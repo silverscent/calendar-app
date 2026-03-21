@@ -1940,11 +1940,9 @@
       }
 
       // =====================================================
-      // 🚀 [스텔스 자동 동기화 엔진] 
+      // 🚀 [스텔스 자동 동기화 엔진] (꼬리표 무시 정밀 대조 패치)
       // =====================================================
       function silentBackgroundSync() {
-        // 🚨 [안전장치] 사용자가 달력 스케줄을 드래그 중이거나, 
-        // 팝업(모달창/등록창)을 열고 작업 중일 때는 동기화하지 않고 조용히 넘어갑니다.
         if (isDragging) return;
         let modal = document.getElementById('modal');
         let addModal = document.getElementById('addModal');
@@ -1952,34 +1950,34 @@
         
         let fetchStartTime = Date.now();
         
-        // Vercel(구글) 서버에 현재 달의 최신 데이터를 몰래 물어봅니다.
         google.script.run
           .withSuccessHandler((res) => {
-            // 내가 방금 내 폰에서 뭔가를 수정 중이었다면 덮어쓰지 않음
             if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
             
-            // 데이터 뼈대 맞추기
             res.year = serverData.year;
             res.month = serverData.month;
             res.firstDay = new Date(serverData.year, serverData.month - 1, 1).getDay();
             res.daysInMonth = new Date(serverData.year, serverData.month, 0).getDate();
 
-            // 💡 [핵심] 누군가 데이터를 수정해서 내 화면의 데이터와 '진짜로' 달라졌을 때만!
-            let isDataChanged = JSON.stringify(serverData) !== JSON.stringify(res);
+            // 💡 [핵심 버그 수정] 화면 그릴 때 임시로 붙인 꼬리표(_rawIdx, _visualSlot)를 무시하고 '순수 데이터'만 대조합니다!
+            const replacer = (key, value) => (key === '_rawIdx' || key === '_visualSlot') ? undefined : value;
+            let isDataChanged = JSON.stringify(serverData, replacer) !== JSON.stringify(res, replacer);
             
             if (isDataChanged) {
-              serverData = res; // 최신 데이터로 갱신
+              serverData = res; 
               localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(res));
-              renderCalendar(); // 바뀐 부분만 화면에 즉시 렌더링
+              renderCalendar(); 
               showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
             }
-            updateSyncTime(); // 좌측 상단 '최근 동기화 시간' 텍스트 갱신
+            updateSyncTime(); 
           })
-          .withFailureHandler(() => {
-            // 스텔스 모드이므로 에러가 나도 사용자에게 알리지 않고 조용히 무시 (다음 주기에 재시도)
-          })
+          .withFailureHandler(() => {})
           .getCalendarDataAsync(currentType, serverData.year, serverData.month);
       }
+
+      // 기존 등록해둔 인터벌(1분)과 visibilitychange 이벤트는 그대로 두시면 됩니다!
+      // setInterval(silentBackgroundSync, 60000);
+      // document.addEventListener("visibilitychange", ...
 
       // 🕒 [1. 정기 폴링] 앱을 켜두고 가만히 있어도 1분(60000ms)마다 몰래 동기화
       setInterval(silentBackgroundSync, 60000);
@@ -2694,8 +2692,9 @@
             res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
 
             // 🚀 [핵심 패치: 깜빡임 방지] 로컬에 있던 데이터와 서버에서 방금 온 데이터가 100% 똑같은가?
-            let isDataChanged = JSON.stringify(serverData) !== JSON.stringify(res);
-
+            const replacer = (key, value) => (key === '_rawIdx' || key === '_visualSlot') ? undefined : value;
+            let isDataChanged = JSON.stringify(serverData, replacer) !== JSON.stringify(res, replacer);
+          
             // 데이터는 최신으로 갱신해둠
             localStorage.setItem(cacheKey, JSON.stringify(res));
 
