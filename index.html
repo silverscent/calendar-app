@@ -1,0 +1,3918 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <base target="_top" />
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <style>
+      /* 💡 눈이 편안한 다크 차콜 색상 적용 */
+      :root {
+        --base-font-size: 100%;
+        --bg-color: #212225;
+        --card-bg: #2a2c30;
+        --text-main: #f0f0f0;
+        --text-sub: #a0a0a0;
+        --border-color: #383a3f;
+        --header-bg: #2a2c30;
+        --sun-color: #ff6b6b;
+        --sat-color: #4dabf7;
+        --btn-bg: #35383d;
+        --btn-text: #a0a0a0;
+        --btn-active-bg: #4dabf7;
+        --btn-active-text: #ffffff;
+      }
+      body.light-mode {
+        --bg-color: #f4f6f9;
+        --card-bg: #ffffff;
+        --text-main: #222222;
+        --text-sub: #777777;
+        --border-color: #e5e5e5;
+        --header-bg: #ffffff;
+        --sun-color: #fa5252;
+        --sat-color: #228be6;
+        --btn-bg: #e9ecef;
+        --btn-text: #495057;
+        --btn-active-bg: #228be6;
+        --btn-active-text: #ffffff;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-main);
+        margin: 0;
+        padding: 12px 12px calc(80px + env(safe-area-inset-bottom)) 12px;
+        font-size: var(--base-font-size);
+        transition: 0.3s;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .top-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 15px;
+        background: var(--header-bg);
+        padding: 12px;
+        border-radius: 16px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+      }
+      .top-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .title-area {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .nav-arrow {
+        background: var(--btn-bg);
+        color: var(--text-main);
+        border: none;
+        border-radius: 10px;
+        padding: 8px 14px;
+        cursor: pointer;
+        font-size: 1em;
+        font-weight: bold;
+        transition: 0.2s;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+      .nav-arrow:active {
+        transform: scale(0.9);
+      }
+      .title-btn {
+        background: var(--btn-bg);
+        color: var(--text-main);
+        padding: 8px 14px;
+        border-radius: 10px;
+        font-size: 1.15em;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .controls-area {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .size-toggle {
+        display: flex;
+        background: var(--btn-bg);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+      }
+      .size-btn {
+        background: transparent;
+        border: none;
+        color: var(--btn-text);
+        font-size: 0.85em;
+        font-weight: 700;
+        padding: 6px 12px;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .size-btn.active {
+        background: var(--btn-active-bg);
+        color: var(--btn-active-text);
+      }
+
+      .theme-toggle {
+        background: var(--btn-bg);
+        border: none;
+        font-size: 1.1em;
+        padding: 6px 8px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      .admin-btn {
+        background: var(--btn-bg);
+        color: var(--text-main);
+        border: none;
+        font-size: 0.85em;
+        font-weight: 800;
+        padding: 6px 12px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: 0.3s;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .admin-btn.unlocked {
+        background: #34c759;
+        color: white;
+        box-shadow: 0 4px 10px rgba(52, 199, 89, 0.3);
+      }
+
+      .action-row-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .sync-area {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .sync-time {
+        font-size: 0.75em;
+        font-weight: 800;
+        color: var(--text-sub);
+        margin-right: 2px;
+      }
+      .sync-btn {
+        background: var(--btn-bg);
+        color: var(--text-main);
+        border: none;
+        font-size: 1em;
+        padding: 5px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: 0.2s;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+      .sync-btn:active {
+        transform: rotate(180deg) scale(0.9);
+      }
+
+      .admin-actions {
+        display: none;
+        gap: 8px;
+      }
+      .multi-btn {
+        background: var(--border-color);
+        color: var(--text-main);
+        border: none;
+        padding: 6px 12px;
+        border-radius: 10px;
+        font-size: 0.85em;
+        font-weight: 800;
+        cursor: pointer;
+        animation: fadeIn 0.3s;
+        transition: 0.2s;
+      }
+      .multi-btn.active {
+        background: #ff3b30;
+        color: white;
+        box-shadow: 0 4px 10px rgba(255, 59, 48, 0.3);
+      }
+
+      .calendar-container {
+        background: var(--border-color);
+        border-radius: 16px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.03);
+      }
+      .grid-row {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 1px;
+      }
+      .day-header {
+        background: var(--header-bg);
+        text-align: center;
+        padding: 10px 0;
+        font-size: 0.75em;
+        font-weight: 800;
+        color: var(--text-sub);
+      }
+      .day-header.sun {
+        color: var(--sun-color);
+      }
+      .day-header.sat {
+        color: var(--sat-color);
+      }
+
+      .day-cell {
+        background: var(--card-bg);
+        min-height: 65px;
+        padding: 4px;
+        position: relative;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        transition: 0.15s ease-out;
+      }
+      .day-cell.empty {
+        background: var(--header-bg);
+        cursor: default;
+      }
+      .date-num {
+        font-size: 0.9em;
+        font-weight: 700;
+        margin-bottom: 2px;
+        margin-left: 2px;
+        display: inline-block;
+      }
+      .date-num.sun {
+        color: var(--sun-color);
+      }
+      .date-num.sat {
+        color: var(--sat-color);
+      }
+      .today-cell {
+        background: rgba(255, 59, 48, 0.05) !important;
+        border: 1px solid rgba(255, 59, 48, 0.3);
+        border-radius: 4px;
+        z-index: 1;
+      }
+      .today-cell .date-num {
+        color: #ff3b30 !important;
+        font-weight: 900;
+      }
+
+      .item-tag {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border-radius: 5px;
+        padding: 4px 2px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        transition: all 0.15s ease-out;
+        width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+        margin-bottom: 1px;
+        min-height: 36px;
+      }
+      .item-tag-slim {
+        flex-direction: row !important;
+        min-height: 22px !important;
+        padding: 2px 4px !important;
+        justify-content: center !important;
+      }
+      .item-tag-slim .comp-name {
+        font-size: 0.85em;
+        text-align: center;
+      }
+      .item-tag.cell-pressing {
+        transform: scale(0.92);
+        filter: brightness(1.2);
+      }
+
+      .item-tag-task {
+        background: #222222 !important;
+        border: 1px solid #444444 !important;
+        border-left: 4px solid #ffd60a !important;
+        position: relative;
+        overflow: visible !important;
+        z-index: 1;
+      }
+      body:not(.light-mode) .item-tag-task {
+        background: #111111 !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-left: 4px solid #ffd60a !important;
+      }
+      .item-tag-task .comp-name,
+      .item-tag-task .pal-sub,
+      .item-tag-task .done-icon {
+        color: #ffffff !important;
+        text-shadow: none !important;
+      }
+
+      html body .item-tag-task.linked-right {
+        margin-right: -5px !important;
+        padding-right: 7px !important;
+        border-right: none !important;
+        border-top-right-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+        width: calc(100% + 5px) !important;
+      }
+      html body .item-tag-task.linked-left {
+        margin-left: -5px !important;
+        padding-left: 7px !important;
+        border-left: none !important;
+        border-top-left-radius: 0 !important;
+        border-bottom-left-radius: 0 !important;
+        width: calc(100% + 5px) !important;
+      }
+      html body .item-tag-task.linked-left.linked-right {
+        width: calc(100% + 10px) !important;
+      }
+
+      html body .item-tag-task.edge-right {
+        margin-right: -4px !important;
+        padding-right: 4px !important;
+        width: calc(100% + 4px) !important;
+        border-right: none !important;
+        border-top-right-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+      }
+      html body .item-tag-task.edge-left {
+        margin-left: -4px !important;
+        padding-left: 4px !important;
+        width: calc(100% + 4px) !important;
+        border-left: none !important;
+        border-top-left-radius: 0 !important;
+        border-bottom-left-radius: 0 !important;
+      }
+      html body .item-tag-task.edge-left.linked-right {
+        width: calc(100% + 9px) !important;
+      }
+      html body .item-tag-task.linked-left.edge-right {
+        width: calc(100% + 9px) !important;
+      }
+
+      .task-span-text {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        z-index: 10;
+        font-size: 0.9em;
+        font-weight: 900;
+        pointer-events: none;
+        color: #ffffff;
+        white-space: nowrap;
+        padding: 0 5%;
+        box-sizing: border-box;
+      }
+
+      .type-label {
+        flex: 1;
+        text-align: center;
+        padding: 10px;
+        font-size: 0.95em;
+        font-weight: 800;
+        color: var(--text-sub);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: 0.2s;
+        white-space: nowrap;
+      }
+      .multi-selected {
+        outline: 3px solid #ff3b30 !important;
+        filter: brightness(1.1);
+        transform: scale(0.95);
+        z-index: 5;
+      }
+      .comp-name {
+        font-size: 0.9em;
+        font-weight: 900;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
+        text-align: center;
+        letter-spacing: -0.5px;
+      }
+      .done-icon {
+        font-size: 11px !important;
+        margin-right: 2px;
+      }
+      .pal-sub {
+        font-size: 0.7em;
+        font-weight: 800;
+        margin-top: 2px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* 💡 출고 쪽은 톤다운 안 함 (원본 그대로 빈칸 유지) */
+      .done-mark {
+      }
+
+      .pending-container {
+        margin-top: 15px;
+        background: var(--card-bg);
+        border-radius: 16px;
+        padding: 15px;
+        border: 1px solid var(--border-color);
+        display: none;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.03);
+      }
+      .pending-title {
+        font-size: 1em;
+        font-weight: 800;
+        color: #ff9f0a;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .pending-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .pending-item {
+        display: flex;
+        align-items: center;
+        background: var(--bg-color);
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+        flex-wrap: wrap;
+        transition: 0.2s;
+        cursor: pointer;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .pending-item:active {
+        transform: scale(0.98);
+      }
+      .pending-comp {
+        font-weight: 800;
+        font-size: 0.95em;
+        width: 80px;
+      }
+      .pending-vol {
+        color: var(--text-sub);
+        font-size: 0.85em;
+        flex: 1;
+        font-weight: 600;
+      }
+      .pending-etc {
+        font-size: 0.8em;
+        color: #ff6b6b;
+        background: rgba(255, 107, 107, 0.1);
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-weight: bold;
+      }
+
+      .info-footer {
+        text-align: center;
+        font-size: 0.8em;
+        color: var(--text-sub);
+        margin-top: 20px;
+        font-weight: 600;
+      }
+
+      .fab-btn {
+        display: none;
+        position: fixed;
+        right: 20px;
+        bottom: max(30px, env(safe-area-inset-bottom));
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #0a84ff, #0056b3);
+        color: white;
+        border: none;
+        font-size: 32px;
+        font-weight: 300;
+        box-shadow: 0 8px 25px rgba(10, 132, 255, 0.5);
+        z-index: 1500;
+        cursor: pointer;
+        align-items: center;
+        justify-content: center;
+        transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+        -webkit-tap-highlight-color: transparent;
+      }
+      .fab-btn:active {
+        transform: scale(0.9) translateY(4px);
+        box-shadow: 0 4px 15px rgba(10, 132, 255, 0.4);
+      }
+
+      #multiActionBar {
+        display: none;
+        position: fixed;
+        bottom: max(20px, env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(30, 30, 30, 0.9);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        padding: 12px 18px;
+        border-radius: 30px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        z-index: 2000;
+        align-items: center;
+        gap: 8px;
+        animation: slideUpToast 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        white-space: nowrap;
+      }
+      body.light-mode #multiActionBar {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+      }
+      .sel-count-text {
+        font-weight: 900;
+        color: var(--text-main);
+        font-size: 0.95em;
+        margin-right: 4px;
+      }
+      .multi-action-btn {
+        border: none;
+        padding: 10px 16px;
+        border-radius: 20px;
+        font-weight: 800;
+        font-size: 0.85em;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .multi-action-btn:active {
+        transform: scale(0.95);
+      }
+      .btn-multi-done {
+        background: #34c759;
+        color: white;
+      }
+      .btn-multi-undo {
+        background: #ff9f0a;
+        color: white;
+      }
+      .btn-multi-del {
+        background: #ff3b30;
+        color: white;
+      }
+
+      .overlay-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        align-items: flex-end;
+        justify-content: center;
+        z-index: 2500;
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        animation: fadeIn 0.2s;
+        padding: 0;
+      }
+      .modal-box {
+        background: var(--bg-color);
+        width: 100%;
+        max-width: 500px;
+        padding: 25px 20px max(25px, env(safe-area-inset-bottom)) 20px;
+        border-radius: 24px 24px 0 0;
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
+        animation: slideUpSheet 0.35s cubic-bezier(0.175, 0.885, 0.32, 1);
+        max-height: 85vh;
+        overflow-y: auto;
+        box-sizing: border-box;
+      }
+      .bottom-sheet-handle {
+        width: 40px;
+        height: 5px;
+        background: var(--border-color);
+        border-radius: 3px;
+        margin: -10px auto 20px auto;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 12px;
+      }
+      .modal-title {
+        font-size: 1.3em;
+        font-weight: 900;
+        letter-spacing: -0.5px;
+      }
+      .close-btn {
+        background: var(--btn-bg);
+        border: none;
+        font-size: 1.2em;
+        color: var(--text-main);
+        cursor: pointer;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: 0.2s;
+      }
+      .close-btn:active {
+        transform: scale(0.9);
+      }
+
+      /* 💡 모달 카드에 모던 뱃지가 뜰 수 있게 여백 확보 (padding-bottom: 35px 추가) */
+      .modal-card {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        background: var(--card-bg);
+        border-radius: 14px;
+        padding: 18px;
+        margin-bottom: 12px;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        flex-wrap: wrap;
+        padding-bottom: 35px;
+      }
+      .modal-icon {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        margin-top: 5px;
+        margin-right: 15px;
+        flex-shrink: 0;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+      .modal-info {
+        flex: 1;
+        width: 100%;
+        min-width: 0;
+      }
+      .modal-comp-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        gap: 8px;
+      }
+      .modal-comp {
+        font-size: 1.1em;
+        font-weight: 900;
+        flex: 1;
+        word-break: keep-all;
+        line-height: 1.2;
+        letter-spacing: -0.5px;
+      }
+      .modal-vol {
+        font-size: 0.95em;
+        color: var(--text-sub);
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .modal-etc {
+        font-size: 0.85em;
+        color: #ff9f0a;
+        background: rgba(255, 159, 10, 0.1);
+        padding: 4px 10px;
+        border-radius: 8px;
+        display: inline-block;
+        margin-top: 6px;
+        font-weight: 800;
+        border: 1px solid rgba(255, 159, 10, 0.2);
+      }
+
+      /* 💡 추가된 둥근 알약형 모던 뱃지 CSS */
+      .status-badge {
+        position: absolute;
+        bottom: 14px;
+        right: 16px;
+        background: rgba(52, 199, 89, 0.1);
+        border: 1px solid rgba(52, 199, 89, 0.4);
+        color: #34c759;
+        font-size: 0.85em;
+        font-weight: 900;
+        padding: 6px 12px;
+        border-radius: 20px;
+        pointer-events: none;
+        z-index: 10;
+        box-shadow: 0 4px 15px rgba(52, 199, 89, 0.15);
+        letter-spacing: -0.3px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
+      }
+
+      .action-btn-group {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+      .edit-toggle-btn {
+        background: var(--btn-bg);
+        color: var(--text-main);
+        border: none;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 0.85em;
+        cursor: pointer;
+        font-weight: 800;
+        transition: 0.2s;
+      }
+      .edit-toggle-btn:active {
+        transform: scale(0.95);
+      }
+      .done-toggle-btn {
+        background: rgba(52, 199, 89, 0.15);
+        color: #34c759;
+        border: 1px solid rgba(52, 199, 89, 0.3);
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 0.85em;
+        cursor: pointer;
+        font-weight: 800;
+        transition: 0.2s;
+      }
+      .done-toggle-btn:active {
+        transform: scale(0.95);
+      }
+
+      .type-toggle-wrapper {
+        display: flex;
+        background: var(--bg-color);
+        border-radius: 10px;
+        padding: 4px;
+        margin-bottom: 15px;
+        border: 1px solid var(--border-color);
+      }
+      .type-label {
+        flex: 1;
+        text-align: center;
+        padding: 10px;
+        font-size: 0.95em;
+        font-weight: 800;
+        color: var(--text-sub);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      input[type="radio"]:checked + .type-label {
+        background: var(--card-bg);
+        color: var(--text-main);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        border: 1px solid var(--border-color);
+      }
+
+      .edit-form {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        margin-top: 5px;
+        width: 100%;
+        background: transparent;
+        padding: 0;
+        box-sizing: border-box;
+        border: none;
+      }
+      .form-label {
+        font-size: 0.85em;
+        font-weight: 800;
+        color: var(--text-sub);
+        margin-bottom: -8px;
+        padding-left: 4px;
+      }
+      .edit-input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 14px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        background: var(--card-bg);
+        color: var(--text-main);
+        font-size: 1em;
+        font-weight: bold;
+        appearance: none;
+        -webkit-appearance: none;
+        transition: border 0.2s;
+      }
+      .edit-input:focus {
+        border-color: #0a84ff;
+        outline: none;
+      }
+      .edit-row {
+        display: flex;
+        gap: 12px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .edit-row > div {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      .btn-row {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .save-btn {
+        flex: 2;
+        background: #0a84ff;
+        color: #fff;
+        border: none;
+        padding: 14px;
+        border-radius: 12px;
+        font-weight: 900;
+        cursor: pointer;
+        font-size: 1.05em;
+        transition: 0.2s;
+        box-shadow: 0 4px 10px rgba(10, 132, 255, 0.3);
+      }
+      .save-btn:active {
+        transform: scale(0.97);
+      }
+      .cancel-btn {
+        flex: 1;
+        background: var(--btn-bg);
+        color: var(--text-main);
+        border: none;
+        padding: 14px;
+        border-radius: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .cancel-btn:active {
+        transform: scale(0.97);
+      }
+      .delete-btn {
+        width: 100%;
+        background: rgba(255, 59, 48, 0.1);
+        color: #ff3b30;
+        border: 1px solid rgba(255, 59, 48, 0.3);
+        padding: 14px;
+        border-radius: 12px;
+        font-weight: 900;
+        cursor: pointer;
+        margin-top: 5px;
+        transition: 0.2s;
+      }
+      .delete-btn:active {
+        transform: scale(0.97);
+        background: rgba(255, 59, 48, 0.2);
+      }
+
+      .input-wrapper {
+        position: relative;
+        width: 100%;
+      }
+      .custom-dropdown {
+        position: absolute;
+        background: rgba(30, 30, 30, 0.95);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        width: 100%;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 3000;
+        border-radius: 12px;
+        margin-top: 8px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      }
+      body.light-mode .custom-dropdown {
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+      }
+      .drop-item {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.95em;
+        cursor: pointer;
+        color: var(--text-main);
+        font-weight: 800;
+        transition: background 0.2s;
+      }
+      .drop-item:last-child {
+        border-bottom: none;
+      }
+      .drop-item:hover,
+      .drop-item:active {
+        background: rgba(10, 132, 255, 0.15);
+        color: #0a84ff;
+      }
+
+      .picker-year-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        font-size: 1.3em;
+        font-weight: 900;
+      }
+      .year-btn {
+        background: var(--btn-bg);
+        border: none;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        color: var(--text-main);
+        transition: 0.2s;
+      }
+      .year-btn:active {
+        transform: scale(0.9);
+      }
+      .month-grid-ui {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
+      .month-btn {
+        background: var(--card-bg);
+        color: var(--text-main);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 16px 0;
+        font-size: 1.05em;
+        font-weight: 800;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .month-btn:active {
+        transform: scale(0.95);
+      }
+      .month-btn.current {
+        background: rgba(10, 132, 255, 0.1);
+        border-color: #0a84ff;
+        color: #0a84ff;
+      }
+
+      #toast {
+        visibility: hidden;
+        min-width: 250px;
+        background: rgba(40, 44, 52, 0.95);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        color: #fff;
+        text-align: center;
+        border-radius: 30px;
+        padding: 14px 24px;
+        position: fixed;
+        z-index: 99999;
+        left: 50%;
+        top: env(safe-area-inset-top, 10px);
+        transform: translate3d(-50%, -150%, 0) scale(0.9);
+        font-size: 0.95em;
+        font-weight: 900;
+        opacity: 0;
+        transition:
+          visibility 0.5s,
+          opacity 0.4s ease,
+          transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        letter-spacing: -0.3px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+        animation: rainbowGlow 3s linear infinite;
+      }
+      body.light-mode #toast {
+        background: rgba(255, 255, 255, 0.95);
+        color: #222;
+        border: 2px solid transparent;
+      }
+      #toast.show {
+        visibility: visible;
+        opacity: 1;
+        transform: translate3d(-50%, 20px, 0) scale(1);
+      }
+
+      @keyframes rainbowGlow {
+        0% {
+          box-shadow: 0 0 15px rgba(255, 59, 48, 0.5);
+          border-color: rgba(255, 59, 48, 0.7);
+        }
+        20% {
+          box-shadow: 0 0 15px rgba(255, 159, 10, 0.5);
+          border-color: rgba(255, 159, 10, 0.7);
+        }
+        40% {
+          box-shadow: 0 0 15px rgba(52, 199, 89, 0.5);
+          border-color: rgba(52, 199, 89, 0.7);
+        }
+        60% {
+          box-shadow: 0 0 15px rgba(10, 132, 255, 0.5);
+          border-color: rgba(10, 132, 255, 0.7);
+        }
+        80% {
+          box-shadow: 0 0 15px rgba(175, 82, 222, 0.5);
+          border-color: rgba(175, 82, 222, 0.7);
+        }
+        100% {
+          box-shadow: 0 0 15px rgba(255, 59, 48, 0.5);
+          border-color: rgba(255, 59, 48, 0.7);
+        }
+      }
+
+      #globalLoader {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        color: white;
+        font-weight: bold;
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
+      }
+      .spinner {
+        border: 4px solid rgba(255, 255, 255, 0.2);
+        border-top: 4px solid #fff;
+        border-radius: 50%;
+        width: 44px;
+        height: 44px;
+        animation: spin 1s linear infinite;
+        margin-bottom: 12px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes slideUpSheet {
+        from {
+          transform: translateY(100%);
+        }
+        to {
+          transform: translateY(0);
+        }
+      }
+
+      /* 💡 신규 등록 모달 헤더 픽스 & 내부 스크롤 설정 */
+      #addModal .modal-box {
+        padding-top: 15px;
+        display: flex;
+        flex-direction: column;
+        max-height: 85vh;
+        padding-bottom: max(15px, env(safe-area-inset-bottom));
+      }
+      #addModal .modal-header {
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0;
+        margin-bottom: 0 !important;
+      }
+      #addModal .edit-form {
+        overflow-y: auto;
+        padding: 15px 5px 20px 0;
+        flex: 1;
+        margin-top: 0;
+      }
+
+      /* 💡 간트차트 완료 게이지 밑줄 (세련된 녹색) */
+      .task-done-border {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: #34c759;
+        z-index: 15;
+        box-shadow: 0 -1px 3px rgba(52, 199, 89, 0.5);
+        border-radius: 0;
+      } /* 라운드 처리를 없애고 완전한 직선으로 변경 */
+      /* 💡 드래그 앤 드롭 스무스 애니메이션 & 타겟 표시 */
+      .day-cell.drag-over {
+        background: rgba(10, 132, 255, 0.1) !important;
+        outline: 2px dashed #0a84ff !important;
+        outline-offset: -2px;
+        transform: scale(0.96);
+        z-index: 10;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="globalLoader">
+      <div class="spinner"></div>
+      <div id="loaderText">데이터 처리 중...</div>
+    </div>
+    <div id="toast">메시지</div>
+
+    <button class="fab-btn" id="fabBtn" onclick="openAddForm()">+</button>
+
+    <div id="multiActionBar">
+      <span class="sel-count-text"><span id="selCount">0</span>개 선택</span>
+      <button
+        class="multi-action-btn btn-multi-done"
+        onclick="executeMultiAction('MULTI_DONE')"
+      >
+        ✅ 완료
+      </button>
+      <button
+        class="multi-action-btn btn-multi-undo"
+        onclick="executeMultiAction('MULTI_UNDO_DONE')"
+      >
+        ⏪ 취소
+      </button>
+      <button
+        class="multi-action-btn btn-multi-del"
+        onclick="executeMultiAction('MULTI_DELETE')"
+      >
+        🗑️ 삭제
+      </button>
+    </div>
+
+    <div class="top-wrapper">
+      <div class="top-row">
+        <div class="title-area">
+          <button class="nav-arrow" onclick="navMonth(-1)">◀</button>
+          <button class="title-btn" onclick="openPicker()">
+            🚚 <span id="calTitle"></span> <span class="drop-icon">▼</span>
+          </button>
+          <button class="nav-arrow" onclick="navMonth(1)">▶</button>
+        </div>
+        <div class="controls-area">
+          <button class="theme-toggle" onclick="toggleTheme()">☀️</button>
+          <button class="admin-btn" id="adminBtn" onclick="toggleAdmin()">
+            🔒 잠김
+          </button>
+        </div>
+      </div>
+      <div class="top-row">
+        <div class="size-toggle">
+          <button class="size-btn" id="btnS" onclick="changeSize('S')">
+            A-
+          </button>
+          <button class="size-btn active" id="btnM" onclick="changeSize('M')">
+            A
+          </button>
+          <button class="size-btn" id="btnL" onclick="changeSize('L')">
+            A+
+          </button>
+        </div>
+
+        <div class="action-row-right">
+          <div class="sync-area" id="syncArea" style="display: flex">
+            <span class="sync-time" id="lastSyncTime"></span>
+            <button class="sync-btn" onclick="navMonth(0)" title="수동 동기화">
+              🔄
+            </button>
+          </div>
+          <div class="admin-actions" id="adminActions">
+            <button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">
+              ☑️ 다중 선택
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="calendar-container">
+      <div class="grid-row">
+        <div class="day-header sun">일</div>
+        <div class="day-header">월</div>
+        <div class="day-header">화</div>
+        <div class="day-header">수</div>
+        <div class="day-header">목</div>
+        <div class="day-header">금</div>
+        <div class="day-header sat">토</div>
+      </div>
+      <div class="grid-row" id="calendarGrid" style="display: contents"></div>
+    </div>
+
+    <div class="pending-container" id="pendingSection">
+      <div class="pending-title">
+        ⚠️ 일정 미정 / 대기 <span id="pendingCount"></span>
+      </div>
+      <div class="pending-list" id="pendingList"></div>
+    </div>
+
+    <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
+
+    <div id="modal" class="overlay-modal" onclick="closeModalOnBgClick(event)">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title" id="modalTitle">상세 내역</div>
+          <button
+            class="close-btn"
+            onclick="document.getElementById('modal').style.display = 'none'"
+          >
+            ✕
+          </button>
+        </div>
+        <div id="modalContent"></div>
+      </div>
+    </div>
+
+    <div
+      id="addModal"
+      class="overlay-modal"
+      onclick="if (event.target === this) this.style.display = 'none';"
+    >
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title" style="color: #0a84ff">
+            ➕ 신규 스케줄 등록
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center">
+            <button
+              class="save-btn"
+              style="
+                padding: 6px 14px;
+                font-size: 0.9em;
+                margin: 0;
+                border-radius: 8px;
+                box-shadow: none;
+              "
+              onclick="submitCMS('ADD')"
+            >
+              저장
+            </button>
+            <button
+              class="close-btn"
+              onclick="
+                document.getElementById('addModal').style.display = 'none'
+              "
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div class="edit-form">
+          <div class="type-toggle-wrapper">
+            <input
+              type="radio"
+              id="type-out-add"
+              name="job-type-add"
+              value="OUT"
+              checked
+              hidden
+              onchange="toggleEndDate('add', false)"
+            />
+            <label for="type-out-add" class="type-label">출고</label>
+            <input
+              type="radio"
+              id="type-task-add"
+              name="job-type-add"
+              value="TASK"
+              hidden
+              onchange="toggleEndDate('add', true)"
+            />
+            <label for="type-task-add" class="type-label">작업</label>
+          </div>
+
+          <div class="form-label">업체/작업명 (필수)</div>
+          <div class="input-wrapper">
+            <input
+              type="text"
+              id="add-comp"
+              class="edit-input"
+              placeholder="터치하여 업체 선택 또는 직접 입력"
+              autocomplete="off"
+            />
+          </div>
+
+          <div
+            class="form-label"
+            style="
+              margin-top: 10px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <span
+              >날짜
+              <span id="add-date-label-extra" style="display: none"
+                >(시작일 ~ 종료일)</span
+              ></span
+            >
+            <span
+              style="
+                color: #ff3b30;
+                cursor: pointer;
+                font-weight: 800;
+                font-size: 0.85em;
+                padding: 4px 8px;
+                background: rgba(255, 59, 48, 0.1);
+                border-radius: 6px;
+                transition: 0.2s;
+              "
+              onclick="
+                document.getElementById('add-date').value = '';
+                let e = document.getElementById('add-end-date');
+                if (e) e.value = '';
+              "
+              onmousedown="this.style.transform = 'scale(0.9)'"
+              onmouseup="this.style.transform = 'scale(1)'"
+              >✕ 지우기</span
+            >
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center">
+            <input
+              type="date"
+              id="add-date"
+              class="edit-input"
+              style="flex: 1"
+            />
+            <div
+              id="add-end-date-group"
+              style="display: none; flex: 1; gap: 8px; align-items: center"
+            >
+              <span style="color: var(--text-sub); font-weight: bold">~</span>
+              <input
+                type="date"
+                id="add-end-date"
+                class="edit-input"
+                style="flex: 1"
+                placeholder="종료일"
+              />
+            </div>
+          </div>
+          <div
+            id="add-end-date-guide"
+            style="
+              display: none;
+              font-size: 0.75em;
+              color: var(--text-sub);
+              margin-top: 4px;
+              text-align: right;
+              margin-bottom: 5px;
+            "
+          >
+            ※ 하루 일정은 앞쪽 시작일만 입력하세요.
+          </div>
+
+          <div class="edit-row">
+            <div>
+              <div class="form-label">파레트 (P)</div>
+              <input
+                type="number"
+                id="add-pal"
+                class="edit-input"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <div class="form-label">박스 (B)</div>
+              <input
+                type="number"
+                id="add-box"
+                class="edit-input"
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <div class="form-label">비고 (보관 위치 등)</div>
+          <input
+            type="text"
+            id="add-etc"
+            class="edit-input"
+            placeholder="예: 바닥보관"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="monthPickerModal"
+      class="overlay-modal"
+      onclick="if (event.target === this) this.style.display = 'none';"
+    >
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="picker-year-row">
+          <button class="year-btn" onclick="changePickerYear(-1)">◀</button
+          ><span id="pickerYearText"></span
+          ><button class="year-btn" onclick="changePickerYear(1)">▶</button>
+        </div>
+        <div class="month-grid-ui" id="pickerMonthGrid"></div>
+      </div>
+    </div>
+
+    <div
+      id="adminLoginModal"
+      class="overlay-modal"
+      onclick="if (event.target === this) this.style.display = 'none';"
+    >
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title" id="modalTitle">🔒 관리자 인증</div>
+          <button
+            class="close-btn"
+            onclick="
+              document.getElementById('adminLoginModal').style.display = 'none'
+            "
+          >
+            ✕
+          </button>
+        </div>
+        <div
+          style="
+            margin-bottom: 15px;
+            font-size: 0.95em;
+            color: var(--text-sub);
+            font-weight: 600;
+          "
+        >
+          관리자 권한을 활성화하려면 비밀번호를 입력하세요.
+        </div>
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0 12px;
+            transition: 0.2s;
+          "
+        >
+          <input
+            type="password"
+            id="adminPwInput"
+            style="
+              flex: 1;
+              border: none;
+              background: transparent;
+              color: var(--text-main);
+              padding: 16px 5px;
+              font-size: 1.1em;
+              outline: none;
+              font-weight: bold;
+            "
+            placeholder="비밀번호"
+          />
+          <button
+            type="button"
+            onmousedown="
+              event.preventDefault();
+              togglePwView();
+            "
+            ontouchstart="event.preventDefault(); togglePwView()"
+            style="
+              background: none;
+              border: none;
+              font-size: 1.2em;
+              cursor: pointer;
+              padding: 5px;
+            "
+          >
+            <span id="pwToggleIcon">👁️</span>
+          </button>
+        </div>
+        <button
+          class="save-btn"
+          style="width: 100%; margin-top: 20px"
+          onclick="submitAdminLogin()"
+        >
+          🔓 인증하기
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // 🔗 1. 방금 배포한 새로운 구글 웹앱 URL을 따옴표 안에 붙여넣으세요! (끝에 /exec 까지)
+      const GAS_API_URL =
+        "https://script.google.com/macros/s/AKfycbxaD9CugTvbE50_C2rR0EaSZ1MkywACeYwiYD_MuPZBZNDpjVwK1VOH31MdtxznD49k/exec";
+      const currentType = "out";
+      const todayDateObj = new Date();
+      let isProcessing = false;
+      // 👇 이 줄을 하나 추가하세요! (내 폰에서 마지막으로 조작한 시간을 기억할 변수)
+      let lastLocalUpdateTime = 0;
+      // 💡 [추가] 과거 유령 버그 시절에 오염된 캐시 싹 다 소독(삭제)하기!
+      if (!localStorage.getItem("cache_wiped_v2")) {
+        Object.keys(localStorage).forEach((k) => {
+          if (k.startsWith("cal_cache_")) localStorage.removeItem(k);
+        });
+        localStorage.setItem("cache_wiped_v2", "true");
+      }
+      // 💡 2. 빈 뼈대 데이터로 시작 (Vercel에서는 구글 서버가 데이터를 쏘아줄 때까지 로딩 화면으로 대기)
+      let serverData = {
+        year: todayDateObj.getFullYear(),
+        month: todayDateObj.getMonth() + 1,
+        firstDay: 0,
+        daysInMonth: 31,
+        monthData: {},
+        pendingItems: [],
+      };
+      let customColors = JSON.parse(
+        localStorage.getItem("GLOBAL_COMPANY_COLORS") || "{}",
+      );
+      const companyColors = {};
+
+      // 🚀 3. [Vercel 매직 어댑터] (이중 문자열 버그 완벽 방어!)
+      // 🚀 3. [Vercel 매직 어댑터] (유령 데이터 꼬임 완벽 방어 - 다중 우편함 할당!)
+      const google = {
+        script: {
+          get run() {
+            // 💡 핵심 패치: get run()을 통해 매 요청마다 새로운 우편함(객체)을 생성합니다!
+            return {
+              _ok: null,
+              _err: null,
+              withSuccessHandler: function (cb) {
+                this._ok = cb;
+                return this;
+              },
+              withFailureHandler: function (cb) {
+                this._err = cb;
+                return this;
+              },
+              _call: function (payload) {
+                fetch(GAS_API_URL, {
+                  method: "POST",
+                  body: JSON.stringify(payload),
+                })
+                  .then((r) => r.json())
+                  .then((d) => {
+                    let finalData = typeof d === "string" ? JSON.parse(d) : d;
+                    if (this._ok) this._ok(finalData);
+                  })
+                  .catch((e) => {
+                    if (this._err) this._err(e);
+                  });
+              },
+              getGlobalColors: function () {
+                this._call({ source: "vercel", action: "GET_GLOBAL_COLORS" });
+              },
+              saveGlobalColor: function (c, i) {
+                this._call({
+                  source: "vercel",
+                  action: "SAVE_GLOBAL_COLOR",
+                  compName: c,
+                  colorIdx: i,
+                });
+              },
+              getCalendarDataAsync: function (type, y, m) {
+                fetch(
+                  `${GAS_API_URL}?api=true&type=${type}&year=${y}&month=${m}`,
+                )
+                  .then((r) => r.json())
+                  .then((d) => {
+                    let finalData = typeof d === "string" ? JSON.parse(d) : d;
+                    if (this._ok) this._ok(finalData);
+                  })
+                  .catch((e) => {
+                    if (this._err) this._err(e);
+                  });
+              },
+              manageWebOutboundData: function (act, data, tk) {
+                this._call({
+                  source: "vercel",
+                  domain: currentType,
+                  action: act,
+                  data: data,
+                  token: tk,
+                });
+              },
+              verifyAdminPw: function (pw) {
+                fetch(GAS_API_URL, {
+                  method: "POST",
+                  body: JSON.stringify({
+                    source: "vercel",
+                    domain: currentType,
+                    action: "PING",
+                    data: {},
+                    token: pw,
+                  }),
+                })
+                  .then((r) => r.json())
+                  .then((d) => {
+                    let isValid = !(d.msg && d.msg.includes("보안"));
+                    if (this._ok) this._ok(isValid);
+                  })
+                  .catch((e) => {
+                    if (this._err) this._err(e);
+                  });
+              },
+            };
+          },
+        },
+      };
+
+      // 🏢 업체명 관련 해시 맵 (기존 동일 유지)
+      const fixedCompanies = [
+        "(주)메디뱅크",
+        "국제",
+        "드림",
+        "링크더랩",
+        "메디맥 주식회사 2층",
+        "메디맥 주식회사 3층",
+        "메디칼써프라이",
+        "서호메디코",
+        "세람",
+        "엠코리아토탈서비스",
+        "위드비아",
+        "제니스",
+        "지엔씨메딕",
+        "하이메드",
+      ];
+      const compShortMap = {
+        "메디맥 주식회사 2층": "메2",
+        "메디맥 주식회사 3층": "메3",
+        "(주)메디뱅크": "메뱅",
+        메디칼써프라이: "메써",
+        서호메디코: "서호",
+        엠코리아토탈서비스: "엠코",
+        백년가게국제의료기: "국제",
+        드림케어메디칼: "드림",
+        지엔씨메딕: "지엔",
+        링크더랩: "링랩",
+        위드비아: "위비",
+        하이메드: "하메",
+      };
+      function getShortName(name) {
+        if (compShortMap[name]) return compShortMap[name];
+        if (name === "메디맥2층") return "메2";
+        if (name === "메디맥3층") return "메3";
+        return name.substring(0, 2);
+      }
+      const compFullMap = {
+        메2: "메디맥 주식회사 2층",
+        메디맥2층: "메디맥 주식회사 2층",
+        메3: "메디맥 주식회사 3층",
+        메디맥3층: "메디맥 주식회사 3층",
+        메뱅: "(주)메디뱅크",
+        메써: "메디칼써프라이",
+        서호: "서호메디코",
+        엠코: "엠코리아토탈서비스",
+        국제: "백년가게국제의료기",
+        드림: "드림케어메디칼",
+        지엔: "지엔씨메딕",
+        지엔씨: "지엔씨메딕",
+        링랩: "링크더랩",
+        링크: "링크더랩",
+        위비: "위드비아",
+        위드: "위드비아",
+        하메: "하이메드",
+        하이: "하이메드",
+      };
+      function getFullName(name) {
+        return compFullMap[name] || name;
+      }
+
+      // 🎨 30PL 색상 팔레트
+      const presetPalette = [
+        {
+          bg: "linear-gradient(135deg, #FF3B30, #b3241d)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #FF9F0A, #E67E22)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #D84315, #8F2D0E)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #FFCDD2, #E57373)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #880E4F, #4A148C)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #FFD54F, #FFB300)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #FFF59D, #FBC02D)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #8D6E63, #5D4037)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #D7CCC8, #8D6E63)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #9E9D24, #827717)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #34C759, #248a3d)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #AED581, #689F38)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #00695C, #004D40)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #15e7ca, #06bda6)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #00BCD4, #00838F)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #B2DFDB, #009688)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #007AFF, #0056b3)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #81D4FA, #0288D1)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #13214a, #0b1329)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #5C6BC0, #283593)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #607D8B, #37474F)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #4DD0E1, #0097A7)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #AF52DE, #7a369e)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #E1BEE7, #8E24AA)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #4A148C, #311B92)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #F06292, #C2185B)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #F8BBD0, #D81B60)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #E040FB, #AA00FF)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+        {
+          bg: "linear-gradient(135deg, #64FFDA, #00BFA5)",
+          cMain: "#111",
+          cSub: "rgba(0,0,0,0.8)",
+          txtShadow: "none",
+        },
+        {
+          bg: "linear-gradient(135deg, #FF6D00, #E65100)",
+          cMain: "#fff",
+          cSub: "rgba(255,255,255,0.9)",
+          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        },
+      ];
+
+      function getCompanyColor(companyName) {
+        let stdName = getFullName(companyName);
+        if (
+          customColors[stdName] !== undefined &&
+          presetPalette[customColors[stdName]]
+        ) {
+          companyColors[stdName] = presetPalette[customColors[stdName]];
+          return presetPalette[customColors[stdName]];
+        }
+        if (companyColors[stdName]) return companyColors[stdName];
+        let hash = 0;
+        for (let i = 0; i < stdName.length; i++)
+          hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
+        let colorIdx = Math.abs(hash) % presetPalette.length;
+        let colorObj = presetPalette[colorIdx];
+        companyColors[stdName] = colorObj;
+        return colorObj;
+      }
+
+      // 🚀 [앱 초기화] 오염된 캐시 무시 + 강제 뼈대 교정 완결판
+      window.addEventListener("DOMContentLoaded", () => {
+        const savedTheme = localStorage.getItem("cal_theme") || "light";
+        const themeBtn = document.querySelector(".theme-toggle");
+        if (savedTheme === "light") {
+          document.body.classList.add("light-mode");
+          isDarkMode = false;
+          if (themeBtn) themeBtn.innerText = "🌙";
+        } else {
+          document.body.classList.remove("light-mode");
+          isDarkMode = true;
+          if (themeBtn) themeBtn.innerText = "☀️";
+        }
+        const savedSize = localStorage.getItem("cal_fontSize") || "M";
+        changeSize(savedSize);
+
+        updateFooterUI();
+
+        let now = new Date();
+        let currentYear = now.getFullYear();
+        let currentMonth = now.getMonth() + 1;
+        let cacheKey = `cal_cache_${currentType}_${currentYear}_${currentMonth}`;
+
+        let cachedData = localStorage.getItem(cacheKey);
+        let isCacheValid = false;
+
+        if (cachedData) {
+          try {
+            let parsed = JSON.parse(cachedData);
+            serverData =
+              typeof parsed === "string" ? JSON.parse(parsed) : parsed;
+
+            // 🚨 [초기화 백신] 서랍 안의 쓰레기 뼈대를 즉시 정상 교정!
+            serverData.year = currentYear;
+            serverData.month = currentMonth;
+            serverData.firstDay = new Date(
+              currentYear,
+              currentMonth - 1,
+              1,
+            ).getDay();
+            serverData.daysInMonth = new Date(
+              currentYear,
+              currentMonth,
+              0,
+            ).getDate();
+
+            if (!isNaN(serverData.year)) isCacheValid = true;
+          } catch (e) {
+            console.error("캐시 파싱 에러", e);
+          }
+        }
+
+        if (!isCacheValid) {
+          let tempFirstDay = new Date(
+            currentYear,
+            currentMonth - 1,
+            1,
+          ).getDay();
+          let tempDays = new Date(currentYear, currentMonth, 0).getDate();
+          serverData = {
+            year: currentYear,
+            month: currentMonth,
+            firstDay: tempFirstDay,
+            daysInMonth: tempDays,
+            monthData: {},
+            pendingItems: [],
+          };
+        }
+
+        renderCalendar();
+
+        let fetchStartTime = Date.now();
+        showToast("🔄 백그라운드 동기화 중...", 0);
+
+        google.script.run
+          .withSuccessHandler(function (colors) {
+            customColors = colors;
+            localStorage.setItem(
+              "GLOBAL_COMPANY_COLORS",
+              JSON.stringify(colors),
+            );
+
+            google.script.run
+              .withSuccessHandler(function (newData) {
+                if (
+                  typeof lastLocalUpdateTime !== "undefined" &&
+                  lastLocalUpdateTime > fetchStartTime
+                )
+                  return;
+
+                newData.year = currentYear;
+                newData.month = currentMonth;
+                newData.firstDay = new Date(
+                  currentYear,
+                  currentMonth - 1,
+                  1,
+                ).getDay();
+                newData.daysInMonth = new Date(
+                  currentYear,
+                  currentMonth,
+                  0,
+                ).getDate();
+
+                localStorage.setItem(cacheKey, JSON.stringify(newData));
+
+                if (
+                  serverData.year === currentYear &&
+                  serverData.month === currentMonth
+                ) {
+                  serverData = newData;
+                  renderCalendar();
+                  showToast("✅ 최신화 완료!", 1000);
+                }
+              })
+              .getCalendarDataAsync(currentType, currentYear, currentMonth);
+          })
+          .getGlobalColors();
+      });
+
+      // ==========================================
+      // 👇 아래부터 기존 함수들 (이 줄은 덮어쓰지 마세요) 👇
+      // function showToast(msg, duration = 2500) { ...
+
+      function showToast(msg, duration = 2500) {
+        const toast = document.getElementById("toast");
+        toast.innerText = msg;
+        toast.className = "show";
+        if (window.toastTimer) clearTimeout(window.toastTimer);
+        if (duration > 0) {
+          window.toastTimer = setTimeout(() => {
+            toast.className = toast.className.replace("show", "");
+          }, duration);
+        }
+      }
+
+      function updateSyncTime() {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, "0");
+        const mm = String(now.getMinutes()).padStart(2, "0");
+        document.getElementById("lastSyncTime").innerText = `최근 ${hh}:${mm}`;
+      }
+
+      function updateFooterUI() {
+        const footer = document.getElementById("infoFooter");
+        if (footer) {
+          footer.innerText = isAdmin
+            ? "👆 날짜 터치: 상세내역 및 수정 / 꾹 누르기: 이동 (빈칸: 신규등록)"
+            : "👆 날짜 터치: 상세내역 확인";
+        }
+      }
+
+      function toggleEndDate(prefix, isTask) {
+        const group = document.getElementById(`${prefix}-end-date-group`);
+        const guide = document.getElementById(`${prefix}-end-date-guide`);
+        const labelExtra = document.getElementById(
+          `${prefix}-date-label-extra`,
+        );
+        if (group) group.style.display = isTask ? "flex" : "none";
+        if (guide) guide.style.display = isTask ? "block" : "none";
+        if (labelExtra) labelExtra.style.display = isTask ? "inline" : "none";
+        if (!isTask) {
+          let endInput = document.getElementById(`${prefix}-end-date`);
+          if (endInput) endInput.value = "";
+        }
+      }
+
+      // 💡 [패치] 완료 여부(isDone)를 판별 조건에서 제거하여 중간에 완료해도 띠가 안 끊어지게 결속!
+      const getMatchKey = (item) => {
+        let clean = item.company.replace(/\[TASK\]/gi, "").trim();
+        let isTask =
+          item.company.toUpperCase().startsWith("[TASK]") ||
+          /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+        if (isTask) return `T_${getFullName(clean)}`;
+        let isDone = item.isDone === true || String(item.isDone) === "true";
+        return `O_${getFullName(clean)}_${isDone}_${item.pal || ""}_${item.box || ""}`;
+      };
+
+      // 💡 [패치] 하루짜리 작업(TASK)은 슬림하게 안 만들고 뚱뚱한 박스로 처리하도록 day 정보를 받아서 스캔합니다.
+      const checkIsSlim = (it, day) => {
+        let clean = it.company.replace(/\[TASK\]/gi, "").trim();
+        let isTask =
+          it.company.toUpperCase().startsWith("[TASK]") ||
+          /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+        if (!isTask) return false; // 출고 항목은 뚱뚱하게
+
+        let hasPrev =
+          serverData.monthData[day - 1] &&
+          serverData.monthData[day - 1].some(
+            (p) => getMatchKey(p) === getMatchKey(it),
+          );
+        let hasNext =
+          serverData.monthData[day + 1] &&
+          serverData.monthData[day + 1].some(
+            (n) => getMatchKey(n) === getMatchKey(it),
+          );
+        if (!hasPrev && !hasNext) return false; // 🚨 하루짜리 작업은 뚱뚱하게!
+
+        return true; // 며칠 이어지는 간트차트 작업만 슬림하게!
+      };
+
+      function renderCalendar() {
+        // 💡 [버그 1 해결] 정렬(Sort)을 인덱스(_rawIdx) 부여보다 무조건 먼저 실행하도록 위로 끌어올렸습니다!
+        for (let d = 1; d <= serverData.daysInMonth; d++) {
+          if (serverData.monthData[d]) {
+            // 1. 단일일정(위) / 간트(아래) 강제 정렬부터 먼저 합니다.
+            serverData.monthData[d].sort((a, b) => {
+              let aSlim = checkIsSlim(a, d);
+              let bSlim = checkIsSlim(b, d);
+              if (aSlim !== bSlim) return aSlim ? 1 : -1;
+              return 0;
+            });
+            // 2. 줄을 다 선 다음에 진짜 번호표를 붙여줍니다!
+            serverData.monthData[d].forEach((item, idx) => {
+              item._rawIdx = idx;
+            });
+          }
+        }
+
+        let activeSlots = [];
+
+        for (let d = 1; d <= serverData.daysInMonth; d++) {
+          if (!serverData.monthData[d]) {
+            activeSlots = [];
+            continue;
+          }
+
+          let todayItems = serverData.monthData[d];
+
+          // ❌ [주의] 이 위치에 있던 todayItems.sort(...) 로직은 위로 이사갔으므로 지워져야 합니다! (이 코드로 덮어쓰시면 자연스럽게 지워집니다)
+
+          let nextActiveSlots = [];
+          // ... (이 아래로는 기존 코드와 동일) ...
+          let usedToday = new Array(todayItems.length).fill(false);
+
+          for (let s = 0; s < activeSlots.length; s++) {
+            if (activeSlots[s] !== null) {
+              let matchIdx = todayItems.findIndex(
+                (it, i) => !usedToday[i] && getMatchKey(it) === activeSlots[s],
+              );
+              if (matchIdx !== -1) {
+                usedToday[matchIdx] = true;
+                todayItems[matchIdx]._visualSlot = s;
+                nextActiveSlots[s] = activeSlots[s];
+              } else {
+                nextActiveSlots[s] = null;
+              }
+            } else {
+              nextActiveSlots[s] = null;
+            }
+          }
+
+          for (let i = 0; i < todayItems.length; i++) {
+            if (!usedToday[i]) {
+              let emptySlotIdx = nextActiveSlots.indexOf(null);
+              if (emptySlotIdx !== -1) {
+                nextActiveSlots[emptySlotIdx] = getMatchKey(todayItems[i]);
+                todayItems[i]._visualSlot = emptySlotIdx;
+              } else {
+                nextActiveSlots.push(getMatchKey(todayItems[i]));
+                todayItems[i]._visualSlot = nextActiveSlots.length - 1;
+              }
+            }
+          }
+          activeSlots = nextActiveSlots;
+        }
+
+        let weekSlotHeights = [];
+
+        for (let d = 1; d <= serverData.daysInMonth; d++) {
+          if (!serverData.monthData[d]) continue;
+          let w = Math.floor((serverData.firstDay + d - 1) / 7);
+          if (!weekSlotHeights[w]) weekSlotHeights[w] = {};
+
+          serverData.monthData[d].forEach((item) => {
+            let s = item._visualSlot;
+            if (s !== undefined) {
+              let h = checkIsSlim(item, d) ? 26 : 46;
+              if (!weekSlotHeights[w][s] || weekSlotHeights[w][s] < h) {
+                weekSlotHeights[w][s] = h;
+              }
+            }
+          });
+        }
+
+        document.getElementById("calTitle").innerText =
+          `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2, "0")}`;
+        const grid = document.getElementById("calendarGrid");
+        let rowHtml = '<div class="grid-row">';
+        let cellCount = 0;
+        for (let i = 0; i < serverData.firstDay; i++) {
+          rowHtml += `<div class="day-cell empty"></div>`;
+          cellCount++;
+        }
+
+        const isThisMonthView =
+          serverData.year === todayDateObj.getFullYear() &&
+          serverData.month === todayDateObj.getMonth() + 1;
+        const todayDayNumber = todayDateObj.getDate();
+
+        for (let day = 1; day <= serverData.daysInMonth; day++) {
+          if (cellCount > 0 && cellCount % 7 === 0)
+            rowHtml += '</div><div class="grid-row">';
+          const dayOfWeek = (serverData.firstDay + day - 1) % 7;
+          let dateClass = "date-num";
+          if (dayOfWeek === 0) dateClass += " sun";
+          if (dayOfWeek === 6) dateClass += " sat";
+
+          let isToday = isThisMonthView && day === todayDayNumber;
+          let cellClass = isToday ? "day-cell today-cell" : "day-cell";
+
+          let dayData = serverData.monthData[day];
+          let prevDayData = serverData.monthData[day - 1];
+          let nextDayData = serverData.monthData[day + 1];
+
+          let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
+          let cellHtml = `<div class="${cellClass}" ${bindCell}><div class="${dateClass}">${day}</div>`;
+
+          let w = Math.floor((serverData.firstDay + day - 1) / 7);
+
+          if (dayData && dayData.length > 0) {
+            let maxSlot = -1;
+            dayData.forEach((item) => {
+              if (item._visualSlot !== undefined && item._visualSlot > maxSlot)
+                maxSlot = item._visualSlot;
+            });
+
+            let renderArray = new Array(maxSlot + 1).fill(null);
+            dayData.forEach((item) => {
+              if (item._visualSlot !== undefined)
+                renderArray[item._visualSlot] = item;
+            });
+
+            for (let s = 0; s <= maxSlot; s++) {
+              let item = renderArray[s];
+              let sHeight =
+                weekSlotHeights[w] && weekSlotHeights[w][s]
+                  ? weekSlotHeights[w][s]
+                  : 46;
+
+              if (!item) {
+                cellHtml += `<div class="item-tag" style="opacity:0; pointer-events:none; border:none; background:transparent; box-shadow:none; height:${sHeight}px; min-height:${sHeight}px; margin-bottom:1px; padding:0;"></div>`;
+                continue;
+              }
+
+              let originalIdx = item._rawIdx;
+              let isItemDone =
+                item.isDone === true || String(item.isDone) === "true";
+
+              let isExplicitTask = item.company
+                .toUpperCase()
+                .startsWith("[TASK]");
+              let cleanCompany = item.company.replace(/\[TASK\]/gi, "").trim();
+              let fullName = getFullName(cleanCompany);
+              let isTaskMode =
+                isExplicitTask ||
+                /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(fullName);
+
+              let colorObj = getCompanyColor(cleanCompany);
+              let shortName = getShortName(cleanCompany);
+
+              let pCount = parseInt(item.pal) || 0;
+              let bCount = parseInt(item.box) || 0;
+              let qtyText = "";
+              if (pCount > 0) qtyText = `${pCount}P`;
+              else if (bCount > 0) qtyText = `${bCount}B`;
+
+              let iconHtml = isItemDone
+                ? `<span class="done-icon">✅</span>`
+                : "";
+
+              let tagClass = `item-tag`;
+              if (checkIsSlim(item, day)) tagClass += " item-tag-slim";
+              if (isItemDone) tagClass += " done-mark";
+
+              let bgStyle = "";
+              let innerHtml = "";
+
+              let hasPrev =
+                prevDayData &&
+                prevDayData.some((p) => getMatchKey(p) === getMatchKey(item));
+              let hasNext =
+                nextDayData &&
+                nextDayData.some((n) => getMatchKey(n) === getMatchKey(item));
+              let isSingleDayActual = !hasPrev && !hasNext;
+
+              if (isTaskMode && !isSingleDayActual) {
+                // 🚨 며칠 이어지는 간트차트 처리 (슬림, 녹색 완료 게이지)
+                tagClass += " item-tag-task";
+                tagClass = tagClass.replace("done-mark", ""); // 게이지가 있으므로 취소선/투명도 제거
+
+                let isLinkedLeft = hasPrev && dayOfWeek !== 0;
+                let isLinkedRight = hasNext && dayOfWeek !== 6;
+                let isEdgeLeft = hasPrev && dayOfWeek === 0;
+                let isEdgeRight = hasNext && dayOfWeek === 6;
+
+                let isBlockStart = !isLinkedLeft;
+                let colspan = 1;
+
+                if (isBlockStart && (isLinkedRight || isEdgeRight)) {
+                  let checkDay = day + 1;
+                  let checkDayOfWeek = dayOfWeek + 1;
+                  while (
+                    checkDay <= serverData.daysInMonth &&
+                    checkDayOfWeek < 7
+                  ) {
+                    let nData = serverData.monthData[checkDay];
+                    let hasSameTask =
+                      nData &&
+                      nData.some((n) => getMatchKey(n) === getMatchKey(item));
+                    if (hasSameTask) {
+                      colspan++;
+                      checkDay++;
+                      checkDayOfWeek++;
+                    } else {
+                      break;
+                    }
+                  }
+                }
+
+                if (isLinkedLeft) tagClass += " linked-left";
+                if (isLinkedRight) tagClass += " linked-right";
+                if (isEdgeLeft) tagClass += " edge-left";
+                if (isEdgeRight) tagClass += " edge-right";
+
+                let vH = 26;
+                let mb = sHeight - vH + 1;
+
+                bgStyle = `z-index: ${100 - day}; height:${vH}px !important; min-height:${vH}px !important; margin-bottom:${mb}px !important; box-sizing:border-box;`;
+
+                if (isLinkedLeft || isEdgeLeft) {
+                  bgStyle += ` border-left: none !important; padding-left: 6px !important;`;
+                }
+
+                let taskDoneHtml = isItemDone
+                  ? `<div class="task-done-border"></div>`
+                  : "";
+
+                if (isBlockStart) {
+                  let letters = cleanCompany
+                    .split("")
+                    .map((l) => `<span>${l}</span>`)
+                    .join("");
+                  let displayQty =
+                    qtyText !== ""
+                      ? `<span style="font-size:0.8em; margin-left:5px;">(${qtyText})</span>`
+                      : "";
+                  let spanWidth = `calc(${colspan * 100}% + ${(colspan - 1) * 9}px)`;
+                  innerHtml = `<div class="task-span-text" style="width: ${spanWidth};">${letters}${displayQty}</div><span style="opacity:0;">-</span>${taskDoneHtml}`;
+                } else {
+                  innerHtml = `<span style="opacity:0;">-</span>${taskDoneHtml}`;
+                }
+              } else {
+                // 🚨 하루짜리 작업이거나 출고 스케줄 (뚱뚱하게 렌더링 & 정상 완료 마크)
+                if (isTaskMode) {
+                  tagClass += " item-tag-task"; // 작업 컬러 유지
+                }
+
+                bgStyle = `background: ${isTaskMode ? "#222222" : colorObj.bg}; height:${sHeight}px; min-height:${sHeight}px; box-sizing:border-box;`;
+                if (
+                  isTaskMode &&
+                  !document.body.classList.contains("light-mode")
+                )
+                  bgStyle += ` border: 1px solid rgba(255,255,255,0.2) !important; border-left: 4px solid #FFD60A !important;`;
+                else if (isTaskMode)
+                  bgStyle += ` border: 1px solid #444444 !important; border-left: 4px solid #FFD60A !important;`;
+
+                let txtStyle = `color: ${isTaskMode ? "#fff" : colorObj.cMain} !important; text-shadow: ${isTaskMode ? "none" : colorObj.txtShadow} !important;`;
+                let subStyle = `color: ${isTaskMode ? "#fff" : colorObj.cSub} !important;`;
+                let subHtml =
+                  qtyText !== "" || isItemDone
+                    ? `<span class="pal-sub" style="${subStyle}">${iconHtml}${qtyText}</span>`
+                    : "";
+                innerHtml = `<div style="width:100%; text-align:center; position:relative; z-index:2;"><span class="comp-name" style="${txtStyle}">${shortName}</span></div>${subHtml}`;
+              }
+
+              let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.company}', ${isItemDone})"`;
+
+              cellHtml += `<div class="${tagClass}" style="${bgStyle}" ${bindItem}>${innerHtml}</div>`;
+            }
+          }
+          cellHtml += `</div>`;
+          rowHtml += cellHtml;
+          cellCount++;
+        }
+        while (cellCount % 7 !== 0) {
+          rowHtml += `<div class="day-cell empty"></div>`;
+          cellCount++;
+        }
+        rowHtml += "</div>";
+        grid.innerHTML = rowHtml;
+
+        if (serverData.pendingItems && serverData.pendingItems.length > 0) {
+          document.getElementById("pendingSection").style.display = "block";
+          document.getElementById("pendingCount").innerText =
+            `(${serverData.pendingItems.length}건)`;
+          let pListHtml = "";
+          serverData.pendingItems.forEach((item, idx) => {
+            let meaningfulEtc = item.etc
+              ? item.etc
+                  .replace(
+                    /\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi,
+                    "",
+                  )
+                  .trim()
+              : "";
+            let etcTag =
+              meaningfulEtc !== ""
+                ? `<div class="pending-etc">${meaningfulEtc}</div>`
+                : "";
+
+            let isItemDone =
+              item.isDone === true || String(item.isDone) === "true";
+            let cleanComp = item.company.replace(/\[TASK\]/gi, "").trim();
+            let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.company}', ${isItemDone})"`;
+            let checkIcon = isItemDone
+              ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>'
+              : "";
+            let pCount = parseInt(item.pal) || 0;
+            let bCount = parseInt(item.box) || 0;
+            let qtyText = "";
+            if (pCount > 0) qtyText = `📦 ${pCount}P`;
+            else if (bCount > 0) qtyText = `📦 ${bCount}B`;
+            let volHtml = qtyText
+              ? `<div class="pending-vol">${qtyText}</div>`
+              : `<div class="pending-vol"></div>`;
+
+            // 👇 색상 뱃지를 추출하여 HTML에 결합합니다 👇
+            let colorObj = getCompanyColor(cleanComp);
+            let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${colorObj.bg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
+
+            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${getFullName(cleanComp)}</div>${volHtml}${etcTag}</div></div>`;
+          });
+          document.getElementById("pendingList").innerHTML = pListHtml;
+        } else {
+          document.getElementById("pendingSection").style.display = "none";
+        }
+
+        if (isAdmin) {
+          if (!isMultiMode)
+            document.getElementById("fabBtn").style.display = "flex";
+        }
+        updateSyncTime();
+      }
+
+      // 🚀 [달력 이동 로직] 문자열 결합 버그 차단 & 순수 숫자 계산 강제
+      function navMonth(offset) {
+        let currentY = parseInt(serverData.year, 10);
+        let currentM = parseInt(serverData.month, 10);
+
+        // 💡 [치유 로직] 혹시라도 캐시가 완전히 망가져서 숫자가 아니면(NaN) 강제로 이번 달로 초기화!
+        if (isNaN(currentY) || isNaN(currentM)) {
+          let now = new Date();
+          currentY = now.getFullYear();
+          currentM = now.getMonth() + 1;
+        }
+
+        let newMonth = currentM + parseInt(offset, 10);
+        let newYear = currentY;
+
+        if (newMonth > 12) {
+          newMonth = 1;
+          newYear++;
+        } else if (newMonth < 1) {
+          newMonth = 12;
+          newYear--;
+        }
+
+        goToAsync(newYear, newMonth);
+      }
+
+      let tempPickerYear = serverData.year; // 💡 관리자님 원래 코드 그대로 유지!
+
+      function openPicker() {
+        // 💡 팝업을 열 때 무조건 현재 달력의 '숫자' 연도를 기준으로 엽니다.
+        tempPickerYear = parseInt(serverData.year, 10);
+        renderPicker();
+        document.getElementById("monthPickerModal").style.display = "flex";
+      }
+
+      function changePickerYear(offset) {
+        tempPickerYear += offset;
+        renderPicker();
+      }
+
+      function renderPicker() {
+        document.getElementById("pickerYearText").innerText =
+          `${tempPickerYear}년`;
+        let gridHtml = "";
+
+        for (let i = 1; i <= 12; i++) {
+          let isCurrent =
+            tempPickerYear === parseInt(serverData.year, 10) &&
+            i === parseInt(serverData.month, 10)
+              ? "current"
+              : "";
+
+          // 🚀 버튼 누르는 즉시 팝업창 닫고 이동!
+          gridHtml += `<button class="month-btn ${isCurrent}" onclick="document.getElementById('monthPickerModal').style.display='none'; goToAsync(${tempPickerYear}, ${i})">${i}월</button>`;
+        }
+        document.getElementById("pickerMonthGrid").innerHTML = gridHtml;
+      }
+
+      // 🚀 [초고속 월 이동] 오염된 캐시 완벽 치료 + 잔여 알림창 강제 삭제 패치
+      function goToAsync(year, month) {
+        // 💡 [토스트 킬러] 달력을 넘기는 순간, 무한 로딩 중이던 알림창이 있다면 즉시 삭제합니다!
+        const toastEl = document.getElementById("toast");
+        if (toastEl) toastEl.classList.remove("show");
+        if (window.toastTimer) clearTimeout(window.toastTimer);
+
+        let safeYear = parseInt(year, 10);
+        let safeMonth = parseInt(month, 10);
+
+        const cacheKey = `cal_cache_${currentType}_${safeYear}_${safeMonth}`;
+        const cachedData = localStorage.getItem(cacheKey);
+        let isCacheValid = false;
+
+        if (cachedData) {
+          try {
+            let parsed = JSON.parse(cachedData);
+            serverData =
+              typeof parsed === "string" ? JSON.parse(parsed) : parsed;
+
+            // 🚨 [강력 백신 1] 폰에 잘못 저장된 과거의 연/월/요일/일수 정보를 모조리 무시하고 진짜 수학 달력 기준으로 뼈대 강제 교정!
+            serverData.year = safeYear;
+            serverData.month = safeMonth;
+            serverData.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
+            serverData.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
+
+            if (!isNaN(serverData.year)) isCacheValid = true;
+          } catch (e) {}
+        }
+
+        if (!isCacheValid) {
+          let tempFirstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
+          let tempDays = new Date(safeYear, safeMonth, 0).getDate();
+          serverData = {
+            year: safeYear,
+            month: safeMonth,
+            firstDay: tempFirstDay,
+            daysInMonth: tempDays,
+            monthData: {},
+            pendingItems: serverData.pendingItems || [],
+          };
+        }
+
+        renderCalendar();
+
+        window.currentNavId = (window.currentNavId || 0) + 1;
+        let myNavId = window.currentNavId;
+
+        let fetchStartTime = Date.now();
+
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (
+              typeof lastLocalUpdateTime !== "undefined" &&
+              lastLocalUpdateTime > fetchStartTime
+            )
+              return;
+
+            // 🚨 [강력 백신 2] 서버에서 온 데이터도 무조건 정확한 뼈대로 강제 고정 후 저장!
+            res.year = safeYear;
+            res.month = safeMonth;
+            res.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
+            res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
+
+            localStorage.setItem(cacheKey, JSON.stringify(res));
+
+            // 💡 가장 마지막에 도착한 최신 요청 화면만 업데이트
+            if (myNavId === window.currentNavId) {
+              serverData = res;
+              renderCalendar();
+            }
+          })
+          .withFailureHandler((err) => {})
+          .getCalendarDataAsync(currentType, safeYear, safeMonth);
+      }
+
+      function updateLocalState(action, payload, idx) {
+        // 💡 현재 달력(화면)에 속하는 날짜인지 판별하는 방어 로직
+        const parseDay = (dateStr) => {
+          if (!dateStr || dateStr === "미정") return "pending";
+          let [y, m, d] = dateStr.split("-");
+          if (
+            parseInt(y, 10) !== serverData.year ||
+            parseInt(m, 10) !== serverData.month
+          )
+            return "hidden"; // 화면에 안 그림!
+          return parseInt(d, 10);
+        };
+
+        let oldDay = parseDay(payload.oldDate);
+        let newDay = parseDay(payload.newDate);
+
+        if (action === "ADD") {
+          if (newDay === "hidden") return;
+          let newItem = {
+            company: payload.newComp,
+            pal: payload.newPal,
+            box: payload.newBox,
+            etc: payload.newEtc,
+            isDone: false,
+          };
+          if (newDay !== "pending" && !serverData.monthData[newDay])
+            serverData.monthData[newDay] = [];
+          let arr =
+            newDay === "pending"
+              ? serverData.pendingItems
+              : serverData.monthData[newDay];
+          arr.push(newItem);
+        } else if (action === "EDIT") {
+          let item = null;
+          if (oldDay !== "hidden") {
+            let oldArr =
+              oldDay === "pending"
+                ? serverData.pendingItems
+                : serverData.monthData[oldDay];
+            if (oldArr && oldArr[idx]) item = oldArr.splice(idx, 1)[0];
+          }
+          if (!item) {
+            item = {
+              company: payload.oldComp,
+              pal: payload.oldPal,
+              box: payload.oldBox,
+              etc: payload.oldEtc,
+              isDone: payload.oldDone,
+            };
+          }
+          item.company = payload.newComp;
+          item.pal = payload.newPal;
+          item.box = payload.newBox;
+          item.etc = payload.newEtc;
+
+          if (newDay !== "hidden") {
+            if (newDay !== "pending" && !serverData.monthData[newDay])
+              serverData.monthData[newDay] = [];
+            let newArr =
+              newDay === "pending"
+                ? serverData.pendingItems
+                : serverData.monthData[newDay];
+            newArr.push(item);
+          }
+        } else if (action === "DELETE") {
+          if (oldDay !== "hidden") {
+            let arr =
+              oldDay === "pending"
+                ? serverData.pendingItems
+                : serverData.monthData[oldDay];
+            if (arr) arr.splice(idx, 1);
+          }
+        } else if (
+          action === "DONE" ||
+          action === "UNDO_DONE" ||
+          action === "ADD_QTY"
+        ) {
+          if (oldDay === "hidden") return;
+          let arr =
+            oldDay === "pending"
+              ? serverData.pendingItems
+              : serverData.monthData[oldDay];
+          if (!arr || !arr[idx]) return;
+          if (action === "DONE") arr[idx].isDone = true;
+          if (action === "UNDO_DONE") arr[idx].isDone = false;
+          if (action === "ADD_QTY") {
+            let addP = parseInt(payload.addPal) || 0;
+            let addB = parseInt(payload.addBox) || 0;
+            arr[idx].pal = (parseInt(arr[idx].pal) || 0) + addP;
+            arr[idx].box = (parseInt(arr[idx].box) || 0) + addB;
+            let histDate = `${new Date().getMonth() + 1}/${new Date().getDate()}`;
+            let histStr = `[${histDate} ${addP ? addP + "P" : ""}${addP && addB ? " " : ""}${addB ? addB + "B" : ""} 추가]`;
+            arr[idx].etc = arr[idx].etc
+              ? arr[idx].etc + " " + histStr
+              : histStr;
+          }
+        }
+        lastLocalUpdateTime = Date.now(); // 방금 조작한 시간 기록
+        localStorage.setItem(
+          `cal_cache_${currentType}_${serverData.year}_${serverData.month}`,
+          JSON.stringify(serverData),
+        ); // 폰 메모리에 즉시 덮어쓰기
+      }
+
+      function updateMultiLocalState(action, items) {
+        const norm = (v) => {
+          let s = String(v != null ? v : "").trim();
+          return s === "0" || s === "" ? "" : s;
+        };
+
+        items.forEach((target) => {
+          let day =
+            target.dateStr === "미정"
+              ? "pending"
+              : parseInt(target.dateStr.split("-")[2], 10);
+          let arr =
+            day === "pending"
+              ? serverData.pendingItems
+              : serverData.monthData[day];
+          if (!arr) return;
+
+          let idx = arr.findIndex((i) => {
+            return (
+              i.company === target.comp &&
+              norm(i.pal) === norm(target.pal) &&
+              norm(i.box) === norm(target.box) &&
+              (i.isDone === true || String(i.isDone) === "true") ===
+                (target.isDone === true || String(target.isDone) === "true")
+            );
+          });
+
+          if (idx !== -1) {
+            if (action === "MULTI_DELETE") arr.splice(idx, 1);
+            else if (action === "MULTI_DONE") arr[idx].isDone = true;
+            else if (action === "MULTI_UNDO_DONE") arr[idx].isDone = false;
+          }
+        });
+        // 👇 함수의 맨 마지막에 아래 두 줄 추가 👇
+        lastLocalUpdateTime = Date.now();
+        localStorage.setItem(
+          `cal_cache_${currentType}_${serverData.year}_${serverData.month}`,
+          JSON.stringify(serverData),
+        );
+      }
+
+      function attachAutocomplete(inputId) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        let oldDrop = document.getElementById(inputId + "-drop");
+        if (oldDrop) oldDrop.remove();
+        const drop = document.createElement("div");
+        drop.id = inputId + "-drop";
+        drop.className = "custom-dropdown";
+        drop.style.display = "none";
+        input.parentNode.insertBefore(drop, input.nextSibling);
+        const cleanStr = (s) => s.replace(/[\(\)주]/g, "");
+        function renderList(filterText) {
+          let filtered = [...fixedCompanies];
+          if (filterText) {
+            filtered = filtered.filter((c) => c.includes(filterText));
+            filtered.sort((a, b) => {
+              let idxA = a.indexOf(filterText);
+              let idxB = b.indexOf(filterText);
+              if (idxA !== idxB) return idxA - idxB;
+              return cleanStr(a).localeCompare(cleanStr(b));
+            });
+          } else {
+            filtered.sort((a, b) => cleanStr(a).localeCompare(cleanStr(b)));
+          }
+          if (filtered.length === 0) {
+            drop.style.display = "none";
+            return;
+          }
+          let html = "";
+          filtered.forEach((c) => {
+            let bolded = filterText
+              ? c.replace(
+                  new RegExp(`(${filterText})`, "gi"),
+                  "<strong style='color:#0a84ff;'>$1</strong>",
+                )
+              : c;
+            html += `<div class="drop-item" onmousedown="document.getElementById('${inputId}').value='${c}'; document.getElementById('${inputId}-drop').style.display='none';">${bolded}</div>`;
+          });
+          drop.innerHTML = html;
+          drop.style.display = "block";
+        }
+        input.addEventListener("focus", () => renderList(input.value.trim()));
+        input.addEventListener("click", () => renderList(input.value.trim()));
+        input.addEventListener("input", () => renderList(input.value.trim()));
+        input.addEventListener("blur", () => {
+          setTimeout(() => {
+            if (drop) drop.style.display = "none";
+          }, 200);
+        });
+      }
+
+      let adminToken = sessionStorage.getItem("admin_token");
+      let isAdmin = adminToken ? true : false;
+      if (isAdmin) {
+        const btn = document.getElementById("adminBtn");
+        btn.innerHTML = "🔓 관리자";
+        btn.classList.add("unlocked");
+        document.getElementById("adminActions").style.display = "flex";
+        document.getElementById("fabBtn").style.display = "flex";
+      }
+
+      function toggleAdmin() {
+        const btn = document.getElementById("adminBtn");
+        if (isAdmin) {
+          isAdmin = false;
+          sessionStorage.removeItem("admin_token");
+          adminToken = null;
+          btn.innerHTML = "🔒 잠김";
+          btn.classList.remove("unlocked");
+          document.getElementById("adminActions").style.display = "none";
+          document.getElementById("fabBtn").style.display = "none";
+          updateFooterUI();
+          showToast("🔒 일반 모드로 전환되었습니다.", 2000);
+          return;
+        }
+        document.getElementById("adminPwInput").value = "";
+        document.getElementById("adminLoginModal").style.display = "flex";
+        setTimeout(() => document.getElementById("adminPwInput").focus(), 100);
+      }
+
+      function submitAdminLogin() {
+        let pw = document.getElementById("adminPwInput").value;
+        if (!pw) return;
+        document.getElementById("adminLoginModal").style.display = "none";
+        showToast("🔒 보안 인증 중...", 0);
+        google.script.run
+          .withSuccessHandler(function (isValid) {
+            if (isValid) {
+              isAdmin = true;
+              sessionStorage.setItem("admin_token", pw);
+              adminToken = pw;
+              document.getElementById("adminBtn").innerHTML = "🔓 관리자";
+              document.getElementById("adminBtn").classList.add("unlocked");
+              document.getElementById("adminActions").style.display = "flex";
+              document.getElementById("fabBtn").style.display = "flex";
+              updateFooterUI();
+              showToast("🔓 관리자 인증 성공!", 2000);
+              renderCalendar();
+            } else {
+              showToast("❌ 비밀번호가 틀렸습니다.", 2000);
+            }
+          })
+          .verifyAdminPw(pw);
+      }
+
+      let isMultiMode = false;
+      let selectedItems = [];
+      function toggleMultiMode() {
+        isMultiMode = !isMultiMode;
+        selectedItems = [];
+        document
+          .querySelectorAll(".item-tag, .pending-item")
+          .forEach((el) => el.classList.remove("multi-selected"));
+        const btn = document.getElementById("multiBtn");
+        const bar = document.getElementById("multiActionBar");
+        const fab = document.getElementById("fabBtn");
+        if (isMultiMode) {
+          btn.innerText = "❌ 취소";
+          btn.classList.add("active");
+          bar.style.display = "flex";
+          document.getElementById("selCount").innerText = "0";
+          fab.style.display = "none";
+        } else {
+          btn.innerText = "☑️ 다중 선택";
+          btn.classList.remove("active");
+          bar.style.display = "none";
+          if (isAdmin) fab.style.display = "flex";
+        }
+      }
+
+      let pressTimer = null;
+      let isLongPress = false;
+      let pressTarget = null;
+      let startX = 0,
+        startY = 0;
+      let isDragging = false;
+      let dragGhost = null;
+      let dragData = null;
+      let hasMovedDuringDrag = false;
+      let dragOffsetX = 0;
+      let dragOffsetY = 0;
+      let dragReq = null;
+      let lastDropTarget = null; // 💡 60fps 스무스 드래그용 변수 추가
+
+      function startPress(e, type, day, idx = null) {
+        if (!isAdmin || isMultiMode) return;
+        cancelPress();
+        isLongPress = false;
+        hasMovedDuringDrag = false;
+        pressTarget = e.currentTarget;
+        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        startX = clientX;
+        startY = clientY;
+        pressTarget.classList.add("cell-pressing");
+
+        pressTimer = setTimeout(() => {
+          isLongPress = true;
+          if (pressTarget) pressTarget.classList.remove("cell-pressing");
+          if (navigator.vibrate) navigator.vibrate(50);
+
+          if (type === "cell") {
+            openAddFormWithDate(day);
+          } else if (type === "item") {
+            isDragging = true;
+            dragData = { day: day, idx: idx };
+            let rect = pressTarget.getBoundingClientRect();
+            dragOffsetX = clientX - rect.left;
+            dragOffsetY = clientY - rect.top;
+
+            dragGhost = pressTarget.cloneNode(true);
+            pressTarget.style.opacity = "0.3"; // 💡 원본은 반투명하게 (드래그 중임이 명확히 보이도록)
+
+            if (day === "pending") {
+              dragGhost.className = "item-tag";
+              let cleanComp = serverData.pendingItems[idx].company
+                .replace(/\[TASK\]/gi, "")
+                .trim();
+              let shortName = getShortName(cleanComp);
+              let colorObj = getCompanyColor(cleanComp);
+              dragGhost.style.background = colorObj.bg;
+              dragGhost.style.color = colorObj.cMain;
+              dragGhost.style.width = "55px";
+              dragGhost.style.height = "35px";
+              dragGhost.style.justifyContent = "center";
+              dragGhost.style.alignItems = "center";
+              dragGhost.style.display = "flex";
+              dragGhost.style.borderRadius = "6px";
+              dragGhost.style.fontSize = "0.9em";
+              dragGhost.style.fontWeight = "900";
+              dragGhost.innerHTML = shortName;
+              dragOffsetX = 27;
+              dragOffsetY = 17;
+            } else {
+              // 💡 [핵심 패치] 작업(Task)처럼 엄청 긴 막대기를 드래그할 때, 손가락 밖으로 삐져나가지 않게 아담한 사이즈로 묶어줍니다!
+              let isWideTask = rect.width > window.innerWidth * 0.4; // 화면의 40% 이상 차지하는 긴 막대라면
+              dragGhost.style.width = isWideTask ? "100px" : rect.width + "px";
+              dragGhost.style.height = rect.height + "px";
+              if (isWideTask) dragOffsetX = 50; // 손가락 중앙으로 강제 정렬
+
+              dragGhost.classList.remove(
+                "linked-left",
+                "linked-right",
+                "item-tag-slim",
+                "edge-left",
+                "edge-right",
+              );
+              dragGhost.style.margin = "0px";
+              dragGhost.style.borderRight = "";
+              dragGhost.style.borderLeft = "";
+              dragGhost.style.borderRadius = "8px"; // 더 부드러운 라운드 처리
+            }
+            dragGhost.style.position = "fixed";
+            dragGhost.style.left = "0px";
+            dragGhost.style.top = "0px";
+            dragGhost.style.margin = "0px";
+            dragGhost.style.zIndex = "999999";
+            dragGhost.style.opacity = "0.95";
+            dragGhost.style.pointerEvents = "none";
+            dragGhost.style.willChange = "transform";
+            dragGhost.style.boxShadow = "0 15px 35px rgba(0,0,0,0.3)";
+
+            // 👇 이 줄을 추가하세요! (좌측 상단에서 날아오는 애니메이션 강제 삭제) 👇
+            dragGhost.style.transition = "none";
+
+            document.body.appendChild(dragGhost);
+
+            updateGhostPosition(clientX, clientY);
+          }
+        }, 400); // 💡 500ms -> 400ms 로 줄여서 좀 더 빨리 드래그가 잡히도록 체감 속도 향상!
+      }
+
+      function cancelPress() {
+        if (isDragging) return;
+        if (pressTimer) clearTimeout(pressTimer);
+        if (pressTarget) {
+          pressTarget.classList.remove("cell-pressing");
+          pressTarget = null;
+        }
+      }
+
+      // 🚀 [60fps 스무스 렌더링] requestAnimationFrame을 사용한 미끄러지는 듯한 드래그 구현
+      function updateGhostPosition(x, y) {
+        if (!dragGhost) return;
+        if (!dragReq) {
+          dragReq = requestAnimationFrame(() => {
+            dragGhost.style.transform = `translate3d(${x - dragOffsetX}px, ${y - dragOffsetY}px, 0) scale(1.05)`;
+
+            // 💡 [드래그 타겟 하이라이트 표시] 어디에 떨어질지 달력 칸을 파랗게 빛나게 해줍니다!
+            let dropElement = document.elementFromPoint(x, y);
+            let targetCell = dropElement
+              ? dropElement.closest(".day-cell:not(.empty)")
+              : null;
+
+            if (lastDropTarget && lastDropTarget !== targetCell)
+              lastDropTarget.classList.remove("drag-over");
+            if (targetCell) {
+              targetCell.classList.add("drag-over");
+              lastDropTarget = targetCell;
+            } else lastDropTarget = null;
+
+            dragReq = null;
+          });
+        }
+      }
+
+      document.addEventListener(
+        "touchmove",
+        function (e) {
+          if (isDragging) {
+            e.preventDefault();
+            hasMovedDuringDrag = true;
+            updateGhostPosition(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        },
+        { passive: false },
+      );
+      document.addEventListener("mousemove", function (e) {
+        if (isDragging) {
+          hasMovedDuringDrag = true;
+          updateGhostPosition(e.clientX, e.clientY);
+        }
+      });
+      document.addEventListener("touchend", endDrag);
+      document.addEventListener("mouseup", endDrag);
+
+      function endDrag(e) {
+        if (!isDragging) return;
+        isDragging = false;
+        if (dragReq) {
+          cancelAnimationFrame(dragReq);
+          dragReq = null;
+        }
+
+        let x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+        let y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+        if (dragGhost) {
+          dragGhost.remove();
+          dragGhost = null;
+        }
+        if (pressTarget) {
+          pressTarget.style.opacity = "1";
+        } // 원본 반투명 원상복구
+        if (lastDropTarget) {
+          lastDropTarget.classList.remove("drag-over");
+          lastDropTarget = null;
+        } // 하이라이트 끄기
+
+        if (!hasMovedDuringDrag) return;
+
+        let dropElement = document.elementFromPoint(x, y);
+        let targetCell = dropElement ? dropElement.closest(".day-cell") : null;
+        let isOutsideCalendar =
+          !dropElement ||
+          (!dropElement.closest(".calendar-container") &&
+            !dropElement.closest(".overlay-modal"));
+        let targetPending = dropElement
+          ? dropElement.closest(".pending-container")
+          : null;
+        let item =
+          dragData.day === "pending"
+            ? serverData.pendingItems[dragData.idx]
+            : serverData.monthData[dragData.day][dragData.idx];
+        let oldDateStr =
+          dragData.day === "pending"
+            ? "미정"
+            : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+
+        if (targetCell && !targetCell.classList.contains("empty")) {
+          let newDay = parseInt(
+            targetCell.querySelector(".date-num").innerText.trim(),
+          );
+          if (newDay === dragData.day) return;
+          let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
+          let cleanName = item.company.replace(/\[TASK\]/gi, "").trim();
+          if (
+            confirm(
+              `🚚 [${getFullName(cleanName)}] 일정을 ${newDay}일로 이동하시겠습니까?`,
+            )
+          ) {
+            executeMove(item, oldDateStr, newDateStr, dragData.idx);
+          }
+        } else if (isOutsideCalendar || targetPending) {
+          if (dragData.day === "pending") return;
+          let cleanName = item.company.replace(/\[TASK\]/gi, "").trim();
+          if (
+            confirm(
+              `🚚 [${getFullName(cleanName)}] 일정을 '미정(대기)'으로 변경하시겠습니까?`,
+            )
+          ) {
+            executeMove(item, oldDateStr, "미정", dragData.idx);
+          }
+        }
+      }
+
+      function executeMove(item, oldDateStr, newDateStr, idx) {
+        // ❌ 지워버림: if(isProcessing) return; isProcessing = true;
+
+        // 💡 [핵심 버그 수정] 수량이 0일 때 빈칸("")으로 변환되어 서버 매칭이 실패하는 JS 버그 완벽 방어
+        const safeStr = (val) =>
+          val === "" || val == null ? "" : String(val).trim();
+        let currentIsDone =
+          item.isDone === true || String(item.isDone).toLowerCase() === "true";
+
+        let payload = {
+          action: "EDIT",
+          oldComp: item.company,
+          oldDate: oldDateStr,
+          oldDone: currentIsDone,
+          oldPal: safeStr(item.pal), // 수정됨!
+          oldBox: safeStr(item.box), // 수정됨!
+          newComp: item.company,
+          newDate: newDateStr,
+          newPal: safeStr(item.pal), // 수정됨!
+          newBox: safeStr(item.box), // 수정됨!
+          newEtc: item.etc,
+        };
+
+        updateLocalState("EDIT", payload, idx);
+        renderCalendar();
+        // 💡 토스트 메시지도 거슬리지 않게 삭제하거나 짧게 둡니다.
+
+        google.script.run
+          .withSuccessHandler((res) => {
+            // ❌ 지워버림: isProcessing = false;
+            if (res.success) {
+              // showToast("✅ 이동 완료!", 1000); // 굳이 안 띄워도 무방합니다
+            } else {
+              // 💡 [UI 수정] 서버 저장 실패 시, '최신화 완료' 토스트에 에러 메시지가 묻히지 않도록 2.5초 딜레이 부여
+              showToast(
+                "❌ 이동 실패! 원본 데이터와 불일치합니다. 복구합니다.",
+                2500,
+              );
+              setTimeout(
+                () => goToAsync(serverData.year, serverData.month),
+                2500,
+              );
+            }
+          })
+          .withFailureHandler((err) => {
+            // ❌ 지워버림: isProcessing = false;
+            showToast("❌ 통신 오류! 데이터를 복구합니다.", 2500);
+            setTimeout(
+              () => goToAsync(serverData.year, serverData.month),
+              2500,
+            );
+          })
+          .manageWebOutboundData("EDIT", payload, adminToken);
+      }
+
+      function handleItemClick(e, day, idx, comp, isDone) {
+        if (isMultiMode) {
+          const el = e.currentTarget;
+          let dateStr =
+            day === "pending"
+              ? "미정"
+              : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          let isItemDone = isDone === true || String(isDone) === "true";
+          let itemKey = `${comp}_${dateStr}_${isItemDone}_${idx}`;
+          let item =
+            day === "pending"
+              ? serverData.pendingItems[idx]
+              : serverData.monthData[day][idx];
+          const safeStr = (val) =>
+            val === "" || val == null ? "" : String(val).trim();
+          let existingIdx = selectedItems.findIndex((i) => i.key === itemKey);
+          if (existingIdx > -1) {
+            selectedItems.splice(existingIdx, 1);
+            el.classList.remove("multi-selected");
+          } else {
+            selectedItems.push({
+              key: itemKey,
+              comp: comp,
+              dateStr: dateStr,
+              isDone: isItemDone,
+              pal: safeStr(item.pal),
+              box: safeStr(item.box),
+            });
+            el.classList.add("multi-selected");
+          }
+          document.getElementById("selCount").innerText = selectedItems.length;
+          return;
+        }
+        if (isLongPress) {
+          setTimeout(() => {
+            isLongPress = false;
+          }, 100);
+          return;
+        }
+        showModal(day);
+      }
+      function handleCellClick(e, day) {
+        if (isMultiMode) return;
+        if (isLongPress) {
+          setTimeout(() => {
+            isLongPress = false;
+          }, 100);
+          return;
+        }
+        showModal(day);
+      }
+      function openAddFormWithDate(day) {
+        openAddForm();
+        let dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        document.getElementById("add-date").value = dateStr;
+        setTimeout(() => document.getElementById("add-comp").focus(), 200);
+      }
+
+      function submitCMS(
+        action,
+        oldComp = null,
+        oldDate = null,
+        idx = null,
+        isDone = false,
+        oldBlockStart = null,
+        oldBlockEnd = null,
+      ) {
+        // ❌ [삭제됨] if(isProcessing) { ... return; }
+
+        let oldPal = "",
+          oldBox = "";
+        const safeStr = (val) =>
+          val === "" || val == null ? "" : String(val).trim();
+        let currentIsDone = isDone === true || String(isDone) === "true";
+        if (idx !== null) {
+          let day =
+            oldDate === "미정"
+              ? "pending"
+              : parseInt(oldDate.split("-")[2], 10);
+          let item =
+            day === "pending"
+              ? serverData.pendingItems[idx]
+              : serverData.monthData[day]
+                ? serverData.monthData[day][idx]
+                : null;
+          if (item) {
+            oldPal = safeStr(item.pal);
+            oldBox = safeStr(item.box);
+            currentIsDone =
+              item.isDone === true || String(item.isDone) === "true";
+          }
+        }
+        let payload = {
+          action: action,
+          oldComp: oldComp,
+          oldDate: oldDate,
+          oldDone: currentIsDone,
+          oldPal: oldPal,
+          oldBox: oldBox,
+        };
+        let confirmName = oldComp
+          ? getFullName(oldComp.replace(/\[TASK\]/gi, "").trim())
+          : "";
+
+        if (action === "DONE") {
+          if (!confirm(`✅ [${confirmName}] 일정을 완료 처리하시겠습니까?`))
+            return;
+        } else if (action === "UNDO_DONE") {
+          if (
+            !confirm(`⏪ [${confirmName}] 일정의 완료 상태를 취소하시겠습니까?`)
+          )
+            return;
+        }
+
+        let isTask = false;
+        let rawComp = "";
+        let startDateStr = "";
+        let endDateStr = "";
+        if (action === "ADD") {
+          isTask = document.getElementById("type-task-add").checked;
+          rawComp = document.getElementById("add-comp").value.trim();
+          payload.newComp = isTask ? `[TASK]${rawComp}` : rawComp;
+          payload.newPal = document.getElementById("add-pal").value;
+          payload.newBox = document.getElementById("add-box").value;
+          startDateStr = document.getElementById("add-date").value || "미정";
+          let endNode = document.getElementById("add-end-date");
+          endDateStr = endNode ? endNode.value : "";
+          payload.newDate = startDateStr;
+          payload.newEtc = document.getElementById("add-etc").value;
+        } else if (action === "EDIT") {
+          isTask = document.getElementById(`edit-type-task-${idx}`).checked;
+          rawComp = document.getElementById(`edit-comp-${idx}`).value.trim();
+          payload.newComp = isTask ? `[TASK]${rawComp}` : rawComp;
+          payload.newPal = document.getElementById(`edit-pal-${idx}`).value;
+          payload.newBox = document.getElementById(`edit-box-${idx}`).value;
+          payload.newDate =
+            document.getElementById(`edit-date-${idx}`).value || "미정";
+          let endNode = document.getElementById(`edit-${idx}-end-date`);
+          endDateStr = endNode ? endNode.value : "";
+          startDateStr = payload.newDate;
+          payload.newEtc = document.getElementById(`edit-etc-${idx}`).value;
+
+          // 💡 [여기서부터 덮어쓰기] 색상 셔플을 돌린 후 저장을 눌렀다면 로컬+서버 동시 영구 저장!
+          if (tempEditColorObj) {
+            let stdName = getFullName(rawComp);
+            companyColors[stdName] = tempEditColorObj; // 내 화면 즉시 반영
+
+            let foundIdx = presetPalette.findIndex(
+              (p) => p.bg === tempEditColorObj.bg,
+            );
+            if (foundIdx !== -1) {
+              customColors[stdName] = foundIdx;
+              localStorage.setItem(
+                "GLOBAL_COMPANY_COLORS",
+                JSON.stringify(customColors),
+              );
+              google.script.run.saveGlobalColor(stdName, foundIdx);
+            }
+            tempEditColorObj = null; // 저장 완료 후 변수 비우기
+          }
+        }
+
+        if (
+          (action === "ADD" || action === "EDIT") &&
+          (!payload.newComp || payload.newComp === "[TASK]")
+        ) {
+          alert("⚠️ 업체/작업명은 필수입니다.");
+          return;
+        }
+        if (
+          action === "DELETE" &&
+          !confirm(`⚠️ 정말 [${confirmName}] 일정을 영구 삭제하시겠습니까?`)
+        )
+          return;
+
+        // 💡 [핵심 패치] 수량 추가 버튼 시 정확한 ID 값 할당
+        if (action === "ADD_QTY") {
+          payload.addPal = document.getElementById(`add-q-pal-${idx}`).value;
+          payload.addBox = document.getElementById(`add-q-box-${idx}`).value;
+          if (!payload.addPal && !payload.addBox) {
+            alert("추가할 수량을 입력하세요!");
+            return;
+          }
+        }
+
+        // ❌ [삭제됨] isProcessing = true;
+        // 💡 화면부터 즉시 닫아서 다른 작업 가능하게 만들기!
+        document.getElementById("modal").style.display = "none";
+        document.getElementById("addModal").style.display = "none";
+
+        setTimeout(() => {
+          if (
+            action === "ADD" &&
+            startDateStr !== "미정" &&
+            endDateStr &&
+            endDateStr >= startDateStr
+          ) {
+            let sDate = new Date(startDateStr);
+            let eDate = new Date(endDateStr);
+            let datesToProcess = [];
+            while (sDate <= eDate) {
+              datesToProcess.push(
+                `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, "0")}-${String(sDate.getDate()).padStart(2, "0")}`,
+              );
+              sDate.setDate(sDate.getDate() + 1);
+            }
+            let processedCount = 0;
+            datesToProcess.forEach((dateStr) => {
+              let curPayload = { ...payload, newDate: dateStr };
+              updateLocalState("ADD", curPayload, null);
+              google.script.run
+                .withSuccessHandler(() => {
+                  processedCount++;
+                  if (processedCount === datesToProcess.length) {
+                    // ❌ [삭제됨] isProcessing = false;
+                    renderCalendar(); // 에러 방지용 가벼운 렌더링
+                  }
+                })
+                .manageWebOutboundData("ADD", curPayload, adminToken);
+            });
+            return;
+          }
+
+          if (action === "EDIT" && oldBlockStart && oldBlockStart !== "null") {
+            let oldDates = [];
+            if (oldBlockStart !== "미정") {
+              let oldSDate = new Date(oldBlockStart);
+              let oldEDate =
+                oldBlockEnd && oldBlockEnd !== "null" && oldBlockEnd !== ""
+                  ? new Date(oldBlockEnd)
+                  : new Date(oldSDate);
+              let curr = new Date(oldSDate);
+              while (curr <= oldEDate) {
+                oldDates.push(
+                  `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`,
+                );
+                curr.setDate(curr.getDate() + 1);
+              }
+            } else {
+              oldDates.push("미정");
+            }
+
+            let newDates = [];
+            if (startDateStr !== "미정") {
+              let newSDate = new Date(startDateStr);
+              let newEDate = endDateStr
+                ? new Date(endDateStr)
+                : new Date(newSDate);
+              if (newEDate < newSDate) newEDate = new Date(newSDate);
+              let curr = new Date(newSDate);
+              while (curr <= newEDate) {
+                newDates.push(
+                  `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`,
+                );
+                curr.setDate(curr.getDate() + 1);
+              }
+            } else {
+              newDates.push("미정");
+            }
+
+            let actionsToRun = [];
+
+            oldDates.forEach((dStr) => {
+              if (newDates.includes(dStr)) {
+                let p = { ...payload, newDate: dStr, oldDate: dStr };
+                let targetDay =
+                  dStr === "미정"
+                    ? "pending"
+                    : parseInt(dStr.split("-")[2], 10);
+                let targetIdx = -1;
+                if (
+                  targetDay ===
+                  (oldDate === "미정"
+                    ? "pending"
+                    : parseInt(oldDate.split("-")[2], 10))
+                ) {
+                  targetIdx = idx;
+                }
+                actionsToRun.push({
+                  action: "EDIT",
+                  payload: p,
+                  idx: targetIdx,
+                  targetDay: targetDay,
+                });
+              } else {
+                let p = { ...payload, oldDate: dStr, newDate: dStr };
+                actionsToRun.push({
+                  action: "DELETE",
+                  payload: p,
+                  targetDay:
+                    dStr === "미정"
+                      ? "pending"
+                      : parseInt(dStr.split("-")[2], 10),
+                });
+              }
+            });
+
+            newDates.forEach((dStr) => {
+              if (!oldDates.includes(dStr)) {
+                let p = { ...payload, newDate: dStr };
+                actionsToRun.push({ action: "ADD", payload: p });
+              }
+            });
+
+            let processedCount = 0;
+            let totalActions = actionsToRun.length;
+            if (totalActions === 0) return; // ❌ [삭제됨] isProcessing = false;
+
+            actionsToRun.forEach((act) => {
+              let localIdx = act.idx;
+              if (localIdx === -1 || localIdx === undefined) {
+                let arr =
+                  act.targetDay === "pending"
+                    ? serverData.pendingItems
+                    : serverData.monthData[act.targetDay];
+                if (arr) {
+                  localIdx = arr.findIndex(
+                    (it) =>
+                      it.company === oldComp &&
+                      String(it.pal || "") === oldPal &&
+                      String(it.box || "") === oldBox &&
+                      (it.isDone === true || String(it.isDone) === "true") ===
+                        currentIsDone,
+                  );
+                }
+              }
+              if (localIdx !== -1 && localIdx !== undefined) {
+                updateLocalState(act.action, act.payload, localIdx);
+              } else if (act.action === "ADD") {
+                updateLocalState(act.action, act.payload, null);
+              }
+
+              google.script.run
+                .withSuccessHandler(() => {
+                  processedCount++;
+                  if (processedCount === totalActions) {
+                    // ❌ [삭제됨] isProcessing = false;
+                    renderCalendar();
+                  }
+                })
+                .withFailureHandler(() => {
+                  processedCount++;
+                  if (processedCount === totalActions) {
+                    // ❌ [삭제됨] isProcessing = false;
+                    goToAsync(serverData.year, serverData.month); // 실패 시에만 강제 동기화 복구
+                  }
+                })
+                .manageWebOutboundData(act.action, act.payload, adminToken);
+            });
+            return;
+          }
+
+          // 🟢 단일 처리 로직
+          updateLocalState(action, payload, idx);
+          renderCalendar();
+
+          google.script.run
+            .withSuccessHandler(function (res) {
+              // ❌ [삭제됨] isProcessing = false;
+              if (!res.success) {
+                showToast("❌ 서버 실패! 복구합니다.", 2500);
+                goToAsync(serverData.year, serverData.month);
+              }
+            })
+            .withFailureHandler((err) => {
+              // ❌ [삭제됨] isProcessing = false;
+              showToast("❌ 통신 오류! 복구합니다.", 2500);
+              goToAsync(serverData.year, serverData.month);
+            })
+            .manageWebOutboundData(action, payload, adminToken);
+        }, 50);
+      }
+
+      function executeMultiAction(action) {
+        // ❌ [삭제됨] if(isProcessing) { showToast('⏳ 처리 중입니다.', 1000); return; }
+
+        if (selectedItems.length === 0) {
+          alert("항목을 먼저 터치하여 선택해 주세요.");
+          return;
+        }
+        let actionName =
+          action === "MULTI_DONE"
+            ? "완료 처리"
+            : action === "MULTI_UNDO_DONE"
+              ? "완료 취소"
+              : "영구 삭제";
+        if (
+          !confirm(
+            `⚠️ 선택된 ${selectedItems.length}개의 일정을 일괄 [${actionName}] 하시겠습니까?`,
+          )
+        )
+          return;
+
+        // ❌ [삭제됨] isProcessing = true;
+        let itemsToProcess = [...selectedItems];
+
+        // 💡 화면부터 즉시 0초 만에 반영하고, 멀티 모드 종료!
+        updateMultiLocalState(action, itemsToProcess);
+        toggleMultiMode();
+        renderCalendar();
+
+        google.script.run
+          .withSuccessHandler(function (res) {
+            // ❌ [삭제됨] isProcessing = false;
+            if (!res.success) {
+              showToast("❌ 일괄 작업 실패! 데이터를 복구합니다.", 2500);
+              goToAsync(serverData.year, serverData.month);
+            }
+          })
+          .withFailureHandler(function (err) {
+            showToast("❌ 통신 오류! 데이터를 복구합니다.", 2500);
+            goToAsync(serverData.year, serverData.month);
+          })
+          .manageWebOutboundData(action, { items: itemsToProcess }, adminToken);
+      }
+
+      function openAddForm() {
+        if (isMultiMode) toggleMultiMode();
+        document.getElementById("type-out-add").checked = true;
+        toggleEndDate("add", false);
+        document.getElementById("add-comp").value = "";
+        document.getElementById("add-pal").value = "";
+        document.getElementById("add-box").value = "";
+        document.getElementById("add-date").value = "";
+        let endNode = document.getElementById("add-end-date");
+        if (endNode) endNode.value = "";
+        document.getElementById("add-etc").value = "";
+        attachAutocomplete("add-comp");
+        document.getElementById("addModal").style.display = "flex";
+      }
+
+      function showModal(day) {
+        let dayData =
+          day === "pending"
+            ? serverData.pendingItems
+            : serverData.monthData[day];
+        if (!dayData || dayData.length === 0) return;
+        let titleText = "",
+          dateStr = "";
+        if (day === "pending") {
+          titleText = "⚠️ 일정 미정 / 대기 상세";
+          dateStr = "미정";
+        } else {
+          const dayOfWeekIdx = ["일", "월", "화", "수", "목", "금", "토"];
+          const dayOfWeek =
+            dayOfWeekIdx[
+              new Date(serverData.year, serverData.month - 1, day).getDay()
+            ];
+          titleText = `${serverData.month}월 ${day}일 (${dayOfWeek})`;
+          dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        }
+        document.getElementById("modalTitle").innerText = titleText;
+        let contentHtml = "";
+        dayData.forEach((item, idx) => {
+          let isItemDone =
+            item.isDone === true || String(item.isDone) === "true";
+          let isDoneClass = isItemDone ? "done-mark" : "";
+          let isExplicitTask = item.company.toUpperCase().startsWith("[TASK]");
+          let cleanComp = item.company.replace(/\[TASK\]/gi, "").trim();
+          let isTaskMode =
+            isExplicitTask ||
+            /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(cleanComp));
+
+          let colorObj = getCompanyColor(cleanComp);
+          let bgStyle = `background: ${colorObj.bg};`;
+          if (isTaskMode) {
+            bgStyle = `background: #222222; border: 2px solid #FFD60A;`;
+          }
+
+          let actionBtns = "";
+          if (isAdmin) {
+            let blockStartDateStr = dateStr;
+            let blockEndDateStr = "";
+
+            if (isTaskMode && day !== "pending") {
+              let startDay = parseInt(day);
+              let endDay = parseInt(day);
+              const getMatchKey = (it) => {
+                let clean = it.company.replace(/\[TASK\]/gi, "").trim();
+                let isT =
+                  it.company.toUpperCase().startsWith("[TASK]") ||
+                  /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(
+                    getFullName(clean),
+                  );
+                let isD = it.isDone === true || String(it.isDone) === "true";
+                return `${isT ? "T" : "O"}_${getFullName(clean)}_${isD}_${it.pal || ""}_${it.box || ""}`;
+              };
+              let targetKey = getMatchKey(item);
+
+              for (let d = startDay - 1; d >= 1; d--) {
+                if (
+                  serverData.monthData[d] &&
+                  serverData.monthData[d].some(
+                    (x) => getMatchKey(x) === targetKey,
+                  )
+                )
+                  startDay = d;
+                else break;
+              }
+              for (let d = endDay + 1; d <= serverData.daysInMonth; d++) {
+                if (
+                  serverData.monthData[d] &&
+                  serverData.monthData[d].some(
+                    (x) => getMatchKey(x) === targetKey,
+                  )
+                )
+                  endDay = d;
+                else break;
+              }
+
+              blockStartDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
+              blockEndDateStr =
+                startDay !== endDay
+                  ? `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`
+                  : "";
+            }
+
+            if (!isItemDone) {
+              actionBtns = `<div class="action-btn-group"><button class="done-toggle-btn" onclick="submitCMS('DONE', '${item.company}', '${dateStr}', ${idx}, false)">✅ 완료</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${item.company}', '${dateStr}', '${item.pal}', '${item.box}', '${item.etc || ""}', false, '${blockStartDateStr}', '${blockEndDateStr}')">✏️ 수정</button></div>`;
+            } else {
+              actionBtns = `<div class="action-btn-group"><button class="edit-toggle-btn" style="color:#ff9f0a; border: 1px solid #ff9f0a; background: rgba(255,159,10,0.1);" onclick="submitCMS('UNDO_DONE', '${item.company}', '${dateStr}', ${idx}, true)">⏪ 취소</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${item.company}', '${dateStr}', '${item.pal}', '${item.box}', '${item.etc || ""}', true, '${blockStartDateStr}', '${blockEndDateStr}')">✏️ 수정</button></div>`;
+            }
+          }
+
+          let meaningfulEtc = item.etc
+            ? item.etc
+                .replace(
+                  /\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi,
+                  "",
+                )
+                .trim()
+            : "";
+          let etcHtml =
+            meaningfulEtc !== ""
+              ? `<div class="modal-etc">📍 비고: ${meaningfulEtc}</div>`
+              : "";
+
+          let iconHtml = isItemDone
+            ? `<span class="done-icon" style="font-size: 13px !important; margin-right: 4px;">✅</span>`
+            : "";
+          let pCount = parseInt(item.pal) || 0;
+          let bCount = parseInt(item.box) || 0;
+          let volStr = "";
+          if (pCount > 0) volStr += `${pCount}P `;
+          if (bCount > 0) volStr += `(${bCount}B)`;
+          if (volStr === "") volStr = "수량 없음";
+
+          let badgeText = isTaskMode ? "작업 완료" : "출고 완료";
+          let stampHtml = isItemDone
+            ? `<div class="status-badge"><span style="font-size: 1.1em; line-height: 1;">✔️</span> ${badgeText}</div>`
+            : "";
+
+          // 💡 [패치] 수량 추가 UI는 "출고" 항목이면서 "완료되지 않은 상태"일 때만 노출!
+          let addQtyBtn =
+            isAdmin && !isTaskMode && !isItemDone
+              ? `<button onclick="event.stopPropagation(); document.getElementById('add-qty-wrap-${idx}').style.display='flex';" style="background:transparent; border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:2px 8px; font-size:0.8em; margin-left:10px; cursor:pointer; font-weight:800;">+ 수량추가</button>`
+              : "";
+
+          let addQtyForm =
+            isAdmin && !isTaskMode && !isItemDone
+              ? `
+          <div id="add-qty-wrap-${idx}" style="display:none; width:100%; margin-top:12px; padding-top:12px; border-top:1px dashed var(--border-color); flex-direction:column; gap:8px;">
+            <div style="font-size:0.8em; color:var(--text-sub); font-weight:800;">📦 파레트/박스 수량 추가</div>
+            <div style="display:flex; gap:8px; align-items:stretch;">
+               <input type="number" id="add-q-pal-${idx}" class="edit-input" placeholder="+ 파레트" style="padding:10px; flex:1;">
+               <input type="number" id="add-q-box-${idx}" class="edit-input" placeholder="+ 박스" style="padding:10px; flex:1;">
+               <button onclick="submitCMS('ADD_QTY', '${item.company}', '${dateStr}', ${idx})" class="save-btn" style="padding:10px; flex:0.6; font-size:0.9em; border-radius:8px;">추가</button>
+            </div>
+          </div>
+        `
+              : "";
+
+          contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
+                            <div class="modal-icon ${isDoneClass}" style="${bgStyle}"></div>
+                            <div class="modal-info">
+                                <div class="modal-comp-row"><span class="modal-comp" style="font-size:1.05em; font-weight:800;">${getFullName(cleanComp)}</span>${actionBtns}</div>
+                                <div class="modal-vol" style="display:flex; align-items:center;">${iconHtml}📦 ${volStr} ${addQtyBtn}</div>
+                                ${etcHtml}
+                            </div>
+                            ${addQtyForm}
+                            ${stampHtml}
+                        </div>`;
+        });
+        document.getElementById("modalContent").innerHTML = contentHtml;
+        document.getElementById("modal").style.display = "flex";
+      }
+
+      function openEditForm(
+        day,
+        idx,
+        comp,
+        dateStr,
+        pal,
+        box,
+        etc,
+        isDone = false,
+        blockStartDateStr = null,
+        blockEndDateStr = null,
+      ) {
+        tempEditColorObj = null; // 💡 [핵심 필수 추가] 창을 열 때마다 무조건 이전 셔플 기억을 삭제!
+        const card = document.getElementById(`modal-card-${day}-${idx}`);
+
+        let inputDateVal =
+          blockStartDateStr || (dateStr === "미정" ? "" : dateStr);
+        let inputEndDateVal = blockEndDateStr || "";
+
+        let isExplicitTask = comp.toUpperCase().startsWith("[TASK]");
+        let cleanComp = comp.replace(/\[TASK\]/gi, "").trim();
+        let isTaskMode = isExplicitTask;
+        card.style.flexDirection = "";
+        card.style.alignItems = "";
+        card.innerHTML = `
+        <div class="edit-form" style="width: 100%; padding:0; border:none; margin-top:0;">
+          <div class="type-toggle-wrapper" style="margin-bottom: 12px; margin-top: 0;">
+            <input type="radio" id="edit-type-out-${idx}" name="edit-job-type-${idx}" value="OUT" ${!isTaskMode ? "checked" : ""} hidden onchange="toggleEndDate('edit-${idx}', false)">
+            <label for="edit-type-out-${idx}" class="type-label">출고</label>
+            <input type="radio" id="edit-type-task-${idx}" name="edit-job-type-${idx}" value="TASK" ${isTaskMode ? "checked" : ""} hidden onchange="toggleEndDate('edit-${idx}', true)">
+            <label for="edit-type-task-${idx}" class="type-label">작업</label>
+          </div>
+          
+          <div class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+             <span>업체명 (필수)</span>
+             <button type="button" onclick="shuffleColorInModal('${cleanComp}', ${idx})" style="background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:4px 10px; font-size:0.85em; cursor:pointer; font-weight:800; transition:0.2s;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">🎨 색상 셔플</button>
+          </div>
+          <div class="input-wrapper"><input type="text" id="edit-comp-${idx}" class="edit-input" value="${getFullName(cleanComp)}" autocomplete="off"></div>
+
+          <div id="color-preview-zone-${idx}" style="display:none; margin-top:10px; padding:15px; background:rgba(0,0,0,0.1); border-radius:12px; border:1px solid var(--border-color); align-items:center; justify-content:center; gap:20px; animation: fadeIn 0.3s;">
+             <div style="text-align:center;">
+                <div style="font-size:0.75em; color:var(--text-sub); margin-bottom:6px; font-weight:bold;">현재 색상</div>
+                <div id="old-color-box-${idx}" style="width:40px; height:40px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
+             </div>
+             <span style="font-size:1.5em; margin-top:15px; color:var(--text-sub);">➡️</span>
+             <div style="text-align:center;">
+                <div style="font-size:0.75em; color:#0a84ff; margin-bottom:6px; font-weight:bold;">변경될 색상</div>
+                <div id="new-color-box-${idx}" style="width:44px; height:44px; border-radius:8px; box-shadow:0 4px 15px rgba(10,132,255,0.4); border:2px solid #0a84ff;"></div>
+             </div>
+          </div>
+          
+          <div class="form-label" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+            <span>날짜 <span id="edit-${idx}-date-label-extra" style="display:${isTaskMode ? "inline" : "none"};">(시작일 ~ 종료일)</span></span>
+            <span style="color:#ff3b30; cursor:pointer; font-weight:800; font-size:0.85em; padding:4px 8px; background:rgba(255,59,48,0.1); border-radius:6px; transition:0.2s;" onclick="document.getElementById('edit-date-${idx}').value=''; let e = document.getElementById('edit-${idx}-end-date'); if(e) e.value='';" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'">✕ 지우기</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="date" id="edit-date-${idx}" class="edit-input" value="${inputDateVal}" style="flex:1;">
+            <div id="edit-${idx}-end-date-group" style="display:${isTaskMode ? "flex" : "none"}; flex:1; gap:8px; align-items:center;">
+              <span style="color:var(--text-sub); font-weight:bold;">~</span>
+              <input type="date" id="edit-${idx}-end-date" class="edit-input" value="${inputEndDateVal}" style="flex:1;" placeholder="종료일">
+            </div>
+          </div>
+          <div id="edit-${idx}-end-date-guide" style="display:${isTaskMode ? "block" : "none"}; font-size:0.75em; color:var(--text-sub); margin-top:4px; text-align:right; margin-bottom: 5px;">※ 하루 일정은 앞쪽 시작일만 입력하세요.</div>
+
+          <div class="edit-row">
+            <div><div class="form-label">파레트 (P)</div><input type="number" id="edit-pal-${idx}" class="edit-input" value="${pal}"></div>
+            <div><div class="form-label">박스 (B)</div><input type="number" id="edit-box-${idx}" class="edit-input" value="${box}"></div>
+          </div>
+          <div class="form-label">비고</div>
+          <input type="text" id="edit-etc-${idx}" class="edit-input" value="${etc !== "undefined" ? etc : ""}">
+          <div class="btn-row">
+            <button class="save-btn" onclick="submitCMS('EDIT', '${comp}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">💾 저장</button>
+            <button class="cancel-btn" onclick="renderCalendar(); document.getElementById('modal').style.display='none';">취소</button>
+          </div>
+          <button class="delete-btn" onclick="submitCMS('DELETE', '${comp}', '${dateStr}', ${idx}, ${isDone})">🗑️ 이 스케줄 삭제</button>
+        </div>
+      `;
+        attachAutocomplete(`edit-comp-${idx}`);
+      }
+
+      function closeModalOnBgClick(e) {
+        if (isLongPress || isMultiMode) return;
+        if (e.target === document.getElementById("modal"))
+          document.getElementById("modal").style.display = "none";
+      }
+      let isDarkMode = false;
+      function toggleTheme() {
+        const body = document.body;
+        const themeBtn = document.querySelector(".theme-toggle");
+        if (isDarkMode) {
+          body.classList.add("light-mode");
+          isDarkMode = false;
+          if (themeBtn) themeBtn.innerText = "🌙";
+          localStorage.setItem("cal_theme", "light");
+        } else {
+          body.classList.remove("light-mode");
+          isDarkMode = true;
+          if (themeBtn) themeBtn.innerText = "☀️";
+          localStorage.setItem("cal_theme", "dark");
+        }
+      }
+      function changeSize(size) {
+        document
+          .querySelectorAll(".size-btn")
+          .forEach((btn) => btn.classList.remove("active"));
+        const body = document.body;
+        if (size === "S") {
+          body.style.fontSize = "80%";
+          document.getElementById("btnS").classList.add("active");
+        }
+        if (size === "M") {
+          body.style.fontSize = "95%";
+          document.getElementById("btnM").classList.add("active");
+        }
+        if (size === "L") {
+          body.style.fontSize = "120%";
+          document.getElementById("btnL").classList.add("active");
+        }
+        localStorage.setItem("cal_fontSize", size);
+      }
+
+      function togglePwView() {
+        const input = document.getElementById("adminPwInput");
+        const icon = document.getElementById("pwToggleIcon");
+        if (input.type === "password") {
+          input.type = "text";
+          icon.innerText = "🙈";
+        } else {
+          input.type = "password";
+          icon.innerText = "👁️";
+        }
+      }
+
+      // 💡 1. 저장 전까지 색상을 임시로 들고 있을 변수
+      let tempEditColorObj = null;
+
+      // 💡 2. 모달창 안에서 셔플 버튼을 눌렀을 때 실행되는 함수
+      function shuffleColorInModal(compName, idx) {
+        let stdName = getFullName(compName);
+
+        // 현재 색상 (이미 한 번 셔플을 눌러서 임시 색상이 있다면 그걸 기준으로 함)
+        let currentColor = tempEditColorObj
+          ? tempEditColorObj
+          : getCompanyColor(stdName);
+
+        // [중복 방지] 다른 업체들이 현재 달력에서 사용 중인 색상들을 수집
+        let usedBgColors = new Set();
+        for (let key in companyColors) {
+          if (key !== stdName) usedBgColors.add(companyColors[key].bg);
+        }
+
+        // 안 쓰는 색상들만 후보로 추리기 (현재 띄워진 색상도 제외)
+        let availableColors = presetPalette.filter(
+          (p) => !usedBgColors.has(p.bg) && p.bg !== currentColor.bg,
+        );
+
+        // 혹시나 30개를 꽉 채워서 빈 자리가 없다면? (전체 색상 중 현재 색상만 제외하고 후보로)
+        if (availableColors.length === 0) {
+          availableColors = presetPalette.filter(
+            (p) => p.bg !== currentColor.bg,
+          );
+        }
+
+        // 남은 후보 중 랜덤으로 하나 뽑기
+        let pickedColor =
+          availableColors[Math.floor(Math.random() * availableColors.length)];
+        tempEditColorObj = pickedColor; // 임시 저장
+
+        // 모달창 UI에 [기존 색상 ➡️ 새 색상] 미리보기 띄우기
+        document.getElementById(`color-preview-zone-${idx}`).style.display =
+          "flex";
+        document.getElementById(`old-color-box-${idx}`).style.background =
+          getCompanyColor(stdName).bg; // 원래 색상
+        document.getElementById(`new-color-box-${idx}`).style.background =
+          pickedColor.bg; // 바뀔 색상
+      }
+    </script>
+  </body>
+</html>
