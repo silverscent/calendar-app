@@ -1198,23 +1198,7 @@
         0% { left: -50%; }
         100% { left: 100%; }
       }
-      /* 🚀 [오늘 날짜 은은한 강조 + 1px 밀림 완벽 차단] */
-      .day-cell.today-cell {
-          /* 1. 테두리는 일반 셀과 완벽히 똑같은 1px로 강제 통일해서 간트차트 밀림 원천 차단 */
-          border: 1px solid #e0e0e0 !important; 
-          
-          /* 2. 공간을 0.1px도 차지하지 않는 '안쪽 그림자'를 써서 테두리처럼 보이게만 만듦 */
-          box-shadow: inset 0 0 0 2px #4285f4 !important; /* 구글 캘린더 스타일의 세련된 파란색 */
-          
-          /* 3. 눈이 아프지 않게 배경색만 아주 살짝 줍니다 */
-          background-color: #f8fbff !important; 
-      }
-
-      .today-cell .date-row {
-          /* 오늘 날짜가 굵어지면서(bold) 높이가 팽창해 밑을 누르는 현상 방지 */
-          margin-bottom: 0px !important; 
-          padding-bottom: 0px !important;
-      }
+      
     </style>
   </head>
   <body>
