@@ -996,6 +996,52 @@
         transform-origin: top left;
         max-width: none;
       }
+      /* 💡 [네온 로딩 & 게이지 바] 크기 2/3 축소 및 고급화 */
+      .top-wrapper {
+        position: relative;
+        overflow: hidden; 
+        border: 2px solid transparent; /* 3px -> 2px */
+        transition: box-shadow 0.3s, border-color 0.3s, transform 0.2s;
+        box-sizing: border-box;
+      }
+      
+      .top-wrapper.syncing-glow {
+        transform: scale(1.005); 
+        border-color: rgba(10, 132, 255, 0.7) !important;
+        animation: frameNeonGlowOptimal 3s linear infinite !important;
+      }
+      
+      /* 광원 효과(box-shadow) 픽셀 및 투명도를 약 66% 수준으로 대폭 다이어트 */
+      @keyframes frameNeonGlowOptimal {
+        0% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); }
+        33% { border-color: rgba(52,199,89,0.7); box-shadow: 0 0 14px rgba(52,199,89,0.5), 0 0 7px rgba(52,199,89,0.3), inset 0 0 7px rgba(52,199,89,0.1); }
+        66% { border-color: rgba(10,132,255,0.7); box-shadow: 0 0 14px rgba(10,132,255,0.5), 0 0 7px rgba(10,132,255,0.3), inset 0 0 7px rgba(10,132,255,0.1); }
+        100% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); }
+      }
+
+      /* 💡 하단 얇은 로딩 게이지 바 */
+      .top-wrapper::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: -50%;
+        width: 50%;
+        height: 2px; /* 4px -> 2px로 아주 슬림하게 */
+        background: linear-gradient(90deg, transparent, #0a84ff, #34c759, #ffd60a, transparent);
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+      }
+
+      .top-wrapper.syncing-glow::after {
+        opacity: 1;
+        animation: loadingBarSweep 0.8s infinite cubic-bezier(0.4, 0, 0.2, 1); 
+      }
+
+      @keyframes loadingBarSweep {
+        0% { left: -50%; }
+        100% { left: 100%; }
+      }
     </style>
   </head>
   <body>
@@ -1268,45 +1314,47 @@
       let adminToken = sessionStorage.getItem('admin_token');
       let isAdmin = adminToken ? true : false;
 
-      // 🚀 3. [Vercel 매직 어댑터] (텍스트/URL 파싱 에러 완벽 방어!)
+      // 🚀 [수정됨] Vercel 통합 매직 어댑터 (모든 통신에 자동 로딩바 연결)
       const google = {
           script: {
               get run() { 
                   return {
-                      _ok: null,
-                      _err: null,
+                      _ok: null, _err: null,
                       withSuccessHandler: function(cb) { this._ok = cb; return this; },
                       withFailureHandler: function(cb) { this._err = cb; return this; },
                       _call: function(payload) {
+                          setLoadingState(true); 
                           fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(payload) })
                               .then(r => r.json()).then(d => { 
-                                  // 💡 [핵심 패치] URL이나 시간 같은 '순수 텍스트'는 강제로 뜯지 않고 그냥 통과시킵니다!
                                   let finalData = d;
-                                  if (typeof d === 'string') {
-                                      try { finalData = JSON.parse(d); } catch(e) { finalData = d; }
-                                  }
+                                  if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
                                   if(this._ok) this._ok(finalData); 
-                              }).catch(e => { if(this._err) this._err(e); });
+                              }).catch(e => { if(this._err) this._err(e); })
+                              .finally(() => setLoadingState(false)); 
                       },
                       getCalendarDataAsync: function(type, y, m) {
+                          setLoadingState(true); 
                           fetch(`${GAS_API_URL}?api=true&type=${type}&year=${y}&month=${m}`)
                               .then(r => r.json()).then(d => { 
                                   let finalData = d;
-                                  if (typeof d === 'string') {
-                                      try { finalData = JSON.parse(d); } catch(e) { finalData = d; }
-                                  }
+                                  if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
                                   if(this._ok) this._ok(finalData); 
-                              }).catch(e => { if(this._err) this._err(e); });
+                              }).catch(e => { if(this._err) this._err(e); })
+                              .finally(() => setLoadingState(false)); 
                       },
-                      manageWebInboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: currentType, action: act, data: data, token: tk }); },
+                      manageWebOutboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'out', action: act, data: data, token: tk }); },
+                      manageWebInboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'in', action: act, data: data, token: tk }); },
                       verifyAdminPw: function(pw) {
+                          setLoadingState(true);
                           fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify({ source: 'vercel', domain: currentType, action: 'PING', data: {}, token: pw }) })
                               .then(r => r.json()).then(d => { 
                                   let isValid = !(d.msg && d.msg.includes('보안'));
                                   if(this._ok) this._ok(isValid); 
-                              }).catch(e => { if(this._err) this._err(e); });
+                              }).catch(e => { if(this._err) this._err(e); })
+                              .finally(() => setLoadingState(false));
                       },
-                      // 💡 [공통 시스템] OCR 통신망 정상화!
+                      getGlobalColors: function() { this._call({ source: 'vercel', action: 'GET_GLOBAL_COLORS' }); },
+                      saveGlobalColor: function(c, i) { this._call({ source: 'vercel', action: 'SAVE_GLOBAL_COLOR', compName: c, colorIdx: i }); },
                       getLastOcrImageUrl: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_IMAGE' }); },
                       getOcrLastTimeStr: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }); }
                   };
@@ -1314,7 +1362,23 @@
           }
       };
 
+      // 💡 [새로 추가됨] 네온 로딩 & 게이지 스위치
+      let activeRequests = 0;
+      function setLoadingState(isLoading) {
+          if (isLoading) activeRequests++;
+          else activeRequests = Math.max(0, activeRequests - 1);
+          
+          const topFrame = document.querySelector('.top-wrapper');
+          if (topFrame) {
+              if (activeRequests > 0) topFrame.classList.add('syncing-glow');
+              else topFrame.classList.remove('syncing-glow');
+          }
+      }
+
+      // 💡 [수정됨] 토스트 킬러 (로딩/완료 알림 무시, 에러만 표시)
       function showToast(msg, duration = 2500) {
+          if (msg.includes("중...") || msg.includes("완료")) return; 
+          
           const toast = document.getElementById("toast"); toast.innerText = msg; toast.className = "show";
           if (window.toastTimer) clearTimeout(window.toastTimer);
           if (duration > 0) { window.toastTimer = setTimeout(() => { toast.className = toast.className.replace("show", ""); }, duration); }
@@ -1365,7 +1429,14 @@
 
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
 
-          let dateRowHtml = `<div class="date-row"><span class="${dateClass}">${day}</span>`;
+          // 🚀 [여기서부터 추가!] 서버에서 받은 공휴일 배열 확인 및 빨간색 스타일 세팅
+          let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          let isHoliday = serverData.holidays && serverData.holidays.includes(currentYmd);
+          let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
+
+          // 💡 span 태그 안에 style="${redStyle}" 을 꽂아줍니다!
+          let dateRowHtml = `<div class="date-row"><span class="${dateClass}" style="${redStyle}">${day}</span>`;
+          
           if (dayData && dayData.length > 0) {
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
               if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}P</span>`;
@@ -1381,6 +1452,8 @@
 
               let tagClass = `item-tag ${cClass}`;
               if (isItemDone) tagClass += " done-mark";
+              
+              // ... (이 아래로 기존 item 렌더링 코드 유지) ...
 
               let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
               if (meaningfulEtc !== '') tagClass += " has-etc";
