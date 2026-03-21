@@ -1939,6 +1939,59 @@
         return colorObj;
       }
 
+      // =====================================================
+      // 🚀 [스텔스 자동 동기화 엔진] 
+      // =====================================================
+      function silentBackgroundSync() {
+        // 🚨 [안전장치] 사용자가 달력 스케줄을 드래그 중이거나, 
+        // 팝업(모달창/등록창)을 열고 작업 중일 때는 동기화하지 않고 조용히 넘어갑니다.
+        if (isDragging) return;
+        let modal = document.getElementById('modal');
+        let addModal = document.getElementById('addModal');
+        if ((modal && modal.style.display === 'flex') || (addModal && addModal.style.display === 'flex')) return;
+        
+        let fetchStartTime = Date.now();
+        
+        // Vercel(구글) 서버에 현재 달의 최신 데이터를 몰래 물어봅니다.
+        google.script.run
+          .withSuccessHandler((res) => {
+            // 내가 방금 내 폰에서 뭔가를 수정 중이었다면 덮어쓰지 않음
+            if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
+            
+            // 데이터 뼈대 맞추기
+            res.year = serverData.year;
+            res.month = serverData.month;
+            res.firstDay = new Date(serverData.year, serverData.month - 1, 1).getDay();
+            res.daysInMonth = new Date(serverData.year, serverData.month, 0).getDate();
+
+            // 💡 [핵심] 누군가 데이터를 수정해서 내 화면의 데이터와 '진짜로' 달라졌을 때만!
+            let isDataChanged = JSON.stringify(serverData) !== JSON.stringify(res);
+            
+            if (isDataChanged) {
+              serverData = res; // 최신 데이터로 갱신
+              localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(res));
+              renderCalendar(); // 바뀐 부분만 화면에 즉시 렌더링
+              showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
+            }
+            updateSyncTime(); // 좌측 상단 '최근 동기화 시간' 텍스트 갱신
+          })
+          .withFailureHandler(() => {
+            // 스텔스 모드이므로 에러가 나도 사용자에게 알리지 않고 조용히 무시 (다음 주기에 재시도)
+          })
+          .getCalendarDataAsync(currentType, serverData.year, serverData.month);
+      }
+
+      // 🕒 [1. 정기 폴링] 앱을 켜두고 가만히 있어도 1분(60000ms)마다 몰래 동기화
+      setInterval(silentBackgroundSync, 60000);
+
+      // 👁️ [2. 화면 복귀 감지 (Visibility API)] 
+      // 스마트폰 화면을 껐다 켜거나, 카톡/유튜브를 보다가 다시 달력 앱으로 돌아오는 '그 순간' 즉시 동기화!
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === 'visible') {
+          silentBackgroundSync();
+        }
+      });
+
       // 🚀 [앱 초기화] 오염된 캐시 무시 + 강제 뼈대 교정 완결판
       window.addEventListener("DOMContentLoaded", () => {
         const savedTheme = localStorage.getItem("cal_theme") || "light";
