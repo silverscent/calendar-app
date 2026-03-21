@@ -2564,9 +2564,8 @@
         document.getElementById("pickerMonthGrid").innerHTML = gridHtml;
       }
 
-      // 🚀 [초고속 월 이동] 오염된 캐시 완벽 치료 + 잔여 알림창 강제 삭제 패치
+      // 🚀 [초고속 월 이동] 오염된 캐시 완벽 치료 + 깜빡임 방지 100% 최적화
       function goToAsync(year, month) {
-        // 💡 [토스트 킬러] 달력을 넘기는 순간, 무한 로딩 중이던 알림창이 있다면 즉시 삭제합니다!
         const toastEl = document.getElementById("toast");
         if (toastEl) toastEl.classList.remove("show");
         if (window.toastTimer) clearTimeout(window.toastTimer);
@@ -2578,13 +2577,12 @@
         const cachedData = localStorage.getItem(cacheKey);
         let isCacheValid = false;
 
+        // 💡 [1단계] 창고(캐시)에 데이터가 있으면 0.001초 만에 꺼내옵니다.
         if (cachedData) {
           try {
             let parsed = JSON.parse(cachedData);
-            serverData =
-              typeof parsed === "string" ? JSON.parse(parsed) : parsed;
+            serverData = typeof parsed === "string" ? JSON.parse(parsed) : parsed;
 
-            // 🚨 [강력 백신 1] 폰에 잘못 저장된 과거의 연/월/요일/일수 정보를 모조리 무시하고 진짜 수학 달력 기준으로 뼈대 강제 교정!
             serverData.year = safeYear;
             serverData.month = safeMonth;
             serverData.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
@@ -2594,6 +2592,7 @@
           } catch (e) {}
         }
 
+        // 💡 [2단계] 이번 달에 처음 와서 캐시가 없더라도, 하얀 화면 대신 '텅 빈 달력 뼈대'라도 즉시 띄웁니다.
         if (!isCacheValid) {
           let tempFirstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
           let tempDays = new Date(safeYear, safeMonth, 0).getDate();
@@ -2607,13 +2606,14 @@
           };
         }
 
+        // 🚀 [3단계: 낙관적 UI] 서버 응답을 기다리지 않고 일단 무조건 화면부터 그립니다! (체감 로딩 0초)
         renderCalendar();
 
         window.currentNavId = (window.currentNavId || 0) + 1;
         let myNavId = window.currentNavId;
-
         let fetchStartTime = Date.now();
 
+        // 💡 [4단계: 백그라운드 동기화] 화면엔 이미 달력이 떠있고, 뒤에서 몰래 최신 데이터를 묻습니다.
         google.script.run
           .withSuccessHandler((res) => {
             if (
@@ -2622,16 +2622,20 @@
             )
               return;
 
-            // 🚨 [강력 백신 2] 서버에서 온 데이터도 무조건 정확한 뼈대로 강제 고정 후 저장!
             res.year = safeYear;
             res.month = safeMonth;
             res.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
             res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
 
+            // 🚀 [핵심 패치: 깜빡임 방지] 로컬에 있던 데이터와 서버에서 방금 온 데이터가 100% 똑같은가?
+            let isDataChanged = JSON.stringify(serverData) !== JSON.stringify(res);
+
+            // 데이터는 최신으로 갱신해둠
             localStorage.setItem(cacheKey, JSON.stringify(res));
 
-            // 💡 가장 마지막에 도착한 최신 요청 화면만 업데이트
-            if (myNavId === window.currentNavId) {
+            // 💡 [핵심 패치] 다른 사람이 추가한 게 있어서 데이터가 '진짜로 달라졌을 때만' 화면을 다시 그립니다.
+            // 똑같으면 화면을 건드리지 않아서 번쩍거림(Flickering)이 완전히 사라집니다!
+            if (myNavId === window.currentNavId && isDataChanged) {
               serverData = res;
               renderCalendar();
             }

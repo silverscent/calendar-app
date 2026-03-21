@@ -1536,7 +1536,7 @@
         document.getElementById('pickerMonthGrid').innerHTML = gridHtml; 
       }
 
-      // 🚀 [초고속 월 이동] 오염된 캐시 치료 + 토스트 킬러
+      // 🚀 [초고속 월 이동] 오염된 캐시 치료 + 깜빡임 방지 100% 최적화 (입고용)
       function goToAsync(year, month) {
         const toastEl = document.getElementById("toast");
         if(toastEl) toastEl.classList.remove("show");
@@ -1548,6 +1548,7 @@
         const cachedData = localStorage.getItem(cacheKey);
         let isCacheValid = false;
 
+        // 💡 [1단계] 캐시 0.001초 로드
         if (cachedData) {
             try {
                 let parsed = JSON.parse(cachedData);
@@ -1560,27 +1561,37 @@
             } catch(e) { }
         } 
         
+        // 💡 [2단계] 빈 달력 뼈대 세팅
         if (!isCacheValid) {
             let tempFirstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
             let tempDays = new Date(safeYear, safeMonth, 0).getDate();
             serverData = { year: safeYear, month: safeMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {}, pendingItems: serverData.pendingItems || [] };
         }
         
+        // 🚀 [3단계: 낙관적 UI] 화면부터 즉시 그림! (체감 0초)
         renderCalendar(); 
+        
         window.currentNavId = (window.currentNavId || 0) + 1;
         let myNavId = window.currentNavId;
         let fetchStartTime = Date.now(); 
 
+        // 💡 [4단계: 백그라운드 몰래 동기화]
         google.script.run.withSuccessHandler(res => {
           if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return; 
+          
           res.year = safeYear;
           res.month = safeMonth;
           res.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
           res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
           
+          // 🚀 [핵심 패치] 데이터가 '진짜로' 변경되었는지 검사!
+          let isDataChanged = JSON.stringify(serverData) !== JSON.stringify(res);
+
+          // 데이터 최신화 보관
           localStorage.setItem(cacheKey, JSON.stringify(res)); 
           
-          if (myNavId === window.currentNavId) {
+          // 💡 [깜빡임 방지] 데이터가 다를 때만 화면을 다시 그립니다.
+          if (myNavId === window.currentNavId && isDataChanged) {
               serverData = res;
               renderCalendar();
           }
