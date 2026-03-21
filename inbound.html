@@ -1333,7 +1333,7 @@
       let adminToken = sessionStorage.getItem('admin_token');
       let isAdmin = adminToken ? true : false;
 
-      // 🚀 [수정됨] Vercel 통합 매직 어댑터 (모든 통신에 자동 로딩바 연결)
+      // 🚀 [수정됨] Vercel 통합 매직 어댑터 (무한 로딩 방지 타임아웃 15초 적용)
       const google = {
           script: {
               get run() { 
@@ -1343,22 +1343,36 @@
                       withFailureHandler: function(cb) { this._err = cb; return this; },
                       _call: function(payload) {
                           setLoadingState(true); 
-                          fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(payload) })
+                          const controller = new AbortController();
+                          const timeoutId = setTimeout(() => controller.abort(), 15000); // 🚨 15초 이상 멈추면 강제 취소
+                          
+                          fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(payload), signal: controller.signal })
                               .then(r => r.json()).then(d => { 
+                                  clearTimeout(timeoutId);
                                   let finalData = d;
                                   if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
                                   if(this._ok) this._ok(finalData); 
-                              }).catch(e => { if(this._err) this._err(e); })
+                              }).catch(e => { 
+                                  clearTimeout(timeoutId);
+                                  if(this._err) this._err(e.name === 'AbortError' ? new Error('통신 지연 (15초 초과)') : e); 
+                              })
                               .finally(() => setLoadingState(false)); 
                       },
                       getCalendarDataAsync: function(type, y, m) {
                           setLoadingState(true); 
-                          fetch(`${GAS_API_URL}?api=true&type=${type}&year=${y}&month=${m}`)
+                          const controller = new AbortController();
+                          const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+                          fetch(`${GAS_API_URL}?api=true&type=${type}&year=${y}&month=${m}`, { signal: controller.signal })
                               .then(r => r.json()).then(d => { 
+                                  clearTimeout(timeoutId);
                                   let finalData = d;
                                   if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
                                   if(this._ok) this._ok(finalData); 
-                              }).catch(e => { if(this._err) this._err(e); })
+                              }).catch(e => { 
+                                  clearTimeout(timeoutId);
+                                  if(this._err) this._err(e); 
+                              })
                               .finally(() => setLoadingState(false)); 
                       },
                       manageWebOutboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'out', action: act, data: data, token: tk }); },
@@ -2003,10 +2017,12 @@
       function changeSize(size) { document.querySelectorAll('.size-btn').forEach(btn => btn.classList.remove('active')); const body = document.body; if(size === 'S') { body.style.fontSize = '80%'; document.getElementById('btnS').classList.add('active'); } if(size === 'M') { body.style.fontSize = '95%'; document.getElementById('btnM').classList.add('active'); } if(size === 'L') { body.style.fontSize = '120%'; document.getElementById('btnL').classList.add('active'); } localStorage.setItem('cal_fontSize', size); }
 
       // =====================================================
-      // 🚀 [스텔스 자동 동기화 엔진] (꼬리표 무시 정밀 대조 패치)
+      // 🚀 [스텔스 자동 동기화 엔진] (로딩 중 엇갈림/덮어쓰기 방지)
       // =====================================================
       function silentBackgroundSync() {
-        if (isDragging) return;
+        // 🚨 [핵심 안전장치] 드래그 중이거나, 내가 방금 저장버튼 눌러서 서버랑 통신(로딩) 중일 때는 동기화 절대 금지!
+        if (isDragging || activeRequests > 0) return; 
+        
         let modal = document.getElementById('modal');
         let addModal = document.getElementById('addModal');
         if ((modal && modal.style.display === 'flex') || (addModal && addModal.style.display === 'flex')) return;
@@ -2022,9 +2038,18 @@
             res.firstDay = new Date(serverData.year, serverData.month - 1, 1).getDay();
             res.daysInMonth = new Date(serverData.year, serverData.month, 0).getDate();
 
-            // 💡 [핵심 버그 수정] 화면 그릴 때 임시로 붙인 꼬리표(_rawIdx, _visualSlot)를 무시하고 '순수 데이터'만 대조합니다!
-            const replacer = (key, value) => (key === '_rawIdx' || key === '_visualSlot') ? undefined : value;
-            let isDataChanged = JSON.stringify(serverData, replacer) !== JSON.stringify(res, replacer);
+            const getSignature = (dataObj) => {
+              if (!dataObj) return "";
+              const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
+              let sigs = [];
+              if (dataObj.pendingItems) dataObj.pendingItems.forEach(it => sigs.push(`P_${it.company}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
+              if (dataObj.monthData) {
+                for (let d in dataObj.monthData) dataObj.monthData[d].forEach(it => sigs.push(`${d}_${it.company}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
+              }
+              return sigs.sort().join("||");
+            };
+            
+            let isDataChanged = getSignature(serverData) !== getSignature(res);
             
             if (isDataChanged) {
               serverData = res; 
