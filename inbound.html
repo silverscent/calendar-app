@@ -852,11 +852,11 @@
         flex: 1;
         width: 100%;
         overflow: hidden !important; 
-        background: #111 !important;
+        background: #ffffff !important; /* 💡 검정색(#111)에서 흰색으로 변경! */
         border-radius: 0;
         border: none !important;
         position: relative;
-        touch-action: none; /* 브라우저 스크롤 방지 */
+        touch-action: none; 
         cursor: grab;
         display: flex;
         align-items: center;
@@ -1583,9 +1583,10 @@
       }
 
       // =====================================================
-      // 🚀 [OCR 최종 패치] 광활한 핀치 투 줌/이동 엔진 
+      // 🚀 [OCR 최종 패치] 광활한 핀치 투 줌/이동 엔진 (먹통 버그 해결)
       // =====================================================
       let ocrTransform = { scale: 1, x: 0, y: 0 };
+      let _ocrGesturesInitialized = false; // 💡 제스처 엔진 중복 실행 방지 플래그
       
       function showLastOcrImage() {
           document.getElementById('ocrImageModal').style.display = 'flex';
@@ -1595,7 +1596,7 @@
           google.script.run.withSuccessHandler(function(url) {
               if (url) {
                   document.getElementById('ocrImageContent').innerHTML = `<img id="ocrImgElement" src="${url}" alt="마지막 스케줄 이미지">`;
-                  setTimeout(initOcrGestures, 100); // 이미지 로딩 시작 후 제스처 엔진 가동
+                  setTimeout(initOcrGestures, 100); 
               } else {
                   document.getElementById('ocrImageContent').innerHTML = '최근 처리된 이미지가 없거나 만료되었습니다.';
               }
@@ -1606,20 +1607,21 @@
 
       function initOcrGestures() {
           const wrapper = document.getElementById('ocrImageWrapper');
-          const img = document.getElementById('ocrImgElement');
-          if (!wrapper || !img) return;
+          if (!wrapper) return;
 
-          // 중복 등록 방지
-          if (wrapper._gestureAttached) return;
-          wrapper._gestureAttached = true;
+          // 💡 중복 등록 방지 (전역 변수로 1번만 세팅)
+          if (_ocrGesturesInitialized) return;
+          _ocrGesturesInitialized = true;
 
           let isDragging = false;
           let startX = 0, startY = 0;
           let initialPinchDist = 0;
           let ocrStartTransform = { scale: 1, x: 0, y: 0 };
 
+          // 💡 매 프레임마다 '현재 살아있는' 이미지를 동적으로 찾아서 움직임! (먹통 해결 핵심)
           const updateTransform = () => {
-              img.style.transform = `translate3d(${ocrTransform.x}px, ${ocrTransform.y}px, 0) scale(${ocrTransform.scale})`;
+              const currentImg = document.getElementById('ocrImgElement');
+              if(currentImg) currentImg.style.transform = `translate3d(${ocrTransform.x}px, ${ocrTransform.y}px, 0) scale(${ocrTransform.scale})`;
           };
 
           const getPinchDistance = (touches) => {
@@ -1627,7 +1629,6 @@
           };
 
           wrapper.addEventListener('touchstart', (e) => {
-              // 제스처가 닫기 버튼 등을 가리지 않도록 방어
               if (e.target.closest('.close-btn')) return;
               e.preventDefault(); 
               
@@ -1651,7 +1652,6 @@
               } else if (e.touches.length === 2) {
                   const currentDist = getPinchDistance(e.touches);
                   const scaleDiff = currentDist / initialPinchDist;
-                  // 최소 1배, 최대 6배 줌 제한
                   ocrTransform.scale = Math.max(1, Math.min(ocrStartTransform.scale * scaleDiff, 6)); 
                   requestAnimationFrame(updateTransform);
               }
@@ -1661,26 +1661,23 @@
               if (e.touches.length < 2) initialPinchDist = 0;
               if (e.touches.length === 0) isDragging = false;
               
-              // 1배 이하로 축소 시 부드럽게 원위치로 복구
+              // 축소 시 부드러운 원상복구
               if (ocrTransform.scale <= 1) {
                   ocrTransform = { scale: 1, x: 0, y: 0 };
-                  img.style.transition = 'transform 0.2s ease-out';
-                  updateTransform();
-                  setTimeout(() => { img.style.transition = 'none'; }, 200);
+                  const currentImg = document.getElementById('ocrImgElement');
+                  if (currentImg) {
+                      currentImg.style.transition = 'transform 0.2s ease-out';
+                      updateTransform();
+                      setTimeout(() => { if(currentImg) currentImg.style.transition = 'none'; }, 200);
+                  }
               }
           });
 
-          // PC 브라우저 마우스 컨트롤 (디버깅/사용성 확장)
           wrapper.addEventListener('mousedown', (e) => {
-              isDragging = true;
-              startX = e.clientX - ocrTransform.x;
-              startY = e.clientY - ocrTransform.y;
+              isDragging = true; startX = e.clientX - ocrTransform.x; startY = e.clientY - ocrTransform.y;
           });
           wrapper.addEventListener('mousemove', (e) => {
-              if (!isDragging) return;
-              ocrTransform.x = e.clientX - startX;
-              ocrTransform.y = e.clientY - startY;
-              requestAnimationFrame(updateTransform);
+              if (!isDragging) return; ocrTransform.x = e.clientX - startX; ocrTransform.y = e.clientY - startY; requestAnimationFrame(updateTransform);
           });
           window.addEventListener('mouseup', () => { isDragging = false; });
           wrapper.addEventListener('wheel', (e) => {
