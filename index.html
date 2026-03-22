@@ -2067,8 +2067,7 @@
 
       // 🚀 [앱 초기화] 오염된 캐시 무시 + 강제 뼈대 교정 완결판
       window.addEventListener("DOMContentLoaded", () => {
-        // 💡 [여기에 딱 한 줄 추가!] 앱 켜자마자 올해 1년 치 빨간날부터 장전!
-      checkAndFetchHolidays(currentYear);
+        
         const savedTheme = localStorage.getItem("cal_theme") || "light";
         const themeBtn = document.querySelector(".theme-toggle");
         if (savedTheme === "light") {
@@ -2092,7 +2091,8 @@
 
         let cachedData = localStorage.getItem(cacheKey);
         let isCacheValid = false;
-
+// 💡 [여기에 딱 한 줄 추가!] 앱 켜자마자 올해 1년 치 빨간날부터 장전!
+      checkAndFetchHolidays(currentYear);
         if (cachedData) {
           try {
             let parsed = JSON.parse(cachedData);
