@@ -1627,6 +1627,40 @@
       );
       const companyColors = {};
 
+      // 💡 [추가] 1년 치 공휴일 전용 저장소 및 관리자
+      window.yearlyHolidays = {}; 
+
+      function checkAndFetchHolidays(year) {
+          const cacheKey = `holidays_${year}`;
+          const cached = localStorage.getItem(cacheKey);
+          const now = Date.now();
+          const TTL = 7 * 24 * 60 * 60 * 1000; // 🚨 유통기한: 7일 (밀리초)
+
+          let needsFetch = true;
+
+          if (cached) {
+              try {
+                  const parsed = JSON.parse(cached);
+                  if (now - parsed.timestamp < TTL) {
+                      // 7일 안 지났음! 캐시(지갑)에서 바로 꺼내 씀 (0초 로딩)
+                      parsed.data.forEach(dateStr => window.yearlyHolidays[dateStr] = true);
+                      needsFetch = false;
+                      renderCalendar(); // 빨간색 칠하기
+                  }
+              } catch(e) {}
+          }
+
+          // 지갑에 없거나 유통기한이 지났다면? 뒤에서 몰래 서버 다녀오기!
+          if (needsFetch) {
+              google.script.run.withSuccessHandler(function(holidays) {
+                  const cacheData = { timestamp: now, data: holidays };
+                  localStorage.setItem(cacheKey, JSON.stringify(cacheData)); // 지갑 갱신
+                  holidays.forEach(dateStr => window.yearlyHolidays[dateStr] = true);
+                  renderCalendar(); // 최신 빨간날로 화면 다시 그리기
+              }).getYearlyHolidays(year);
+          }
+      }
+
       // 🚀 [수정됨] Vercel 통합 매직 어댑터 (무한 로딩 방지 타임아웃 15초 적용)
       const google = {
           script: {
@@ -1995,15 +2029,12 @@
               return sigs.sort().join("||");
             };
 
-            const getHolidaySig = (dataObj) => {
-              if (!dataObj || !dataObj.holidays || !Array.isArray(dataObj.holidays)) return "";
-              return dataObj.holidays.sort().join(",");
-            };
+            
             
             let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
-            let isHolidayChanged = getHolidaySig(serverData) !== getHolidaySig(res);
             
-            if (isScheduleChanged || isHolidayChanged) {
+            
+            if (isScheduleChanged) {
               serverData = res; 
               // 🚨 [핵심 3] 캐시도 박제해둔 연/월(reqYear, reqMonth)에만 안전하게 덮어씁니다.
               localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res)); 
@@ -2036,6 +2067,8 @@
 
       // 🚀 [앱 초기화] 오염된 캐시 무시 + 강제 뼈대 교정 완결판
       window.addEventListener("DOMContentLoaded", () => {
+        // 💡 [여기에 딱 한 줄 추가!] 앱 켜자마자 올해 1년 치 빨간날부터 장전!
+      checkAndFetchHolidays(currentYear);
         const savedTheme = localStorage.getItem("cal_theme") || "light";
         const themeBtn = document.querySelector(".theme-toggle");
         if (savedTheme === "light") {
@@ -2371,7 +2404,8 @@
 
           // 🚀 [추가된 핵심 로직] 공휴일 판별 및 빨간색 스타일!
           let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          let isHoliday = serverData.holidays && serverData.holidays.includes(currentYmd);
+          // 💡 새 지갑에서 꺼내 쓰도록 요렇게 한 줄만 바꿔줍니다!
+        let isHoliday = window.yearlyHolidays[dStr] === true;
           
           // 일요일(0)이거나 공휴일이면 빨간색을 줍니다.
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
@@ -2680,6 +2714,10 @@
 
         let safeYear = parseInt(year, 10);
         let safeMonth = parseInt(month, 10);
+
+        // 💡 [여기에 딱 한 줄 추가!] 연도가 바뀌었을 수 있으니 무조건 검사 지시!
+        checkAndFetchHolidays(safeYear);
+
         const cacheKey = `cal_cache_${currentType}_${safeYear}_${safeMonth}`;
         const cachedData = localStorage.getItem(cacheKey);
         let isCacheValid = false;
