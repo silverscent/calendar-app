@@ -1229,19 +1229,24 @@
         document.getElementById('pickerMonthGrid').innerHTML = gridHtml; 
       }
 
+      // 🚀 [초고속 월 이동] 오염된 캐시 치료 + 깜빡임 방지 100% 최적화
       function goToAsync(year, month) {
-        const toastEl = document.getElementById("toast"); if(toastEl) toastEl.classList.remove("show");
+        const toastEl = document.getElementById("toast");
+        if(toastEl) toastEl.classList.remove("show");
         if(window.toastTimer) clearTimeout(window.toastTimer);
 
-        let safeYear = parseInt(year, 10); let safeMonth = parseInt(month, 10);
+        let safeYear = parseInt(year, 10);
+        let safeMonth = parseInt(month, 10);
         const cacheKey = `cal_cache_${currentType}_${safeYear}_${safeMonth}`;
-        const cachedData = localStorage.getItem(cacheKey); let isCacheValid = false;
+        const cachedData = localStorage.getItem(cacheKey);
+        let isCacheValid = false;
 
         if (cachedData) {
             try {
                 let parsed = JSON.parse(cachedData);
                 serverData = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
-                serverData.year = safeYear; serverData.month = safeMonth;
+                serverData.year = safeYear;
+                serverData.month = safeMonth;
                 serverData.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
                 serverData.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
                 if (!isNaN(serverData.year)) isCacheValid = true;
@@ -1257,18 +1262,46 @@
         renderCalendar(); 
         
         window.currentNavId = (window.currentNavId || 0) + 1;
-        let myNavId = window.currentNavId; let fetchStartTime = Date.now(); 
+        let myNavId = window.currentNavId;
+        let fetchStartTime = Date.now(); 
 
         google.script.run.withSuccessHandler(res => {
-          if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return; 
-          res.year = safeYear; res.month = safeMonth;
-          res.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay(); res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
+          // 🚨 [핵심 방어막] 달력을 연타해서 빠르게 넘기면, 가장 마지막 달력만 진짜로 인정!
+          if (myNavId !== window.currentNavId) return; 
           
-          const replacer = (key, value) => (key === '_rawIdx' || key === '_visualSlot') ? undefined : value;
-          let isDataChanged = JSON.stringify(serverData, replacer) !== JSON.stringify(res, replacer);
+          if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return; 
+          
+          res.year = safeYear;
+          res.month = safeMonth;
+          res.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
+          res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
+          
+          const getScheduleSig = (dataObj) => {
+            if (!dataObj) return "";
+            const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
+            let sigs = [];
+            if (dataObj.pendingItems) dataObj.pendingItems.forEach(it => sigs.push(`P_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
+            if (dataObj.monthData) {
+              for (let d in dataObj.monthData) dataObj.monthData[d].forEach(it => sigs.push(`${d}_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
+            }
+            return sigs.sort().join("||");
+          };
+
+          const getHolidaySig = (dataObj) => {
+            if (!dataObj || !dataObj.holidays || !Array.isArray(dataObj.holidays)) return "";
+            return dataObj.holidays.sort().join(",");
+          };
+          
+          let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
+          let isHolidayChanged = getHolidaySig(serverData) !== getHolidaySig(res);
+
           localStorage.setItem(cacheKey, JSON.stringify(res)); 
           
-          if (myNavId === window.currentNavId && isDataChanged) { serverData = res; renderCalendar(); }
+          if (isScheduleChanged || isHolidayChanged) {
+            serverData = res;
+            renderCalendar();
+          }
+        }).withFailureHandler(err => {
         }).getCalendarDataAsync(currentType, safeYear, safeMonth);
       }
 
@@ -1700,50 +1733,69 @@
       function changeSize(size) { document.querySelectorAll('.size-btn').forEach(btn => btn.classList.remove('active')); const body = document.body; if(size === 'S') { body.style.fontSize = '80%'; document.getElementById('btnS').classList.add('active'); } if(size === 'M') { body.style.fontSize = '95%'; document.getElementById('btnM').classList.add('active'); } if(size === 'L') { body.style.fontSize = '120%'; document.getElementById('btnL').classList.add('active'); } localStorage.setItem('cal_fontSize', size); }
 
       // =====================================================
-      // 🚀 [스텔스 자동 동기화 엔진] (로딩 중 엇갈림/덮어쓰기 방지)
+      // 🚀 [스텔스 자동 동기화 엔진] (귀신 데이터 & 가짜 토스트 완벽 차단)
       // =====================================================
       function silentBackgroundSync() {
         if (isDragging || activeRequests > 0) return; 
         
         let modal = document.getElementById('modal');
         let addModal = document.getElementById('addModal');
-        let ocrModal = document.getElementById('ocrImageModal'); // OCR 모달 떠있을 때 방해 금지
+        let ocrModal = document.getElementById('ocrImageModal'); 
         if ((modal && modal.style.display === 'flex') || (addModal && addModal.style.display === 'flex') || (ocrModal && ocrModal.style.display === 'flex')) return;
         
         let fetchStartTime = Date.now();
         
+        // 🚨 [핵심 1] 심부름 보내기 직전의 '연/월'과 '달력 번호표'를 박제해둡니다!
+        const reqYear = serverData.year;
+        const reqMonth = serverData.month;
+        const reqNavId = window.currentNavId;
+        
         google.script.run
           .withSuccessHandler((res) => {
+            // 🚨 [핵심 2] 심부름이 끝났는데, 그사이에 유저가 달력을 넘겼다? -> 쿨하게 데이터 폐기!
+            if (reqYear !== serverData.year || reqMonth !== serverData.month || reqNavId !== window.currentNavId) return;
+            
             if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
             
-            res.year = serverData.year;
-            res.month = serverData.month;
-            res.firstDay = new Date(serverData.year, serverData.month - 1, 1).getDay();
-            res.daysInMonth = new Date(serverData.year, serverData.month, 0).getDate();
+            res.year = reqYear;
+            res.month = reqMonth;
+            res.firstDay = new Date(reqYear, reqMonth - 1, 1).getDay();
+            res.daysInMonth = new Date(reqYear, reqMonth, 0).getDate();
 
-            const getSignature = (dataObj) => {
+            // 💡 입고(bl)/출고(company) 모두 완벽 호환되는 지문 대조기
+            const getScheduleSig = (dataObj) => {
               if (!dataObj) return "";
               const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
               let sigs = [];
-              if (dataObj.pendingItems) dataObj.pendingItems.forEach(it => sigs.push(`P_${it.bl}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
+              if (dataObj.pendingItems) dataObj.pendingItems.forEach(it => sigs.push(`P_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
               if (dataObj.monthData) {
-                for (let d in dataObj.monthData) dataObj.monthData[d].forEach(it => sigs.push(`${d}_${it.bl}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
+                for (let d in dataObj.monthData) dataObj.monthData[d].forEach(it => sigs.push(`${d}_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
               }
               return sigs.sort().join("||");
             };
+
+            const getHolidaySig = (dataObj) => {
+              if (!dataObj || !dataObj.holidays || !Array.isArray(dataObj.holidays)) return "";
+              return dataObj.holidays.sort().join(",");
+            };
             
-            let isDataChanged = getSignature(serverData) !== getSignature(res);
+            let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
+            let isHolidayChanged = getHolidaySig(serverData) !== getHolidaySig(res);
             
-            if (isDataChanged) {
+            if (isScheduleChanged || isHolidayChanged) {
               serverData = res; 
-              localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(res));
+              // 🚨 [핵심 3] 캐시도 박제해둔 연/월(reqYear, reqMonth)에만 안전하게 덮어씁니다.
+              localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res)); 
               renderCalendar(); 
-              showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
+              
+              if (isScheduleChanged) {
+                  showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
+              }
             }
             updateSyncTime(); 
           })
           .withFailureHandler(() => {})
-          .getCalendarDataAsync(currentType, serverData.year, serverData.month);
+          .getCalendarDataAsync(currentType, reqYear, reqMonth);
       }
 
       setInterval(silentBackgroundSync, 60000);
