@@ -2404,8 +2404,12 @@
 
           // 🚀 [추가된 핵심 로직] 공휴일 판별 및 빨간색 스타일!
           let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          // 💡 새 지갑에서 꺼내 쓰도록 요렇게 한 줄만 바꿔줍니다!
-        let isHoliday = window.yearlyHolidays[dStr] === true;
+          
+          // 💡 [수정완료] currentYmd 로 이름표를 맞추고, 안전장치를 씌웠습니다.
+          let isHoliday = false;
+          if (window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true) {
+              isHoliday = true;
+          }
           
           // 일요일(0)이거나 공휴일이면 빨간색을 줍니다.
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';

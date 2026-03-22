@@ -1187,8 +1187,12 @@
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
 
           let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          // 💡 새 지갑에서 꺼내 쓰도록 요렇게 한 줄만 바꿔줍니다!
-        let isHoliday = window.yearlyHolidays[dStr] === true;
+          
+          // 💡 [수정완료] currentYmd 로 이름표를 맞추고 방어막을 씌웠습니다!
+          let isHoliday = false;
+          if (window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true) {
+              isHoliday = true;
+          }
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
 
           let dateRowHtml = `<div class="date-row"><span class="${dateClass}" style="${redStyle}">${day}</span>`;
@@ -1326,17 +1330,12 @@
             return sigs.sort().join("||");
           };
 
-          const getHolidaySig = (dataObj) => {
-            if (!dataObj || !dataObj.holidays || !Array.isArray(dataObj.holidays)) return "";
-            return dataObj.holidays.sort().join(",");
-          };
-          
           let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
-         
 
           localStorage.setItem(cacheKey, JSON.stringify(res)); 
           
-          if (isScheduleChanged || isHolidayChanged) {
+          // 💡 [수정완료] 없는 변수(isHolidayChanged)를 호출하던 버그 삭제!
+          if (isScheduleChanged) {
             serverData = res;
             renderCalendar();
           }
