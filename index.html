@@ -29,8 +29,7 @@
         --btn-active-text: #ffffff;
       }
       body.light-mode {
-        /* --bg-color: #f4f6f9; */
-        --bg-color: #af198a;
+        --bg-color: #f4f6f9;
         --card-bg: #ffffff;
         --text-main: #222222;
         --text-sub: #777777;
@@ -3883,6 +3882,14 @@
           getCompanyColor(stdName).bg; // 원래 색상
         document.getElementById(`new-color-box-${idx}`).style.background =
           pickedColor.bg; // 바뀔 색상
+      }
+      
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js')
+            .then(reg => console.log('서비스 워커 등록 성공!', reg.scope))
+            .catch(err => console.log('서비스 워커 등록 실패:', err));
+        });
       }
     </script>
   </body>
