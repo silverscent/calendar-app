@@ -1122,7 +1122,12 @@
                       getGlobalColors: function() { this._call({ source: 'vercel', action: 'GET_GLOBAL_COLORS' }); },
                       saveGlobalColor: function(c, i) { this._call({ source: 'vercel', action: 'SAVE_GLOBAL_COLOR', compName: c, colorIdx: i }); },
                       getLastOcrImageUrl: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_IMAGE' }); },
-                      getOcrLastTimeStr: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }); }
+                      
+                      // 🚨 기존 코드 마지막에 쉼표(,)를 꼭 찍어주시고 아래 줄을 추가하세요!
+                      getOcrLastTimeStr: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }); },
+                      
+                      // 👇👇 [여기 추가!] 어댑터에 1년 치 공휴일 요청 버튼 장착! 👇👇
+                      getYearlyHolidays: function(y) { this._call({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: y }); }
                   };
               }
           }
