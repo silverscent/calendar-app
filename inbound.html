@@ -884,22 +884,22 @@
       }
 
       /* ===================================================== */
-      /* 🚀 [디테일 완벽 패치] 상단 비율 고정 & 모달창 겹침 방지 */
+      /* 🚀 [최종 패치] 상단 비율 고정 & 모달창 텍스트/도장 겹침 방지 */
       /* ===================================================== */
 
-      /* 1. 상단 메뉴 1줄 고정 & 화면 비율(vw)에 맞춘 유동적 축소 */
+      /* 1. 상단 메뉴 (화살표 포함) 1줄 고정 & 화면 비율(vw) 축소 */
       .top-row {
-        flex-wrap: nowrap !important; /* 🚨 절대 줄바꿈 금지 */
-        gap: 1.5vw !important; /* 화면이 작아지면 여백도 같이 작아짐 */
+        flex-wrap: nowrap !important;
+        gap: 1.5vw !important;
       }
       .title-area, .controls-area, .action-row-right, .sync-area, .admin-actions {
         flex-wrap: nowrap !important;
         gap: 1vw !important;
         white-space: nowrap !important;
       }
-      .title-btn, .admin-btn, .size-btn, .theme-toggle, .sync-btn, .multi-btn, .ocr-btn {
+      /* 🚨 화살표(.nav-arrow) 추가 완료! */
+      .title-btn, .admin-btn, .size-btn, .theme-toggle, .sync-btn, .multi-btn, .ocr-btn, .nav-arrow {
         white-space: nowrap !important;
-        /* 💡 핵심: 폰트와 패딩이 폰 화면 크기에 맞춰 고무줄처럼 축소/확대됨 */
         font-size: clamp(0.7em, 3vw, 1.15em) !important; 
         padding: clamp(4px, 1.5vw, 8px) clamp(6px, 2vw, 14px) !important;
       }
@@ -908,34 +908,36 @@
         white-space: nowrap !important;
       }
 
-      /* 2. 상세 모달창 - 긴 글씨 줄바꿈 & 버튼 우측 튼튼하게 고정 */
+      /* 2. 상세 모달창 - 긴 글씨 완벽 줄바꿈 (Flexbox 탈출 방지) */
       .modal-comp-row {
-        flex-wrap: nowrap !important; /* 🚨 버튼 가출 금지 */
-        align-items: flex-start !important; /* 글씨가 2줄이 돼도 위쪽 정렬 */
+        flex-wrap: nowrap !important; 
+        align-items: flex-start !important; 
       }
       .modal-comp {
-        white-space: normal !important; /* 자연스러운 줄바꿈 허용 */
+        flex: 1 1 0% !important;   /* 🚨 핵심: 남은 공간만 차지하되, 절대 밖으로 안 밀어냄 */
+        min-width: 0 !important;   /* 🚨 핵심: 긴 텍스트가 버튼을 밀어내는 현상 완벽 차단 */
+        white-space: normal !important;
         word-break: keep-all !important;
-        overflow-wrap: break-word !important; /* 미치도록 길면 강제 쪼갬 */
-        flex: 1 1 auto !important;
+        overflow-wrap: break-word !important; 
         line-height: 1.3 !important;
         margin-right: 10px !important;
       }
       .action-btn-group {
-        flex-shrink: 0 !important; /* 🚨 버튼 크기 찌그러짐 완벽 방지 */
+        flex-shrink: 0 !important; /* 완료/수정 버튼은 절대 안 찌그러지게 튼튼하게 고정 */
       }
 
-      /* 3. 출고(입고)완료 도장 - 비고(메모) 겹침 완벽 해결 */
+      /* 3. 출고/입고완료 도장 - 비고(메모) 가려짐 완벽 해결 */
       .modal-card {
-        padding-bottom: 20px !important; /* 억지로 비워둔 바닥 공간 회수 */
+        position: relative !important;
+        /* 🚨 핵심: 바닥에 55px의 '도장 전용 영토'를 강제 확보해서 글씨가 절대 못 내려오게 함 */
+        padding-bottom: 55px !important; 
       }
       .status-badge {
-        position: relative !important; /* 절대 위치 버림 -> 텍스트 밑으로 자연스럽게 떨어짐 */
-        bottom: auto !important;
-        right: auto !important;
-        margin-top: 15px !important; 
-        margin-left: auto !important; /* 우측 하단으로 찰칵 밀착 */
-        width: max-content !important;
+        /* 원래의 예쁜 우측 하단 절대 위치로 복구 */
+        position: absolute !important; 
+        bottom: 14px !important;
+        right: 16px !important;
+        margin: 0 !important;
       }
       /* ===================================================== */
 
