@@ -287,15 +287,13 @@
       }*/
       .today-cell {
         background: rgba(255, 59, 48, 0.05) !important;
-        /* 💡 border(테두리) 대신 공간 차지 없는 inset 그림자로 테두리 1px 그리기 */
         box-shadow: inset 0 0 0 1px rgba(255, 59, 48, 0.3) !important; 
         border-radius: 4px;
-        z-index: 1;
       }
+      /* 💡 [2번 패치] 오늘 날짜 붉은 바탕은 유지하되, 글자 색깔은 요일 본연의 색 유지 */
       .today-cell .date-num {
-        color: #ff3b30 !important;
+        color: inherit !important; /* 🚨 이 부분을 inherit으로 변경! */
         font-weight: 900;
-        /* 🚨 간트차트를 딸려 올라가게 만들었던 line-height 압축 코드는 삭제했습니다! */
       }
 
       .item-tag {
@@ -1268,6 +1266,13 @@
         margin: 0 !important;
       }
       /* ===================================================== */
+      /* 💡 [5번 패치] 드래그 앤 드롭 끼워넣기 표시선 */
+      .insert-line-top { box-shadow: inset 0 4px 0 0 #0a84ff !important; }
+      .insert-line-bottom { box-shadow: inset 0 -4px 0 0 #0a84ff !important; }
+      /* 💡 관리자 로그인 창 키보드 가림 방지 (화면 중앙 팝업으로 변경) */
+      #adminLoginModal { align-items: center !important; padding: 20px; }
+      #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
+
     </style>
   </head>
   <body>
@@ -2093,18 +2098,20 @@
 
             
             
+            // ... (기존 코드) ...
             let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
             
-            
             if (isScheduleChanged) {
+              // 🚨 [핵심 패치 2] 동기화로 새 일정이 들어와도 기존 순서는 절대 사수!
+              if (typeof preserveCustomOrder === "function") {
+                  res = preserveCustomOrder(res);
+              }
+              
               serverData = res; 
-              // 🚨 [핵심 3] 캐시도 박제해둔 연/월(reqYear, reqMonth)에만 안전하게 덮어씁니다.
               localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res)); 
               renderCalendar(); 
               
-              if (isScheduleChanged) {
-                  showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
-              }
+              showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
             }
             updateSyncTime(); 
           })
@@ -2203,41 +2210,29 @@
         let fetchStartTime = Date.now();
         showToast("🔄 백그라운드 동기화 중...", 0);
 
+        // ... (기존 코드) ...
         google.script.run
           .withSuccessHandler(function (colors) {
             customColors = colors;
-            localStorage.setItem(
-              "GLOBAL_COMPANY_COLORS",
-              JSON.stringify(colors),
-            );
+            localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(colors));
 
             google.script.run
               .withSuccessHandler(function (newData) {
-                if (
-                  typeof lastLocalUpdateTime !== "undefined" &&
-                  lastLocalUpdateTime > fetchStartTime
-                )
-                  return;
+                if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
 
                 newData.year = currentYear;
                 newData.month = currentMonth;
-                newData.firstDay = new Date(
-                  currentYear,
-                  currentMonth - 1,
-                  1,
-                ).getDay();
-                newData.daysInMonth = new Date(
-                  currentYear,
-                  currentMonth,
-                  0,
-                ).getDate();
+                newData.firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
+                newData.daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+
+                // 🚨 [핵심 패치 1] 서버 데이터를 메모리에 덮어쓰기 직전! 관리자님의 순서를 강제로 주입!
+                if (typeof preserveCustomOrder === "function") {
+                    newData = preserveCustomOrder(newData);
+                }
 
                 localStorage.setItem(cacheKey, JSON.stringify(newData));
 
-                if (
-                  serverData.year === currentYear &&
-                  serverData.month === currentMonth
-                ) {
+                if (serverData.year === currentYear && serverData.month === currentMonth) {
                   serverData = newData;
                   renderCalendar();
                   showToast("✅ 최신화 완료!", 1000);
@@ -2301,15 +2296,46 @@
         }
       }
 
-      // 💡 [패치] 완료 여부(isDone)를 판별 조건에서 제거하여 중간에 완료해도 띠가 안 끊어지게 결속!
+ // 🚀 [기억 상실 방지 엔진 V2] 동명이인 일정들도 헷갈리지 않고 완벽하게 순서 복구!
+      function preserveCustomOrder(newData) {
+          if (!serverData.customOrderFlags) return newData;
+          newData.customOrderFlags = serverData.customOrderFlags;
+          
+          for (let d = 1; d <= newData.daysInMonth; d++) {
+              if (newData.monthData[d] && serverData.monthData[d] && newData.customOrderFlags[d]) {
+                  let orderMap = {};
+                  serverData.monthData[d].forEach((item, idx) => {
+                      let k = getMatchKey(item);
+                      if(!orderMap[k]) orderMap[k] = [];
+                      orderMap[k].push(idx); // 동명이인 구분을 위해 배열(줄서기표)로 순서 기억
+                  });
+                  
+                  newData.monthData[d].forEach(item => {
+                      let k = getMatchKey(item);
+                      if (orderMap[k] && orderMap[k].length > 0) {
+                          item._tempSortIdx = orderMap[k].shift(); // 기억해둔 순서표를 하나씩 빼서 부여
+                      } else {
+                          item._tempSortIdx = 999; // 텔레그램으로 방금 추가된 새 일정은 맨 밑으로
+                      }
+                  });
+
+                  // 부여받은 순서표대로 다시 쫙 줄 세우기!
+                  newData.monthData[d].sort((a, b) => a._tempSortIdx - b._tempSortIdx);
+              }
+          }
+          return newData;
+      }
+      // 💡 [최종 패치] 수량 0과 빈칸을 동일하게 취급하여 억울한 간트 찢어짐 완벽 방어!
       const getMatchKey = (item) => {
         let clean = item.company.replace(/\[TASK\]/gi, "").trim();
-        let isTask =
-          item.company.toUpperCase().startsWith("[TASK]") ||
-          /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
-        if (isTask) return `T_${getFullName(clean)}`;
-        let isDone = item.isDone === true || String(item.isDone) === "true";
-        return `O_${getFullName(clean)}_${isDone}_${item.pal || ""}_${item.box || ""}`;
+        let isTask = item.company.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+        
+        // "0"이나 빈칸, null을 모두 완벽히 동일한 "" 으로 정규화
+        let p = (item.pal === "0" || !item.pal) ? "" : String(item.pal).trim();
+        let b = (item.box === "0" || !item.box) ? "" : String(item.box).trim();
+        
+        if (isTask) return `T_${getFullName(clean)}_${p}_${b}`;
+        return `O_${getFullName(clean)}_${p}_${b}`;
       };
 
       // 💡 [패치] 하루짜리 작업(TASK)은 슬림하게 안 만들고 뚱뚱한 박스로 처리하도록 day 정보를 받아서 스캔합니다.
@@ -2336,144 +2362,134 @@
       };
 
       function renderCalendar() {
-        // 💡 [핵심 패치] 각 주(Week)마다 가장 많은 하루 일정(Slim)의 개수를 미리 파악합니다!
-        let maxSinglePerWeek = {};
+        // 🚀 [무적의 통합 엔진] 이전 렌더링 찌꺼기를 완벽히 지우고, 사용자의 배열 순서를 절대 존중!
+        serverData.customOrderFlags = serverData.customOrderFlags || {};
+        let slotAllocation = {};
+        for (let d = 1; d <= serverData.daysInMonth; d++) slotAllocation[d] = [];
+
+        let globalItems = []; 
+        let gIdCounter = 1;
+
+        // 🚨 [핵심 패치 3] 이전 렌더링 때 발급된 번호표 찌꺼기 완벽 초기화! (이것 때문에 순서 이동이 안 먹혔음)
         for (let d = 1; d <= serverData.daysInMonth; d++) {
-          let w = Math.floor((serverData.firstDay + d - 1) / 7);
-          if (serverData.monthData[d]) {
-            let singleCount = serverData.monthData[d].filter(it => !checkIsSlim(it, d)).length;
-            if (!maxSinglePerWeek[w] || singleCount > maxSinglePerWeek[w]) {
-              maxSinglePerWeek[w] = singleCount;
+            if (serverData.monthData[d]) {
+                serverData.monthData[d].forEach(item => {
+                    item._ganttId = null;
+                    item._visualSlot = undefined;
+                });
             }
-          }
         }
 
-        let activeSlots = [];
-
+        // ① 일정 그룹화 및 고유 ID 부여
         for (let d = 1; d <= serverData.daysInMonth; d++) {
-          if (!serverData.monthData[d]) { activeSlots = []; continue; }
-
-          let w = Math.floor((serverData.firstDay + d - 1) / 7);
-          // 간트차트는 무조건 이 날의 하루일정 최대치(offset) 밑으로 깔리게 됩니다.
-          let offset = maxSinglePerWeek[w] || 0; 
-          
-          let todayItems = serverData.monthData[d];
-          let nextActiveSlots = [];
-          let usedToday = new Array(todayItems.length).fill(false);
-
-          // 🚀 1. [하루 일정] 무조건 맨 위(0번부터) 싹쓸이 배정!
-          let singleSlotIdx = 0;
-          for (let i = 0; i < todayItems.length; i++) {
-            if (!checkIsSlim(todayItems[i], d)) {
-              todayItems[i]._visualSlot = singleSlotIdx++;
-              usedToday[i] = true;
-            }
-          }
-
-          // 🚀 2. [기존 간트] 어제부터 이어져 온 간트는 하루 일정 밑(offset)으로 배정!
-          for (let s = 0; s < activeSlots.length; s++) {
-            if (activeSlots[s] !== null) {
-              let matchIdx = todayItems.findIndex((it, i) => !usedToday[i] && getMatchKey(it) === activeSlots[s]);
-              if (matchIdx !== -1) {
-                usedToday[matchIdx] = true;
-                todayItems[matchIdx]._visualSlot = s + offset;
-                nextActiveSlots[s] = activeSlots[s];
-              } else {
-                nextActiveSlots[s] = null;
-              }
-            } else {
-              nextActiveSlots[s] = null;
-            }
-          }
-
-          // 🚀 3. [신규 간트] 오늘 시작하는 간트도 빈칸을 찾아 하루 일정 밑(offset)으로 배정!
-          for (let i = 0; i < todayItems.length; i++) {
-            if (!usedToday[i]) {
-              let emptySlotIdx = nextActiveSlots.indexOf(null);
-              if (emptySlotIdx !== -1) {
-                nextActiveSlots[emptySlotIdx] = getMatchKey(todayItems[i]);
-                todayItems[i]._visualSlot = emptySlotIdx + offset;
-              } else {
-                nextActiveSlots.push(getMatchKey(todayItems[i]));
-                todayItems[i]._visualSlot = nextActiveSlots.length - 1 + offset;
-              }
-            }
-          }
-
-          // 🚀 [정렬 로직 최종판] 
-          // 1. 단일 일정(하루짜리)은 무조건 위로!
-          // 2. 간트차트끼리는 "시작 날짜"가 빠른 놈이 무조건 위로!
-          todayItems.sort((a, b) => {
-            let aSlim = checkIsSlim(a, d);
-            let bSlim = checkIsSlim(b, d);
-
-            if (aSlim !== bSlim) return aSlim ? -1 : 1; // 단일 일정은 무조건 위(-1)
+            if (!serverData.monthData[d]) continue;
             
-            // 둘 다 간트일 경우: 시작 날짜가 빠른 순서대로 정렬 (먼저 시작한 게 위!)
-            if (!aSlim && !bSlim) {
-                return (a.startDate || "") < (b.startDate || "") ? -1 : 1;
+            if (!serverData.customOrderFlags[d]) {
+                serverData.monthData[d].sort((a, b) => {
+                    let aSlim = checkIsSlim(a, d); let bSlim = checkIsSlim(b, d);
+                    if (aSlim !== bSlim) return aSlim ? 1 : -1; 
+                    return (a.startDate || a.company) < (b.startDate || b.company) ? -1 : 1; 
+                });
+                serverData.customOrderFlags[d] = true;
             }
-            return 0;
-          });
-          todayItems.forEach((item, idx) => { item._rawIdx = idx; });
-          activeSlots = nextActiveSlots;
+            
+            serverData.monthData[d].forEach((item) => {
+                if (checkIsSlim(item, d)) { 
+                    if (!item._ganttId) {
+                        let key = getMatchKey(item);
+                        item._ganttId = gIdCounter++;
+                        let eDay = d;
+                        for (let n = d + 1; n <= serverData.daysInMonth; n++) {
+                            let nextItem = serverData.monthData[n] && serverData.monthData[n].find(x => getMatchKey(x) === key && !x._ganttId);
+                            if (nextItem) { nextItem._ganttId = item._ganttId; eDay = n; } 
+                            else break;
+                        }
+                        globalItems.push({ isGantt: true, id: item._ganttId, start: d, end: eDay, key: key });
+                    }
+                } else { 
+                    item._ganttId = gIdCounter++; 
+                    globalItems.push({ isGantt: false, id: item._ganttId, start: d, end: d, refItem: item });
+                }
+            });
+        }
+        
+        // ② 렌더링 우선순위 결정 (무조건 사용자가 배열해둔 상하 순서를 우선!)
+        globalItems.sort((a, b) => {
+            let overlapStart = Math.max(a.start, b.start);
+            let overlapEnd = Math.min(a.end, b.end);
+            
+            if (overlapStart <= overlapEnd) {
+                let dayArr = serverData.monthData[overlapStart];
+                let idxA = dayArr.findIndex(x => x._ganttId === a.id);
+                let idxB = dayArr.findIndex(x => x._ganttId === b.id);
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            }
+            if (a.start !== b.start) return a.start - b.start;
+            return (b.end - b.start) - (a.end - a.start);
+        });
+
+        // ③ 빈칸 테트리스 (우선순위가 높은 놈부터 맨 위부터 꽂아 넣음)
+        globalItems.forEach(g => {
+            let slot = 0;
+            while (true) {
+                let isFree = true;
+                for (let d = g.start; d <= g.end; d++) { if (slotAllocation[d][slot]) { isFree = false; break; } }
+                if (isFree) break;
+                slot++;
+            }
+            for (let d = g.start; d <= g.end; d++) {
+                slotAllocation[d][slot] = true;
+                let it = serverData.monthData[d].find(x => x._ganttId === g.id);
+                if (it) it._visualSlot = slot;
+            }
+        });
+        
+        // ④ 최종 화면 동기화
+        for (let d = 1; d <= serverData.daysInMonth; d++) {
+            if (!serverData.monthData[d]) continue;
+            serverData.monthData[d].sort((a, b) => {
+                if (a._visualSlot !== undefined && b._visualSlot !== undefined) return a._visualSlot - b._visualSlot;
+                return 0;
+            });
+            serverData.monthData[d].forEach((item, idx) => { item._rawIdx = idx; });
         }
 
-        // ... (여기서부터 let weekSlotHeights = []; 기존 코드 유지) ...
+        
+        // 🚀 [2] 달력 그리기 (수정된 HTML 렌더링)
         let weekSlotHeights = [];
-
         for (let d = 1; d <= serverData.daysInMonth; d++) {
           if (!serverData.monthData[d]) continue;
           let w = Math.floor((serverData.firstDay + d - 1) / 7);
           if (!weekSlotHeights[w]) weekSlotHeights[w] = {};
-
           serverData.monthData[d].forEach((item) => {
             let s = item._visualSlot;
             if (s !== undefined) {
               let h = checkIsSlim(item, d) ? 26 : 46;
-              if (!weekSlotHeights[w][s] || weekSlotHeights[w][s] < h) {
-                weekSlotHeights[w][s] = h;
-              }
+              if (!weekSlotHeights[w][s] || weekSlotHeights[w][s] < h) weekSlotHeights[w][s] = h;
             }
           });
         }
 
-        document.getElementById("calTitle").innerText =
-          `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2, "0")}`;
+        document.getElementById("calTitle").innerText = `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2, "0")}`;
         const grid = document.getElementById("calendarGrid");
-        let rowHtml = '<div class="grid-row">';
-        let cellCount = 0;
-        for (let i = 0; i < serverData.firstDay; i++) {
-          rowHtml += `<div class="day-cell empty"></div>`;
-          cellCount++;
-        }
+        let rowHtml = '<div class="grid-row">'; let cellCount = 0;
+        for (let i = 0; i < serverData.firstDay; i++) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
 
-        const isThisMonthView =
-          serverData.year === todayDateObj.getFullYear() &&
-          serverData.month === todayDateObj.getMonth() + 1;
+        const isThisMonthView = serverData.year === todayDateObj.getFullYear() && serverData.month === todayDateObj.getMonth() + 1;
         const todayDayNumber = todayDateObj.getDate();
 
         for (let day = 1; day <= serverData.daysInMonth; day++) {
-          if (cellCount > 0 && cellCount % 7 === 0)
-            rowHtml += '</div><div class="grid-row">';
+          if (cellCount > 0 && cellCount % 7 === 0) rowHtml += '</div><div class="grid-row">';
           const dayOfWeek = (serverData.firstDay + day - 1) % 7;
           let dateClass = "date-num";
-          if (dayOfWeek === 0) dateClass += " sun";
-          if (dayOfWeek === 6) dateClass += " sat";
+          if (dayOfWeek === 0) dateClass += " sun"; if (dayOfWeek === 6) dateClass += " sat";
 
           let isToday = isThisMonthView && day === todayDayNumber;
           let cellClass = isToday ? "day-cell today-cell" : "day-cell";
 
-          // 🚀 [추가된 핵심 로직] 공휴일 판별 및 빨간색 스타일!
           let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          
-          // 💡 [수정완료] currentYmd 로 이름표를 맞추고, 안전장치를 씌웠습니다.
           let isHoliday = false;
-          if (window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true) {
-              isHoliday = true;
-          }
-          
-          // 일요일(0)이거나 공휴일이면 빨간색을 줍니다.
+          if (window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true) isHoliday = true;
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
 
           let dayData = serverData.monthData[day];
@@ -2481,33 +2497,20 @@
           let nextDayData = serverData.monthData[day + 1];
 
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
-          
-          // 🚀 [HTML 결합] 날짜 숫자를 감싸는 div 태그나 span에 빨간 스타일을 넣습니다.
-          // 관리자님의 기존 클래스(dateClass)를 유지하면서 스타일만 덮어씌웁니다.
           let cellHtml = `<div class="${cellClass}" ${bindCell}><div class="${dateClass}" style="${redStyle}">${day}</div>`;
 
           let w = Math.floor((serverData.firstDay + day - 1) / 7);
 
-          // ... (이 아래로 if (dayData && dayData.length > 0) { ... 기존 코드가 그대로 이어집니다!) ...
           if (dayData && dayData.length > 0) {
             let maxSlot = -1;
-            dayData.forEach((item) => {
-              if (item._visualSlot !== undefined && item._visualSlot > maxSlot)
-                maxSlot = item._visualSlot;
-            });
+            dayData.forEach((item) => { if (item._visualSlot !== undefined && item._visualSlot > maxSlot) maxSlot = item._visualSlot; });
 
             let renderArray = new Array(maxSlot + 1).fill(null);
-            dayData.forEach((item) => {
-              if (item._visualSlot !== undefined)
-                renderArray[item._visualSlot] = item;
-            });
+            dayData.forEach((item) => { if (item._visualSlot !== undefined) renderArray[item._visualSlot] = item; });
 
             for (let s = 0; s <= maxSlot; s++) {
               let item = renderArray[s];
-              let sHeight =
-                weekSlotHeights[w] && weekSlotHeights[w][s]
-                  ? weekSlotHeights[w][s]
-                  : 46;
+              let sHeight = weekSlotHeights[w] && weekSlotHeights[w][s] ? weekSlotHeights[w][s] : 46;
 
               if (!item) {
                 cellHtml += `<div class="item-tag" style="opacity:0; pointer-events:none; border:none; background:transparent; box-shadow:none; height:${sHeight}px; min-height:${sHeight}px; margin-bottom:1px; padding:0;"></div>`;
@@ -2515,202 +2518,106 @@
               }
 
               let originalIdx = item._rawIdx;
-              let isItemDone =
-                item.isDone === true || String(item.isDone) === "true";
-
-              let isExplicitTask = item.company
-                .toUpperCase()
-                .startsWith("[TASK]");
+              let isItemDone = item.isDone === true || String(item.isDone) === "true";
               let cleanCompany = item.company.replace(/\[TASK\]/gi, "").trim();
-              let fullName = getFullName(cleanCompany);
-              let isTaskMode =
-                isExplicitTask ||
-                /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(fullName);
+              let isTaskMode = item.company.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(cleanCompany));
 
               let colorObj = getCompanyColor(cleanCompany);
               let shortName = getShortName(cleanCompany);
 
-              let pCount = parseInt(item.pal) || 0;
-              let bCount = parseInt(item.box) || 0;
+              let pCount = parseInt(item.pal) || 0; let bCount = parseInt(item.box) || 0;
               let qtyText = "";
-              if (pCount > 0) qtyText = `${pCount}P`;
-              else if (bCount > 0) qtyText = `${bCount}B`;
+              if (pCount > 0) qtyText = `${pCount}P`; else if (bCount > 0) qtyText = `${bCount}B`;
 
-              let iconHtml = isItemDone
-                ? `<span class="done-icon">✅</span>`
-                : "";
-
+              let iconHtml = isItemDone ? `<span class="done-icon">✅</span>` : "";
               let tagClass = `item-tag`;
               if (checkIsSlim(item, day)) tagClass += " item-tag-slim";
               if (isItemDone) tagClass += " done-mark";
 
-              let bgStyle = "";
-              let innerHtml = "";
+              let bgStyle = ""; let innerHtml = "";
 
-              let hasPrev =
-                prevDayData &&
-                prevDayData.some((p) => getMatchKey(p) === getMatchKey(item));
-              let hasNext =
-                nextDayData &&
-                nextDayData.some((n) => getMatchKey(n) === getMatchKey(item));
+              // 🚨 [버그 픽스] null === null 현상 완벽 방어! (ID가 존재할 때만 이어짐 판별)
+              let hasPrev = item._ganttId && prevDayData && prevDayData.some(p => p._ganttId === item._ganttId);
+              let hasNext = item._ganttId && nextDayData && nextDayData.some(n => n._ganttId === item._ganttId);
               let isSingleDayActual = !hasPrev && !hasNext;
 
               if (isTaskMode && !isSingleDayActual) {
-                // 🚨 며칠 이어지는 간트차트 처리 (슬림, 녹색 완료 게이지)
-                tagClass += " item-tag-task";
-                tagClass = tagClass.replace("done-mark", ""); // 게이지가 있으므로 취소선/투명도 제거
-
+                tagClass += " item-tag-task"; tagClass = tagClass.replace("done-mark", "");
                 let isLinkedLeft = hasPrev && dayOfWeek !== 0;
                 let isLinkedRight = hasNext && dayOfWeek !== 6;
                 let isEdgeLeft = hasPrev && dayOfWeek === 0;
                 let isEdgeRight = hasNext && dayOfWeek === 6;
-
                 let isBlockStart = !isLinkedLeft;
                 let colspan = 1;
 
                 if (isBlockStart && (isLinkedRight || isEdgeRight)) {
-                  let checkDay = day + 1;
-                  let checkDayOfWeek = dayOfWeek + 1;
-                  while (
-                    checkDay <= serverData.daysInMonth &&
-                    checkDayOfWeek < 7
-                  ) {
+                  let checkDay = day + 1; let checkDayOfWeek = dayOfWeek + 1;
+                  while (checkDay <= serverData.daysInMonth && checkDayOfWeek < 7) {
                     let nData = serverData.monthData[checkDay];
-                    let hasSameTask =
-                      nData &&
-                      nData.some((n) => getMatchKey(n) === getMatchKey(item));
-                    if (hasSameTask) {
-                      colspan++;
-                      checkDay++;
-                      checkDayOfWeek++;
-                    } else {
-                      break;
-                    }
+                    let hasSameTask = nData && nData.some(n => n._ganttId === item._ganttId);
+                    if (hasSameTask) { colspan++; checkDay++; checkDayOfWeek++; } else break;
                   }
                 }
 
-                if (isLinkedLeft) tagClass += " linked-left";
-                if (isLinkedRight) tagClass += " linked-right";
-                if (isEdgeLeft) tagClass += " edge-left";
-                if (isEdgeRight) tagClass += " edge-right";
+                if (isLinkedLeft) tagClass += " linked-left"; if (isLinkedRight) tagClass += " linked-right";
+                if (isEdgeLeft) tagClass += " edge-left"; if (isEdgeRight) tagClass += " edge-right";
 
-                let vH = 26;
-                let mb = sHeight - vH + 1;
-
+                let vH = 26; let mb = sHeight - vH + 1;
                 bgStyle = `z-index: ${100 - day}; height:${vH}px !important; min-height:${vH}px !important; margin-bottom:${mb}px !important; box-sizing:border-box;`;
+                if (isLinkedLeft || isEdgeLeft) bgStyle += ` border-left: none !important; padding-left: 6px !important;`;
 
-                if (isLinkedLeft || isEdgeLeft) {
-                  bgStyle += ` border-left: none !important; padding-left: 6px !important;`;
-                }
-
-                let taskDoneHtml = isItemDone
-                  ? `<div class="task-done-border"></div>`
-                  : "";
-
+                let taskDoneHtml = isItemDone ? `<div class="task-done-border"></div>` : "";
                 if (isBlockStart) {
-                  let letters = cleanCompany
-                    .split("")
-                    .map((l) => `<span>${l}</span>`)
-                    .join("");
-                  let displayQty =
-                    qtyText !== ""
-                      ? `<span style="font-size:0.8em; margin-left:5px;">(${qtyText})</span>`
-                      : "";
+                  let letters = cleanCompany.split("").map(l => `<span>${l}</span>`).join("");
+                  let displayQty = qtyText !== "" ? `<span style="font-size:0.8em; margin-left:5px;">(${qtyText})</span>` : "";
                   let spanWidth = `calc(${colspan * 100}% + ${(colspan - 1) * 9}px)`;
                   innerHtml = `<div class="task-span-text" style="width: ${spanWidth};">${letters}${displayQty}</div><span style="opacity:0;">-</span>${taskDoneHtml}`;
-                } else {
-                  innerHtml = `<span style="opacity:0;">-</span>${taskDoneHtml}`;
-                }
+                } else { innerHtml = `<span style="opacity:0;">-</span>${taskDoneHtml}`; }
               } else {
-                // 🚨 하루짜리 작업이거나 출고 스케줄 (뚱뚱하게 렌더링 & 정상 완료 마크)
-                if (isTaskMode) {
-                  tagClass += " item-tag-task"; // 작업 컬러 유지
-                }
-
+                if (isTaskMode) tagClass += " item-tag-task";
                 bgStyle = `background: ${isTaskMode ? "#222222" : colorObj.bg}; height:${sHeight}px; min-height:${sHeight}px; box-sizing:border-box;`;
-                if (
-                  isTaskMode &&
-                  !document.body.classList.contains("light-mode")
-                )
-                  bgStyle += ` border: 1px solid rgba(255,255,255,0.2) !important; border-left: 4px solid #FFD60A !important;`;
-                else if (isTaskMode)
-                  bgStyle += ` border: 1px solid #444444 !important; border-left: 4px solid #FFD60A !important;`;
+                if (isTaskMode && !document.body.classList.contains("light-mode")) bgStyle += ` border: 1px solid rgba(255,255,255,0.2) !important; border-left: 4px solid #FFD60A !important;`;
+                else if (isTaskMode) bgStyle += ` border: 1px solid #444444 !important; border-left: 4px solid #FFD60A !important;`;
 
                 let txtStyle = `color: ${isTaskMode ? "#fff" : colorObj.cMain} !important; text-shadow: ${isTaskMode ? "none" : colorObj.txtShadow} !important;`;
                 let subStyle = `color: ${isTaskMode ? "#fff" : colorObj.cSub} !important;`;
-                let subHtml =
-                  qtyText !== "" || isItemDone
-                    ? `<span class="pal-sub" style="${subStyle}">${iconHtml}${qtyText}</span>`
-                    : "";
+                let subHtml = qtyText !== "" || isItemDone ? `<span class="pal-sub" style="${subStyle}">${iconHtml}${qtyText}</span>` : "";
                 innerHtml = `<div style="width:100%; text-align:center; position:relative; z-index:2;"><span class="comp-name" style="${txtStyle}">${shortName}</span></div>${subHtml}`;
               }
 
               let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.company}', ${isItemDone})"`;
 
-              cellHtml += `<div class="${tagClass}" style="${bgStyle}" ${bindItem}>${innerHtml}</div>`;
+              // 🚨 핵심: 드래그가 먹히도록 data-raw-idx 강제 추가!
+              cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}" style="${bgStyle}" ${bindItem}>${innerHtml}</div>`;
             }
           }
-          cellHtml += `</div>`;
-          rowHtml += cellHtml;
-          cellCount++;
+          cellHtml += `</div>`; rowHtml += cellHtml; cellCount++;
         }
-        while (cellCount % 7 !== 0) {
-          rowHtml += `<div class="day-cell empty"></div>`;
-          cellCount++;
-        }
-        rowHtml += "</div>";
-        grid.innerHTML = rowHtml;
+        while (cellCount % 7 !== 0) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
+        rowHtml += "</div>"; grid.innerHTML = rowHtml;
 
+        // ... (나머지 대기열 그리는 부분은 기존과 완벽히 동일합니다!)
         if (serverData.pendingItems && serverData.pendingItems.length > 0) {
           document.getElementById("pendingSection").style.display = "block";
-          document.getElementById("pendingCount").innerText =
-            `(${serverData.pendingItems.length}건)`;
+          document.getElementById("pendingCount").innerText = `(${serverData.pendingItems.length}건)`;
           let pListHtml = "";
           serverData.pendingItems.forEach((item, idx) => {
-            let meaningfulEtc = item.etc
-              ? item.etc
-                  .replace(
-                    /\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi,
-                    "",
-                  )
-                  .trim()
-              : "";
-            let etcTag =
-              meaningfulEtc !== ""
-                ? `<div class="pending-etc">${meaningfulEtc}</div>`
-                : "";
-
-            let isItemDone =
-              item.isDone === true || String(item.isDone) === "true";
+            let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi,"").trim() : "";
+            let etcTag = meaningfulEtc !== "" ? `<div class="pending-etc">${meaningfulEtc}</div>` : "";
+            let isItemDone = item.isDone === true || String(item.isDone) === "true";
             let cleanComp = item.company.replace(/\[TASK\]/gi, "").trim();
             let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.company}', ${isItemDone})"`;
-            let checkIcon = isItemDone
-              ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>'
-              : "";
-            let pCount = parseInt(item.pal) || 0;
-            let bCount = parseInt(item.box) || 0;
-            let qtyText = "";
-            if (pCount > 0) qtyText = `📦 ${pCount}P`;
-            else if (bCount > 0) qtyText = `📦 ${bCount}B`;
-            let volHtml = qtyText
-              ? `<div class="pending-vol">${qtyText}</div>`
-              : `<div class="pending-vol"></div>`;
-
-            // 👇 색상 뱃지를 추출하여 HTML에 결합합니다 👇
+            let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : "";
+            let pCount = parseInt(item.pal) || 0; let bCount = parseInt(item.box) || 0;
+            let qtyText = ""; if (pCount > 0) qtyText = `📦 ${pCount}P`; else if (bCount > 0) qtyText = `📦 ${bCount}B`;
+            let volHtml = qtyText ? `<div class="pending-vol">${qtyText}</div>` : `<div class="pending-vol"></div>`;
             let colorObj = getCompanyColor(cleanComp);
             let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${colorObj.bg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
-
             pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${getFullName(cleanComp)}</div>${volHtml}${etcTag}</div></div>`;
           });
           document.getElementById("pendingList").innerHTML = pListHtml;
-        } else {
-          document.getElementById("pendingSection").style.display = "none";
-        }
-
-        if (isAdmin) {
-          if (!isMultiMode)
-            document.getElementById("fabBtn").style.display = "flex";
-        }
+        } else { document.getElementById("pendingSection").style.display = "none"; }
+        if (isAdmin) { if (!isMultiMode) document.getElementById("fabBtn").style.display = "flex"; }
         updateSyncTime();
       }
 
@@ -2772,7 +2679,6 @@
         document.getElementById("pickerMonthGrid").innerHTML = gridHtml;
       }
 
-      // 🚀 [초고속 월 이동] 오염된 캐시 치료 + 깜빡임 방지 100% 최적화
       function goToAsync(year, month) {
         const toastEl = document.getElementById("toast");
         if(toastEl) toastEl.classList.remove("show");
@@ -2781,8 +2687,10 @@
         let safeYear = parseInt(year, 10);
         let safeMonth = parseInt(month, 10);
 
-        // 💡 [여기에 딱 한 줄 추가!] 연도가 바뀌었을 수 있으니 무조건 검사 지시!
         checkAndFetchHolidays(safeYear);
+
+        // 💡 [패치] 달력을 넘기기 전에 현재 가지고 있는 '미정(대기)' 최신 목록을 배낭에 챙깁니다!
+        let globalPending = serverData.pendingItems || [];
 
         const cacheKey = `cal_cache_${currentType}_${safeYear}_${safeMonth}`;
         const cachedData = localStorage.getItem(cacheKey);
@@ -2803,8 +2711,11 @@
         if (!isCacheValid) {
             let tempFirstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
             let tempDays = new Date(safeYear, safeMonth, 0).getDate();
-            serverData = { year: safeYear, month: safeMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {}, pendingItems: serverData.pendingItems || [] };
+            serverData = { year: safeYear, month: safeMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {} };
         }
+        
+        // 💡 [패치] 새로 연 달력에 아까 챙겨둔 '미정(대기)' 목록을 그대로 덮어씌워서 깜빡임 방지!
+        serverData.pendingItems = globalPending;
         
         renderCalendar(); 
         
@@ -2813,9 +2724,7 @@
         let fetchStartTime = Date.now(); 
 
         google.script.run.withSuccessHandler(res => {
-          // 🚨 [핵심 방어막] 달력을 연타해서 빠르게 넘기면, 가장 마지막 달력만 진짜로 인정!
           if (myNavId !== window.currentNavId) return; 
-          
           if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return; 
           
           res.year = safeYear;
@@ -2823,30 +2732,13 @@
           res.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
           res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
           
-          const getScheduleSig = (dataObj) => {
-            if (!dataObj) return "";
-            const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
-            let sigs = [];
-            if (dataObj.pendingItems) dataObj.pendingItems.forEach(it => sigs.push(`P_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
-            if (dataObj.monthData) {
-              for (let d in dataObj.monthData) dataObj.monthData[d].forEach(it => sigs.push(`${d}_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
-            }
-            return sigs.sort().join("||");
-          };
-
-          const getHolidaySig = (dataObj) => {
-            if (!dataObj || !dataObj.holidays || !Array.isArray(dataObj.holidays)) return "";
-            return dataObj.holidays.sort().join(",");
-          };
-          
           let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
           
-
-          localStorage.setItem(cacheKey, JSON.stringify(res)); 
-          
-          if (isScheduleChanged || isHolidayChanged) {
-            serverData = res;
-            renderCalendar();
+          if (isScheduleChanged) {
+              if(typeof preserveCustomOrder === "function") res = preserveCustomOrder(res);
+              serverData = res;
+              localStorage.setItem(cacheKey, JSON.stringify(res)); 
+              renderCalendar();
           }
         }).withFailureHandler(err => {
         }).getCalendarDataAsync(currentType, safeYear, safeMonth);
@@ -3032,7 +2924,8 @@
         });
       }
 
-      let adminToken = sessionStorage.getItem("admin_token");
+      // 💡 [수정] 앱을 꺼도 관리자 로그인 유지
+      let adminToken = localStorage.getItem("admin_token");
       let isAdmin = adminToken ? true : false;
       if (isAdmin) {
         const btn = document.getElementById("adminBtn");
@@ -3046,7 +2939,7 @@
         const btn = document.getElementById("adminBtn");
         if (isAdmin) {
           isAdmin = false;
-          sessionStorage.removeItem("admin_token");
+          localStorage.removeItem("admin_token"); // 💡 수정됨
           adminToken = null;
           btn.innerHTML = "🔒 잠김";
           btn.classList.remove("unlocked");
@@ -3070,7 +2963,7 @@
           .withSuccessHandler(function (isValid) {
             if (isValid) {
               isAdmin = true;
-              sessionStorage.setItem("admin_token", pw);
+              localStorage.setItem("admin_token", pw); // 💡 수정됨
               adminToken = pw;
               document.getElementById("adminBtn").innerHTML = "🔓 관리자";
               document.getElementById("adminBtn").classList.add("unlocked");
@@ -3111,19 +3004,18 @@
         }
       }
 
+      // 🚀 [초정밀 통합 드래그 엔진] (입고/출고 공통)
       let pressTimer = null;
       let isLongPress = false;
       let pressTarget = null;
-      let startX = 0,
-        startY = 0;
+      let startX = 0, startY = 0;
       let isDragging = false;
       let dragGhost = null;
       let dragData = null;
       let hasMovedDuringDrag = false;
-      let dragOffsetX = 0;
-      let dragOffsetY = 0;
+      let dragOffsetX = 0, dragOffsetY = 0;
       let dragReq = null;
-      let lastDropTarget = null; // 💡 60fps 스무스 드래그용 변수 추가
+      let lastDropTarget = null;
 
       function startPress(e, type, day, idx = null) {
         if (!isAdmin || isMultiMode) return;
@@ -3133,8 +3025,7 @@
         pressTarget = e.currentTarget;
         let clientX = e.touches ? e.touches[0].clientX : e.clientX;
         let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        startX = clientX;
-        startY = clientY;
+        startX = clientX; startY = clientY;
         pressTarget.classList.add("cell-pressing");
 
         pressTimer = setTimeout(() => {
@@ -3152,185 +3043,188 @@
             dragOffsetY = clientY - rect.top;
 
             dragGhost = pressTarget.cloneNode(true);
-            pressTarget.style.opacity = "0.3"; // 💡 원본은 반투명하게 (드래그 중임이 명확히 보이도록)
+            pressTarget.style.opacity = "0.3"; 
 
             if (day === "pending") {
               dragGhost.className = "item-tag";
-              let cleanComp = serverData.pendingItems[idx].company
-                .replace(/\[TASK\]/gi, "")
-                .trim();
-              let shortName = getShortName(cleanComp);
-              let colorObj = getCompanyColor(cleanComp);
-              dragGhost.style.background = colorObj.bg;
-              dragGhost.style.color = colorObj.cMain;
-              dragGhost.style.width = "55px";
-              dragGhost.style.height = "35px";
-              dragGhost.style.justifyContent = "center";
-              dragGhost.style.alignItems = "center";
-              dragGhost.style.display = "flex";
-              dragGhost.style.borderRadius = "6px";
-              dragGhost.style.fontSize = "0.9em";
-              dragGhost.style.fontWeight = "900";
-              dragGhost.innerHTML = shortName;
-              dragOffsetX = 27;
-              dragOffsetY = 17;
+              if (serverData.pendingItems[idx].sType) {
+                 let cClass = serverData.pendingItems[idx].sType === 'SEA' ? 'color-sea' : 'color-air';
+                 dragGhost.classList.add(cClass);
+                 dragGhost.innerHTML = serverData.pendingItems[idx].bl.slice(-4);
+                 dragGhost.style.color = '#fff';
+              } else {
+                 let cleanComp = serverData.pendingItems[idx].company.replace(/\[TASK\]/gi, "").trim();
+                 let shortName = getShortName(cleanComp);
+                 let colorObj = getCompanyColor(cleanComp);
+                 dragGhost.style.background = colorObj.bg;
+                 dragGhost.style.color = colorObj.cMain;
+                 dragGhost.innerHTML = shortName;
+              }
+              dragGhost.style.width = "60px"; dragGhost.style.height = "35px"; 
+              dragGhost.style.justifyContent = "center"; dragGhost.style.alignItems = "center"; dragGhost.style.display = "flex"; dragGhost.style.borderRadius = "6px"; dragGhost.style.fontSize = "0.85em"; dragGhost.style.fontWeight = "900";
+              dragOffsetX = 30; dragOffsetY = 17;
             } else {
-              // 💡 [핵심 패치] 작업(Task)처럼 엄청 긴 막대기를 드래그할 때, 손가락 밖으로 삐져나가지 않게 아담한 사이즈로 묶어줍니다!
-              let isWideTask = rect.width > window.innerWidth * 0.4; // 화면의 40% 이상 차지하는 긴 막대라면
+              let isWideTask = rect.width > window.innerWidth * 0.4;
               dragGhost.style.width = isWideTask ? "100px" : rect.width + "px";
               dragGhost.style.height = rect.height + "px";
-              if (isWideTask) dragOffsetX = 50; // 손가락 중앙으로 강제 정렬
-
-              dragGhost.classList.remove(
-                "linked-left",
-                "linked-right",
-                "item-tag-slim",
-                "edge-left",
-                "edge-right",
-              );
-              dragGhost.style.margin = "0px";
-              dragGhost.style.borderRight = "";
-              dragGhost.style.borderLeft = "";
-              dragGhost.style.borderRadius = "8px"; // 더 부드러운 라운드 처리
+              if (isWideTask) dragOffsetX = 50;
+              dragGhost.classList.remove("linked-left", "linked-right", "item-tag-slim", "edge-left", "edge-right");
+              dragGhost.style.margin = "0px"; dragGhost.style.borderRight = ""; dragGhost.style.borderLeft = ""; dragGhost.style.borderRadius = "8px";
             }
-            dragGhost.style.position = "fixed";
-            dragGhost.style.left = "0px";
-            dragGhost.style.top = "0px";
-            dragGhost.style.margin = "0px";
-            dragGhost.style.zIndex = "999999";
-            dragGhost.style.opacity = "0.95";
-            dragGhost.style.pointerEvents = "none";
-            dragGhost.style.willChange = "transform";
-            dragGhost.style.boxShadow = "0 15px 35px rgba(0,0,0,0.3)";
-
-            // 👇 이 줄을 추가하세요! (좌측 상단에서 날아오는 애니메이션 강제 삭제) 👇
-            dragGhost.style.transition = "none";
-
+            
+            dragGhost.style.position = "fixed"; dragGhost.style.left = "0px"; dragGhost.style.top = "0px"; dragGhost.style.margin = "0px"; dragGhost.style.zIndex = "999999"; dragGhost.style.opacity = "0.95"; dragGhost.style.pointerEvents = "none"; dragGhost.style.willChange = "transform"; dragGhost.style.boxShadow = "0 15px 35px rgba(0,0,0,0.3)"; dragGhost.style.transition = "none";
+            
             document.body.appendChild(dragGhost);
-
-            updateGhostPosition(clientX, clientY);
+            
+            // 🚨 화면에 박자마자 즉시 좌표 적용! (입고 버그 픽스)
+            dragGhost.style.transform = `translate3d(${clientX - dragOffsetX}px, ${clientY - dragOffsetY}px, 0) scale(1.05)`;
           }
-        }, 400); // 💡 500ms -> 400ms 로 줄여서 좀 더 빨리 드래그가 잡히도록 체감 속도 향상!
+        }, 400); 
       }
 
       function cancelPress() {
         if (isDragging) return;
         if (pressTimer) clearTimeout(pressTimer);
-        if (pressTarget) {
-          pressTarget.classList.remove("cell-pressing");
-          pressTarget = null;
-        }
+        if (pressTarget) { pressTarget.classList.remove("cell-pressing"); pressTarget = null; }
       }
 
-      // 🚀 [60fps 스무스 렌더링] requestAnimationFrame을 사용한 미끄러지는 듯한 드래그 구현
       function updateGhostPosition(x, y) {
         if (!dragGhost) return;
+        
+        // 🚨 픽셀 단위 직접 주입으로 입고 달력 먹통 현상 완벽 해결!
+        dragGhost.style.left = (x - dragOffsetX) + "px";
+        dragGhost.style.top = (y - dragOffsetY) + "px";
+        dragGhost.style.transform = "scale(1.05)"; // 크기만 살짝 키움
+        
         if (!dragReq) {
           dragReq = requestAnimationFrame(() => {
-            dragGhost.style.transform = `translate3d(${x - dragOffsetX}px, ${y - dragOffsetY}px, 0) scale(1.05)`;
-
-            // 💡 [드래그 타겟 하이라이트 표시] 어디에 떨어질지 달력 칸을 파랗게 빛나게 해줍니다!
             let dropElement = document.elementFromPoint(x, y);
-            let targetCell = dropElement
-              ? dropElement.closest(".day-cell:not(.empty)")
-              : null;
+            let targetCell = dropElement ? dropElement.closest(".day-cell:not(.empty)") : null;
+            let targetItem = dropElement ? dropElement.closest(".item-tag") : null;
 
-            if (lastDropTarget && lastDropTarget !== targetCell)
-              lastDropTarget.classList.remove("drag-over");
+            document.querySelectorAll(".insert-line-top, .insert-line-bottom, .drag-over").forEach((el) => {
+              el.classList.remove("insert-line-top", "insert-line-bottom", "drag-over");
+            });
+
             if (targetCell) {
-              targetCell.classList.add("drag-over");
-              lastDropTarget = targetCell;
-            } else lastDropTarget = null;
-
+              if (targetItem && targetItem !== pressTarget) {
+                let rect = targetItem.getBoundingClientRect();
+                if (y < rect.top + rect.height / 2) targetItem.classList.add("insert-line-top");
+                else targetItem.classList.add("insert-line-bottom");
+                lastDropTarget = targetItem;
+              } else {
+                targetCell.classList.add("drag-over");
+                lastDropTarget = targetCell;
+              }
+            } else {
+              lastDropTarget = null;
+            }
             dragReq = null;
           });
         }
       }
 
-      document.addEventListener(
-        "touchmove",
-        function (e) {
-          if (isDragging) {
-            e.preventDefault();
-            hasMovedDuringDrag = true;
-            updateGhostPosition(e.touches[0].clientX, e.touches[0].clientY);
-          }
-        },
-        { passive: false },
-      );
+      document.addEventListener("touchmove", function (e) {
+          if (isDragging) { e.preventDefault(); hasMovedDuringDrag = true; updateGhostPosition(e.touches[0].clientX, e.touches[0].clientY); }
+      }, { passive: false });
+      
       document.addEventListener("mousemove", function (e) {
-        if (isDragging) {
-          hasMovedDuringDrag = true;
-          updateGhostPosition(e.clientX, e.clientY);
-        }
+          if (isDragging) { hasMovedDuringDrag = true; updateGhostPosition(e.clientX, e.clientY); }
       });
-      document.addEventListener("touchend", endDrag);
-      document.addEventListener("mouseup", endDrag);
+      
+      document.addEventListener("touchend", endDrag); document.addEventListener("mouseup", endDrag);
 
       function endDrag(e) {
         if (!isDragging) return;
         isDragging = false;
-        if (dragReq) {
-          cancelAnimationFrame(dragReq);
-          dragReq = null;
-        }
+        if (dragReq) { cancelAnimationFrame(dragReq); dragReq = null; }
 
         let x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
         let y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
-        if (dragGhost) {
-          dragGhost.remove();
-          dragGhost = null;
-        }
-        if (pressTarget) {
-          pressTarget.style.opacity = "1";
-        } // 원본 반투명 원상복구
+        
+        if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+        if (pressTarget) { pressTarget.style.opacity = "1"; }
+
+        let currentDropTarget = lastDropTarget;
+        let isTopInsert = currentDropTarget ? currentDropTarget.classList.contains('insert-line-top') : false;
+
         if (lastDropTarget) {
-          lastDropTarget.classList.remove("drag-over");
+          lastDropTarget.classList.remove("drag-over", "insert-line-top", "insert-line-bottom");
           lastDropTarget = null;
-        } // 하이라이트 끄기
+        }
 
         if (!hasMovedDuringDrag) return;
 
         let dropElement = document.elementFromPoint(x, y);
         let targetCell = dropElement ? dropElement.closest(".day-cell") : null;
-        let isOutsideCalendar =
-          !dropElement ||
-          (!dropElement.closest(".calendar-container") &&
-            !dropElement.closest(".overlay-modal"));
-        let targetPending = dropElement
-          ? dropElement.closest(".pending-container")
-          : null;
-        let item =
-          dragData.day === "pending"
-            ? serverData.pendingItems[dragData.idx]
-            : serverData.monthData[dragData.day][dragData.idx];
-        let oldDateStr =
-          dragData.day === "pending"
-            ? "미정"
-            : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+        let isOutsideCalendar = !dropElement || (!dropElement.closest(".calendar-container") && !dropElement.closest(".overlay-modal"));
+        let targetPending = dropElement ? dropElement.closest(".pending-container") : null;
+        
+        let item = dragData.day === "pending" ? serverData.pendingItems[dragData.idx] : serverData.monthData[dragData.day][dragData.idx];
+        let oldDateStr = dragData.day === "pending" ? "미정" : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
 
         if (targetCell && !targetCell.classList.contains("empty")) {
-          let newDay = parseInt(
-            targetCell.querySelector(".date-num").innerText.trim(),
-          );
+          let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
+
+          // 💡 [간트 & 하루일정 순서 변경 완벽 작동 로직]
+          if (newDay === dragData.day && currentDropTarget && currentDropTarget.classList.contains('item-tag')) {
+              let targetIdx = parseInt(currentDropTarget.getAttribute('data-raw-idx'));
+              if (!isNaN(targetIdx)) {
+                  let arr = serverData.monthData[dragData.day];
+                  let movedItem = arr[dragData.idx]; 
+                  let targetItem = arr[targetIdx];
+                  
+                  // 지문 추출기 (이름과 정규화된 수량)
+                  const mk = (it) => {
+                      let p = (it.pal === "0" || !it.pal) ? "" : String(it.pal).trim();
+                      let b = (it.box === "0" || !it.box) ? "" : String(it.box).trim();
+                      return `${it.company.replace(/\[TASK\]/gi, "").trim()}_${p}_${b}`;
+                  };
+                  let movedKey = mk(movedItem);
+                  let targetKey = mk(targetItem);
+
+                  arr.splice(dragData.idx, 1);
+                  if (targetIdx > dragData.idx) targetIdx--; 
+                  let insertIdx = isTopInsert ? targetIdx : targetIdx + 1;
+                  arr.splice(insertIdx, 0, movedItem);
+                  
+                  serverData.customOrderFlags = serverData.customOrderFlags || {};
+                  serverData.customOrderFlags[dragData.day] = true;
+
+                  // 🚨 [킬러 로직] 얇은 간트차트의 순서를 바꿨다면, 겹치는 모든 날짜의 배열 순서도 텔레파시로 똑같이 바꿈!
+                  for (let d = 1; d <= serverData.daysInMonth; d++) {
+                      if (d === dragData.day || !serverData.monthData[d]) continue;
+                      let mIdx = serverData.monthData[d].findIndex(x => mk(x) === movedKey);
+                      let tIdx = serverData.monthData[d].findIndex(x => mk(x) === targetKey);
+                      
+                      if (mIdx !== -1 && tIdx !== -1) {
+                          let mItem = serverData.monthData[d].splice(mIdx, 1)[0];
+                          tIdx = serverData.monthData[d].findIndex(x => mk(x) === targetKey);
+                          let iIdx = isTopInsert ? tIdx : tIdx + 1;
+                          serverData.monthData[d].splice(iIdx, 0, mItem);
+                          serverData.customOrderFlags[d] = true;
+                      }
+                  }
+
+                  localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+                  renderCalendar();
+                  return;
+              }
+          }
+
           if (newDay === dragData.day) return;
+          
           let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
-          let cleanName = item.company.replace(/\[TASK\]/gi, "").trim();
-          if (
-            confirm(
-              `🚚 [${getFullName(cleanName)}] 일정을 ${newDay}일로 이동하시겠습니까?`,
-            )
-          ) {
+          let rawName = item.company || item.bl;
+          let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
+          if (confirm(`🚚 [${cleanName}] 일정을 ${newDay}일로 이동하시겠습니까?`)) {
             executeMove(item, oldDateStr, newDateStr, dragData.idx);
           }
         } else if (isOutsideCalendar || targetPending) {
           if (dragData.day === "pending") return;
-          let cleanName = item.company.replace(/\[TASK\]/gi, "").trim();
-          if (
-            confirm(
-              `🚚 [${getFullName(cleanName)}] 일정을 '미정(대기)'으로 변경하시겠습니까?`,
-            )
-          ) {
+          let rawName = item.company || item.bl;
+          let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
+          if (confirm(`🚚 [${cleanName}] 일정을 '미정(대기)'으로 변경하시겠습니까?`)) {
             executeMove(item, oldDateStr, "미정", dragData.idx);
           }
         }

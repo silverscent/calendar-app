@@ -355,8 +355,9 @@
         border-radius: 4px;
         z-index: 1;
       }
+      /* 💡 [2번 패치] 오늘 날짜 붉은 바탕은 유지하되, 글자 색깔은 요일 본연의 색 유지 */
       .today-cell .date-num {
-        color: #ff3b30 !important;
+        color: inherit !important; /* 🚨 이 부분을 inherit으로 변경! */
         font-weight: 900;
       }
 
@@ -939,8 +940,41 @@
         right: 16px !important;
         margin: 0 !important;
       }
-      /* ===================================================== */
-
+      /* 💡 [1번 패치] 입고 달력 최근 OCR / 해상 항공 범례 자동 크기 조절 */
+      .legend-bar-wrapper {
+        flex-wrap: nowrap !important;
+        white-space: nowrap !important;
+        gap: 1vw !important;
+      }
+      .ocr-time-info, .legend-bar, .legend-item {
+        flex-wrap: nowrap !important;
+        white-space: nowrap !important;
+      }
+      .ocr-time-info span, .legend-item {
+        font-size: clamp(0.7em, 2.5vw, 0.85em) !important;
+      }
+      /* 💡 [3번 패치] 파레트 P 제거 대신 숫자를 더 크고 강렬하게, 짤림 방지 */
+      .pal-main {
+        font-size: 1.25em !important; /* 숫자 크기 극대화 */
+        letter-spacing: -1px !important; /* 자간을 좁혀서 공간 확보 */
+      }
+      .daily-total {
+        font-size: 0.75em !important;
+        letter-spacing: -0.5px !important;
+      }
+      /* 💡 [5번 패치] 드래그 앤 드롭 끼워넣기 표시선 */
+      .insert-line-top { box-shadow: inset 0 4px 0 0 #0a84ff !important; }
+      .insert-line-bottom { box-shadow: inset 0 -4px 0 0 #0a84ff !important; }
+      /* 💡 관리자 로그인 창 키보드 가림 방지 (화면 중앙 팝업으로 변경) */
+      #adminLoginModal { align-items: center !important; padding: 20px; }
+      #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
+    /* 💡 B/L 넘버 및 도장 자동 크기 조절 (박스 밖으로 탈출 방지) */
+      .bl-sub {
+        font-size: clamp(0.55em, 2.2vw, 0.75em) !important;
+        letter-spacing: -0.5px !important;
+        white-space: nowrap !important;
+      }
+      .done-icon { font-size: clamp(9px, 2.5vw, 12px) !important; }
     </style>
   </head>
   <body>
@@ -983,10 +1017,11 @@
             <span class="sync-time" id="lastSyncTime"></span>
             <button class="sync-btn" onclick="navMonth(0)" title="수동 동기화">🔄</button>
           </div>
-          <div class="admin-actions" id="adminActions">
-            <button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
           </div>
-        </div>
+      </div>
+      
+      <div class="admin-actions" id="adminActions" style="justify-content: flex-end; margin-top: 4px;">
+        <button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
       </div>
     </div>
 
@@ -1088,7 +1123,8 @@
       }
 
       let serverData = { year: todayDateObj.getFullYear(), month: todayDateObj.getMonth() + 1, firstDay: 0, daysInMonth: 31, monthData: {}, pendingItems: [] };
-      let adminToken = sessionStorage.getItem('admin_token');
+      // 💡 [수정] 앱을 꺼도 관리자 로그인 유지
+      let adminToken = localStorage.getItem("admin_token");
       let isAdmin = adminToken ? true : false;
 
       // 💡 [추가] 1년 치 공휴일 전용 저장소 및 관리자
@@ -1262,7 +1298,9 @@
           let dateRowHtml = `<div class="date-row"><span class="${dateClass}" style="${redStyle}">${day}</span>`;
           if (dayData && dayData.length > 0) {
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
-              if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}P</span>`;
+             // 🚨 (수정 전) if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}P</span>`;
+          // 💡 (수정 후) '합' 글자 제거
+          if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
           }
           dateRowHtml += `</div>`;
           let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
@@ -1280,12 +1318,16 @@
               let iconHtml = isItemDone ? `<span class="done-icon">✅</span>` : '';
               let shortName = item.bl.length > 4 ? item.bl.slice(-4) : item.bl;
               if (item.bl.startsWith('발행전')) shortName = '발행전';
-              let innerHtml = `<span class="pal-main">${item.pal}P</span><span class="bl-sub">${iconHtml}${shortName}</span>`;
+              // 🚨 (수정 전) let innerHtml = `<span class="pal-main">${item.pal}P</span>...
+              // 💡 (수정 후) P 삭제!
+              let innerHtml = `<span class="pal-main">${item.pal}</span><span class="bl-sub">${iconHtml}${shortName}</span>`;
 
               let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
               let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.bl}', ${isItemDone})"`;
 
-              cellHtml += `<div class="${tagClass}" ${bindItem}>${innerHtml}</div>`;
+              // 🚨 이 부분에 data-raw-idx를 추가해 줍니다!
+              // 💡 [수정완료] 입고 달력에 맞게 고쳤습니다!
+              cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}" ${bindItem}>${innerHtml}</div>`;
             });
           }
           cellHtml += `</div>`; rowHtml += cellHtml; cellCount++;
@@ -1451,7 +1493,8 @@
       function toggleAdmin() {
         const btn = document.getElementById('adminBtn');
         if(isAdmin) {
-          isAdmin = false; sessionStorage.removeItem('admin_token'); adminToken = null;
+          isAdmin = false; localStorage.removeItem("admin_token"); // 💡 수정됨
+          adminToken = null;
           btn.innerHTML = '🔒 잠김'; btn.classList.remove('unlocked');
           document.getElementById('adminActions').style.display = 'none'; updateFooterUI();
           showToast('🔒 일반 모드로 전환되었습니다.', 2000); return;
@@ -1465,7 +1508,9 @@
         document.getElementById('adminLoginModal').style.display = 'none'; showToast("🔒 보안 인증 중...", 0);
         google.script.run.withSuccessHandler(function(isValid) {
           if (isValid) {
-            isAdmin = true; sessionStorage.setItem('admin_token', pw); adminToken = pw;
+            isAdmin = true;
+            localStorage.setItem("admin_token", pw); // 💡 수정됨
+            adminToken = pw;
             document.getElementById('adminBtn').innerHTML = '🔓 관리자'; document.getElementById('adminBtn').classList.add('unlocked');
             document.getElementById('adminActions').style.display = 'flex'; updateFooterUI();
             showToast("🔓 관리자 인증 성공!", 2000); renderCalendar();
@@ -1488,91 +1533,213 @@
         } else { btn.innerText = '☑️ 다중 선택'; btn.classList.remove('active'); bar.style.display = 'none'; }
       }
 
-      let pressTimer = null; let isLongPress = false; let pressTarget = null;
-      let startX = 0, startY = 0; let isDragging = false; let dragGhost = null; let dragData = null; let hasMovedDuringDrag = false;
-      let dragOffsetX = 0; let dragOffsetY = 0; let dragReq = null; let lastDropTarget = null; 
+    // 🚀 [초정밀 통합 드래그 엔진] (입고/출고 공통)
+      let pressTimer = null;
+      let isLongPress = false;
+      let pressTarget = null;
+      let startX = 0, startY = 0;
+      let isDragging = false;
+      let dragGhost = null;
+      let dragData = null;
+      let hasMovedDuringDrag = false;
+      let dragOffsetX = 0, dragOffsetY = 0;
+      let dragReq = null;
+      let lastDropTarget = null;
 
       function startPress(e, type, day, idx = null) {
         if (!isAdmin || isMultiMode) return;
-        cancelPress(); isLongPress = false; hasMovedDuringDrag = false; pressTarget = e.currentTarget;
-        let clientX = e.touches ? e.touches[0].clientX : e.clientX; let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        startX = clientX; startY = clientY; pressTarget.classList.add('cell-pressing');
-        
+        cancelPress();
+        isLongPress = false;
+        hasMovedDuringDrag = false;
+        pressTarget = e.currentTarget;
+        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        startX = clientX; startY = clientY;
+        pressTarget.classList.add("cell-pressing");
+
         pressTimer = setTimeout(() => {
-          isLongPress = true; if(pressTarget) pressTarget.classList.remove('cell-pressing');
+          isLongPress = true;
+          if (pressTarget) pressTarget.classList.remove("cell-pressing");
           if (navigator.vibrate) navigator.vibrate(50);
-          
-          if (type === 'item') {
-              isDragging = true; dragData = { day: day, idx: idx };
-              let rect = pressTarget.getBoundingClientRect();
-              dragOffsetX = clientX - rect.left; dragOffsetY = clientY - rect.top;
-              
-              dragGhost = pressTarget.cloneNode(true); pressTarget.style.opacity = '0.3'; 
-              
-              if (day === 'pending') {
-                  dragGhost.className = 'item-tag';
-                  let cClass = serverData.pendingItems[idx].sType === 'SEA' ? 'color-sea' : 'color-air';
-                  dragGhost.classList.add(cClass);
-                  dragGhost.style.width = '60px'; dragGhost.style.height = '35px'; dragGhost.style.justifyContent = 'center'; dragGhost.style.alignItems = 'center'; dragGhost.style.display = 'flex'; dragGhost.style.borderRadius = '6px'; dragGhost.style.fontSize = '0.85em'; dragGhost.style.fontWeight = '900'; dragGhost.style.color = '#fff';
-                  dragGhost.innerHTML = serverData.pendingItems[idx].bl.slice(-4);
-                  dragOffsetX = 30; dragOffsetY = 17;
+
+          if (type === "cell") {
+            openAddFormWithDate(day);
+          } else if (type === "item") {
+            isDragging = true;
+            dragData = { day: day, idx: idx };
+            let rect = pressTarget.getBoundingClientRect();
+            dragOffsetX = clientX - rect.left;
+            dragOffsetY = clientY - rect.top;
+
+            dragGhost = pressTarget.cloneNode(true);
+            pressTarget.style.opacity = "0.3"; 
+
+            if (day === "pending") {
+              dragGhost.className = "item-tag";
+              if (serverData.pendingItems[idx].sType) {
+                 let cClass = serverData.pendingItems[idx].sType === 'SEA' ? 'color-sea' : 'color-air';
+                 dragGhost.classList.add(cClass);
+                 dragGhost.innerHTML = serverData.pendingItems[idx].bl.slice(-4);
+                 dragGhost.style.color = '#fff';
               } else {
-                  dragGhost.style.width = rect.width + 'px'; dragGhost.style.height = rect.height + 'px'; dragGhost.style.margin = '0px'; dragGhost.style.borderRadius = '5px';
+                 let cleanComp = serverData.pendingItems[idx].company.replace(/\[TASK\]/gi, "").trim();
+                 let shortName = getShortName(cleanComp);
+                 let colorObj = getCompanyColor(cleanComp);
+                 dragGhost.style.background = colorObj.bg;
+                 dragGhost.style.color = colorObj.cMain;
+                 dragGhost.innerHTML = shortName;
               }
-              dragGhost.style.position = 'fixed'; dragGhost.style.left = '0px'; dragGhost.style.top = '0px'; dragGhost.style.margin = '0px'; dragGhost.style.zIndex = '999999'; dragGhost.style.opacity = '0.95'; dragGhost.style.pointerEvents = 'none'; dragGhost.style.willChange = 'transform'; dragGhost.style.boxShadow = '0 15px 35px rgba(0,0,0,0.3)'; dragGhost.style.transition = 'none'; 
-              document.body.appendChild(dragGhost);
-              updateGhostPosition(clientX, clientY);
+              dragGhost.style.width = "60px"; dragGhost.style.height = "35px"; 
+              dragGhost.style.justifyContent = "center"; dragGhost.style.alignItems = "center"; dragGhost.style.display = "flex"; dragGhost.style.borderRadius = "6px"; dragGhost.style.fontSize = "0.85em"; dragGhost.style.fontWeight = "900";
+              dragOffsetX = 30; dragOffsetY = 17;
+            } else {
+              let isWideTask = rect.width > window.innerWidth * 0.4;
+              dragGhost.style.width = isWideTask ? "100px" : rect.width + "px";
+              dragGhost.style.height = rect.height + "px";
+              if (isWideTask) dragOffsetX = 50;
+              dragGhost.classList.remove("linked-left", "linked-right", "item-tag-slim", "edge-left", "edge-right");
+              dragGhost.style.margin = "0px"; dragGhost.style.borderRight = ""; dragGhost.style.borderLeft = ""; dragGhost.style.borderRadius = "8px";
+            }
+            
+            dragGhost.style.position = "fixed"; dragGhost.style.left = "0px"; dragGhost.style.top = "0px"; dragGhost.style.margin = "0px"; dragGhost.style.zIndex = "999999"; dragGhost.style.opacity = "0.95"; dragGhost.style.pointerEvents = "none"; dragGhost.style.willChange = "transform"; dragGhost.style.boxShadow = "0 15px 35px rgba(0,0,0,0.3)"; dragGhost.style.transition = "none";
+            
+            document.body.appendChild(dragGhost);
+            
+            // 🚨 화면에 박자마자 즉시 좌표 적용! (입고 버그 픽스)
+            dragGhost.style.transform = `translate3d(${clientX - dragOffsetX}px, ${clientY - dragOffsetY}px, 0) scale(1.05)`;
           }
-        }, 400);
+        }, 400); 
       }
-      
-      function cancelPress() { if (isDragging) return; if (pressTimer) clearTimeout(pressTimer); if (pressTarget) { pressTarget.classList.remove('cell-pressing'); pressTarget = null; } }
-      
-      function updateGhostPosition(x, y) { 
-          if (!dragGhost) return;
-          if (!dragReq) {
-              dragReq = requestAnimationFrame(() => {
-                  dragGhost.style.transform = `translate3d(${x - dragOffsetX}px, ${y - dragOffsetY}px, 0) scale(1.05)`;
-                  let dropElement = document.elementFromPoint(x, y); 
-                  let targetCell = dropElement ? dropElement.closest('.day-cell:not(.empty)') : null;
-                  if (lastDropTarget && lastDropTarget !== targetCell) lastDropTarget.classList.remove('drag-over');
-                  if (targetCell) { targetCell.classList.add('drag-over'); lastDropTarget = targetCell; } else lastDropTarget = null;
-                  dragReq = null;
-              });
-          }
+
+      function cancelPress() {
+        if (isDragging) return;
+        if (pressTimer) clearTimeout(pressTimer);
+        if (pressTarget) { pressTarget.classList.remove("cell-pressing"); pressTarget = null; }
       }
+
+      function updateGhostPosition(x, y) {
+        if (!dragGhost) return;
+        
+        // 🚨 픽셀 단위 직접 주입으로 입고 달력 먹통 현상 완벽 해결!
+        dragGhost.style.left = (x - dragOffsetX) + "px";
+        dragGhost.style.top = (y - dragOffsetY) + "px";
+        dragGhost.style.transform = "scale(1.05)"; // 크기만 살짝 키움
+        
+        if (!dragReq) {
+          dragReq = requestAnimationFrame(() => {
+            let dropElement = document.elementFromPoint(x, y);
+            let targetCell = dropElement ? dropElement.closest(".day-cell:not(.empty)") : null;
+            let targetItem = dropElement ? dropElement.closest(".item-tag") : null;
+
+            document.querySelectorAll(".insert-line-top, .insert-line-bottom, .drag-over").forEach((el) => {
+              el.classList.remove("insert-line-top", "insert-line-bottom", "drag-over");
+            });
+
+            if (targetCell) {
+              if (targetItem && targetItem !== pressTarget) {
+                let rect = targetItem.getBoundingClientRect();
+                if (y < rect.top + rect.height / 2) targetItem.classList.add("insert-line-top");
+                else targetItem.classList.add("insert-line-bottom");
+                lastDropTarget = targetItem;
+              } else {
+                targetCell.classList.add("drag-over");
+                lastDropTarget = targetCell;
+              }
+            } else {
+              lastDropTarget = null;
+            }
+            dragReq = null;
+          });
+        }
+      }
+
+      document.addEventListener("touchmove", function (e) {
+          if (isDragging) { e.preventDefault(); hasMovedDuringDrag = true; updateGhostPosition(e.touches[0].clientX, e.touches[0].clientY); }
+      }, { passive: false });
       
-      document.addEventListener('touchmove', function(e) { if (isDragging) { e.preventDefault(); hasMovedDuringDrag = true; updateGhostPosition(e.touches[0].clientX, e.touches[0].clientY); } }, {passive: false});
-      document.addEventListener('mousemove', function(e) { if (isDragging) { hasMovedDuringDrag = true; updateGhostPosition(e.clientX, e.clientY); } });
-      document.addEventListener('touchend', endDrag); document.addEventListener('mouseup', endDrag);
+      document.addEventListener("mousemove", function (e) {
+          if (isDragging) { hasMovedDuringDrag = true; updateGhostPosition(e.clientX, e.clientY); }
+      });
+      
+      document.addEventListener("touchend", endDrag); document.addEventListener("mouseup", endDrag);
 
       function endDrag(e) {
-        if (!isDragging) return; isDragging = false;
+        if (!isDragging) return;
+        isDragging = false;
         if (dragReq) { cancelAnimationFrame(dragReq); dragReq = null; }
+
+        let x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+        let y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
         
-        let x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX; let y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
         if (dragGhost) { dragGhost.remove(); dragGhost = null; }
-        if (pressTarget) { pressTarget.style.opacity = '1'; } 
-        if (lastDropTarget) { lastDropTarget.classList.remove('drag-over'); lastDropTarget = null; } 
-        
-        if (!hasMovedDuringDrag) return;
-        
-        let dropElement = document.elementFromPoint(x, y);
-        let targetCell = dropElement ? dropElement.closest('.day-cell') : null;
-        let isOutsideCalendar = !dropElement || (!dropElement.closest('.calendar-container') && !dropElement.closest('.overlay-modal'));
-        let targetPending = dropElement ? dropElement.closest('.pending-container') : null;
-        let item = dragData.day === 'pending' ? serverData.pendingItems[dragData.idx] : serverData.monthData[dragData.day][dragData.idx];
-        let oldDateStr = dragData.day === 'pending' ? '미정' : `${serverData.year}-${String(serverData.month).padStart(2,'0')}-${String(dragData.day).padStart(2,'0')}`;
-        
-        if (targetCell && !targetCell.classList.contains('empty')) {
-          let newDay = parseInt(targetCell.querySelector('.date-num').innerText.trim());
-          if (newDay === dragData.day) return;
-          let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2,'0')}-${String(newDay).padStart(2,'0')}`;
-          if(confirm(`📦 [${item.bl}] 입고일을 ${newDay}일로 이동하시겠습니까?`)) { executeMove(item, oldDateStr, newDateStr, dragData.idx); }
+        if (pressTarget) { pressTarget.style.opacity = "1"; }
+
+        let currentDropTarget = lastDropTarget;
+        let isTopInsert = currentDropTarget ? currentDropTarget.classList.contains('insert-line-top') : false;
+
+        if (lastDropTarget) {
+          lastDropTarget.classList.remove("drag-over", "insert-line-top", "insert-line-bottom");
+          lastDropTarget = null;
         }
-        else if (isOutsideCalendar || targetPending) {
-          if (dragData.day === 'pending') return;
-          if(confirm(`📦 [${item.bl}] 일정을 '미정(대기)'으로 변경하시겠습니까?`)) { executeMove(item, oldDateStr, '미정', dragData.idx); }
+
+        if (!hasMovedDuringDrag) return;
+
+        // 🚨 타겟 결정 안전장치 
+        let targetCell = currentDropTarget ? currentDropTarget.closest('.day-cell') : null;
+        let isOutsideCalendar = false;
+        let targetPending = false;
+        
+        if (!targetCell) {
+            let dropElement = document.elementFromPoint(x, y);
+            targetCell = dropElement ? dropElement.closest(".day-cell") : null;
+            isOutsideCalendar = !dropElement || (!dropElement.closest(".calendar-container") && !dropElement.closest(".overlay-modal"));
+            targetPending = dropElement ? dropElement.closest(".pending-container") : null;
+        }
+
+        let item = dragData.day === "pending" ? serverData.pendingItems[dragData.idx] : serverData.monthData[dragData.day][dragData.idx];
+        let oldDateStr = dragData.day === "pending" ? "미정" : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+
+        if (targetCell && !targetCell.classList.contains("empty")) {
+          let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
+
+          // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
+          if (newDay === dragData.day && currentDropTarget && currentDropTarget.classList.contains('item-tag')) {
+              let targetIdx = parseInt(currentDropTarget.getAttribute('data-raw-idx'));
+              if (!isNaN(targetIdx)) {
+                  let arr = serverData.monthData[dragData.day];
+                  let movedItem = arr[dragData.idx]; 
+                  
+                  arr.splice(dragData.idx, 1);
+                  if (targetIdx > dragData.idx) targetIdx--; 
+                  
+                  let insertIdx = isTopInsert ? targetIdx : targetIdx + 1;
+                  arr.splice(insertIdx, 0, movedItem);
+                  
+                  // 🚨 사용자가 만든 커스텀 순서를 무조건 유지하도록 도장 꽝!
+                  serverData.customOrderFlags = serverData.customOrderFlags || {};
+                  serverData.customOrderFlags[dragData.day] = true;
+
+                  localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+                  renderCalendar();
+                  return;
+              }
+          }
+
+          if (newDay === dragData.day) return;
+          
+          let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
+          let rawName = item.company || item.bl;
+          let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
+          if (confirm(`🚚 [${cleanName}] 일정을 ${newDay}일로 이동하시겠습니까?`)) {
+            executeMove(item, oldDateStr, newDateStr, dragData.idx);
+          }
+        } else if (isOutsideCalendar || targetPending) {
+          if (dragData.day === "pending") return;
+          let rawName = item.company || item.bl;
+          let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
+          if (confirm(`🚚 [${cleanName}] 일정을 '미정(대기)'으로 변경하시겠습니까?`)) {
+            executeMove(item, oldDateStr, "미정", dragData.idx);
+          }
         }
       }
 
