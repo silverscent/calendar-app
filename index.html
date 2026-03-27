@@ -2596,6 +2596,7 @@
         while (cellCount % 7 !== 0) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
         rowHtml += "</div>"; grid.innerHTML = rowHtml;
 
+        
         // ... (나머지 대기열 그리는 부분은 기존과 완벽히 동일합니다!)
         if (serverData.pendingItems && serverData.pendingItems.length > 0) {
           document.getElementById("pendingSection").style.display = "block";
