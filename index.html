@@ -1270,9 +1270,8 @@
       .insert-line-top { box-shadow: inset 0 4px 0 0 #0a84ff !important; }
       .insert-line-bottom { box-shadow: inset 0 -4px 0 0 #0a84ff !important; }
       /* 💡 관리자 로그인 창 키보드 가림 방지 (화면 중앙 팝업으로 변경) */
-      #adminLoginModal { align-items: center !important; padding: 20px; }
+      #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
       #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
-
     </style>
   </head>
   <body>
@@ -3781,8 +3780,8 @@
           <div id="edit-${idx}-end-date-guide" style="display:${isTaskMode ? "block" : "none"}; font-size:0.75em; color:var(--text-sub); margin-top:4px; text-align:right; margin-bottom: 5px;">※ 하루 일정은 앞쪽 시작일만 입력하세요.</div>
 
           <div class="edit-row">
-            <div><div class="form-label">파레트 (P)</div><input type="number" id="edit-pal-${idx}" class="edit-input" value="${pal}"></div>
-            <div><div class="form-label">박스 (B)</div><input type="number" id="edit-box-${idx}" class="edit-input" value="${box}"></div>
+            <div><div class="form-label">파레트 (P)</div><input type="number" id="edit-pal-${idx}" class="edit-input" placeholder="0" value="${pal == '0' ? '' : pal}"></div>
+            <div><div class="form-label">박스 (B)</div><input type="number" id="edit-box-${idx}" class="edit-input" placeholder="0" value="${box == '0' ? '' : box}"></div>
           </div>
           <div class="form-label">비고</div>
           <input type="text" id="edit-etc-${idx}" class="edit-input" value="${etc !== "undefined" ? etc : ""}">
