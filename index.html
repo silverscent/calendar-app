@@ -1875,24 +1875,91 @@
         { bg: "#CE93D8", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 19. 라벤더
         { bg: "#F48FB1", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }  // 20. 로즈
       ];
-    // 💡 [브라우저 색상 차이 완벽 해결] 똑같은 이름엔 100% 똑같은 색상을 수학적으로(해시) 영구 고정!
+    // 💡 [패치 1&2] 색상 중복 배정 & 셔플 참조 오류 완벽 해결!
       function getCompanyColor(companyName) {
         if (!companyName) return presetPalette[0];
         let stdName = getFullName(companyName);
+        if (!customColors) customColors = {};
         
-        // 1. 관리자가 '셔플'로 강제 지정한 색상이 서버에 있으면 그것부터 최우선 적용!
-        if (customColors && customColors[stdName] !== undefined && presetPalette[customColors[stdName]]) {
+        // 1. 이미 지정된 색이 있으면 최우선 반환
+        if (customColors[stdName] !== undefined && presetPalette[customColors[stdName]]) {
+          companyColors[stdName] = presetPalette[customColors[stdName]]; 
           return presetPalette[customColors[stdName]];
         }
+        if (companyColors[stdName]) return companyColors[stdName];
         
-        // 2. 서버에 없으면? 모든 기기/브라우저가 100% 완벽하게 똑같은 색을 뽑도록 문자열 해시(Hash) 계산
-        let hash = 0;
-        for (let i = 0; i < stdName.length; i++) {
-          hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
+        // 2. 남은 색상 찾기 (indexOf 객체 참조 버그 해결!)
+        let usedIndices = new Set();
+        for (let key in customColors) usedIndices.add(customColors[key]);
+        for (let key in companyColors) {
+            let foundIdx = presetPalette.findIndex(p => p.bg === companyColors[key].bg);
+            if (foundIdx !== -1) usedIndices.add(foundIdx);
         }
-        let colorIdx = Math.abs(hash) % presetPalette.length;
+
+        let available = [];
+        for (let i = 0; i < presetPalette.length; i++) {
+            if (!usedIndices.has(i)) available.push(i);
+        }
+
+        let colorIdx = 0;
+        let hash = 0; 
+        for (let i = 0; i < stdName.length; i++) hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
+
+        if (available.length > 0) {
+            // 남은 색상 중에서 해시로 랜덤 배정 (초기 겹침 완벽 차단)
+            colorIdx = available[Math.abs(hash) % available.length];
+        } else {
+            colorIdx = Math.abs(hash) % presetPalette.length;
+        }
+
+        customColors[stdName] = colorIdx;
+        companyColors[stdName] = presetPalette[colorIdx];
         
+        // 🚨 방금 부여한 고유 색상을 서버로 몰래 전송해서 다른 기기에도 영구 고정!
+        setTimeout(() => {
+            localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
+            google.script.run.saveGlobalColor(stdName, colorIdx);
+        }, 100);
+
         return presetPalette[colorIdx];
+      }
+
+      function shuffleColorInModal(compName, idx) {
+        let stdName = getFullName(compName);
+        
+        let usedIndices = new Set();
+        // 🚨 indexOf 참조 버그 완벽 해결 (색상 bg 문자열 값으로 정밀 비교)
+        for (let key in companyColors) {
+            if (key !== stdName && companyColors[key]) {
+                let pIdx = presetPalette.findIndex(p => p.bg === companyColors[key].bg);
+                if (pIdx !== -1) usedIndices.add(pIdx);
+            }
+        }
+        for (let key in customColors) {
+            if (key !== stdName) usedIndices.add(customColors[key]);
+        }
+
+        let currentIdx = customColors[stdName] !== undefined ? customColors[stdName] : -1;
+        
+        let available = [];
+        for (let i = 0; i < presetPalette.length; i++) {
+            if (!usedIndices.has(i) && i !== currentIdx) available.push(i);
+        }
+
+        if (available.length === 0) {
+            for (let i = 0; i < presetPalette.length; i++) {
+                if (i !== currentIdx) available.push(i);
+            }
+        }
+
+        let newIdx = available[Math.floor(Math.random() * available.length)];
+        tempEditColorIdx = newIdx;
+        tempEditColorObj = presetPalette[newIdx];
+
+        document.getElementById(`edit-${idx}-color-preview`).style.display = "flex";
+        let oldColorBg = (currentIdx !== -1 && presetPalette[currentIdx]) ? presetPalette[currentIdx].bg : getCompanyColor(stdName).bg;
+        document.getElementById(`old-color-box-${idx}`).style.background = oldColorBg; 
+        document.getElementById(`new-color-box-${idx}`).style.background = tempEditColorObj.bg; 
       }
 
       // 💡 [순서 동기화 핵심 패치] 배열의 '순서(idx)'까지 완벽하게 감지하여 PC에서도 즉시 새로고침 되게 만듦!
@@ -1936,6 +2003,9 @@
         const reqMonth = serverData.month;
         const reqNavId = window.currentNavId;
         
+        // 💡 [패치 4] 백그라운드 동기화 때 색상 정보도 최우선으로 가져와서 칠하기!
+        google.script.run.withSuccessHandler(c => { customColors = c; localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(c)); renderCalendar(); }).getGlobalColors();
+
         google.script.run
           .withSuccessHandler((res) => {
             // 🚨 [핵심 2] 심부름이 끝났는데, 그사이에 유저가 달력을 넘겼다? -> 쿨하게 데이터 폐기!
@@ -2557,6 +2627,9 @@
         // 💡 [패치] 새로 연 달력에 아까 챙겨둔 '미정(대기)' 목록을 그대로 덮어씌워서 깜빡임 방지!
         serverData.pendingItems = globalPending;
         
+        // 💡 [패치 4] 수동 동기화/달력 넘길 때 색상도 즉시 불러오기!
+        google.script.run.withSuccessHandler(c => { customColors = c; localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(c)); renderCalendar(); }).getGlobalColors();
+
         renderCalendar(); 
         
         window.currentNavId = (window.currentNavId || 0) + 1;
@@ -2584,7 +2657,7 @@
         }).getCalendarDataAsync(currentType, safeYear, safeMonth);
       }
 
-      // 🚀 [출고 전용] 고스트 박멸 + 동명이인 완벽 보호 + 즉시 반영 엔진
+      // 🚀 [패치 3] 제자리 수정 기능이 탑재된 즉시 반영 엔진 (맨 밑으로 안 떨어짐!)
       function updateLocalState(action, payload, idx) {
         const safeStr = (v) => (v == null || v === "") ? "" : String(v).trim();
         const norm = (v) => { let s = safeStr(v); return (s === "0" || s === "") ? "" : s; };
@@ -2592,67 +2665,75 @@
         const parseDay = (dateStr) => {
           if (!dateStr || String(dateStr) === "미정" || String(dateStr).trim() === "") return "pending";
           let parts = String(dateStr).split("-");
-          if (parts.length < 3) return "pending"; // 날짜 형식이 깨졌을 때 크래시 방어
+          if (parts.length < 3) return "pending"; 
           let [y, m, d] = parts;
           if (parseInt(y, 10) !== serverData.year || parseInt(m, 10) !== serverData.month) return "hidden"; 
           return parseInt(d, 10);
         };
 
         let oldDay = parseDay(payload.oldDate);
+        let newDay = parseDay(payload.newDate);
 
-        // 1. [먼저 지우기 - 고스트 박멸]
-        if (action === "EDIT" || action === "DELETE") {
-          if (payload.oldBlockStart && payload.oldBlockStart !== "null" && payload.oldBlockStart !== "미정") {
-            // 💡 [간트차트 방어막] 동일한 이름/수량의 간트가 2개 있어도, 루프 돌면서 딱 '1개'만 찾아서 지웁니다! (과잉 삭제 방지)
-            let sD = new Date(payload.oldBlockStart).getDate();
-            let eD = (payload.oldBlockEnd && payload.oldBlockEnd !== "null" && payload.oldBlockEnd !== "") ? new Date(payload.oldBlockEnd).getDate() : sD;
-            
-            for (let d = sD; d <= eD; d++) {
-              let targetArr = serverData.monthData[d];
-              if (targetArr) {
-                let matchIdx = targetArr.findIndex(it => 
-                  it.company === payload.oldComp && 
-                  norm(it.pal) === norm(payload.oldPal) && 
-                  norm(it.box) === norm(payload.oldBox) && 
-                  (it.isDone === true || String(it.isDone) === "true") === (payload.oldDone === true || String(payload.oldDone) === "true")
-                );
-                if (matchIdx !== -1) targetArr.splice(matchIdx, 1); // 찾은 딱 1개만 제거
+        // 🚨 [핵심] 날짜가 바뀌지 않은 단순 수정일 경우 "제자리 수정"으로 맨 밑 추락 방지!
+        let isSameDayEdit = (action === "EDIT" && oldDay === newDay && (!payload.oldBlockStart || payload.oldBlockStart === "null" || payload.oldBlockStart === "미정"));
+
+        if (isSameDayEdit) {
+          let targetArr = oldDay === "pending" ? serverData.pendingItems : serverData.monthData[oldDay];
+          if (targetArr && idx !== null && targetArr[idx]) {
+            targetArr[idx].company = payload.newComp || payload.oldComp;
+            targetArr[idx].pal = payload.newPal || payload.oldPal;
+            targetArr[idx].box = payload.newBox || payload.oldBox;
+            targetArr[idx].etc = payload.newEtc;
+          }
+        } else {
+          // 1. [먼저 지우기 - 고스트 박멸]
+          if (action === "EDIT" || action === "DELETE") {
+            if (payload.oldBlockStart && payload.oldBlockStart !== "null" && payload.oldBlockStart !== "미정") {
+              let sD = new Date(payload.oldBlockStart).getDate();
+              let eD = (payload.oldBlockEnd && payload.oldBlockEnd !== "null" && payload.oldBlockEnd !== "") ? new Date(payload.oldBlockEnd).getDate() : sD;
+              for (let d = sD; d <= eD; d++) {
+                let targetArr = serverData.monthData[d];
+                if (targetArr) {
+                  let matchIdx = targetArr.findIndex(it => 
+                    it.company === payload.oldComp && norm(it.pal) === norm(payload.oldPal) && norm(it.box) === norm(payload.oldBox) && 
+                    (it.isDone === true || String(it.isDone) === "true") === (payload.oldDone === true || String(payload.oldDone) === "true")
+                  );
+                  if (matchIdx !== -1) targetArr.splice(matchIdx, 1);
+                }
               }
+            } else {
+              let targetArr = oldDay === "pending" ? serverData.pendingItems : serverData.monthData[oldDay];
+              if (targetArr && idx !== null && targetArr[idx]) targetArr.splice(idx, 1); 
             }
-          } else {
-            // 💡 [하루 일정 방어막] 내가 클릭한 '고유 번호(idx)'만 정확히 삭제! 다른 동명이인 일정은 털끝도 안 건드림.
-            let targetArr = oldDay === "pending" ? serverData.pendingItems : serverData.monthData[oldDay];
-            if (targetArr && idx !== null && targetArr[idx]) {
-                targetArr.splice(idx, 1); 
+          }
+
+          // 2. [새로 넣기]
+          if (action === "ADD" || action === "EDIT") {
+            const newItem = {
+              company: payload.newComp || payload.oldComp,
+              pal: payload.newPal || payload.oldPal,
+              box: payload.newBox || payload.oldBox,
+              etc: payload.newEtc,
+              isDone: (action === "EDIT") ? payload.oldDone : false,
+              startDate: payload.newDate
+            };
+            let startD = parseDay(payload.newDate);
+            let endD = (payload.newEndDate && payload.newEndDate !== "미정" && payload.newEndDate !== "") ? parseDay(payload.newEndDate) : startD;
+
+            if (startD === "pending") {
+              serverData.pendingItems.push(newItem);
+            } else if (startD !== "hidden") {
+              let actualEnd = (endD === "hidden" || endD === "pending") ? startD : endD;
+              for (let d = startD; d <= actualEnd; d++) {
+                if (!serverData.monthData[d]) serverData.monthData[d] = [];
+                serverData.monthData[d].push({ ...newItem });
+              }
             }
           }
         }
 
-        // 2. [새로 넣기 - 낙관적 UI 즉시 반영]
-        if (action === "ADD" || action === "EDIT") {
-          const newItem = {
-            company: payload.newComp || payload.oldComp,
-            pal: payload.newPal || payload.oldPal,
-            box: payload.newBox || payload.oldBox,
-            etc: payload.newEtc,
-            isDone: (action === "EDIT") ? payload.oldDone : false,
-            startDate: payload.newDate
-          };
-
-          let startD = parseDay(payload.newDate);
-          let endD = (payload.newEndDate && payload.newEndDate !== "미정" && payload.newEndDate !== "") ? parseDay(payload.newEndDate) : startD;
-
-          if (startD === "pending") {
-            serverData.pendingItems.push(newItem);
-          } else if (startD !== "hidden") {
-            let actualEnd = (endD === "hidden" || endD === "pending") ? startD : endD;
-            for (let d = startD; d <= actualEnd; d++) {
-              if (!serverData.monthData[d]) serverData.monthData[d] = [];
-              serverData.monthData[d].push({ ...newItem });
-            }
-          }
-        } else if (action === "DONE" || action === "UNDO_DONE" || action === "ADD_QTY") {
-          // 기존 상태 변경 로직은 완벽하므로 그대로 유지
+        // 3. 완료 처리, 수량 추가
+        if (action === "DONE" || action === "UNDO_DONE" || action === "ADD_QTY") {
           let arr = oldDay === "pending" ? serverData.pendingItems : serverData.monthData[oldDay];
           if (arr && arr[idx]) {
             if (action === "DONE") arr[idx].isDone = true;
@@ -2667,7 +2748,6 @@
           }
         }
 
-        // 3. 서버에 덮어씌워지지 않게 락(Lock) 걸기
         lastLocalUpdateTime = Date.now();
         localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
       }
@@ -3706,39 +3786,6 @@
       let tempEditColorObj = null; 
       let tempEditColorIdx = null;
 
-      function shuffleColorInModal(compName, idx) {
-        let stdName = getFullName(compName);
-        
-        let usedIndices = new Set();
-        for (let key in companyColors) {
-            if (key !== stdName) {
-                let pIdx = presetPalette.indexOf(companyColors[key]);
-                if(pIdx !== -1) usedIndices.add(pIdx);
-            }
-        }
-
-        let currentIdx = customColors[stdName] !== undefined ? customColors[stdName] : -1;
-        
-        let available = [];
-        for (let i = 0; i < presetPalette.length; i++) {
-            if (!usedIndices.has(i) && i !== currentIdx) available.push(i);
-        }
-
-        if (available.length === 0) {
-            for (let i = 0; i < presetPalette.length; i++) {
-                if (i !== currentIdx) available.push(i);
-            }
-        }
-
-        let newIdx = available[Math.floor(Math.random() * available.length)];
-        tempEditColorIdx = newIdx;
-        tempEditColorObj = presetPalette[newIdx];
-
-        document.getElementById(`edit-${idx}-color-preview`).style.display = "flex";
-        let oldColorBg = (currentIdx !== -1 && presetPalette[currentIdx]) ? presetPalette[currentIdx].bg : getCompanyColor(stdName).bg;
-        document.getElementById(`old-color-box-${idx}`).style.background = oldColorBg; 
-        document.getElementById(`new-color-box-${idx}`).style.background = tempEditColorObj.bg; 
-      }
       
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
