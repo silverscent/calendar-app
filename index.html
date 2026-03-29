@@ -1897,41 +1897,61 @@
         return presetPalette[colorIdx];
       }
 
+      // 💡 [최종 패치] 유령 데이터 무시! 진짜 달력에 있는 업체만 피해서 무한 셔플 제공
       function shuffleColorInModal(compName, idx) {
         let stdName = getFullName(compName);
         
-        let usedIndices = new Set();
-        // 🚨 indexOf 참조 버그 완벽 해결 (색상 bg 문자열 값으로 정밀 비교)
-        for (let key in companyColors) {
-            if (key !== stdName && companyColors[key]) {
-                let pIdx = presetPalette.findIndex(p => p.bg === companyColors[key].bg);
-                if (pIdx !== -1) usedIndices.add(pIdx);
+        // 1. 원래 색상 파악
+        let originalIdx = customColors[stdName] !== undefined ? customColors[stdName] : -1;
+        let originalBg = originalIdx !== -1 ? presetPalette[originalIdx].bg : getCompanyColor(stdName).bg;
+        
+        // 2. 현재 미리보기 창에 떠있는 색상 (버튼을 계속 누르면 이 색상만 피해서 뽑음)
+        let currentPreviewBg = tempEditColorObj ? tempEditColorObj.bg : originalBg;
+
+        // 3. 현재 달력에 띄워진 "진짜로 쓰고 있는" 업체들만 수집 (과거 쓰레기 데이터 무시)
+        let activeComps = new Set();
+        for(let d=1; d<=31; d++) {
+            if(serverData.monthData[d]) {
+                serverData.monthData[d].forEach(it => {
+                    let c = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
+                    if(c) activeComps.add(getFullName(c));
+                });
             }
         }
-        for (let key in customColors) {
-            if (key !== stdName) usedIndices.add(customColors[key]);
-        }
 
-        let currentIdx = customColors[stdName] !== undefined ? customColors[stdName] : -1;
-        
+        // 진짜 쓰고 있는 색상 번호만 차단 목록에 등록
+        let usedIndices = new Set();
+        activeComps.forEach(c => {
+            if (c !== stdName && customColors[c] !== undefined) {
+                usedIndices.add(customColors[c]);
+            }
+        });
+
+        // 4. 1순위: 진짜 남은 색상들 모으기
         let available = [];
         for (let i = 0; i < presetPalette.length; i++) {
-            if (!usedIndices.has(i) && i !== currentIdx) available.push(i);
-        }
-
-        if (available.length === 0) {
-            for (let i = 0; i < presetPalette.length; i++) {
-                if (i !== currentIdx) available.push(i);
+            if (!usedIndices.has(i) && presetPalette[i].bg !== currentPreviewBg) {
+                available.push(i);
             }
         }
 
+        // 🚨 2순위: 만약 달력이 꽉 차서 남은 색상이 3개 이하라면? 
+        // -> 셔플의 재미를 위해 차단 목록 무시하고, 전체 20색 중에서 '현재 보여지는 색'만 빼고 다 후보로 넣음!
+        if (available.length <= 3) {
+            available = [];
+            for (let i = 0; i < presetPalette.length; i++) {
+                if (presetPalette[i].bg !== currentPreviewBg) available.push(i);
+            }
+        }
+
+        // 5. 완벽한 랜덤 뽑기
         let newIdx = available[Math.floor(Math.random() * available.length)];
         tempEditColorIdx = newIdx;
         tempEditColorObj = presetPalette[newIdx];
 
+        // 6. 화면 반영
         document.getElementById(`edit-${idx}-color-preview`).style.display = "flex";
-        let oldColorBg = (currentIdx !== -1 && presetPalette[currentIdx]) ? presetPalette[currentIdx].bg : getCompanyColor(stdName).bg;
-        document.getElementById(`old-color-box-${idx}`).style.background = oldColorBg; 
+        document.getElementById(`old-color-box-${idx}`).style.background = originalBg; 
         document.getElementById(`new-color-box-${idx}`).style.background = tempEditColorObj.bg; 
       }
 
