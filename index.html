@@ -1854,31 +1854,35 @@
      
       // 🎨 [최적화 25색 팔레트] 확실하게 구분되는 쨍한 원색 + 뚜렷한 파스텔 조합!
       const presetPalette = [
-  { bg: "#FF2D2D", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 1. 레드
-  { bg: "#FF7A00", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 2. 오렌지
-  { bg: "#FFD000", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 3. 옐로우
-  { bg: "#00C244", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 4. 그린
-  { bg: "#00BFB3", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.25)" }, // 5. 틸
-  { bg: "#009FFF", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.25)" }, // 6. 시안블루
-  { bg: "#0055FF", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 7. 블루
-  { bg: "#4F3FE8", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 8. 인디고
-  { bg: "#A020D0", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 9. 퍼플
-  { bg: "#FF1A6C", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 10. 핫핑크
-  { bg: "#FF6B9D", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 11. 핑크
-  { bg: "#FF5733", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 12. 코랄레드
-  { bg: "#00D68F", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 13. 민트그린
-  { bg: "#C0FF00", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 14. 라임
-  { bg: "#E040FB", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 15. 마젠타
-  { bg: "#FF9B6A", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 16. 피치
-  { bg: "#FFE566", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 17. 레몬
-  { bg: "#B8F0B0", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 18. 라이트민트
-  { bg: "#7FDBFF", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 19. 스카이블루
-  { bg: "#A8CFFF", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 20. 파스텔블루
-  { bg: "#D4A8FF", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 21. 라벤더
-  { bg: "#FFB3CE", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 22. 로즈
-  { bg: "#1A5FBF", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 23. 네이비블루
-  { bg: "#007A6E", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 24. 다크틸
-  { bg: "#E09000", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 25. 골드앰버
+  // 🎯 비비드 15
+  { bg: "#FF1A1A", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 1 레드
+  { bg: "#FF6600", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 2 오렌지
+  { bg: "#FFCC00", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 3 골드
+  { bg: "#99DD00", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 4 옐로우그린
+  { bg: "#00BB44", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 5 그린
+  { bg: "#00BBAA", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 6 틸
+  { bg: "#00AAEE", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 7 시안블루
+  { bg: "#1166FF", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 8 블루
+  { bg: "#6600FF", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 9 바이올렛
+  { bg: "#AA00CC", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 10 퍼플
+  { bg: "#EE0099", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 11 마젠타
+  { bg: "#FF1155", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 12 핫핑크
+  { bg: "#003399", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 13 네이비
+  { bg: "#007744", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 14 포레스트그린
+  { bg: "#882200", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 15 다크브라운
+
+  // 🌸 파스텔 10 (겹침 수정됨)
+  { bg: "#FFB0B0", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 16 파스텔레드
+  { bg: "#FFD4A0", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 17 파스텔오렌지
+  { bg: "#FFEE88", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 18 파스텔골드
+  { bg: "#CCFF77", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 19 파스텔라임
+  { bg: "#88FFD4", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 20 파스텔민트
+  { bg: "#88DDFF", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 21 파스텔블루
+  { bg: "#AABBFF", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 22 파스텔인디고
+
+  { bg: "#CC99FF", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 23 파스텔퍼플 (핑크톤 유지)
+  { bg: "#B8C6FF", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 24 파스텔라벤더 (블루톤으로 변경 ⭐ 핵심)
+  { bg: "#FF99CC", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }  // 25 파스텔핑크
 ];
     // 💡 [패치 1] 색상 무단 변경 버그 완벽 차단! 순수 100% 해시 영구 고정 알고리즘
       function getCompanyColor(companyName) {
