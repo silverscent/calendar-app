@@ -1851,7 +1851,8 @@
         return compFullMap[name] || name;
       }
 
-      // 🎨 30PL 색상 팔레트
+     
+      // 🎨 [고대비 실무용 30색 팔레트] 겹치지 않고 눈에 확 띄는 색상들!
       const presetPalette = [
         { bg: "#FF3B30", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 1. 쨍한 레드
         { bg: "#FF9F0A", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 2. 쨍한 오렌지
@@ -1865,84 +1866,66 @@
         { bg: "#FF2D55", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 10. 핫핑크
         { bg: "#A2845E", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 11. 브라운
         { bg: "#8E8E93", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 12. 슬레이트 그레이
-        { bg: "#FF8A80", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 13. 연한 코랄 (검은 글씨)
-        { bg: "#FFCDD2", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 14. 베이비 핑크 (검은 글씨)
-        { bg: "#F8BBD0", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 15. 연보라 핑크 (검은 글씨)
-        { bg: "#E1BEE7", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 16. 페일 라벤더 (검은 글씨)
-        { bg: "#D1C4E9", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 17. 아이스 퍼플 (검은 글씨)
-        { bg: "#C5CAE9", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 18. 파스텔 인디고 (검은 글씨)
-        { bg: "#BBDEFB", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 19. 파스텔 블루 (검은 글씨)
-        { bg: "#B3E5FC", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 20. 라이트 스카이 (검은 글씨)
-        { bg: "#B2EBF2", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 21. 파우더 블루 (검은 글씨)
-        { bg: "#B2DFDB", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 22. 민트 크림 (검은 글씨)
-        { bg: "#C8E6C9", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 23. 파스텔 그린 (검은 글씨)
-        { bg: "#DCEDC8", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 24. 말차 그린 (검은 글씨)
-        { bg: "#F0F4C3", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 25. 연두 옐로우 (검은 글씨)
-        { bg: "#FFF9C4", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 26. 레몬 옐로우 (검은 글씨)
-        { bg: "#FFECB3", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 27. 바나나 밀크 (검은 글씨)
-        { bg: "#FFE0B2", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 28. 피치 옐로우 (검은 글씨)
-        { bg: "#FFCC80", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 29. 파스텔 오렌지 (검은 글씨)
-        { bg: "#D7CCC8", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }  // 30. 라떼 브라운 (검은 글씨)
+        { bg: "#FF8A80", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 13. 연한 코랄
+        { bg: "#FFCDD2", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 14. 베이비 핑크
+        { bg: "#F8BBD0", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 15. 연보라 핑크
+        { bg: "#E1BEE7", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 16. 페일 라벤더
+        { bg: "#D1C4E9", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 17. 아이스 퍼플
+        { bg: "#C5CAE9", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 18. 파스텔 인디고
+        { bg: "#BBDEFB", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 19. 파스텔 블루
+        { bg: "#B3E5FC", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 20. 라이트 스카이
+        { bg: "#B2EBF2", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 21. 파우더 블루
+        { bg: "#B2DFDB", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 22. 민트 크림
+        { bg: "#C8E6C9", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 23. 파스텔 그린
+        { bg: "#DCEDC8", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 24. 말차 그린
+        { bg: "#F0F4C3", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 25. 연두 옐로우
+        { bg: "#FFF9C4", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 26. 레몬 옐로우
+        { bg: "#FFECB3", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 27. 바나나 밀크
+        { bg: "#FFE0B2", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 28. 피치 옐로우
+        { bg: "#FFCC80", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 29. 파스텔 오렌지
+        { bg: "#D7CCC8", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }  // 30. 라떼 브라운
       ];
 
-     // 💡 [추가] 달력에 있는 모든 업체의 색상이 절대 안 겹치게 교통정리!
-      function autoResolveColorCollisions() {
-        let usedIndices = new Set();
-        let changed = false;
-        let compsInView = new Set();
-
-        const addComp = (arr) => {
-            if(!arr) return;
-            arr.forEach(it => {
-                let c = String(it.company || it.bl || "");
-                let clean = c.replace(/\[TASK\]/gi, "").trim();
-                let isTask = c.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
-                if(!isTask && clean) compsInView.add(getFullName(clean));
-            });
-        };
-        addComp(serverData.pendingItems);
-        for(let d=1; d<=31; d++) addComp(serverData.monthData[d]);
-
-        compsInView.forEach(comp => {
-            let idx = customColors[comp];
-            if (idx === undefined || usedIndices.has(idx)) {
-                let available = [];
-                for(let i=0; i<presetPalette.length; i++) if(!usedIndices.has(i)) available.push(i);
-                idx = available.length > 0 ? available[Math.floor(Math.random() * available.length)] : Math.floor(Math.random() * presetPalette.length);
-                customColors[comp] = idx;
-                changed = true;
-            }
-            usedIndices.add(idx);
-            companyColors[comp] = presetPalette[idx];
-        });
-
-        if (changed) localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
-      }
-
+      // 💡 [수정] 겹치는 색상 원천 차단! 절대 겹치지 않는 스마트 색상 배정기 (영화관 지정좌석제)
       function getCompanyColor(companyName) {
         if (!companyName) return presetPalette[0];
         let stdName = getFullName(companyName);
-        if (companyColors[stdName]) return companyColors[stdName];
-        let hash = 0; for (let i = 0; i < stdName.length; i++) hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
-        return presetPalette[Math.abs(hash) % presetPalette.length];
-      }
-
-      // 💡 [추가] 어디서든 쓸 수 있게 밖으로 빼낸 무적의 지문 인식기!
-      function getScheduleSig(dataObj) {
-        if (!dataObj) return "";
-        const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
-        const cleanStr = (s) => String(s || "").replace(/\[TASK\]/gi, "").replace(/\s+/g, "").toUpperCase();
-        let sigs = [];
-
-        if (dataObj.pendingItems) dataObj.pendingItems.forEach(it => sigs.push(`P_${cleanStr(it.company || it.bl)}_${norm(it.pal)}_${norm(it.box)}_${cleanStr(it.etc)}_${it.isDone}`));
-        if (dataObj.monthData) {
-          for (let d in dataObj.monthData) {
-            if (dataObj.monthData[d]) {
-              dataObj.monthData[d].forEach(it => sigs.push(`${d}_${cleanStr(it.company || it.bl)}_${norm(it.pal)}_${norm(it.box)}_${cleanStr(it.etc)}_${it.isDone}`));
-            }
-          }
+        if (!customColors) customColors = {};
+        
+        // 1. 이미 지정된 색이 있으면 변함없이 그대로 반환
+        if (customColors[stdName] !== undefined && presetPalette[customColors[stdName]]) {
+          companyColors[stdName] = presetPalette[customColors[stdName]]; 
+          return presetPalette[customColors[stdName]];
         }
-        return sigs.sort().join("||");
+        if (companyColors[stdName]) return companyColors[stdName];
+        
+        // 2. 남은 색상 찾기 (현재 달력에서 누가 무슨 색을 쓰고 있는지 싹 다 조사)
+        let usedIndices = new Set();
+        for (let key in customColors) usedIndices.add(customColors[key]);
+        for (let key in companyColors) usedIndices.add(presetPalette.indexOf(companyColors[key]));
+
+        let available = [];
+        for (let i = 0; i < presetPalette.length; i++) {
+            if (!usedIndices.has(i)) available.push(i);
+        }
+
+        let colorIdx = 0;
+        if (available.length > 0) {
+            // 남은 빈자리 중 가장 첫 번째 쨍한 색상을 줌
+            colorIdx = available[0];
+        } else {
+            // 30개 색상이 모두 꽉 찼을 때만 어쩔 수 없이 해시(Hash)로 배정
+            let hash = 0; 
+            for (let i = 0; i < stdName.length; i++) hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
+            colorIdx = Math.abs(hash) % presetPalette.length;
+        }
+
+        // 3. 한 번 정해진 색상은 스마트폰/브라우저에 도장을 찍어버림 (새로고침해도 안 바뀜!)
+        customColors[stdName] = colorIdx;
+        localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
+        companyColors[stdName] = presetPalette[colorIdx];
+        
+        return presetPalette[colorIdx];
       }
 
       // =====================================================
