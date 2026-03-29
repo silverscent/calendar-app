@@ -962,10 +962,11 @@
         font-size: 0.75em !important;
         letter-spacing: -0.5px !important;
       }
-      /* 💡 [5번 패치] 드래그 앤 드롭 끼워넣기 애니메이션 (스르륵 미리보기) */
-      .item-tag { transition: margin 0.25s ease, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s !important; }
-      .insert-line-top { transform: translateY(6px) scale(0.98); box-shadow: inset 0 4px 0 0 #0a84ff, 0 -6px 15px -5px rgba(10,132,255,0.3) !important; z-index: 10; }
-      .insert-line-bottom { transform: translateY(-6px) scale(0.98); box-shadow: inset 0 -4px 0 0 #0a84ff, 0 6px 15px -5px rgba(10,132,255,0.3) !important; z-index: 10; }
+      /* 💡 [수정] 드래그 깜빡임 차단! 확실하고 직관적인 네온 두꺼운 선 표시 */
+      .item-tag { transition: background 0.15s, opacity 0.15s !important; }
+      .insert-line-top { border-top: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
+      .insert-line-bottom { border-bottom: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
+      .day-cell.drag-over { background: rgba(10, 132, 255, 0.1) !important; outline: 3px dashed #0a84ff !important; outline-offset: -3px; z-index: 10; }
       /* 💡 관리자 로그인 창 키보드 가림 방지 (화면 중앙 팝업으로 변경) */
       #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
       #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }

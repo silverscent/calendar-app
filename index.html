@@ -1266,11 +1266,11 @@
         margin: 0 !important;
       }
       /* ===================================================== */
-      /* 💡 [5번 패치] 드래그 앤 드롭 끼워넣기 애니메이션 (스르륵 미리보기) */
-      .item-tag { transition: margin 0.25s ease, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s !important; }
-      .insert-line-top { transform: translateY(6px) scale(0.98); box-shadow: inset 0 4px 0 0 #0a84ff, 0 -6px 15px -5px rgba(10,132,255,0.3) !important; z-index: 10; }
-      .insert-line-bottom { transform: translateY(-6px) scale(0.98); box-shadow: inset 0 -4px 0 0 #0a84ff, 0 6px 15px -5px rgba(10,132,255,0.3) !important; z-index: 10; }
-      /* 💡 관리자 로그인 창 키보드 가림 방지 (화면 중앙 팝업으로 변경) */
+      /* 💡 [수정] 드래그 깜빡임 차단! 확실하고 직관적인 네온 두꺼운 선 표시 */
+      .item-tag { transition: background 0.15s, opacity 0.15s !important; }
+      .insert-line-top { border-top: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
+      .insert-line-bottom { border-bottom: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
+      .day-cell.drag-over { background: rgba(10, 132, 255, 0.1) !important; outline: 3px dashed #0a84ff !important; outline-offset: -3px; z-index: 10; }
       #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
       #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
     </style>
@@ -1853,36 +1853,36 @@
 
       // 🎨 30PL 색상 팔레트
       const presetPalette = [
-        { bg: "linear-gradient(135deg, #FFB3BA, #FFC8A2)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 코랄 핑크
-        { bg: "linear-gradient(135deg, #FFDFBA, #FFFFBA)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 연노랑
-        { bg: "linear-gradient(135deg, #BAFFC9, #BAE1FF)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 민트 스카이
-        { bg: "linear-gradient(135deg, #E2B0FF, #9F81F7)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 라벤더
-        { bg: "linear-gradient(135deg, #FDEB71, #F8D800)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 버터 옐로우
-        { bg: "linear-gradient(135deg, #ABECD6, #FBBEDF)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 코튼 캔디
-        { bg: "linear-gradient(135deg, #FFF1EB, #ACE0F9)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 스카이 틴트
-        { bg: "linear-gradient(135deg, #84FAB0, #8FD3F4)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 아쿠아 민트
-        { bg: "linear-gradient(135deg, #FCCB90, #D57EEB)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 선셋
-        { bg: "linear-gradient(135deg, #E0C3FC, #8EC5FC)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 페리윙클
-        { bg: "linear-gradient(135deg, #4FACFE, #00F2FE)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 브라이트 스카이
-        { bg: "linear-gradient(135deg, #43E97B, #38F9D7)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 네온 라임
-        { bg: "linear-gradient(135deg, #FA709A, #FEE140)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 자몽
-        { bg: "linear-gradient(135deg, #B224EF, #7579FF)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 바이올렛
-        { bg: "linear-gradient(135deg, #F5576C, #F093FB)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 핫핑크
-        { bg: "linear-gradient(135deg, #42E695, #3BB2B8)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 청록
-        { bg: "linear-gradient(135deg, #5EE7DF, #B490CA)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 페어리 블루
-        { bg: "linear-gradient(135deg, #D4FC79, #96E6A1)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 말차 그린
-        { bg: "linear-gradient(135deg, #89F7FE, #66A6FF)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 오션 브리즈
-        { bg: "linear-gradient(135deg, #FF0844, #FFB199)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 스트로베리
-        { bg: "linear-gradient(135deg, #96FBC4, #F9F586)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 스프링 글로우
-        { bg: "linear-gradient(135deg, #2AFADF, #4C83FF)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 시안 블루
-        { bg: "linear-gradient(135deg, #FF9A9E, #FECFEF)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 로즈 밀크
-        { bg: "linear-gradient(135deg, #A18CD1, #FBC2EB)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 매화
-        { bg: "linear-gradient(135deg, #F6D365, #FDA085)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 오렌지 소다
-        { bg: "linear-gradient(135deg, #FBC8D4, #9795F0)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 버블검
-        { bg: "linear-gradient(135deg, #C2E9FB, #A1C4FD)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 파우더 블루
-        { bg: "linear-gradient(135deg, #E2D1C3, #FDFCFB)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 라떼 우유
-        { bg: "linear-gradient(135deg, #FFAA85, #B3315F)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 살몬 핑크
-        { bg: "linear-gradient(135deg, #F3E7E9, #E3EEFF)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }  // 진주색
+        { bg: "#FF3B30", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 1. 쨍한 레드
+        { bg: "#FF9F0A", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 2. 쨍한 오렌지
+        { bg: "#FFD60A", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 3. 비비드 옐로우 (검은 글씨)
+        { bg: "#34C759", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 4. 애플 그린
+        { bg: "#00C7BE", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 5. 청록색
+        { bg: "#32ADE6", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 6. 라이트 블루
+        { bg: "#007AFF", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 7. 코발트 블루
+        { bg: "#5856D6", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 8. 진한 보라
+        { bg: "#AF52DE", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 9. 쨍한 마젠타
+        { bg: "#FF2D55", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 10. 핫핑크
+        { bg: "#A2845E", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 11. 브라운
+        { bg: "#8E8E93", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 12. 슬레이트 그레이
+        { bg: "#FF8A80", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 13. 연한 코랄 (검은 글씨)
+        { bg: "#FFCDD2", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 14. 베이비 핑크 (검은 글씨)
+        { bg: "#F8BBD0", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 15. 연보라 핑크 (검은 글씨)
+        { bg: "#E1BEE7", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 16. 페일 라벤더 (검은 글씨)
+        { bg: "#D1C4E9", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 17. 아이스 퍼플 (검은 글씨)
+        { bg: "#C5CAE9", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 18. 파스텔 인디고 (검은 글씨)
+        { bg: "#BBDEFB", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 19. 파스텔 블루 (검은 글씨)
+        { bg: "#B3E5FC", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 20. 라이트 스카이 (검은 글씨)
+        { bg: "#B2EBF2", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 21. 파우더 블루 (검은 글씨)
+        { bg: "#B2DFDB", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 22. 민트 크림 (검은 글씨)
+        { bg: "#C8E6C9", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 23. 파스텔 그린 (검은 글씨)
+        { bg: "#DCEDC8", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 24. 말차 그린 (검은 글씨)
+        { bg: "#F0F4C3", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 25. 연두 옐로우 (검은 글씨)
+        { bg: "#FFF9C4", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 26. 레몬 옐로우 (검은 글씨)
+        { bg: "#FFECB3", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 27. 바나나 밀크 (검은 글씨)
+        { bg: "#FFE0B2", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 28. 피치 옐로우 (검은 글씨)
+        { bg: "#FFCC80", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 29. 파스텔 오렌지 (검은 글씨)
+        { bg: "#D7CCC8", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }  // 30. 라떼 브라운 (검은 글씨)
       ];
 
      // 💡 [추가] 달력에 있는 모든 업체의 색상이 절대 안 겹치게 교통정리!
@@ -2246,7 +2246,7 @@
       };
 
       function renderCalendar() {
-        autoResolveColorCollisions(); // 💡 달력 그리기 직전, 겹치는 색상 자동 감지 및 고유 색상 재배포!
+        
         // 🚀 [무적의 통합 엔진] 이전 렌더링 찌꺼기를 완벽히 지우고, 사용자의 배열 순서를 절대 존중!
         serverData.customOrderFlags = serverData.customOrderFlags || {};
         let slotAllocation = {};
