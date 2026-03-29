@@ -3914,7 +3914,7 @@
       let mainChartIns = null;
       let shareChartIns = null;
 
-     // 🎨 [마법의 플러그인 4.0] 텍스트 잘림 절대 방지 + 좌우 완벽 정렬 + 엉킴 방지 엔진!
+     // 🎨 [최종 패치 5.0] 차트 위 침범 절대 방지 & 바깥 빈 공간 100% 활용 지시선 엔진!
       const pieLeaderLinePlugin = {
           id: 'pieLeaderLine',
           afterDraw(chart) {
@@ -3931,7 +3931,7 @@
               let leftLabels = [];
               const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
               
-              ctx.font = "bold 12px -apple-system, sans-serif"; // 🚨 글자 크기 12px로 확대!
+              ctx.font = "bold 12px -apple-system, sans-serif"; // 🚨 글자 크기 12px로 선명하게 확대!
               
               meta.data.forEach((element, index) => {
                   if (data[index] === 0) return;
@@ -3939,11 +3939,14 @@
                   const radius = element.outerRadius;
                   const isRight = Math.cos(midAngle) > 0;
                   
+                  // 선 시작점 (도넛 겉면)
                   const startX = centerX + Math.cos(midAngle) * radius;
                   const startY = centerY + Math.sin(midAngle) * radius;
                   
-                  let elbowX = centerX + Math.cos(midAngle) * (radius + 15);
-                  let elbowY = centerY + Math.sin(midAngle) * (radius + 15);
+                  // 🚨 [핵심 변경] 선 꺾이는 점(Elbow)을 차트 경계에서 '무조건 바깥으로 25px' 튕겨냄!
+                  // (이전 코드처럼 radius에 고정하지 않고 바깥 여백 영역에 생성)
+                  let elbowX = centerX + Math.cos(midAngle) * (radius + 25);
+                  let elbowY = centerY + Math.sin(midAngle) * (radius + 25);
                   
                   const text = `${labels[index]} (${data[index]}${unitStr})`;
                   const textWidth = ctx.measureText(text).width;
@@ -3953,25 +3956,14 @@
                   else leftLabels.push(obj);
               });
 
-              // 🚨 [핵심] Y축 겹침 방지 및 꼬임 완벽 방지 알고리즘 (위아래 간격 18px 확보)
+              // Y축 충돌 방지 간격 20px로 확대 (꼬임 방지 강화)
               const avoidCollision = (lbls) => {
-                  // 선이 꼬이지 않게 '시작 높이(startY)' 기준으로 먼저 정렬
-                  lbls.sort((a, b) => a.startY - b.startY); 
+                  lbls.sort((a, b) => a.elbowY - b.elbowY); 
                   let prevY = -9999;
-                  for (let i = 0; i < lbls.length; i++) {
-                      if (lbls[i].elbowY < prevY + 18) lbls[i].elbowY = prevY + 18;
-                      prevY = lbls[i].elbowY;
-                  }
-                  // 글씨가 너무 밑으로 내려가서 짤릴 것 같으면 다시 위로 끌어올림
-                  const bottomLimit = chart.chartArea.bottom + 20;
-                  if (lbls.length > 0 && lbls[lbls.length - 1].elbowY > bottomLimit) {
-                      let overflow = lbls[lbls.length - 1].elbowY - bottomLimit;
-                      for (let i = lbls.length - 1; i >= 0; i--) {
-                          lbls[i].elbowY -= overflow;
-                          if (i > 0 && lbls[i-1].elbowY > lbls[i].elbowY - 18) overflow = (lbls[i-1].elbowY + 18) - lbls[i].elbowY;
-                          else break;
-                      }
-                  }
+                  lbls.forEach(lbl => {
+                      if (lbl.elbowY < prevY + 20) lbl.elbowY = prevY + 20; 
+                      prevY = lbl.elbowY;
+                  });
               };
               avoidCollision(rightLabels);
               avoidCollision(leftLabels);
@@ -3983,23 +3975,30 @@
               const drawLabel = (lbl) => {
                   let lineEndX, textX;
                   
-                  // 🚨 텍스트를 캔버스 양쪽 끝 벽면에 완전 밀착 정렬! (잘림 100% 방지)
+                  // 🚨 텍스트를 캔버스 양쪽 끝 벽면에 완전 밀착 정렬 (잘림 방지)
                   if (lbl.isRight) {
-                      textX = chart.width - 5; // 우측 벽면
+                      textX = chart.width - 5;
                       ctx.textAlign = 'right';
                       lineEndX = textX - lbl.textWidth - 5;
-                      if (lineEndX < lbl.elbowX) lineEndX = lbl.elbowX + 5;
+                      // 선이 너무 안쪽으로 들어오지 않게 방어
+                      if (lineEndX < centerX + meta.data[0].outerRadius + 15) lineEndX = centerX + meta.data[0].outerRadius + 15;
                   } else {
-                      textX = 5; // 좌측 벽면
+                      textX = 5;
                       ctx.textAlign = 'left';
                       lineEndX = textX + lbl.textWidth + 5;
-                      if (lineEndX > lbl.elbowX) lineEndX = lbl.elbowX - 5;
+                      // 선이 너무 안쪽으로 들어오지 않게 방어
+                      if (lineEndX > centerX - meta.data[0].outerRadius - 15) lineEndX = centerX - meta.data[0].outerRadius - 15;
                   }
                   
                   // 꺾은선 그리기
                   ctx.beginPath();
                   ctx.moveTo(lbl.startX, lbl.startY);
-                  ctx.lineTo(lbl.elbowX, lbl.elbowY);
+                  // 🚨 만약 꺾이는 점(elbowX)이 차트 안쪽이라면 바깥으로 밀어냄
+                  let safeElbowX = lbl.elbowX;
+                  if (!lbl.isRight && safeElbowX > centerX - meta.data[0].outerRadius - 20) safeElbowX = centerX - meta.data[0].outerRadius - 20;
+                  if (lbl.isRight && safeElbowX < centerX + meta.data[0].outerRadius + 20) safeElbowX = centerX + meta.data[0].outerRadius + 20;
+
+                  ctx.lineTo(safeElbowX, lbl.elbowY);
                   ctx.lineTo(lineEndX, lbl.elbowY);
                   ctx.strokeStyle = document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.4)";
                   ctx.lineWidth = 1.2;
