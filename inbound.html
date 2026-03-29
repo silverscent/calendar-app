@@ -12,7 +12,35 @@
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="manifest_in.json">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+      /* 📊 [입고 통계 대시보드] 전용 디자인 */
+      .stats-summary-bar { margin-top: 15px; background: linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(52, 199, 89, 0.05)); border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03); }
+      .stats-summary-bar:active { transform: scale(0.97); background: rgba(10, 132, 255, 0.15); }
+      .stats-title { font-size: 1.05em; font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+      .stats-numbers { font-size: 1.2em; font-weight: 900; color: var(--text-main); letter-spacing: -0.5px; }
+      .stats-numbers .done { color: #34c759; font-size: 1.2em; }
+      .stats-numbers .total { color: var(--text-sub); font-size: 0.85em; }
+
+      #dashboardModal { z-index: 3000; }
+      .dash-control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+      .dash-nav { display: flex; align-items: center; gap: 10px; font-size: 1.2em; font-weight: 900; }
+      .dash-nav button { background: var(--btn-bg); border: none; color: var(--text-main); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+      .dash-nav button:active { transform: scale(0.9); }
+      .dash-toggles { display: flex; background: var(--btn-bg); padding: 4px; border-radius: 10px; gap: 2px; }
+      .dash-toggles button { background: transparent; border: none; color: var(--text-sub); padding: 4px 15px; font-weight: 800; font-size: 0.9em; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+      .dash-toggles button.active { background: #0a84ff; color: white; box-shadow: 0 2px 5px rgba(10,132,255,0.3); }
+      
+      .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+      .dash-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
+      .dash-card-title { font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: 8px; }
+      .dash-card-value { font-size: 1.5em; font-weight: 900; color: var(--text-main); }
+      
+      .chart-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 15px; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-weight: bold; margin-bottom: 12px; }
+      .pie-slider { -webkit-appearance: none; width: 100%; height: 6px; background: rgba(10, 132, 255, 0.2); border-radius: 5px; outline: none; margin-top: 5px; }
+      .pie-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #0a84ff; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); border: 2.5px solid #fff; transition: transform 0.1s; }
+      .pie-slider::-webkit-slider-thumb:active { transform: scale(1.15); }
+    </style>
       /* 💡 눈이 편안한 다크 차콜 색상 적용 */
       :root {
         --base-font-size: 100%;
@@ -1054,6 +1082,66 @@
     <div class="pending-container" id="pendingSection">
       <div class="pending-title">⚠️ 입고 보류 / 대기 <span id="pendingCount"></span></div>
       <div class="pending-list" id="pendingList"></div>
+    </div>
+
+    <div id="statsSummaryBar" class="stats-summary-bar" onclick="openDashboard()">
+      <div class="stats-title">📊 당월 입고 진척률</div>
+      <div class="stats-numbers">
+        <span class="done" id="sumDonePal">0</span>
+        <span class="total">/ <span id="sumTotalPal">0</span> PAL</span>
+      </div>
+    </div>
+
+    <div id="dashboardModal" class="overlay-modal" style="display:none;">
+      <div class="modal-box" onclick="event.stopPropagation()" style="max-height: 90vh;">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header" style="margin-bottom: 10px;">
+          <div class="modal-title" style="color: #0a84ff;">📈 입고 통계 대시보드</div>
+          <button class="close-btn" onclick="document.getElementById('dashboardModal').style.display = 'none'">✕</button>
+        </div>
+
+        <div class="dash-control-row">
+          <div class="dash-nav">
+            <button onclick="navDashDate(-1)">◀</button>
+            <span id="dashTitleText">2026년 3월</span>
+            <button onclick="navDashDate(1)">▶</button>
+          </div>
+          <div class="dash-toggles">
+            <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월별</button>
+            <button id="btnDashYear" onclick="setDashMode('year')">연간</button>
+          </div>
+        </div>
+        
+        <div class="dashboard-grid">
+          <div class="dash-card">
+            <div class="dash-card-title" id="dashCardTitle1">당월 총 입고 예정</div>
+            <div class="dash-card-value" id="dashTotal" style="color:var(--text-main);">0</div>
+            <div id="dashVolDetail" style="font-size:0.9em; color:#0a84ff; margin-top:6px; font-weight:900;">완료: 0 (0%)</div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-title" id="dashCardTitle2">일일 평균 입고량</div>
+            <div class="dash-card-value" id="dashAvg">0</div>
+            <div id="dashDaysDetail" style="font-size:0.85em; color:var(--text-sub); margin-top:6px; font-weight:800;">(월간 총합: 0)</div>
+          </div>
+        </div>
+
+        <div class="chart-container" style="height: 220px; display:block; margin-bottom: 8px;">
+          <canvas id="mainChart"></canvas>
+        </div>
+        
+        <div id="barDetailBox" style="display: none; background: var(--card-bg); border: 1px solid #0a84ff; border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 0.9em; box-shadow: 0 2px 10px rgba(10, 132, 255, 0.1);"></div>
+
+        <div class="chart-container" style="height: 380px; display:flex; flex-direction:column; align-items:center;">
+          <div style="font-weight:900; color:var(--text-main); margin-bottom: 5px;">🏢 업체별 입고 점유율 <span style="font-size:0.75em; color:var(--text-sub);">(조각을 터치해 보세요)</span></div>
+          <div style="position: relative; width: 100%; flex: 1;">
+            <canvas id="shareChart"></canvas>
+          </div>
+          <div id="pieSliderWrapper" style="width: 60%; align-self: flex-start; margin-left: 5%; margin-top: 15px; display:none;">
+            <input type="range" id="pieSlider" class="pie-slider" min="-1" max="0" value="-1">
+            <div style="text-align:left; padding-left:5px; font-size:0.75em; color:var(--text-sub); margin-top:8px; font-weight:800;">👈 스와이프하여 탐색 👉</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
@@ -2139,6 +2227,414 @@
             .catch(err => console.log('서비스 워커 등록 실패:', err));
         });
       }
+      // =====================================================
+      // 📊 [입고 전용 완결판] 대시보드 & 하이브리드 지시선 엔진
+      // =====================================================
+      window.dashMode = 'month';
+      window.dashYear = new Date().getFullYear();
+      window.dashMonth = new Date().getMonth() + 1;
+      let yearlyCache = {};
+      let mainChartIns = null;
+      let shareChartIns = null;
+      window.activePieIndex = null;
+      window.dashCurrentData = null; 
+
+      // 🎨 [플러그인 1] 중앙 풀네임 텍스트
+      const pieCenterTextPlugin = {
+          id: 'pieCenterText',
+          beforeDraw(chart) {
+              if (chart.config.type !== 'doughnut') return;
+              const ctx = chart.ctx;
+              const centerX = chart.chartArea.left + chart.chartArea.width / 2;
+              const centerY = chart.chartArea.top + chart.chartArea.height / 2;
+
+              ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+              if (window.activePieIndex !== null) {
+                  const idx = window.activePieIndex;
+                  const data = chart.data.datasets[0].data;
+                  const colors = chart.data.datasets[0].backgroundColor;
+                  const displayName = chart.data.fullNames ? chart.data.fullNames[idx] : chart.data.labels[idx];
+                  const totalSum = data.reduce((a, b) => a + b, 0);
+                  const percent = ((data[idx] / totalSum) * 100).toFixed(1);
+
+                  ctx.font = "bold 15px -apple-system, sans-serif";
+                  ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff";
+                  if (ctx.measureText(displayName).width > 120) ctx.font = "bold 13px -apple-system, sans-serif";
+                  ctx.fillText(displayName, centerX, centerY - 22);
+
+                  ctx.font = "900 26px -apple-system, sans-serif";
+                  ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
+                  ctx.fillText(`${percent}%`, centerX, centerY + 6);
+
+                  ctx.font = "bold 15px -apple-system, sans-serif";
+                  ctx.fillStyle = "gray";
+                  ctx.fillText(`(${data[idx]}P)`, centerX, centerY + 30);
+              } else {
+                  ctx.font = "bold 14px -apple-system, sans-serif";
+                  ctx.fillStyle = "gray";
+                  ctx.fillText("조각을 터치하세요", centerX, centerY);
+              }
+              ctx.restore();
+          }
+      };
+
+      // 🎨 [플러그인 2] 하이브리드 지시선 (입고 전용)
+      const pieHybridLabelPlugin = {
+          id: 'pieHybridLabel',
+          afterDraw(chart) {
+              if (chart.config.type !== 'doughnut') return;
+              const ctx = chart.ctx;
+              const meta = chart.getDatasetMeta(0);
+              const data = chart.data.datasets[0].data;
+              const labels = chart.data.labels;
+              const totalSum = data.reduce((a, b) => a + b, 0);
+              const centerX = chart.chartArea.left + chart.chartArea.width / 2;
+              const centerY = chart.chartArea.top + chart.chartArea.height / 2;
+              let rightLabels = []; let leftLabels = [];
+              const isLight = document.body.classList.contains("light-mode");
+              
+              meta.data.forEach((element, index) => {
+                  if (data[index] === 0) return;
+                  const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
+                  const circumference = element.endAngle - element.startAngle;
+                  const radius = element.outerRadius;
+                  const isRight = Math.cos(midAngle) > 0;
+                  const percent = ((data[index] / totalSum) * 100).toFixed(1);
+                  const isActive = (window.activePieIndex === null || window.activePieIndex === index);
+
+                  if (circumference > 0.35) {
+                      const r = element.innerRadius + (element.outerRadius - element.innerRadius) * 0.55;
+                      const x = centerX + Math.cos(midAngle) * r;
+                      const y = centerY + Math.sin(midAngle) * r;
+                      ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                      ctx.font = isActive ? "bold 13px -apple-system, sans-serif" : "13px -apple-system, sans-serif";
+                      ctx.fillStyle = isActive ? "#ffffff" : "rgba(255,255,255,0.3)";
+                      if (isActive) { ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 4; }
+                      ctx.fillText(labels[index], x, y - 6);
+                      ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
+                      ctx.fillText(`${percent}%`, x, y + 8);
+                      ctx.restore();
+                  } else {
+                      const startX = centerX + Math.cos(midAngle) * radius;
+                      const startY = centerY + Math.sin(midAngle) * radius;
+                      let elbowX = centerX + Math.cos(midAngle) * (radius + 15);
+                      let elbowY = centerY + Math.sin(midAngle) * (radius + 15);
+                      const text = `${labels[index]} (${percent}%)`; 
+                      ctx.font = "bold 11px -apple-system, sans-serif";
+                      let obj = { index, text, textWidth: ctx.measureText(text).width, startX, startY, elbowX, elbowY, isRight };
+                      if (isRight) rightLabels.push(obj); else leftLabels.push(obj);
+                  }
+              });
+
+              const avoidCollision = (lbls) => {
+                  lbls.sort((a, b) => a.elbowY - b.elbowY); 
+                  let prevY = -9999;
+                  lbls.forEach(lbl => { if (lbl.elbowY < prevY + 16) lbl.elbowY = prevY + 16; prevY = lbl.elbowY; });
+              };
+              avoidCollision(rightLabels); avoidCollision(leftLabels);
+
+              ctx.save(); ctx.textBaseline = 'middle';
+              const drawLabel = (lbl) => {
+                  let lineEndX, textX;
+                  if (lbl.isRight) {
+                      textX = chart.width - 2; ctx.textAlign = 'right'; lineEndX = textX - lbl.textWidth - 5;
+                      if (lineEndX < centerX + meta.data[0].outerRadius + 10) lineEndX = centerX + meta.data[0].outerRadius + 10;
+                  } else {
+                      textX = 2; ctx.textAlign = 'left'; lineEndX = textX + lbl.textWidth + 5;
+                      if (lineEndX > centerX - meta.data[0].outerRadius - 10) lineEndX = centerX - meta.data[0].outerRadius - 10;
+                  }
+                  let safeElbowX = lbl.elbowX;
+                  if (!lbl.isRight && safeElbowX > centerX - meta.data[0].outerRadius - 10) safeElbowX = centerX - meta.data[0].outerRadius - 10;
+                  if (lbl.isRight && safeElbowX < centerX + meta.data[0].outerRadius + 10) safeElbowX = centerX + meta.data[0].outerRadius + 10;
+
+                  const isActive = (window.activePieIndex === null || window.activePieIndex === lbl.index);
+                  ctx.strokeStyle = isActive ? (isLight ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.3)") : "rgba(128,128,128,0.1)";
+                  
+                  ctx.beginPath(); ctx.moveTo(lbl.startX, lbl.startY); ctx.lineTo(safeElbowX, lbl.elbowY); ctx.lineTo(lineEndX, lbl.elbowY); ctx.lineWidth = 1; ctx.stroke();
+                  ctx.beginPath(); ctx.arc(lbl.startX, lbl.startY, 3.5, 0, 2 * Math.PI);
+                  ctx.fillStyle = isActive ? (isLight ? "rgba(100,100,100,0.7)" : "rgba(180,180,180,0.7)") : "rgba(128,128,128,0.1)"; ctx.fill();
+                  ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
+                  ctx.fillStyle = isActive ? (isLight ? "#444" : "#ccc") : "rgba(128,128,128,0.3)";
+                  ctx.fillText(lbl.text, textX, lbl.elbowY);
+              };
+              rightLabels.forEach(drawLabel); leftLabels.forEach(drawLabel); ctx.restore();
+          }
+      };
+      
+      Chart.unregister(pieCenterTextPlugin, pieHybridLabelPlugin); 
+      Chart.register(pieCenterTextPlugin, pieHybridLabelPlugin);
+
+      function setDashMode(mode) {
+          window.dashMode = mode;
+          document.getElementById('btnDashMonth').classList.toggle('active', mode === 'month');
+          document.getElementById('btnDashYear').classList.toggle('active', mode === 'year');
+          if (mode === 'year' && !yearlyCache[window.dashYear]) fetchYearlyAndRender();
+          else renderDashCharts();
+      }
+
+      function navDashDate(offset) {
+          if (window.dashMode === 'month') {
+              window.dashMonth += offset;
+              if (window.dashMonth > 12) { window.dashMonth = 1; window.dashYear++; }
+              else if (window.dashMonth < 1) { window.dashMonth = 12; window.dashYear--; }
+              fetchDashMonthAndRender(); 
+          } else {
+              window.dashYear += offset;
+              fetchYearlyAndRender();
+          }
+      }
+
+      function fetchDashMonthAndRender() {
+          document.getElementById('dashTitleText').innerText = "데이터 불러오는 중...";
+          let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
+          let cached = localStorage.getItem(cacheKey);
+          if (cached) { try { window.dashCurrentData = JSON.parse(cached); renderDashCharts(); } catch(e) {} }
+          google.script.run
+              .withSuccessHandler(res => {
+                  let finalData = typeof res === 'string' ? JSON.parse(res) : res;
+                  window.dashCurrentData = finalData;
+                  localStorage.setItem(cacheKey, JSON.stringify(finalData));
+                  if (window.dashMode === 'month') renderDashCharts();
+              })
+              .withFailureHandler(err => { if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
+              .getCalendarDataAsync(currentType, window.dashYear, window.dashMonth);
+      }
+
+      function fetchYearlyAndRender() {
+          document.getElementById('dashTitleText').innerText = "데이터 불러오는 중...";
+          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYear}`;
+          let cached = localStorage.getItem(cacheKey);
+          if (cached) { try { yearlyCache[window.dashYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {} }
+          google.script.run
+              .withSuccessHandler(res => {
+                  yearlyCache[res.year] = res; localStorage.setItem(cacheKey, JSON.stringify(res)); 
+                  if (window.dashMode === 'year' && window.dashYear === res.year) renderDashCharts();
+              })
+              .withFailureHandler(err => { if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
+              .getYearlyStatsAsync(currentType, window.dashYear);
+      }
+
+      function openDashboard() {
+          window.dashYear = serverData.year; window.dashMonth = serverData.month;
+          window.dashCurrentData = serverData; 
+          document.getElementById('dashboardModal').style.display = 'flex';
+          setTimeout(renderDashCharts, 100);
+      }
+
+      function renderDashCharts() {
+          Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
+          Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
+          
+          let labels = []; let barData = []; let compMap = {};
+          let barDetails = []; let totalQty = 0; let doneQty = 0;
+          document.getElementById("barDetailBox").style.display = "none";
+
+          if (window.dashMode === 'month') {
+              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
+              let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
+              for (let d = 1; d <= days; d++) { labels.push(`${d}일`); barData.push(0); barDetails.push({}); }
+
+              const process = (it, dIdx) => {
+                  let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
+                  let isTask = String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+                  if (!isTask) {
+                      let qty = parseInt(it.pal) || 0; // 🚨 입고는 무조건 pal 단위 고정
+                      totalQty += qty;
+                      if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
+                      if (dIdx !== null) {
+                          barData[dIdx - 1] += qty;
+                          let std = getFullName(clean);
+                          barDetails[dIdx - 1][std] = (barDetails[dIdx - 1][std] || 0) + qty;
+                      }
+                      let stdTotal = getFullName(clean);
+                      compMap[stdTotal] = (compMap[stdTotal] || 0) + qty;
+                  }
+              };
+              
+              if (window.dashCurrentData) {
+                  for (let d = 1; d <= days; d++) { if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d]) window.dashCurrentData.monthData[d].forEach(it => process(it, d)); }
+                  if (window.dashCurrentData.pendingItems) window.dashCurrentData.pendingItems.forEach(it => process(it, null));
+              }
+          } else {
+              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`; 
+              for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); barDetails.push({}); }
+              let yData = yearlyCache[window.dashYear];
+              if (!yData) return;
+              barData = yData.monthly.map(m => m.pal); // 🚨 연간 입고량도 pal 고정
+              totalQty = barData.reduce((a, b) => a + b, 0);
+              Object.keys(yData.comp).forEach(k => { compMap[k] = yData.comp[k].pal; });
+          }
+
+          if (window.dashMode === 'month') {
+              let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
+              let now = new Date();
+              let isCurrentMonth = (window.dashYear === now.getFullYear() && window.dashMonth === now.getMonth() + 1);
+              let divider = isCurrentMonth ? Math.max(1, now.getDate()) : new Date(window.dashYear, window.dashMonth, 0).getDate();
+              let avgDaily = doneQty > 0 ? (doneQty / divider).toFixed(1) : 0;
+
+              document.getElementById("dashCardTitle1").innerText = "당월 총 입고 예정";
+              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">P</span>`;
+              document.getElementById("dashVolDetail").innerText = `완료: ${doneQty.toLocaleString()} (${rate}%)`;
+              document.getElementById("dashVolDetail").style.color = rate >= 100 ? "#34c759" : (rate > 50 ? "#0a84ff" : "#ff9f0a");
+              document.getElementById("dashCardTitle2").innerText = "일일 평균 입고량";
+              document.getElementById("dashAvg").innerHTML = `${avgDaily} <span style="font-size:0.5em; color:var(--text-sub);">P/일</span>`;
+              document.getElementById("dashDaysDetail").innerText = `(월 누적: ${doneQty.toLocaleString()})`;
+          } else {
+              let avgMonthly = totalQty > 0 ? Math.round(totalQty / 12) : 0;
+              let avgDaily = totalQty > 0 ? (totalQty / 365).toFixed(1) : 0;
+              document.getElementById("dashCardTitle1").innerText = "연간 총 누적수량";
+              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">P</span>`;
+              document.getElementById("dashVolDetail").innerText = `(1년 전체 합산)`;
+              document.getElementById("dashVolDetail").style.color = "#0a84ff";
+              document.getElementById("dashCardTitle2").innerText = "월간 평균 처리량";
+              document.getElementById("dashAvg").innerHTML = `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">P/월</span>`;
+              document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${avgDaily})`;
+          }
+
+          if (mainChartIns) mainChartIns.destroy();
+          let defaultBgColor = '#0a84ff';
+          let bgColors = new Array(labels.length).fill(defaultBgColor);
+
+          mainChartIns = new Chart(document.getElementById('mainChart'), {
+              type: 'bar',
+              data: { labels: labels, datasets: [{ label: `수량(PAL)`, data: barData, backgroundColor: bgColors, borderRadius: 4 }] },
+              options: { 
+                  responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } } },
+                  onClick: (e, activeElements) => {
+                      let detailBox = document.getElementById("barDetailBox");
+                      if (!activeElements || activeElements.length === 0) {
+                          mainChartIns.data.datasets[0].backgroundColor = new Array(labels.length).fill(defaultBgColor);
+                          mainChartIns.update(); detailBox.style.display = 'none'; return;
+                      }
+                      const idx = activeElements[0].index;
+                      let dimColor = document.body.classList.contains("light-mode") ? 'rgba(10, 132, 255, 0.2)' : 'rgba(10, 132, 255, 0.3)';
+                      let newColors = new Array(labels.length).fill(dimColor);
+                      newColors[idx] = defaultBgColor;
+                      mainChartIns.data.datasets[0].backgroundColor = newColors;
+                      mainChartIns.update();
+
+                      if (window.dashMode === 'month') {
+                          let details = barDetails[idx]; let total = barData[idx];
+                          if (total === 0) { detailBox.style.display = 'none'; return; }
+                          let sortedDetail = Object.keys(details).sort((a,b) => details[b] - details[a]);
+                          
+                          let html = `<div style="font-weight:900; margin-bottom:10px; color:#0a84ff;">📅 ${idx+1}일 입고 내역 <span style="color:var(--text-main); font-size:0.9em;">(총 ${total}P)</span></div>`;
+                          html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+                          sortedDetail.forEach(comp => {
+                              let cColor = getCompanyColor(comp).bg; 
+                              html += `<div style="display:flex; align-items:center; gap:5px; background:var(--btn-bg); padding:5px 10px; border-radius:8px; font-size:0.95em; border:1px solid var(--border-color);">
+                                  <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${cColor};"></span>
+                                  <span style="font-weight:bold; color:var(--text-main);">${getShortName(comp)}</span>
+                                  <span style="color:var(--text-sub); font-weight:800;">${details[comp]}P</span>
+                              </div>`;
+                          });
+                          html += `</div>`; detailBox.innerHTML = html; detailBox.style.display = 'block';
+                      }
+                  }
+              }
+          });
+
+          window.highlightPieSlice = function(idx) {
+              if (!shareChartIns) return;
+              const dataset = shareChartIns.data.datasets[0];
+              let slider = document.getElementById('pieSlider');
+              if (idx === null || String(idx) === "-1") {
+                  window.activePieIndex = null; dataset.backgroundColor = [...dataset._originalColors];
+                  if (slider) slider.value = -1;
+              } else {
+                  window.activePieIndex = parseInt(idx, 10);
+                  dataset.backgroundColor = dataset._originalColors.map((color, i) => i === window.activePieIndex ? color : (document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)"));
+                  if (slider) slider.value = window.activePieIndex; 
+              }
+              shareChartIns.update(); 
+          };
+
+          let sortedComps = Object.keys(compMap).filter(k => compMap[k] > 0).sort((a, b) => compMap[b] - compMap[a]);
+          let sLabels = []; let sData = []; let sColors = [];
+          sortedComps.forEach(c => { sLabels.push(getShortName(c)); sData.push(compMap[c]); sColors.push(getCompanyColor(c).bg); });
+
+          if (shareChartIns) shareChartIns.destroy();
+          shareChartIns = new Chart(document.getElementById('shareChart'), {
+              type: 'doughnut',
+              data: { labels: sLabels, fullNames: sortedComps, datasets: [{ data: sData, backgroundColor: [...sColors], _originalColors: [...sColors], borderWidth: 2, borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30" }] },
+              options: {
+                  responsive: true, maintainAspectRatio: false, cutout: '55%', layout: { padding: { left: 50, right: 50, top: 15, bottom: 15 } }, 
+                  plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                  onClick: (e, activeElements) => {
+                      if (!activeElements || activeElements.length === 0) window.highlightPieSlice(-1);
+                      else { const idx = activeElements[0].index; window.activePieIndex === idx ? window.highlightPieSlice(-1) : window.highlightPieSlice(idx); }
+                  }
+              }
+          });
+
+          let sliderWrapper = document.getElementById("pieSliderWrapper"); let slider = document.getElementById("pieSlider");
+          if (sLabels.length > 0 && sliderWrapper && slider) {
+              sliderWrapper.style.display = "block"; slider.max = sLabels.length - 1; slider.value = -1;
+              slider.oninput = function() { window.highlightPieSlice(this.value); };
+          } else if (sliderWrapper) sliderWrapper.style.display = "none";
+      }
+
+      function updateStatsSummary() {
+          let tPal = 0, dPal = 0;
+          const process = (it) => {
+              let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
+              if (String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean))) return;
+              tPal += parseInt(it.pal) || 0;
+              if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
+          };
+          for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
+          if (serverData.pendingItems) serverData.pendingItems.forEach(process);
+          let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
+          let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
+      }
+
+      // 모달창 스와이프 및 바탕 터치 차트 리셋
+      window.addEventListener('DOMContentLoaded', () => {
+          document.getElementById("dashboardModal").addEventListener("click", function(e) {
+              if (window.activePieIndex !== null && shareChartIns) {
+                  if (e.target.tagName !== "CANVAS" && e.target.id !== "pieSlider" && !e.target.closest("#pieSliderWrapper")) window.highlightPieSlice(-1);
+              }
+          });
+
+          document.querySelectorAll('.overlay-modal').forEach(modal => {
+              const box = modal.querySelector('.modal-box'); if (!box) return;
+              const handle = box.querySelector('.bottom-sheet-handle'); const header = box.querySelector('.modal-header');
+              let startY = 0, currentY = 0, isDragging = false;
+
+              const startDrag = (e) => {
+                  if (box.scrollTop > 5) return; 
+                  startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                  isDragging = true; box.style.transition = 'none';
+                  if (e.type === 'mousedown') { document.addEventListener('mousemove', moveDrag, { passive: false }); document.addEventListener('mouseup', endDrag); }
+              };
+              const moveDrag = (e) => {
+                  if (!isDragging) return;
+                  currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                  let diff = currentY - startY;
+                  if (diff > 0) { if (e.cancelable) e.preventDefault(); box.style.transform = `translateY(${diff}px)`; }
+              };
+              const endDrag = (e) => {
+                  if (!isDragging) return;
+                  isDragging = false; let diff = currentY - startY;
+                  box.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                  if (diff > 80) {
+                      box.style.transform = 'translateY(100%)';
+                      setTimeout(() => { modal.style.display = 'none'; box.style.transform = ''; }, 250);
+                  } else {
+                      box.style.transform = 'translateY(0)'; setTimeout(() => { box.style.transform = ''; }, 250);
+                  }
+                  if (e.type === 'mouseup' || e.type === 'mouseleave') { document.removeEventListener('mousemove', moveDrag); document.removeEventListener('mouseup', endDrag); }
+              };
+
+              const attachEvents = (el) => {
+                  if (!el) return;
+                  el.addEventListener('touchstart', startDrag, { passive: true }); el.addEventListener('touchmove', moveDrag, { passive: false });
+                  el.addEventListener('touchend', endDrag); el.addEventListener('touchcancel', endDrag); el.addEventListener('mousedown', startDrag);
+              };
+              attachEvents(handle); attachEvents(header);
+          });
+      });
     </script>
   </body>
 </html>
