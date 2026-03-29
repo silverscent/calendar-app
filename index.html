@@ -1558,9 +1558,9 @@
           <div style="position: relative; width: 100%; flex: 1;">
             <canvas id="shareChart"></canvas>
           </div>
-          <div id="pieSliderWrapper" style="width: 90%; margin-top: 15px; display:none;">
+          <div id="pieSliderWrapper" style="width: 60%; align-self: flex-start; margin-left: 5%; margin-top: 15px; display:none;">
             <input type="range" id="pieSlider" class="pie-slider" min="-1" max="0" value="-1">
-            <div style="text-align:center; font-size:0.75em; color:var(--text-sub); margin-top:8px; font-weight:800;">👈 스와이프하여 순위별 탐색 👉</div>
+            <div style="text-align:left; padding-left:5px; font-size:0.75em; color:var(--text-sub); margin-top:8px; font-weight:800;">👈 스와이프하여 탐색 👉</div>
           </div>
         </div>
       </div>
@@ -4140,10 +4140,35 @@
       }
       function fetchYearlyAndRender() {
           document.getElementById('dashTitleText').innerText = "데이터 불러오는 중...";
-          google.script.run.withSuccessHandler(res => {
-              yearlyCache[res.year] = res;
-              renderDashCharts();
-          }).getYearlyStatsAsync(currentType, window.dashYear);
+          
+          // 💡 [속도 개선 핵심] 폰 메모리(로컬 스토리지)에 저장된 연간 데이터가 있다면 0초 만에 즉시 띄움!
+          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYear}`;
+          let cached = localStorage.getItem(cacheKey);
+          if (cached) {
+              try {
+                  yearlyCache[window.dashYear] = JSON.parse(cached);
+                  renderDashCharts(); // 즉시 화면 렌더링!
+              } catch(e) {}
+          }
+
+          // 화면엔 캐시 데이터를 띄워두고, 뒷단에서 조용히 서버 최신 데이터를 가져옴 (스텔스 업데이트)
+          google.script.run
+              .withSuccessHandler(res => {
+                  yearlyCache[res.year] = res;
+                  localStorage.setItem(cacheKey, JSON.stringify(res)); // 지갑(캐시) 갱신
+                  
+                  // 유저가 아직 다른 년도로 안 넘어가고 해당 화면을 보고 있다면 쥐도새도 모르게 스르륵 업데이트!
+                  if (window.dashMode === 'year' && window.dashYear === res.year) {
+                      renderDashCharts();
+                  }
+              })
+              .withFailureHandler(err => {
+                  // 서버가 뻗었어도 캐시가 있으면 티 내지 않음. 캐시마저 없을 때만 실패 표시!
+                  if (window.dashMode === 'year' && !cached) {
+                      document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲";
+                  }
+              })
+              .getYearlyStatsAsync(currentType, window.dashYear);
       }
       function openDashboard() {
           window.dashYear = serverData.year; window.dashMonth = serverData.month;
@@ -4292,16 +4317,17 @@
               const dataset = shareChartIns.data.datasets[0];
               let slider = document.getElementById('pieSlider');
               
-              if (idx === null || idx === -1) {
+              // 🚨 [버그 픽스] 스크롤바가 던지는 문자열 "-1"도 완벽하게 잡아냄!
+              if (idx === null || String(idx) === "-1") {
                   window.activePieIndex = null;
                   dataset.backgroundColor = [...dataset._originalColors];
-                  if (slider) slider.value = -1; // 슬라이더 초기화
+                  if (slider) slider.value = -1; // 슬라이더 원위치
               } else {
                   window.activePieIndex = parseInt(idx, 10);
                   dataset.backgroundColor = dataset._originalColors.map((color, i) => {
                       return i === window.activePieIndex ? color : (document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)");
                   });
-                  if (slider) slider.value = idx; // 슬라이더 위치 동기화
+                  if (slider) slider.value = window.activePieIndex; 
               }
               shareChartIns.update(); 
           };
