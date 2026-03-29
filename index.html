@@ -13,6 +13,28 @@
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+      .dash-control-row {
+        display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
+      }
+      .dash-nav {
+        display: flex; align-items: center; gap: 10px; font-size: 1.2em; font-weight: 900;
+      }
+      .dash-nav button {
+        background: var(--btn-bg); border: none; color: var(--text-main); width: 32px; height: 32px;
+        border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s;
+      }
+      .dash-nav button:active { transform: scale(0.9); }
+      
+      .dash-toggles {
+        display: flex; background: var(--btn-bg); padding: 4px; border-radius: 10px; gap: 2px;
+      }
+      .dash-toggles button {
+        background: transparent; border: none; color: var(--text-sub); padding: 4px 10px;
+        font-weight: 800; font-size: 0.85em; border-radius: 8px; cursor: pointer; transition: 0.2s;
+      }
+      .dash-toggles button.active {
+        background: #0a84ff; color: white; box-shadow: 0 2px 5px rgba(10,132,255,0.3);
+      }
       /* 💡 눈이 편안한 다크 차콜 색상 적용 */
       :root {
         --base-font-size: 100%;
@@ -1465,32 +1487,46 @@
       </div>
     </div>
 
-    <div id="dashboardModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
+   <div id="dashboardModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
       <div class="modal-box" onclick="event.stopPropagation()" style="max-height: 90vh;">
         <div class="bottom-sheet-handle"></div>
-        <div class="modal-header">
-          <div class="modal-title" style="color: #0a84ff;">📈 <span id="dashMonthTitle">이번 달 통계</span></div>
+        <div class="modal-header" style="margin-bottom: 10px;">
+          <div class="modal-title" style="color: #0a84ff;">📈 통계 대시보드</div>
           <button class="close-btn" onclick="document.getElementById('dashboardModal').style.display = 'none'">✕</button>
+        </div>
+
+        <div class="dash-control-row">
+          <div class="dash-nav">
+            <button onclick="navDashDate(-1)">◀</button>
+            <span id="dashTitleText">2026년 3월</span>
+            <button onclick="navDashDate(1)">▶</button>
+          </div>
+          <div class="dash-toggles">
+            <button id="btnDashPal" class="active" onclick="setDashUnit('pal')">P</button>
+            <button id="btnDashBox" onclick="setDashUnit('box')">B</button>
+            <span style="color:var(--border-color);">|</span>
+            <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월</button>
+            <button id="btnDashYear" onclick="setDashMode('year')">년</button>
+          </div>
         </div>
         
         <div class="dashboard-grid">
           <div class="dash-card">
-            <div class="dash-card-title">목표 달성률</div>
+            <div class="dash-card-title" id="dashCardTitle1">월간 달성률</div>
             <div class="dash-card-value" id="dashRate" style="color:#0a84ff;">0%</div>
           </div>
           <div class="dash-card">
-            <div class="dash-card-title">일일 평균 처리</div>
-            <div class="dash-card-value" id="dashAvg">0 <span style="font-size:0.5em; color:var(--text-sub);">PAL/일</span></div>
+            <div class="dash-card-title" id="dashCardTitle2">일일 평균 처리</div>
+            <div class="dash-card-value" id="dashAvg">0</div>
           </div>
         </div>
 
-        <div class="chart-container" style="height: 220px;">
-          <canvas id="dailyChart"></canvas>
+        <div class="chart-container" style="height: 220px; display:block;">
+          <canvas id="mainChart"></canvas>
         </div>
-        <div class="chart-container" style="height: 220px;">
+        <div class="chart-container" style="height: 250px; display:block;">
           <canvas id="shareChart"></canvas>
         </div>
-
       </div>
     </div>
 
@@ -1907,7 +1943,16 @@
                       getOcrLastTimeStr: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }); },
                       
                       // 👇👇 [여기 추가!] 어댑터에 1년 치 공휴일 요청 버튼 장착! 👇👇
-                      getYearlyHolidays: function(y) { this._call({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: y }); }
+                      getYearlyHolidays: function(y) { this._call({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: y }); },
+                      // 👇👇 어댑터에 연간 통계 호출 스위치 추가! 👇👇
+                     // 👇👇 어댑터에 연간 통계 호출 스위치 추가! 👇👇
+          getYearlyStatsAsync: function(type, y) { 
+              setLoadingState(true);
+              fetch(`${GAS_API_URL}?api=true&action=yearlyStats&type=${type}&year=${y}`)
+                  .then(r => r.json()).then(d => { if(this._ok) this._ok(d); })
+                  .catch(e => { if(this._err) this._err(e); }) // 🚨 [추가] 통신 에러 발생 시 먹통 방지
+                  .finally(() => setLoadingState(false)); 
+          }
                   };
               }
           }
@@ -3857,181 +3902,215 @@
       }
 
       // =====================================================
-      // 📊 [3단계] 스마트 통계 및 대시보드 엔진 (오류 수정판)
+      // 📊 [최종] 다이나믹 대시보드 & 꺾은선 지시선 커스텀 엔진
       // =====================================================
-      function updateStatsSummary() {
-        let totalPal = 0;
-        let donePal = 0;
-        
-        const processItem = (it) => {
-            let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
-            let isTask = String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
-            
-            if (!isTask) {
-                let p = parseInt(it.pal) || 0;
-                totalPal += p;
-                if (it.isDone === true || String(it.isDone) === "true") {
-                    donePal += p;
-                }
-            }
-        };
+      window.dashMode = 'month'; // 'month' or 'year'
+      window.dashUnit = 'pal';   // 'pal' or 'box'
+      window.dashYear = new Date().getFullYear();
+      window.dashMonth = new Date().getMonth() + 1;
+      let yearlyCache = {};
+      let mainChartIns = null;
+      let shareChartIns = null;
 
-        // 당월 달력 + 대기열 스캔
-        for (let d = 1; d <= serverData.daysInMonth; d++) {
-            if (serverData.monthData[d]) serverData.monthData[d].forEach(processItem);
-        }
-        if (serverData.pendingItems) serverData.pendingItems.forEach(processItem);
+      // 🎨 [마법의 플러그인] 파이 차트 밖으로 꺾어지는 지시선(Leader Line) 직접 그리기!
+      const pieLeaderLinePlugin = {
+          id: 'pieLeaderLine',
+          afterDraw(chart) {
+              if (chart.config.type !== 'doughnut') return;
+              const ctx = chart.ctx;
+              const meta = chart.getDatasetMeta(0);
+              const data = chart.data.datasets[0].data;
+              const labels = chart.data.labels;
+              
+              ctx.save();
+              ctx.font = "bold 11px -apple-system, sans-serif";
+              ctx.textBaseline = 'middle';
+              
+              meta.data.forEach((element, index) => {
+                  if (data[index] === 0) return; // 수량 0이면 생략
+                  
+                  const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
+                  const radius = element.outerRadius;
+                  const centerX = chart.chartArea.left + chart.chartArea.width / 2;
+                  const centerY = chart.chartArea.top + chart.chartArea.height / 2;
+                  
+                  // 선 시작점 (도넛 겉면)
+                  const startX = centerX + Math.cos(midAngle) * radius;
+                  const startY = centerY + Math.sin(midAngle) * radius;
+                  // 선 꺾이는 점
+                  const bendX = centerX + Math.cos(midAngle) * (radius + 20);
+                  const bendY = centerY + Math.sin(midAngle) * (radius + 20);
+                  // 선 끝점 (좌우로 뻗침)
+                  const isRight = Math.cos(midAngle) > 0;
+                  const endX = bendX + (isRight ? 15 : -15);
+                  
+                  // 1. 선 그리기
+                  ctx.beginPath();
+                  ctx.moveTo(startX, startY);
+                  ctx.lineTo(bendX, bendY);
+                  ctx.lineTo(endX, bendY);
+                  ctx.strokeStyle = document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.3)";
+                  ctx.stroke();
+                  
+                  // 2. 글씨 쓰기 (업체명 + 수량)
+                  ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
+                  ctx.textAlign = isRight ? 'left' : 'right';
+                  const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
+                  const text = `${labels[index]} (${data[index]}${unitStr})`;
+                  ctx.fillText(text, endX + (isRight ? 5 : -5), bendY);
+              });
+              ctx.restore();
+          }
+      };
+      Chart.register(pieLeaderLinePlugin); // 엔진에 장착!
 
-        // 텍스트 자동 변환 (출고 / 입고)
-        let typeName = currentType === "out" ? "출고" : "입고";
-        let labelEl = document.getElementById("statsLabelType");
-        if(labelEl) labelEl.innerText = typeName;
-
-        // 요약 바 업데이트
-        document.getElementById("sumDonePal").innerText = donePal;
-        document.getElementById("sumTotalPal").innerText = totalPal;
-        
-        // 대시보드 내부 디테일 계산
-        let rate = totalPal > 0 ? Math.round((donePal / totalPal) * 100) : 0;
-        
-        // 🚨 과거/미래 조회 시 분모(나누는 수) 보정 완벽 적용!
-        let now = new Date();
-        let isCurrentMonth = (serverData.year === now.getFullYear() && serverData.month === now.getMonth() + 1);
-        let isPastMonth = (serverData.year < now.getFullYear() || (serverData.year === now.getFullYear() && serverData.month < now.getMonth() + 1));
-        
-        let divider = 1;
-        if (isCurrentMonth) divider = now.getDate(); // 이번 달은 오늘 날짜까지만
-        else if (isPastMonth) divider = serverData.daysInMonth; // 과거 달은 그 달의 총 일수
-        
-        let avg = donePal > 0 ? (donePal / divider).toFixed(1) : 0;
-        
-        let mTitle = document.getElementById("dashMonthTitle");
-        if(mTitle) mTitle.innerText = `${serverData.month}월 ${typeName} 통계`;
-        
-        let dRate = document.getElementById("dashRate");
-        if(dRate) {
-            dRate.innerText = `${rate}%`;
-            dRate.style.color = rate >= 100 ? "#34c759" : (rate > 50 ? "#0a84ff" : "#ff9f0a");
-        }
-        let dAvg = document.getElementById("dashAvg");
-        if(dAvg) dAvg.innerHTML = `${avg} <span style="font-size:0.5em; color:var(--text-sub);">PAL/일</span>`;
+      // ⚙️ 스위치 토글 함수
+      function setDashUnit(unit) {
+          window.dashUnit = unit;
+          document.getElementById('btnDashPal').classList.toggle('active', unit === 'pal');
+          document.getElementById('btnDashBox').classList.toggle('active', unit === 'box');
+          renderDashCharts();
+      }
+      function setDashMode(mode) {
+          window.dashMode = mode;
+          document.getElementById('btnDashMonth').classList.toggle('active', mode === 'month');
+          document.getElementById('btnDashYear').classList.toggle('active', mode === 'year');
+          if (mode === 'year' && !yearlyCache[window.dashYear]) fetchYearlyAndRender();
+          else renderDashCharts();
+      }
+      function navDashDate(offset) {
+          if (window.dashMode === 'month') {
+              window.dashMonth += offset;
+              if (window.dashMonth > 12) { window.dashMonth = 1; window.dashYear++; }
+              else if (window.dashMonth < 1) { window.dashMonth = 12; window.dashYear--; }
+              
+              // 달력 자체를 넘기면서 데이터 가져옴
+              goToAsync(window.dashYear, window.dashMonth); 
+              setTimeout(renderDashCharts, 800); // 통신 기다린 후 렌더링
+          } else {
+              window.dashYear += offset;
+              fetchYearlyAndRender();
+          }
       }
 
-      // =====================================================
-      // 📊 [최종] Chart.js 그래프 렌더링 엔진
-      // =====================================================
-      let dailyChartInstance = null;
-      let shareChartInstance = null;
-
-      function renderCharts() {
-          // 1. 차트 기본 글씨 색상 (다크모드 대응)
-          Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
-          Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
-          
-          let typeName = currentType === "out" ? "출고량" : "입고량";
-
-          // 2. 데이터 수집용 바구니 준비
-          let daysArray = [];
-          let dailyData = [];
-          for (let d = 1; d <= serverData.daysInMonth; d++) {
-              daysArray.push(`${d}일`);
-              dailyData.push(0);
-          }
-          let compData = {};
-
-          // 3. 달력을 싹 돌면서 데이터 채우기 (TASK 철저히 배제)
-          for (let d = 1; d <= serverData.daysInMonth; d++) {
-              if (serverData.monthData[d]) {
-                  serverData.monthData[d].forEach(it => {
-                      let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
-                      let isTask = String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
-                      
-                      if (!isTask) {
-                          let pCount = parseInt(it.pal) || 0;
-                          dailyData[d - 1] += pCount; // 일별 물동량 누적
-                          
-                          let stdName = getFullName(clean);
-                          compData[stdName] = (compData[stdName] || 0) + pCount; // 업체별 물동량 누적
-                      }
-                  });
-              }
-          }
-
-          // 4. [첫 번째 차트] 일별 물동량 (막대 그래프)
-          const ctxDaily = document.getElementById('dailyChart').getContext('2d');
-          if (dailyChartInstance) dailyChartInstance.destroy(); // 기존 차트 포맷(초기화)
-          
-          dailyChartInstance = new Chart(ctxDaily, {
-              type: 'bar',
-              data: {
-                  labels: daysArray,
-                  datasets: [{
-                      label: `일일 ${typeName} (PAL)`,
-                      data: dailyData,
-                      backgroundColor: '#0a84ff',
-                      borderRadius: 4,
-                  }]
-              },
-              options: {
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                      legend: { display: false },
-                      title: { display: true, text: `📅 일별 ${typeName} 추이`, font: { size: 14, weight: 'bold' } }
-                  },
-                  scales: {
-                      x: { grid: { display: false } },
-                      y: { beginAtZero: true, border: { dash: [4, 4] } }
-                  }
-              }
-          });
-
-          // 5. [두 번째 차트] 업체별 점유율 도넛 차트 (달력 색상표와 100% 동기화!)
-          let sortedComps = Object.keys(compData).sort((a, b) => compData[b] - compData[a]); // 물량 많은 순 정렬
-          let shareLabels = [];
-          let shareVals = [];
-          let shareColors = [];
-
-          sortedComps.forEach(comp => {
-              shareLabels.push(getShortName(comp)); // 라벨은 보기 좋게 줄임말로
-              shareVals.push(compData[comp]);
-              shareColors.push(getCompanyColor(comp).bg); // 🚨 핵심: 달력의 그 색상 그대로 가져옴!
-          });
-
-          const ctxShare = document.getElementById('shareChart').getContext('2d');
-          if (shareChartInstance) shareChartInstance.destroy(); // 기존 차트 포맷
-          
-          shareChartInstance = new Chart(ctxShare, {
-              type: 'doughnut',
-              data: {
-                  labels: shareLabels,
-                  datasets: [{
-                      data: shareVals,
-                      backgroundColor: shareColors,
-                      borderWidth: 2,
-                      borderColor: document.body.classList.contains("light-mode") ? "#ffffff" : "#2a2c30" // 다크모드 대응 테두리
-                  }]
-              },
-              options: {
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  cutout: '60%', // 도넛 두께
-                  plugins: {
-                      legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11, weight: 'bold' } } },
-                      title: { display: true, text: `🏢 업체별 ${typeName} 점유율`, font: { size: 14, weight: 'bold' }, padding: { bottom: 15 } }
-                  }
-              }
-          });
+      function fetchYearlyAndRender() {
+          document.getElementById('dashTitleText').innerText = "데이터 불러오는 중...";
+          google.script.run.withSuccessHandler(res => {
+              yearlyCache[res.year] = res;
+              renderDashCharts();
+          }).getYearlyStatsAsync(currentType, window.dashYear);
       }
 
       function openDashboard() {
-          updateStatsSummary();
+          window.dashYear = serverData.year; window.dashMonth = serverData.month;
           document.getElementById('dashboardModal').style.display = 'flex';
+          setTimeout(renderDashCharts, 100); // 애니메이션 딜레이
+      }
+
+      // 📈 핵심 차트 그리기 엔진
+      function renderDashCharts() {
+          Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
+          Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
+          let typeName = currentType === "out" ? "출고량" : "입고량";
+          let unitName = window.dashUnit === 'pal' ? "PAL" : "BOX";
           
-          // 🚨 [추가] 창이 열릴 때, 아주 살짝 딜레이를 줘서 애니메이션과 함께 그래프가 확! 그려지게 만듦
-          setTimeout(() => {
-              renderCharts();
-          }, 100);
+          let labels = []; let barData = []; let compMap = {};
+          let totalQty = 0; let doneQty = 0;
+
+          if (window.dashMode === 'month') {
+              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
+              document.getElementById('dashCardTitle1').innerText = "월간 달성률";
+              document.getElementById('dashCardTitle2').innerText = "일일 평균 처리";
+              
+              let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
+              for (let d = 1; d <= days; d++) { labels.push(`${d}일`); barData.push(0); }
+
+              const process = (it, dIdx) => {
+                  let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
+                  let isTask = String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+                  if (!isTask) {
+                      let qty = parseInt(it[window.dashUnit]) || 0;
+                      totalQty += qty;
+                      if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
+                      
+                      if (dIdx !== null) barData[dIdx - 1] += qty;
+                      let std = getFullName(clean);
+                      compMap[std] = (compMap[std] || 0) + qty;
+                  }
+              };
+              for (let d = 1; d <= days; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(it => process(it, d)); }
+              if (serverData.pendingItems) serverData.pendingItems.forEach(it => process(it, null));
+              
+          } else {
+              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`;
+              document.getElementById('dashCardTitle1').innerText = "연간 총 누적수량";
+              document.getElementById('dashCardTitle2').innerText = "월 평균 처리";
+              
+              for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); }
+              let yData = yearlyCache[window.dashYear];
+              if (!yData) return; // 대기
+              
+              barData = yData.monthly.map(m => m[window.dashUnit]);
+              totalQty = barData.reduce((a, b) => a + b, 0);
+              Object.keys(yData.comp).forEach(k => { compMap[k] = yData.comp[k][window.dashUnit]; });
+          }
+
+          // 🎛️ 카드 UI 업데이트
+          if (window.dashMode === 'month') {
+              let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
+              let avg = doneQty > 0 ? (doneQty / new Date().getDate()).toFixed(1) : 0;
+              document.getElementById("dashRate").innerText = `${rate}%`;
+              document.getElementById("dashRate").style.color = rate >= 100 ? "#34c759" : (rate > 50 ? "#0a84ff" : "#ff9f0a");
+              document.getElementById("dashAvg").innerHTML = `${avg} <span style="font-size:0.5em;">${unitName}/일</span>`;
+          } else {
+              let avg = totalQty > 0 ? Math.round(totalQty / 12) : 0;
+              document.getElementById("dashRate").innerText = `${totalQty} ${unitName}`;
+              document.getElementById("dashRate").style.color = "#0a84ff";
+              document.getElementById("dashAvg").innerHTML = `${avg} <span style="font-size:0.5em;">${unitName}/월</span>`;
+          }
+
+          // 📊 1. 막대 그래프 그리기
+          if (mainChartIns) mainChartIns.destroy();
+          mainChartIns = new Chart(document.getElementById('mainChart'), {
+              type: 'bar',
+              data: { labels: labels, datasets: [{ label: `수량(${unitName})`, data: barData, backgroundColor: '#0a84ff', borderRadius: 4 }] },
+              options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } } } }
+          });
+
+          // 🍩 2. 파이 차트 (커스텀 지시선 적용!)
+          let sortedComps = Object.keys(compMap).filter(k => compMap[k] > 0).sort((a, b) => compMap[b] - compMap[a]);
+          let sLabels = []; let sData = []; let sColors = [];
+          sortedComps.forEach(c => {
+              sLabels.push(getShortName(c)); sData.push(compMap[c]); sColors.push(getCompanyColor(c).bg);
+          });
+
+          if (shareChartIns) shareChartIns.destroy();
+          shareChartIns = new Chart(document.getElementById('shareChart'), {
+              type: 'doughnut',
+              data: { labels: sLabels, datasets: [{ data: sData, backgroundColor: sColors, borderWidth: 2, borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30" }] },
+              options: {
+                  responsive: true, maintainAspectRatio: false, cutout: '50%',
+                  layout: { padding: 40 }, // 🚨 꺾은선이 그려질 넉넉한 공간 확보
+                  plugins: { legend: { display: false } } // 기본 범례 끄기 (선으로 대체)
+              }
+          });
+      }
+
+      // 달력 바닥에 있는 "하단 요약바"용 업데이트
+      function updateStatsSummary() {
+          let tPal = 0, dPal = 0;
+          const process = (it) => {
+              let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
+              if (String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean))) return;
+              tPal += parseInt(it.pal) || 0;
+              if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
+          };
+          for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
+          if (serverData.pendingItems) serverData.pendingItems.forEach(process);
+
+          let elType = document.getElementById("statsLabelType"); if(elType) elType.innerText = currentType === "out" ? "출고" : "입고";
+          let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
+          let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
       }
 
       function closeModalOnBgClick(e) {
