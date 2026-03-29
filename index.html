@@ -3914,7 +3914,7 @@
       let mainChartIns = null;
       let shareChartIns = null;
 
-      // 🎨 [마법의 플러그인 3.0] 파이 침범 방지 & 빈 공간 활용형 지시선 엔진!
+     // 🎨 [마법의 플러그인 4.0] 텍스트 잘림 절대 방지 + 좌우 완벽 정렬 + 엉킴 방지 엔진!
       const pieLeaderLinePlugin = {
           id: 'pieLeaderLine',
           afterDraw(chart) {
@@ -3931,6 +3931,8 @@
               let leftLabels = [];
               const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
               
+              ctx.font = "bold 12px -apple-system, sans-serif"; // 🚨 글자 크기 12px로 확대!
+              
               meta.data.forEach((element, index) => {
                   if (data[index] === 0) return;
                   const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
@@ -3940,46 +3942,72 @@
                   const startX = centerX + Math.cos(midAngle) * radius;
                   const startY = centerY + Math.sin(midAngle) * radius;
                   
-                  // 🚨 꺾이는 점을 파이에서 확 멀어지게 설정 (파이 침범 방지)
-                  let elbowX = centerX + Math.cos(midAngle) * (radius + 20);
-                  let elbowY = centerY + Math.sin(midAngle) * (radius + 20);
+                  let elbowX = centerX + Math.cos(midAngle) * (radius + 15);
+                  let elbowY = centerY + Math.sin(midAngle) * (radius + 15);
                   
-                  let obj = { index, text: `${labels[index]} (${data[index]}${unitStr})`, startX, startY, elbowX, elbowY, isRight };
+                  const text = `${labels[index]} (${data[index]}${unitStr})`;
+                  const textWidth = ctx.measureText(text).width;
+                  
+                  let obj = { index, text, textWidth, startX, startY, elbowX, elbowY, isRight };
                   if (isRight) rightLabels.push(obj);
                   else leftLabels.push(obj);
               });
 
-              // Y축 충돌 방지 간격을 16px -> 20px로 넓혀서 큰 글씨도 안 겹치게 함
+              // 🚨 [핵심] Y축 겹침 방지 및 꼬임 완벽 방지 알고리즘 (위아래 간격 18px 확보)
               const avoidCollision = (lbls) => {
-                  lbls.sort((a, b) => a.elbowY - b.elbowY);
+                  // 선이 꼬이지 않게 '시작 높이(startY)' 기준으로 먼저 정렬
+                  lbls.sort((a, b) => a.startY - b.startY); 
                   let prevY = -9999;
-                  lbls.forEach(lbl => {
-                      if (lbl.elbowY < prevY + 20) lbl.elbowY = prevY + 20; 
-                      prevY = lbl.elbowY;
-                  });
+                  for (let i = 0; i < lbls.length; i++) {
+                      if (lbls[i].elbowY < prevY + 18) lbls[i].elbowY = prevY + 18;
+                      prevY = lbls[i].elbowY;
+                  }
+                  // 글씨가 너무 밑으로 내려가서 짤릴 것 같으면 다시 위로 끌어올림
+                  const bottomLimit = chart.chartArea.bottom + 20;
+                  if (lbls.length > 0 && lbls[lbls.length - 1].elbowY > bottomLimit) {
+                      let overflow = lbls[lbls.length - 1].elbowY - bottomLimit;
+                      for (let i = lbls.length - 1; i >= 0; i--) {
+                          lbls[i].elbowY -= overflow;
+                          if (i > 0 && lbls[i-1].elbowY > lbls[i].elbowY - 18) overflow = (lbls[i-1].elbowY + 18) - lbls[i].elbowY;
+                          else break;
+                      }
+                  }
               };
               avoidCollision(rightLabels);
               avoidCollision(leftLabels);
 
               ctx.save();
-              ctx.font = "bold 12px -apple-system, sans-serif"; // 🚨 글자 크기 11px -> 12px 확대
+              ctx.font = "bold 12px -apple-system, sans-serif";
               ctx.textBaseline = 'middle';
               
               const drawLabel = (lbl) => {
-                  // 🚨 지시선 끝을 좌우 빈 공간(스샷의 V표시 부분)으로 길게 뻗게 고정
-                  const lineEndX = lbl.isRight ? centerX + meta.data[0].outerRadius + 35 : centerX - meta.data[0].outerRadius - 35;
+                  let lineEndX, textX;
                   
+                  // 🚨 텍스트를 캔버스 양쪽 끝 벽면에 완전 밀착 정렬! (잘림 100% 방지)
+                  if (lbl.isRight) {
+                      textX = chart.width - 5; // 우측 벽면
+                      ctx.textAlign = 'right';
+                      lineEndX = textX - lbl.textWidth - 5;
+                      if (lineEndX < lbl.elbowX) lineEndX = lbl.elbowX + 5;
+                  } else {
+                      textX = 5; // 좌측 벽면
+                      ctx.textAlign = 'left';
+                      lineEndX = textX + lbl.textWidth + 5;
+                      if (lineEndX > lbl.elbowX) lineEndX = lbl.elbowX - 5;
+                  }
+                  
+                  // 꺾은선 그리기
                   ctx.beginPath();
                   ctx.moveTo(lbl.startX, lbl.startY);
                   ctx.lineTo(lbl.elbowX, lbl.elbowY);
                   ctx.lineTo(lineEndX, lbl.elbowY);
-                  ctx.strokeStyle = document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.4)";
+                  ctx.strokeStyle = document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.4)";
                   ctx.lineWidth = 1.2;
                   ctx.stroke();
                   
+                  // 텍스트 그리기 (색상을 뚜렷하게)
                   ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
-                  ctx.textAlign = lbl.isRight ? 'left' : 'right';
-                  ctx.fillText(lbl.text, lineEndX + (lbl.isRight ? 6 : -6), lbl.elbowY);
+                  ctx.fillText(lbl.text, textX, lbl.elbowY);
               };
 
               rightLabels.forEach(drawLabel);
@@ -3987,7 +4015,7 @@
               ctx.restore();
           }
       };
-      Chart.register(pieLeaderLinePlugin);
+      Chart.register(pieLeaderLinePlugin); // 엔진 재장착!
 
       // ⚙️ 스위치 토글 함수
       function setDashUnit(unit) {
@@ -4131,9 +4159,9 @@
               type: 'doughnut',
               data: { labels: sLabels, datasets: [{ data: sData, backgroundColor: sColors, borderWidth: 2, borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30" }] },
               options: {
-                  responsive: true, maintainAspectRatio: false, cutout: '45%', // 도넛을 살짝 더 두껍게
-                  // 🚨 좌우 빈 공간을 확보하여 글씨가 차트 밖으로 뻗어나갈 수 있게 패딩을 극대화!
-                  layout: { padding: { left: 95, right: 95, top: 30, bottom: 30 } }, 
+                  responsive: true, maintainAspectRatio: false, cutout: '45%',
+                  // 🚨 좌우 글씨 여백을 95px로 대폭 키워서 긴 글씨도 절대 안 짤리게 함!
+                  layout: { padding: { left: 95, right: 95, top: 25, bottom: 25 } }, 
                   plugins: { legend: { display: false } }
               }
           });
