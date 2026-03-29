@@ -1512,14 +1512,14 @@
         
         <div class="dashboard-grid">
           <div class="dash-card">
-            <div class="dash-card-title" id="dashCardTitle1">목표 달성률</div>
-            <div class="dash-card-value" id="dashRate" style="color:#0a84ff;">0%</div>
-            <div id="dashVolDetail" style="font-size:0.85em; color:var(--text-sub); margin-top:6px; font-weight:800;">0 / 0 PAL</div>
+            <div class="dash-card-title" id="dashCardTitle1">당월 총 예정 물량</div>
+            <div class="dash-card-value" id="dashTotal" style="color:var(--text-main);">0</div>
+            <div id="dashVolDetail" style="font-size:0.9em; color:#0a84ff; margin-top:6px; font-weight:900;">완료: 0 (0%)</div>
           </div>
           <div class="dash-card">
-            <div class="dash-card-title" id="dashCardTitle2">일일 평균 처리</div>
+            <div class="dash-card-title" id="dashCardTitle2">일일 평균 처리량</div>
             <div class="dash-card-value" id="dashAvg">0</div>
-            <div id="dashDaysDetail" style="font-size:0.85em; color:var(--text-sub); margin-top:6px; font-weight:800;">(영업일 기준)</div>
+            <div id="dashDaysDetail" style="font-size:0.85em; color:var(--text-sub); margin-top:6px; font-weight:800;">(월간 총합: 0)</div>
           </div>
         </div>
 
@@ -3914,7 +3914,7 @@
       let mainChartIns = null;
       let shareChartIns = null;
 
-      // 🎨 [마법의 플러그인 2.0] 글자 겹침 완벽 방지(Anti-Collision) 지시선 엔진!
+      // 🎨 [마법의 플러그인 3.0] 파이 침범 방지 & 빈 공간 활용형 지시선 엔진!
       const pieLeaderLinePlugin = {
           id: 'pieLeaderLine',
           afterDraw(chart) {
@@ -3931,7 +3931,6 @@
               let leftLabels = [];
               const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
               
-              // 1. 모든 라벨의 초기 위치 계산
               meta.data.forEach((element, index) => {
                   if (data[index] === 0) return;
                   const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
@@ -3940,47 +3939,47 @@
                   
                   const startX = centerX + Math.cos(midAngle) * radius;
                   const startY = centerY + Math.sin(midAngle) * radius;
-                  let bendX = centerX + Math.cos(midAngle) * (radius + 15);
-                  let bendY = centerY + Math.sin(midAngle) * (radius + 15);
                   
-                  let obj = { index, text: `${labels[index]} (${data[index]}${unitStr})`, startX, startY, bendX, bendY, isRight };
+                  // 🚨 꺾이는 점을 파이에서 확 멀어지게 설정 (파이 침범 방지)
+                  let elbowX = centerX + Math.cos(midAngle) * (radius + 20);
+                  let elbowY = centerY + Math.sin(midAngle) * (radius + 20);
+                  
+                  let obj = { index, text: `${labels[index]} (${data[index]}${unitStr})`, startX, startY, elbowX, elbowY, isRight };
                   if (isRight) rightLabels.push(obj);
                   else leftLabels.push(obj);
               });
 
-              // 🚨 2. [핵심] Y축 충돌 방지 엔진 (글자가 겹치면 아래로 살짝 밀어냄)
+              // Y축 충돌 방지 간격을 16px -> 20px로 넓혀서 큰 글씨도 안 겹치게 함
               const avoidCollision = (lbls) => {
-                  lbls.sort((a, b) => a.bendY - b.bendY); // 위에서 아래 순서로 정렬
+                  lbls.sort((a, b) => a.elbowY - b.elbowY);
                   let prevY = -9999;
                   lbls.forEach(lbl => {
-                      if (lbl.bendY < prevY + 16) lbl.bendY = prevY + 16; // 16px 간격 강제 유지
-                      prevY = lbl.bendY;
+                      if (lbl.elbowY < prevY + 20) lbl.elbowY = prevY + 20; 
+                      prevY = lbl.elbowY;
                   });
               };
               avoidCollision(rightLabels);
               avoidCollision(leftLabels);
 
-              // 3. 선과 글씨 그리기
               ctx.save();
-              ctx.font = "bold 11px -apple-system, sans-serif";
+              ctx.font = "bold 12px -apple-system, sans-serif"; // 🚨 글자 크기 11px -> 12px 확대
               ctx.textBaseline = 'middle';
               
               const drawLabel = (lbl) => {
-                  const endX = lbl.bendX + (lbl.isRight ? 15 : -15);
+                  // 🚨 지시선 끝을 좌우 빈 공간(스샷의 V표시 부분)으로 길게 뻗게 고정
+                  const lineEndX = lbl.isRight ? centerX + meta.data[0].outerRadius + 35 : centerX - meta.data[0].outerRadius - 35;
                   
-                  // 지시선 그리기
                   ctx.beginPath();
                   ctx.moveTo(lbl.startX, lbl.startY);
-                  ctx.lineTo(lbl.bendX, lbl.bendY);
-                  ctx.lineTo(endX, lbl.bendY);
-                  ctx.strokeStyle = document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.4)";
-                  ctx.lineWidth = 1;
+                  ctx.lineTo(lbl.elbowX, lbl.elbowY);
+                  ctx.lineTo(lineEndX, lbl.elbowY);
+                  ctx.strokeStyle = document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.4)";
+                  ctx.lineWidth = 1.2;
                   ctx.stroke();
                   
-                  // 텍스트 그리기
                   ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
                   ctx.textAlign = lbl.isRight ? 'left' : 'right';
-                  ctx.fillText(lbl.text, endX + (lbl.isRight ? 5 : -5), lbl.bendY);
+                  ctx.fillText(lbl.text, lineEndX + (lbl.isRight ? 6 : -6), lbl.elbowY);
               };
 
               rightLabels.forEach(drawLabel);
@@ -4081,34 +4080,38 @@
               Object.keys(yData.comp).forEach(k => { compMap[k] = yData.comp[k][window.dashUnit]; });
           }
 
-          // 🎛️ 카드 UI 업데이트 (실제 수량 및 기준일 추가)
+          // 🎛️ 스마트 카드 UI 데이터 매핑
           if (window.dashMode === 'month') {
               let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
-              
-              // 과거 달은 총 일수로, 이번 달은 오늘 날짜로 평균 계산
               let now = new Date();
-              let isCurrentMonth = (serverData.year === now.getFullYear() && serverData.month === now.getMonth() + 1);
-              let divider = isCurrentMonth ? Math.max(1, now.getDate()) : serverData.daysInMonth;
-              let avg = doneQty > 0 ? (doneQty / divider).toFixed(1) : 0;
+              let isCurrentMonth = (window.dashYear === now.getFullYear() && window.dashMonth === now.getMonth() + 1);
+              let divider = isCurrentMonth ? Math.max(1, now.getDate()) : new Date(window.dashYear, window.dashMonth, 0).getDate();
+              let avgDaily = doneQty > 0 ? (doneQty / divider).toFixed(1) : 0;
 
-              document.getElementById("dashRate").innerText = `${rate}%`;
-              document.getElementById("dashRate").style.color = rate >= 100 ? "#34c759" : (rate > 50 ? "#0a84ff" : "#ff9f0a");
-              document.getElementById("dashVolDetail").innerText = `${doneQty.toLocaleString()} / ${totalQty.toLocaleString()} ${unitName}`; // 👈 실제 수량 꽂기
+              document.getElementById("dashCardTitle1").innerText = "당월 총 예정 물량";
+              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
               
-              document.getElementById("dashAvg").innerHTML = `${avg} <span style="font-size:0.5em;">${unitName}/일</span>`;
-              document.getElementById("dashDaysDetail").innerText = `(${divider}일 기준 평균)`; // 👈 며칠 기준인지 꽂기
+              document.getElementById("dashVolDetail").innerText = `완료: ${doneQty.toLocaleString()} (${rate}%)`;
+              document.getElementById("dashVolDetail").style.color = rate >= 100 ? "#34c759" : (rate > 50 ? "#0a84ff" : "#ff9f0a");
+              
+              document.getElementById("dashCardTitle2").innerText = "일일 평균 처리량";
+              document.getElementById("dashAvg").innerHTML = `${avgDaily} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/일</span>`;
+              document.getElementById("dashDaysDetail").innerText = `(월 누적: ${doneQty.toLocaleString()})`;
           } else {
-              let avg = totalQty > 0 ? Math.round(totalQty / 12) : 0;
+              let avgMonthly = totalQty > 0 ? Math.round(totalQty / 12) : 0;
+              let avgDaily = totalQty > 0 ? (totalQty / 365).toFixed(1) : 0;
               
-              document.getElementById("dashRate").innerText = `${totalQty.toLocaleString()}`;
-              document.getElementById("dashRate").style.color = "#0a84ff";
-              document.getElementById("dashVolDetail").innerText = `연간 총 누적 ${unitName}`; 
+              document.getElementById("dashCardTitle1").innerText = "연간 총 누적수량";
+              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
+              document.getElementById("dashVolDetail").innerText = `(1년 전체 합산)`;
+              document.getElementById("dashVolDetail").style.color = "#0a84ff";
               
-              document.getElementById("dashAvg").innerHTML = `${avg.toLocaleString()} <span style="font-size:0.5em;">${unitName}/월</span>`;
-              document.getElementById("dashDaysDetail").innerText = `(12개월 기준 평균)`;
+              document.getElementById("dashCardTitle2").innerText = "월간 평균 처리량";
+              document.getElementById("dashAvg").innerHTML = `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/월</span>`;
+              document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${avgDaily})`;
           }
 
-          // 📊 1. 막대 그래프 그리기 (기존 코드 유지)
+          // 📊 1. 막대 그래프 그리기
           if (mainChartIns) mainChartIns.destroy();
           mainChartIns = new Chart(document.getElementById('mainChart'), {
               type: 'bar',
@@ -4116,7 +4119,7 @@
               options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } } } }
           });
 
-          // 🍩 2. 파이 차트 (커스텀 지시선 적용 및 좌우 여백 대폭 확대!)
+          // 🍩 2. 파이 차트 (커스텀 지시선 적용 및 여백 최적화)
           let sortedComps = Object.keys(compMap).filter(k => compMap[k] > 0).sort((a, b) => compMap[b] - compMap[a]);
           let sLabels = []; let sData = []; let sColors = [];
           sortedComps.forEach(c => {
@@ -4128,9 +4131,9 @@
               type: 'doughnut',
               data: { labels: sLabels, datasets: [{ data: sData, backgroundColor: sColors, borderWidth: 2, borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30" }] },
               options: {
-                  responsive: true, maintainAspectRatio: false, cutout: '50%',
-                  // 🚨 좌우로 글씨가 뻗어나갈 수 있도록 75px씩 거대한 여백을 줌! (상하도 30px)
-                  layout: { padding: { left: 75, right: 75, top: 30, bottom: 30 } }, 
+                  responsive: true, maintainAspectRatio: false, cutout: '45%', // 도넛을 살짝 더 두껍게
+                  // 🚨 좌우 빈 공간을 확보하여 글씨가 차트 밖으로 뻗어나갈 수 있게 패딩을 극대화!
+                  layout: { padding: { left: 95, right: 95, top: 30, bottom: 30 } }, 
                   plugins: { legend: { display: false } }
               }
           });
