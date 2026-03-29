@@ -4,841 +4,143 @@
     <title>입고 캘린더</title>
     <base target="_top" />
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
-    />
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="manifest_in.json">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-      /* 📊 [입고 통계 대시보드] 전용 디자인 */
-      .stats-summary-bar { margin-top: 15px; background: linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(52, 199, 89, 0.05)); border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03); }
-      .stats-summary-bar:active { transform: scale(0.97); background: rgba(10, 132, 255, 0.15); }
-      .stats-title { font-size: 1.05em; font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
-      .stats-numbers { font-size: 1.2em; font-weight: 900; color: var(--text-main); letter-spacing: -0.5px; }
-      .stats-numbers .done { color: #34c759; font-size: 1.2em; }
-      .stats-numbers .total { color: var(--text-sub); font-size: 0.85em; }
-
-      #dashboardModal { z-index: 3000; }
-      .dash-control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-      .dash-nav { display: flex; align-items: center; gap: 10px; font-size: 1.2em; font-weight: 900; }
-      .dash-nav button { background: var(--btn-bg); border: none; color: var(--text-main); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-      .dash-nav button:active { transform: scale(0.9); }
-      .dash-toggles { display: flex; background: var(--btn-bg); padding: 4px; border-radius: 10px; gap: 2px; }
-      .dash-toggles button { background: transparent; border: none; color: var(--text-sub); padding: 4px 15px; font-weight: 800; font-size: 0.9em; border-radius: 8px; cursor: pointer; transition: 0.2s; }
-      .dash-toggles button.active { background: #0a84ff; color: white; box-shadow: 0 2px 5px rgba(10,132,255,0.3); }
-      
-      .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
-      .dash-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
-      .dash-card-title { font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: 8px; }
-      .dash-card-value { font-size: 1.5em; font-weight: 900; color: var(--text-main); }
-      
-      .chart-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 15px; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-weight: bold; margin-bottom: 12px; }
-      .pie-slider { -webkit-appearance: none; width: 100%; height: 6px; background: rgba(10, 132, 255, 0.2); border-radius: 5px; outline: none; margin-top: 5px; }
-      .pie-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #0a84ff; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); border: 2.5px solid #fff; transition: transform 0.1s; }
-      .pie-slider::-webkit-slider-thumb:active { transform: scale(1.15); }
-    
       /* 💡 눈이 편안한 다크 차콜 색상 적용 */
       :root {
-        --base-font-size: 100%;
-        --bg-color: #212225;
-        --card-bg: #2a2c30;
-        --text-main: #f0f0f0;
-        --text-sub: #a0a0a0;
-        --border-color: #383a3f;
-        --header-bg: #2a2c30;
-        --sun-color: #ff6b6b;
-        --sat-color: #4dabf7;
-        --btn-bg: #35383d;
-        --btn-text: #a0a0a0;
-        --btn-active-bg: #4dabf7;
-        --btn-active-text: #ffffff;
+        --base-font-size: 100%; --bg-color: #212225; --card-bg: #2a2c30; --text-main: #f0f0f0; --text-sub: #a0a0a0;
+        --border-color: #383a3f; --header-bg: #2a2c30; --sun-color: #ff6b6b; --sat-color: #4dabf7; --btn-bg: #35383d;
+        --btn-text: #a0a0a0; --btn-active-bg: #4dabf7; --btn-active-text: #ffffff;
       }
       body.light-mode {
-        --bg-color: #f4f6f9;
-        --card-bg: #ffffff;
-        --text-main: #222222;
-        --text-sub: #777777;
-        --border-color: #e5e5e5;
-        --header-bg: #ffffff;
-        --sun-color: #fa5252;
-        --sat-color: #228be6;
-        --btn-bg: #e9ecef;
-        --btn-text: #495057;
-        --btn-active-bg: #228be6;
-        --btn-active-text: #ffffff;
+        --bg-color: #f4f6f9; --card-bg: #ffffff; --text-main: #222222; --text-sub: #777777; --border-color: #e5e5e5;
+        --header-bg: #ffffff; --sun-color: #fa5252; --sat-color: #228be6; --btn-bg: #e9ecef; --btn-text: #495057;
+        --btn-active-bg: #228be6; --btn-active-text: #ffffff;
       }
-      body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
-        background-color: var(--bg-color);
-        color: var(--text-main);
-        margin: 0;
-        padding: 12px 12px calc(80px + env(safe-area-inset-bottom)) 12px;
-        font-size: var(--base-font-size);
-        transition: 0.3s;
-        -webkit-font-smoothing: antialiased;
-      }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif; background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 12px 12px calc(80px + env(safe-area-inset-bottom)) 12px; font-size: var(--base-font-size); transition: 0.3s; -webkit-font-smoothing: antialiased; }
 
-      .top-wrapper {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        margin-bottom: 15px;
-        background: var(--header-bg);
-        padding: 12px;
-        border-radius: 16px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-      }
-      .top-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
+      .top-wrapper { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; background: var(--header-bg); padding: 12px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); position: relative; overflow: hidden; border: 2px solid transparent; transition: box-shadow 0.3s, border-color 0.3s, transform 0.2s; box-sizing: border-box; }
+      .top-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap !important; gap: 1.5vw !important; }
+      .title-area, .controls-area, .action-row-right, .sync-area, .admin-actions { flex-wrap: nowrap !important; gap: 1vw !important; white-space: nowrap !important; }
+      .nav-arrow { background: var(--btn-bg); color: var(--text-main); border: none; border-radius: 10px; padding: 8px 14px; cursor: pointer; font-size: 1em; font-weight: bold; transition: 0.2s; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
+      .nav-arrow:active { transform: scale(0.9); }
+      .title-btn { background: var(--btn-bg); color: var(--text-main); padding: 8px 14px; border-radius: 10px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px; display: flex; align-items: center; gap: 6px; cursor: pointer; border: none; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+      
+      .size-toggle { display: flex; background: var(--btn-bg); border-radius: 10px; overflow: hidden; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05); flex-shrink: 0; }
+      .size-btn { background: transparent; border: none; color: var(--btn-text); font-size: 0.85em; font-weight: 700; padding: 6px 12px; cursor: pointer; transition: 0.2s; white-space: nowrap; }
+      .size-btn.active { background: var(--btn-active-bg); color: var(--btn-active-text); }
+      .theme-toggle { background: var(--btn-bg); border: none; font-size: 1.1em; padding: 6px 8px; border-radius: 10px; cursor: pointer; }
+      .admin-btn { background: var(--btn-bg); color: var(--text-main); border: none; font-size: 0.85em; font-weight: 800; padding: 6px 12px; border-radius: 10px; cursor: pointer; transition: 0.3s; display: flex; align-items: center; gap: 4px; }
+      .admin-btn.unlocked { background: #34c759; color: white; box-shadow: 0 4px 10px rgba(52, 199, 89, 0.3); }
+      
+      .action-row-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+      .sync-area { display: flex; align-items: center; gap: 5px; }
+      .sync-time { font-size: clamp(0.6em, 2.5vw, 0.75em) !important; font-weight: 800; color: var(--text-sub); margin-right: 2px; white-space: nowrap !important; }
+      .sync-btn { background: var(--btn-bg); color: var(--text-main); border: none; font-size: 1em; padding: 5px 8px; border-radius: 8px; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
+      .sync-btn:active { transform: rotate(180deg) scale(0.9); }
+      .admin-actions { display: none; gap: 8px; }
+      .multi-btn { background: var(--border-color); color: var(--text-main); border: none; padding: 6px 12px; border-radius: 10px; font-size: 0.85em; font-weight: 800; cursor: pointer; animation: fadeIn 0.3s; transition: 0.2s; }
+      .multi-btn.active { background: #ff3b30; color: white; box-shadow: 0 4px 10px rgba(255, 59, 48, 0.3); }
+      .ocr-btn { background: #0a84ff; color: white; border: none; padding: 6px 12px; border-radius: 10px; font-size: 0.85em; font-weight: 800; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 6px rgba(10, 132, 255, 0.3); }
+      .ocr-btn:active { transform: scale(0.95); }
+      .title-btn, .admin-btn, .size-btn, .theme-toggle, .sync-btn, .multi-btn, .ocr-btn, .nav-arrow { white-space: nowrap !important; font-size: clamp(0.7em, 3vw, 1.15em) !important; padding: clamp(4px, 1.5vw, 8px) clamp(6px, 2vw, 14px) !important; }
 
-      .title-area {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .nav-arrow {
-        background: var(--btn-bg);
-        color: var(--text-main);
-        border: none;
-        border-radius: 10px;
-        padding: 8px 14px;
-        cursor: pointer;
-        font-size: 1em;
-        font-weight: bold;
-        transition: 0.2s;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      }
-      .nav-arrow:active {
-        transform: scale(0.9);
-      }
-      .title-btn {
-        background: var(--btn-bg);
-        color: var(--text-main);
-        padding: 8px 14px;
-        border-radius: 10px;
-        font-size: 1.15em;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        cursor: pointer;
-        border: none;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      }
+      .legend-bar-wrapper { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 5px; flex-wrap: nowrap !important; white-space: nowrap !important; gap: 1vw !important; }
+      .ocr-time-info, .legend-bar, .legend-item { flex-wrap: nowrap !important; white-space: nowrap !important; }
+      .ocr-time-info span, .legend-item { font-size: clamp(0.7em, 2.5vw, 0.85em) !important; }
+      .legend-bar { display: flex; gap: 12px; }
+      .legend-item { display: flex; align-items: center; gap: 5px; font-weight: 800; color: var(--text-sub); }
+      .legend-color { width: 16px; height: 16px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+      .color-sea { background: linear-gradient(135deg, #0a84ff, #005bb5); }
+      .color-air { background: linear-gradient(135deg, #ff453a, #cc2920); }
 
-      .controls-area {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-      .size-toggle {
-        display: flex;
-        background: var(--btn-bg);
-        border-radius: 10px;
-        overflow: hidden;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-        flex-shrink: 0;
-      }
-      .size-btn {
-        background: transparent;
-        border: none;
-        color: var(--btn-text);
-        font-size: 0.85em;
-        font-weight: 700;
-        padding: 6px 12px;
-        cursor: pointer;
-        transition: 0.2s;
-        white-space: nowrap;
-      }
-      .size-btn.active {
-        background: var(--btn-active-bg);
-        color: var(--btn-active-text);
-      }
+      .calendar-container { background: var(--border-color); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--border-color); box-shadow: 0 5px 20px rgba(0, 0, 0, 0.03); }
+      .grid-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; }
+      .day-header { background: var(--header-bg); text-align: center; padding: 10px 0; font-size: 0.75em; font-weight: 800; color: var(--text-sub); }
+      .day-header.sun { color: var(--sun-color); }
+      .day-header.sat { color: var(--sat-color); }
+      .day-cell { background: var(--card-bg); min-height: 65px; padding: 4px; position: relative; cursor: pointer; display: flex; flex-direction: column; gap: 3px; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; transition: 0.15s ease-out; }
+      .day-cell.empty { background: var(--header-bg); cursor: default; }
+      .day-cell.drag-over { background: rgba(10,132,255,0.1) !important; outline: 2px dashed #0a84ff !important; outline-offset: -2px; transform: scale(0.96); z-index: 10; }
+      
+      .date-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; padding: 0 2px; }
+      .date-num { font-size: 0.9em; font-weight: 700; }
+      .date-num.sun { color: var(--sun-color); }
+      .date-num.sat { color: var(--sat-color); }
+      .daily-total { font-size: 0.75em !important; font-weight: 800; color: #ff9f0a; background: rgba(255, 159, 10, 0.15); padding: 2px 5px; border-radius: 6px; letter-spacing: -0.5px !important; }
+      .today-cell { background: rgba(255, 59, 48, 0.05) !important; box-shadow: inset 0 0 0 1px rgba(255, 59, 48, 0.3) !important; border-radius: 4px; z-index: 1; }
+      .today-cell .date-num { color: inherit !important; font-weight: 900; }
 
-      .theme-toggle {
-        background: var(--btn-bg);
-        border: none;
-        font-size: 1.1em;
-        padding: 6px 8px;
-        border-radius: 10px;
-        cursor: pointer;
-      }
-      .admin-btn {
-        background: var(--btn-bg);
-        color: var(--text-main);
-        border: none;
-        font-size: 0.85em;
-        font-weight: 800;
-        padding: 6px 12px;
-        border-radius: 10px;
-        cursor: pointer;
-        transition: 0.3s;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      }
-      .admin-btn.unlocked {
-        background: #34c759;
-        color: white;
-        box-shadow: 0 4px 10px rgba(52, 199, 89, 0.3);
-      }
+      .item-tag { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 5px; padding: 4px 2px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15); -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; transition: background 0.15s, opacity 0.15s !important; width: 100%; box-sizing: border-box; overflow: hidden; margin-bottom: 1px; }
+      .item-tag.cell-pressing { transform: scale(0.92); filter: brightness(1.2); }
+      .has-etc { border-left: 4px solid #ffd60a !important; }
+      .pal-main { font-size: 1.25em !important; font-weight: 900; color: #fff; letter-spacing: -1px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; }
+      .bl-sub { font-size: clamp(0.55em, 2.2vw, 0.75em) !important; font-weight: 800; color: rgba(255, 255, 255, 0.9); margin-top: 2px; display: flex; align-items: center; justify-content: center; letter-spacing: -0.5px !important; white-space: nowrap !important; }
+      .done-mark { opacity: 0.6; border-left: none !important; }
+      .done-mark .pal-main, .done-mark .bl-sub { text-decoration: none !important; text-shadow: none !important; }
+      .done-icon { font-size: clamp(9px, 2.5vw, 12px) !important; margin-right: 2px; text-decoration: none !important; }
+      .multi-selected { outline: 3px solid #ff3b30 !important; filter: brightness(1.1); transform: scale(0.95); z-index: 5; }
+      
+      .insert-line-top { border-top: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
+      .insert-line-bottom { border-bottom: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
 
-      .action-row-right {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-      }
-      .sync-area {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-      }
-      .sync-time {
-        font-size: 0.75em;
-        font-weight: 800;
-        color: var(--text-sub);
-        margin-right: 2px;
-      }
-      .sync-btn {
-        background: var(--btn-bg);
-        color: var(--text-main);
-        border: none;
-        font-size: 1em;
-        padding: 5px 8px;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: 0.2s;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      }
-      .sync-btn:active {
-        transform: rotate(180deg) scale(0.9);
-      }
+      .pending-container { margin-top: 15px; background: var(--card-bg); border-radius: 16px; padding: 15px; border: 1px solid var(--border-color); display: none; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.03); }
+      .pending-title { font-size: 1em; font-weight: 800; color: #ff9f0a; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+      .pending-list { display: flex; flex-direction: column; gap: 8px; }
+      .pending-item { display: flex; align-items: center; background: var(--bg-color); padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border-color); flex-wrap: wrap; transition: 0.2s; cursor: pointer; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+      .pending-item:active { transform: scale(0.98); }
+      .pending-comp { font-weight: 800; font-size: 0.95em; width: 90px; }
+      .pending-vol { color: var(--text-sub); font-size: 0.85em; flex: 1; font-weight: 600; }
+      .pending-etc { font-size: 0.8em; color: #ff6b6b; background: rgba(255, 107, 107, 0.1); padding: 3px 8px; border-radius: 6px; font-weight: bold; }
+      .info-footer { text-align: center; font-size: 0.8em; color: var(--text-sub); margin-top: 20px; font-weight: 600; }
 
-      .admin-actions {
-        display: none;
-        gap: 8px;
-      }
-      .multi-btn {
-        background: var(--border-color);
-        color: var(--text-main);
-        border: none;
-        padding: 6px 12px;
-        border-radius: 10px;
-        font-size: 0.85em;
-        font-weight: 800;
-        cursor: pointer;
-        animation: fadeIn 0.3s;
-        transition: 0.2s;
-      }
-      .multi-btn.active {
-        background: #ff3b30;
-        color: white;
-        box-shadow: 0 4px 10px rgba(255, 59, 48, 0.3);
-      }
-      .ocr-btn {
-        background: #0a84ff;
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 10px;
-        font-size: 0.85em;
-        font-weight: 800;
-        cursor: pointer;
-        transition: 0.2s;
-        box-shadow: 0 2px 6px rgba(10, 132, 255, 0.3);
-      }
-      .ocr-btn:active {
-        transform: scale(0.95);
-      }
-
-      .legend-bar-wrapper {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-        padding: 0 5px;
-      }
-      .legend-bar {
-        display: flex;
-        gap: 12px;
-      }
-      .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        font-size: 0.8em;
-        font-weight: 800;
-        color: var(--text-sub);
-      }
-      .legend-color {
-        width: 16px;
-        height: 16px;
-        border-radius: 4px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-      }
-      .color-sea {
-        background: linear-gradient(135deg, #0a84ff, #005bb5);
-      }
-      .color-air {
-        background: linear-gradient(135deg, #ff453a, #cc2920);
-      }
-
-      .calendar-container {
-        background: var(--border-color);
-        border-radius: 16px;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        gap: 1px;
-        border: 1px solid var(--border-color);
-        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.03);
-      }
-      .grid-row {
-        display: grid;
-        grid-template-columns: repeat(7, minmax(0, 1fr));
-        gap: 1px;
-      }
-      .day-header {
-        background: var(--header-bg);
-        text-align: center;
-        padding: 10px 0;
-        font-size: 0.75em;
-        font-weight: 800;
-        color: var(--text-sub);
-      }
-      .day-header.sun {
-        color: var(--sun-color);
-      }
-      .day-header.sat {
-        color: var(--sat-color);
-      }
-
-      .day-cell {
-        background: var(--card-bg);
-        min-height: 65px;
-        padding: 4px;
-        position: relative;
-        cursor: pointer;
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-        -webkit-touch-callout: none;
-        -webkit-user-select: none;
-        user-select: none;
-        transition: 0.15s ease-out;
-      }
-      .day-cell.empty {
-        background: var(--header-bg);
-        cursor: default;
-      }
-      .day-cell.drag-over { 
-        background: rgba(10,132,255,0.1) !important; 
-        outline: 2px dashed #0a84ff !important; 
-        outline-offset: -2px;
-        transform: scale(0.96); 
-        z-index: 10;
-      }
-
-      .date-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2px;
-        padding: 0 2px;
-      }
-      .date-num {
-        font-size: 0.9em;
-        font-weight: 700;
-      }
-      .date-num.sun {
-        color: var(--sun-color);
-      }
-      .date-num.sat {
-        color: var(--sat-color);
-      }
-      .daily-total {
-        font-size: 0.7em;
-        font-weight: 800;
-        color: #ff9f0a;
-        background: rgba(255, 159, 10, 0.15);
-        padding: 2px 5px;
-        border-radius: 6px;
-        letter-spacing: -0.5px;
-      }
-
-      .today-cell {
-        background: rgba(255, 59, 48, 0.05) !important;
-        box-shadow: inset 0 0 0 1px rgba(255, 59, 48, 0.3) !important; 
-        border-radius: 4px;
-        z-index: 1;
-      }
-      /* 💡 [2번 패치] 오늘 날짜 붉은 바탕은 유지하되, 글자 색깔은 요일 본연의 색 유지 */
-      .today-cell .date-num {
-        color: inherit !important; /* 🚨 이 부분을 inherit으로 변경! */
-        font-weight: 900;
-      }
-
-      .item-tag {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        border-radius: 5px;
-        padding: 4px 2px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-        -webkit-touch-callout: none;
-        -webkit-user-select: none;
-        user-select: none;
-        transition: all 0.15s ease-out;
-        width: 100%;
-        box-sizing: border-box;
-        overflow: hidden;
-        margin-bottom: 1px;
-      }
-      .item-tag.cell-pressing {
-        transform: scale(0.92);
-        filter: brightness(1.2);
-      }
-      .has-etc {
-        border-left: 4px solid #ffd60a !important;
-      }
-
-      .pal-main {
-        font-size: 1.05em;
-        font-weight: 900;
-        color: #fff;
-        letter-spacing: -0.5px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        width: 100%;
-        text-align: center;
-      }
-      .bl-sub {
-        font-size: 0.75em;
-        font-weight: 800;
-        color: rgba(255, 255, 255, 0.9);
-        margin-top: 2px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .done-mark {
-        opacity: 0.6;
-        border-left: none !important;
-      }
-      .done-mark .pal-main,
-      .done-mark .bl-sub {
-        text-decoration: none !important;
-        text-shadow: none !important;
-      }
-      .done-icon {
-        font-size: 11px !important;
-        margin-right: 2px;
-        text-decoration: none !important;
-      }
-
-      .multi-selected {
-        outline: 3px solid #ff3b30 !important;
-        filter: brightness(1.1);
-        transform: scale(0.95);
-        z-index: 5;
-      }
-
-      .pending-container {
-        margin-top: 15px;
-        background: var(--card-bg);
-        border-radius: 16px;
-        padding: 15px;
-        border: 1px solid var(--border-color);
-        display: none;
-        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.03);
-      }
-      .pending-title {
-        font-size: 1em;
-        font-weight: 800;
-        color: #ff9f0a;
-        margin-bottom: 12px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-      .pending-list {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .pending-item {
-        display: flex;
-        align-items: center;
-        background: var(--bg-color);
-        padding: 12px 14px;
-        border-radius: 12px;
-        border: 1px solid var(--border-color);
-        flex-wrap: wrap;
-        transition: 0.2s;
-        cursor: pointer;
-        -webkit-touch-callout: none;
-        -webkit-user-select: none;
-        user-select: none;
-      }
-      .pending-item:active {
-        transform: scale(0.98);
-      }
-      .pending-comp {
-        font-weight: 800;
-        font-size: 0.95em;
-        width: 90px;
-      }
-      .pending-vol {
-        color: var(--text-sub);
-        font-size: 0.85em;
-        flex: 1;
-        font-weight: 600;
-      }
-      .pending-etc {
-        font-size: 0.8em;
-        color: #ff6b6b;
-        background: rgba(255, 107, 107, 0.1);
-        padding: 3px 8px;
-        border-radius: 6px;
-        font-weight: bold;
-      }
-
-      .info-footer {
-        text-align: center;
-        font-size: 0.8em;
-        color: var(--text-sub);
-        margin-top: 20px;
-        font-weight: 600;
-      }
-
-      #multiActionBar {
-        display: none;
-        position: fixed;
-        bottom: max(20px, env(safe-area-inset-bottom));
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(30, 30, 30, 0.9);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        padding: 12px 18px;
-        border-radius: 30px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        z-index: 2000;
-        align-items: center;
-        gap: 8px;
-        animation: slideUpToast 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        white-space: nowrap;
-      }
-      body.light-mode #multiActionBar {
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-      }
-      .sel-count-text {
-        font-weight: 900;
-        color: var(--text-main);
-        font-size: 0.95em;
-        margin-right: 4px;
-      }
-      .multi-action-btn {
-        border: none;
-        padding: 10px 16px;
-        border-radius: 20px;
-        font-weight: 800;
-        font-size: 0.85em;
-        cursor: pointer;
-        transition: 0.2s;
-      }
-      .multi-action-btn:active {
-        transform: scale(0.95);
-      }
+      #multiActionBar { display: none; position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); background: rgba(30, 30, 30, 0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 12px 18px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); z-index: 2000; align-items: center; gap: 8px; animation: slideUpToast 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); border: 1px solid rgba(255, 255, 255, 0.1); white-space: nowrap; }
+      body.light-mode #multiActionBar { background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(0, 0, 0, 0.1); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); }
+      .sel-count-text { font-weight: 900; color: var(--text-main); font-size: 0.95em; margin-right: 4px; }
+      .multi-action-btn { border: none; padding: 10px 16px; border-radius: 20px; font-weight: 800; font-size: 0.85em; cursor: pointer; transition: 0.2s; }
+      .multi-action-btn:active { transform: scale(0.95); }
       .btn-multi-done { background: #34c759; color: white; }
       .btn-multi-undo { background: #ff9f0a; color: white; }
       .btn-multi-del { background: #ff3b30; color: white; }
 
-      .overlay-modal {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.6);
-        align-items: flex-end;
-        justify-content: center;
-        z-index: 2500;
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-        animation: fadeIn 0.2s;
-        padding: 0;
-      }
-      .modal-box {
-        background: var(--bg-color);
-        width: 100%;
-        max-width: 500px;
-        padding: 25px 20px max(25px, env(safe-area-inset-bottom)) 20px;
-        border-radius: 24px 24px 0 0;
-        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
-        animation: slideUpSheet 0.35s cubic-bezier(0.175, 0.885, 0.32, 1);
-        max-height: 85vh;
-        overflow-y: auto;
-        box-sizing: border-box;
-      }
-      .bottom-sheet-handle {
-        width: 40px;
-        height: 5px;
-        background: var(--border-color);
-        border-radius: 3px;
-        margin: -10px auto 20px auto;
-      }
+      .overlay-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); align-items: flex-end; justify-content: center; z-index: 2500; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: fadeIn 0.2s; padding: 0; }
+      .modal-box { background: var(--bg-color); width: 100%; max-width: 500px; padding: 25px 20px max(25px, env(safe-area-inset-bottom)) 20px; border-radius: 24px 24px 0 0; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2); animation: slideUpSheet 0.35s cubic-bezier(0.175, 0.885, 0.32, 1); max-height: 85vh; overflow-y: auto; box-sizing: border-box; }
+      .bottom-sheet-handle { width: 40px; height: 5px; background: var(--border-color); border-radius: 3px; margin: -10px auto 20px auto; }
+      .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
+      .modal-title { font-size: 1.3em; font-weight: 900; letter-spacing: -0.5px; }
+      .close-btn { background: var(--btn-bg); border: none; font-size: 1.2em; color: var(--text-main); cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+      .close-btn:active { transform: scale(0.9); }
+      
+      .modal-card { position: relative !important; display: flex; align-items: flex-start; background: var(--card-bg); border-radius: 14px; padding: 18px; margin-bottom: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03); flex-wrap: wrap; padding-bottom: 55px !important; }
+      .modal-icon { width: 14px; height: 14px; border-radius: 50%; margin-top: 5px; margin-right: 15px; flex-shrink: 0; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2); }
+      .modal-info { flex: 1; width: 100%; min-width: 0; }
+      .modal-comp-row { display: flex; justify-content: space-between; align-items: flex-start !important; margin-bottom: 8px; gap: 8px; flex-wrap: nowrap !important; }
+      .modal-comp { font-size: 1.1em; font-weight: 900; flex: 1 1 0% !important; min-width: 0 !important; white-space: normal !important; word-break: keep-all !important; overflow-wrap: break-word !important; line-height: 1.3 !important; letter-spacing: -0.5px; margin-right: 10px !important; }
+      .modal-vol { font-size: 0.95em; color: var(--text-sub); font-weight: 600; margin-bottom: 4px; }
+      .modal-detail-text { font-size: 0.85em; color: var(--text-sub); margin-top: 4px; }
+      .modal-etc { font-size: 0.85em; color: #ff9f0a; background: rgba(255, 159, 10, 0.1); padding: 4px 10px; border-radius: 8px; display: inline-block; margin-top: 6px; font-weight: 800; border: 1px solid rgba(255, 159, 10, 0.2); word-break: break-all; }
+      .status-badge { position: absolute !important; bottom: 14px !important; right: 16px !important; margin: 0 !important; background: rgba(52, 199, 89, 0.1); border: 1px solid rgba(52, 199, 89, 0.4); color: #34c759; font-size: 0.85em; font-weight: 900; padding: 6px 12px; border-radius: 20px; pointer-events: none; z-index: 10; box-shadow: 0 4px 15px rgba(52, 199, 89, 0.15); letter-spacing: -0.3px; display: flex; align-items: center; gap: 5px; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
 
-      .modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 12px;
-      }
-      .modal-title {
-        font-size: 1.3em;
-        font-weight: 900;
-        letter-spacing: -0.5px;
-      }
-      .close-btn {
-        background: var(--btn-bg);
-        border: none;
-        font-size: 1.2em;
-        color: var(--text-main);
-        cursor: pointer;
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: 0.2s;
-      }
-      .close-btn:active {
-        transform: scale(0.9);
-      }
+      .action-btn-group { display: flex; gap: 8px; flex-shrink: 0 !important; }
+      .edit-toggle-btn { background: var(--btn-bg); color: var(--text-main); border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.85em; cursor: pointer; font-weight: 800; transition: 0.2s; }
+      .edit-toggle-btn:active { transform: scale(0.95); }
+      .done-toggle-btn { background: rgba(52, 199, 89, 0.15); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.3); padding: 8px 12px; border-radius: 8px; font-size: 0.85em; cursor: pointer; font-weight: 800; transition: 0.2s; }
+      .done-toggle-btn:active { transform: scale(0.95); }
 
-      .modal-card {
-        position: relative;
-        display: flex;
-        align-items: flex-start;
-        background: var(--card-bg);
-        border-radius: 14px;
-        padding: 18px;
-        margin-bottom: 12px;
-        border: 1px solid var(--border-color);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-        flex-wrap: wrap;
-        padding-bottom: 25px;
-      }
-      .modal-icon {
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        margin-top: 5px;
-        margin-right: 15px;
-        flex-shrink: 0;
-        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-      }
-      .modal-info {
-        flex: 1;
-        width: 100%;
-        min-width: 0;
-      }
-      .modal-comp-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-        gap: 8px;
-      }
-      .modal-comp {
-        font-size: 1.1em;
-        font-weight: 900;
-        flex: 1;
-        word-break: break-all;
-        line-height: 1.2;
-        letter-spacing: -0.5px;
-      }
-      .modal-vol {
-        font-size: 0.95em;
-        color: var(--text-sub);
-        font-weight: 600;
-        margin-bottom: 4px;
-      }
-      .modal-detail-text {
-        font-size: 0.85em;
-        color: var(--text-sub);
-        margin-top: 4px;
-      }
-      .modal-etc {
-        font-size: 0.85em;
-        color: #ff9f0a;
-        background: rgba(255, 159, 10, 0.1);
-        padding: 4px 10px;
-        border-radius: 8px;
-        display: inline-block;
-        margin-top: 6px;
-        font-weight: 800;
-        border: 1px solid rgba(255, 159, 10, 0.2);
-        word-break: break-all;
-      }
-
-      .status-badge {
-        position: absolute;
-        bottom: 14px;
-        right: 16px;
-        background: rgba(52, 199, 89, 0.1);
-        border: 1px solid rgba(52, 199, 89, 0.4);
-        color: #34c759;
-        font-size: 0.85em;
-        font-weight: 900;
-        padding: 6px 12px;
-        border-radius: 20px;
-        pointer-events: none;
-        z-index: 10;
-        box-shadow: 0 4px 15px rgba(52, 199, 89, 0.15);
-        letter-spacing: -0.3px;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        backdrop-filter: blur(5px);
-        -webkit-backdrop-filter: blur(5px);
-      }
-
-      .action-btn-group {
-        display: flex;
-        gap: 8px;
-        flex-shrink: 0;
-      }
-      .edit-toggle-btn {
-        background: var(--btn-bg);
-        color: var(--text-main);
-        border: none;
-        padding: 8px 12px;
-        border-radius: 8px;
-        font-size: 0.85em;
-        cursor: pointer;
-        font-weight: 800;
-        transition: 0.2s;
-      }
-      .edit-toggle-btn:active {
-        transform: scale(0.95);
-      }
-      .done-toggle-btn {
-        background: rgba(52, 199, 89, 0.15);
-        color: #34c759;
-        border: 1px solid rgba(52, 199, 89, 0.3);
-        padding: 8px 12px;
-        border-radius: 8px;
-        font-size: 0.85em;
-        cursor: pointer;
-        font-weight: 800;
-        transition: 0.2s;
-      }
-      .done-toggle-btn:active {
-        transform: scale(0.95);
-      }
-
-      .edit-form {
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        margin-top: 5px;
-        width: 100%;
-        background: transparent;
-        padding: 0;
-        box-sizing: border-box;
-        border: none;
-      }
-      .form-label {
-        font-size: 0.85em;
-        font-weight: 800;
-        color: var(--text-sub);
-        margin-bottom: -8px;
-        padding-left: 4px;
-      }
-      .edit-input {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 14px 12px;
-        border: 1px solid var(--border-color);
-        border-radius: 10px;
-        background: var(--card-bg);
-        color: var(--text-main);
-        font-size: 1em;
-        font-weight: bold;
-        appearance: none;
-        -webkit-appearance: none;
-        transition: border 0.2s;
-      }
-      .edit-input:focus {
-        border-color: #0a84ff;
-        outline: none;
-      }
-      .btn-row {
-        display: flex;
-        gap: 10px;
-        margin-top: 10px;
-      }
-      .save-btn {
-        flex: 2;
-        background: #0a84ff;
-        color: #fff;
-        border: none;
-        padding: 14px;
-        border-radius: 12px;
-        font-weight: 900;
-        cursor: pointer;
-        font-size: 1.05em;
-        transition: 0.2s;
-        box-shadow: 0 4px 10px rgba(10, 132, 255, 0.3);
-      }
+      .edit-form { display: flex; flex-direction: column; gap: 14px; margin-top: 5px; width: 100%; background: transparent; padding: 0; box-sizing: border-box; border: none; }
+      .form-label { font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: -8px; padding-left: 4px; }
+      .edit-input { width: 100%; box-sizing: border-box; padding: 14px 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--card-bg); color: var(--text-main); font-size: 1em; font-weight: bold; appearance: none; -webkit-appearance: none; transition: border 0.2s; }
+      .edit-input:focus { border-color: #0a84ff; outline: none; }
+      .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+      .save-btn { flex: 2; background: #0a84ff; color: #fff; border: none; padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 1.05em; transition: 0.2s; box-shadow: 0 4px 10px rgba(10, 132, 255, 0.3); }
       .save-btn:active { transform: scale(0.97); }
-      .cancel-btn {
-        flex: 1;
-        background: var(--btn-bg);
-        color: var(--text-main);
-        border: none;
-        padding: 14px;
-        border-radius: 12px;
-        font-weight: 800;
-        cursor: pointer;
-        transition: 0.2s;
-      }
+      .cancel-btn { flex: 1; background: var(--btn-bg); color: var(--text-main); border: none; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; transition: 0.2s; }
       .cancel-btn:active { transform: scale(0.97); }
-      .delete-btn {
-        width: 100%;
-        background: rgba(255, 59, 48, 0.1);
-        color: #ff3b30;
-        border: 1px solid rgba(255, 59, 48, 0.3);
-        padding: 14px;
-        border-radius: 12px;
-        font-weight: 900;
-        cursor: pointer;
-        margin-top: 5px;
-        transition: 0.2s;
-      }
+      .delete-btn { width: 100%; background: rgba(255, 59, 48, 0.1); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; margin-top: 5px; transition: 0.2s; }
       .delete-btn:active { transform: scale(0.97); background: rgba(255, 59, 48, 0.2); }
 
       .picker-year-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; font-size: 1.3em; font-weight: 900; }
@@ -860,151 +162,44 @@
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       @keyframes slideUpSheet { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
-      .top-wrapper { position: relative; overflow: hidden; border: 2px solid transparent; transition: box-shadow 0.3s, border-color 0.3s, transform 0.2s; box-sizing: border-box; }
       .top-wrapper.syncing-glow { transform: scale(1.005); border-color: rgba(10, 132, 255, 0.7) !important; animation: frameNeonGlowOptimal 3s linear infinite !important; }
       @keyframes frameNeonGlowOptimal { 0% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); } 33% { border-color: rgba(52,199,89,0.7); box-shadow: 0 0 14px rgba(52,199,89,0.5), 0 0 7px rgba(52,199,89,0.3), inset 0 0 7px rgba(52,199,89,0.1); } 66% { border-color: rgba(10,132,255,0.7); box-shadow: 0 0 14px rgba(10,132,255,0.5), 0 0 7px rgba(10,132,255,0.3), inset 0 0 7px rgba(10,132,255,0.1); } 100% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); } }
       .top-wrapper::after { content: ''; position: absolute; bottom: 0; left: -50%; width: 50%; height: 2px; background: linear-gradient(90deg, transparent, #0a84ff, #34c759, #ffd60a, transparent); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
       .top-wrapper.syncing-glow::after { opacity: 1; animation: loadingBarSweep 0.8s infinite cubic-bezier(0.4, 0, 0.2, 1); }
       @keyframes loadingBarSweep { 0% { left: -50%; } 100% { left: 100%; } }
 
-      /* 🚀 [추가] OCR 이미지 모달 광활화 & 핀치투줌 대응 */
-      #ocrImageModal .modal-box {
-        max-width: 100% !important;
-        height: 98vh !important;
-        max-height: 98vh !important;
-        padding: 10px 0 max(10px, env(safe-area-inset-bottom)) 0 !important;
-        display: flex;
-        flex-direction: column;
-        border-radius: 20px 20px 0 0 !important;
-      }
-      #ocrImageWrapper {
-        flex: 1;
-        width: 100%;
-        overflow: hidden !important; 
-        background: #ffffff !important; /* 💡 검정색(#111)에서 흰색으로 변경! */
-        border-radius: 0;
-        border: none !important;
-        position: relative;
-        touch-action: none; 
-        cursor: grab;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      #ocrImageWrapper:active {
-        cursor: grabbing;
-      }
-      #ocrImageContent {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      #ocrImageContent img {
-        max-width: 100% !important;
-        max-height: 100% !important;
-        width: auto !important;
-        height: auto !important;
-        object-fit: contain;
-        transform-origin: center center !important;
-        transition: none !important; /* 드래그 렉 방지 */
-        border-radius: 0 !important;
-      }
-
-      /* ===================================================== */
-      /* 🚀 [최종 패치] 상단 비율 고정 & 모달창 텍스트/도장 겹침 방지 */
-      /* ===================================================== */
-
-      /* 1. 상단 메뉴 (화살표 포함) 1줄 고정 & 화면 비율(vw) 축소 */
-      .top-row {
-        flex-wrap: nowrap !important;
-        gap: 1.5vw !important;
-      }
-      .title-area, .controls-area, .action-row-right, .sync-area, .admin-actions {
-        flex-wrap: nowrap !important;
-        gap: 1vw !important;
-        white-space: nowrap !important;
-      }
-      /* 🚨 화살표(.nav-arrow) 추가 완료! */
-      .title-btn, .admin-btn, .size-btn, .theme-toggle, .sync-btn, .multi-btn, .ocr-btn, .nav-arrow {
-        white-space: nowrap !important;
-        font-size: clamp(0.7em, 3vw, 1.15em) !important; 
-        padding: clamp(4px, 1.5vw, 8px) clamp(6px, 2vw, 14px) !important;
-      }
-      .sync-time {
-        font-size: clamp(0.6em, 2.5vw, 0.75em) !important;
-        white-space: nowrap !important;
-      }
-
-      /* 2. 상세 모달창 - 긴 글씨 완벽 줄바꿈 (Flexbox 탈출 방지) */
-      .modal-comp-row {
-        flex-wrap: nowrap !important; 
-        align-items: flex-start !important; 
-      }
-      .modal-comp {
-        flex: 1 1 0% !important;   /* 🚨 핵심: 남은 공간만 차지하되, 절대 밖으로 안 밀어냄 */
-        min-width: 0 !important;   /* 🚨 핵심: 긴 텍스트가 버튼을 밀어내는 현상 완벽 차단 */
-        white-space: normal !important;
-        word-break: keep-all !important;
-        overflow-wrap: break-word !important; 
-        line-height: 1.3 !important;
-        margin-right: 10px !important;
-      }
-      .action-btn-group {
-        flex-shrink: 0 !important; /* 완료/수정 버튼은 절대 안 찌그러지게 튼튼하게 고정 */
-      }
-
-      /* 3. 출고/입고완료 도장 - 비고(메모) 가려짐 완벽 해결 */
-      .modal-card {
-        position: relative !important;
-        /* 🚨 핵심: 바닥에 55px의 '도장 전용 영토'를 강제 확보해서 글씨가 절대 못 내려오게 함 */
-        padding-bottom: 55px !important; 
-      }
-      .status-badge {
-        /* 원래의 예쁜 우측 하단 절대 위치로 복구 */
-        position: absolute !important; 
-        bottom: 14px !important;
-        right: 16px !important;
-        margin: 0 !important;
-      }
-      /* 💡 [1번 패치] 입고 달력 최근 OCR / 해상 항공 범례 자동 크기 조절 */
-      .legend-bar-wrapper {
-        flex-wrap: nowrap !important;
-        white-space: nowrap !important;
-        gap: 1vw !important;
-      }
-      .ocr-time-info, .legend-bar, .legend-item {
-        flex-wrap: nowrap !important;
-        white-space: nowrap !important;
-      }
-      .ocr-time-info span, .legend-item {
-        font-size: clamp(0.7em, 2.5vw, 0.85em) !important;
-      }
-      /* 💡 [3번 패치] 파레트 P 제거 대신 숫자를 더 크고 강렬하게, 짤림 방지 */
-      .pal-main {
-        font-size: 1.25em !important; /* 숫자 크기 극대화 */
-        letter-spacing: -1px !important; /* 자간을 좁혀서 공간 확보 */
-      }
-      .daily-total {
-        font-size: 0.75em !important;
-        letter-spacing: -0.5px !important;
-      }
-      /* 💡 [수정] 드래그 깜빡임 차단! 확실하고 직관적인 네온 두꺼운 선 표시 */
-      .item-tag { transition: background 0.15s, opacity 0.15s !important; }
-      .insert-line-top { border-top: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
-      .insert-line-bottom { border-bottom: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
-      .day-cell.drag-over { background: rgba(10, 132, 255, 0.1) !important; outline: 3px dashed #0a84ff !important; outline-offset: -3px; z-index: 10; }
-      /* 💡 관리자 로그인 창 키보드 가림 방지 (화면 중앙 팝업으로 변경) */
+      #ocrImageModal .modal-box { max-width: 100% !important; height: 98vh !important; max-height: 98vh !important; padding: 10px 0 max(10px, env(safe-area-inset-bottom)) 0 !important; display: flex; flex-direction: column; border-radius: 20px 20px 0 0 !important; }
+      #ocrImageWrapper { flex: 1; width: 100%; overflow: hidden !important; background: #ffffff !important; border-radius: 0; border: none !important; position: relative; touch-action: none; cursor: grab; display: flex; align-items: center; justify-content: center; }
+      #ocrImageWrapper:active { cursor: grabbing; }
+      #ocrImageContent { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+      #ocrImageContent img { max-width: 100% !important; max-height: 100% !important; width: auto !important; height: auto !important; object-fit: contain; transform-origin: center center !important; transition: none !important; border-radius: 0 !important; }
       #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
       #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
-    /* 💡 B/L 넘버 및 도장 자동 크기 조절 (박스 밖으로 탈출 방지) */
-      .bl-sub {
-        font-size: clamp(0.55em, 2.2vw, 0.75em) !important;
-        letter-spacing: -0.5px !important;
-        white-space: nowrap !important;
-      }
-      .done-icon { font-size: clamp(9px, 2.5vw, 12px) !important; }
+      
+      /* 📊 [입고 통계 대시보드] 추가 디자인 */
+      .stats-summary-bar { margin-top: 15px; background: linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(52, 199, 89, 0.05)); border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03); }
+      .stats-summary-bar:active { transform: scale(0.97); background: rgba(10, 132, 255, 0.15); }
+      .stats-title { font-size: 1.05em; font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+      .stats-numbers { font-size: 1.2em; font-weight: 900; color: var(--text-main); letter-spacing: -0.5px; }
+      .stats-numbers .done { color: #34c759; font-size: 1.2em; }
+      .stats-numbers .total { color: var(--text-sub); font-size: 0.85em; }
+
+      .dash-control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+      .dash-nav { display: flex; align-items: center; gap: 10px; font-size: 1.2em; font-weight: 900; }
+      .dash-nav button { background: var(--btn-bg); border: none; color: var(--text-main); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+      .dash-toggles { display: flex; background: var(--btn-bg); padding: 4px; border-radius: 10px; gap: 2px; }
+      .dash-toggles button { background: transparent; border: none; color: var(--text-sub); padding: 4px 15px; font-weight: 800; font-size: 0.9em; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+      .dash-toggles button.active { background: #0a84ff; color: white; box-shadow: 0 2px 5px rgba(10,132,255,0.3); }
+      
+      .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+      .dash-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
+      .dash-card-title { font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: 8px; }
+      .dash-card-value { font-size: 1.5em; font-weight: 900; color: var(--text-main); }
+      
+      .chart-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 15px; display: flex; align-items: center; justify-content: center; color: var(--text-sub); font-weight: bold; margin-bottom: 12px; }
+      .pie-slider { -webkit-appearance: none; width: 100%; height: 6px; background: rgba(10, 132, 255, 0.2); border-radius: 5px; outline: none; margin-top: 5px; }
+      .pie-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 26px; height: 26px; border-radius: 50%; background: #0a84ff; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); border: 2.5px solid #fff; transition: transform 0.1s; }
+      .pie-slider::-webkit-slider-thumb:active { transform: scale(1.15); }
     </style>
   </head>
   <body>
@@ -1047,9 +242,8 @@
             <span class="sync-time" id="lastSyncTime"></span>
             <button class="sync-btn" onclick="navMonth(0)" title="수동 동기화">🔄</button>
           </div>
-          </div>
+        </div>
       </div>
-      
       <div class="admin-actions" id="adminActions" style="justify-content: flex-end; margin-top: 4px;">
         <button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
       </div>
@@ -1092,8 +286,10 @@
       </div>
     </div>
 
+    <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
+
     <div id="dashboardModal" class="overlay-modal" style="display:none;">
-      <div class="modal-box" onclick="event.stopPropagation()" style="max-height: 90vh;">
+      <div class="modal-box" style="max-height: 90vh;">
         <div class="bottom-sheet-handle"></div>
         <div class="modal-header" style="margin-bottom: 10px;">
           <div class="modal-title" style="color: #0a84ff;">📈 입고 통계 대시보드</div>
@@ -1144,9 +340,7 @@
       </div>
     </div>
 
-    <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
-
-    <div id="modal" class="overlay-modal" onclick="closeModalOnBgClick(event)">
+    <div id="modal" class="overlay-modal">
       <div class="modal-box" onclick="event.stopPropagation()">
         <div class="bottom-sheet-handle"></div>
         <div class="modal-header">
@@ -1157,7 +351,7 @@
       </div>
     </div>
 
-    <div id="ocrImageModal" class="overlay-modal" onclick="closeModalOnBgClick(event)">
+    <div id="ocrImageModal" class="overlay-modal">
       <div class="modal-box" onclick="event.stopPropagation()">
         <div class="bottom-sheet-handle"></div>
         <div class="modal-header" style="margin-bottom: 10px; padding: 0 15px 10px 15px;">
@@ -1199,7 +393,7 @@
     </div>
 
     <script>
-      // 🔗 1. 구글 웹앱 URL (입고용)
+      // 🔗 1. 구글 웹앱 URL (입고용) - 관리자님 URL 유지됨!
       const GAS_API_URL = "https://script.google.com/macros/s/AKfycbypqPheUf90aE4uFepC9gsa1GCqCpwXj7xTGslXVGBI7SCoc_MH4trKdFrh8tKzyp_FQg/exec";
       const currentType = "in"; 
       
@@ -1213,18 +407,16 @@
       }
 
       let serverData = { year: todayDateObj.getFullYear(), month: todayDateObj.getMonth() + 1, firstDay: 0, daysInMonth: 31, monthData: {}, pendingItems: [] };
-      // 💡 [수정] 앱을 꺼도 관리자 로그인 유지
       let adminToken = localStorage.getItem("admin_token");
       let isAdmin = adminToken ? true : false;
 
-      // 💡 [추가] 1년 치 공휴일 전용 저장소 및 관리자
       window.yearlyHolidays = {}; 
 
       function checkAndFetchHolidays(year) {
           const cacheKey = `holidays_${year}`;
           const cached = localStorage.getItem(cacheKey);
           const now = Date.now();
-          const TTL = 7 * 24 * 60 * 60 * 1000; // 🚨 유통기한: 7일 (밀리초)
+          const TTL = 7 * 24 * 60 * 60 * 1000; 
 
           let needsFetch = true;
 
@@ -1232,26 +424,23 @@
               try {
                   const parsed = JSON.parse(cached);
                   if (now - parsed.timestamp < TTL) {
-                      // 7일 안 지났음! 캐시(지갑)에서 바로 꺼내 씀 (0초 로딩)
                       parsed.data.forEach(dateStr => window.yearlyHolidays[dateStr] = true);
                       needsFetch = false;
-                      renderCalendar(); // 빨간색 칠하기
+                      renderCalendar(); 
                   }
               } catch(e) {}
           }
 
-          // 지갑에 없거나 유통기한이 지났다면? 뒤에서 몰래 서버 다녀오기!
           if (needsFetch) {
               google.script.run.withSuccessHandler(function(holidays) {
                   const cacheData = { timestamp: now, data: holidays };
-                  localStorage.setItem(cacheKey, JSON.stringify(cacheData)); // 지갑 갱신
+                  localStorage.setItem(cacheKey, JSON.stringify(cacheData)); 
                   holidays.forEach(dateStr => window.yearlyHolidays[dateStr] = true);
-                  renderCalendar(); // 최신 빨간날로 화면 다시 그리기
+                  renderCalendar(); 
               }).getYearlyHolidays(year);
           }
       }
 
-      // 🚀 Vercel 통합 매직 어댑터 (15초 타임아웃 적용)
       const google = {
           script: {
               get run() { 
@@ -1307,12 +496,19 @@
                       getGlobalColors: function() { this._call({ source: 'vercel', action: 'GET_GLOBAL_COLORS' }); },
                       saveGlobalColor: function(c, i) { this._call({ source: 'vercel', action: 'SAVE_GLOBAL_COLOR', compName: c, colorIdx: i }); },
                       getLastOcrImageUrl: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_IMAGE' }); },
-                      
-                      // 🚨 기존 코드 마지막에 쉼표(,)를 꼭 찍어주시고 아래 줄을 추가하세요!
                       getOcrLastTimeStr: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }); },
-                      
-                      // 👇👇 [여기 추가!] 어댑터에 1년 치 공휴일 요청 버튼 장착! 👇👇
-                      getYearlyHolidays: function(y) { this._call({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: y }); }
+                      getYearlyHolidays: function(y) { this._call({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: y }); },
+                      getYearlyStatsAsync: function(type, y) { 
+                          setLoadingState(true);
+                          const controller = new AbortController();
+                          const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+                          fetch(`${GAS_API_URL}?api=true&action=yearlyStats&type=${type}&year=${y}`, { signal: controller.signal })
+                              .then(r => r.json())
+                              .then(d => { clearTimeout(timeoutId); if(this._ok) this._ok(d); })
+                              .catch(e => { clearTimeout(timeoutId); if(this._err) this._err(e); }) 
+                              .finally(() => setLoadingState(false)); 
+                      }
                   };
               }
           }
@@ -1378,7 +574,6 @@
 
           let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           
-          // 💡 [수정완료] currentYmd 로 이름표를 맞추고 방어막을 씌웠습니다!
           let isHoliday = false;
           if (window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true) {
               isHoliday = true;
@@ -1388,8 +583,6 @@
           let dateRowHtml = `<div class="date-row"><span class="${dateClass}" style="${redStyle}">${day}</span>`;
           if (dayData && dayData.length > 0) {
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
-             // 🚨 (수정 전) if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}P</span>`;
-          // 💡 (수정 후) '합' 글자 제거
           if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
           }
           dateRowHtml += `</div>`;
@@ -1408,15 +601,11 @@
               let iconHtml = isItemDone ? `<span class="done-icon">✅</span>` : '';
               let shortName = item.bl.length > 4 ? item.bl.slice(-4) : item.bl;
               if (item.bl.startsWith('발행전')) shortName = '발행전';
-              // 🚨 (수정 전) let innerHtml = `<span class="pal-main">${item.pal}P</span>...
-              // 💡 (수정 후) P 삭제!
               let innerHtml = `<span class="pal-main">${item.pal}</span><span class="bl-sub">${iconHtml}${shortName}</span>`;
 
               let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
               let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.bl}', ${isItemDone})"`;
 
-              // 🚨 이 부분에 data-raw-idx를 추가해 줍니다!
-              // 💡 [수정완료] 입고 달력에 맞게 고쳤습니다!
               cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}" ${bindItem}>${innerHtml}</div>`;
             });
           }
@@ -1439,6 +628,8 @@
           });
           document.getElementById('pendingList').innerHTML = pListHtml;
         } else { document.getElementById('pendingSection').style.display = 'none'; }
+        
+        updateStatsSummary(); // 🚨 이제 정상적으로 불려집니다!
         updateSyncTime();
       }
 
@@ -1464,7 +655,6 @@
         document.getElementById('pickerMonthGrid').innerHTML = gridHtml; 
       }
 
-      // 🚀 [초고속 월 이동] 오염된 캐시 치료 + 깜빡임 방지 100% 최적화
       function goToAsync(year, month) {
         const toastEl = document.getElementById("toast");
         if(toastEl) toastEl.classList.remove("show");
@@ -1473,7 +663,6 @@
         let safeYear = parseInt(year, 10);
         let safeMonth = parseInt(month, 10);
 
-        // 💡 [여기에 딱 한 줄 추가!] 연도가 바뀌었을 수 있으니 무조건 검사 지시!
         checkAndFetchHolidays(safeYear);
 
         const cacheKey = `cal_cache_${currentType}_${safeYear}_${safeMonth}`;
@@ -1505,29 +694,22 @@
         let fetchStartTime = Date.now(); 
 
         google.script.run.withSuccessHandler(res => {
-          // 🚨 [핵심 방어막] 달력을 연타해서 빠르게 넘기면, 가장 마지막 달력만 진짜로 인정!
           if (myNavId !== window.currentNavId) return; 
-          
           if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return; 
           
           res.year = safeYear;
           res.month = safeMonth;
           res.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
           res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
-          
-          
 
           let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
-
           localStorage.setItem(cacheKey, JSON.stringify(res)); 
           
-          // 💡 [수정완료] 없는 변수(isHolidayChanged)를 호출하던 버그 삭제!
           if (isScheduleChanged) {
             serverData = res;
             renderCalendar();
           }
-        }).withFailureHandler(err => {
-        }).getCalendarDataAsync(currentType, safeYear, safeMonth);
+        }).withFailureHandler(err => {}).getCalendarDataAsync(currentType, safeYear, safeMonth);
       }
 
       function updateLocalState(action, payload, idx) {
@@ -1566,15 +748,10 @@
         lastLocalUpdateTime = Date.now(); localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
       }
 
-      if (isAdmin) {
-        const btn = document.getElementById('adminBtn'); btn.innerHTML = '🔓 관리자'; btn.classList.add('unlocked');
-        document.getElementById('adminActions').style.display = 'flex';
-      }
-
       function toggleAdmin() {
         const btn = document.getElementById('adminBtn');
         if(isAdmin) {
-          isAdmin = false; localStorage.removeItem("admin_token"); // 💡 수정됨
+          isAdmin = false; localStorage.removeItem("admin_token"); 
           adminToken = null;
           btn.innerHTML = '🔒 잠김'; btn.classList.remove('unlocked');
           document.getElementById('adminActions').style.display = 'none'; updateFooterUI();
@@ -1590,7 +767,7 @@
         google.script.run.withSuccessHandler(function(isValid) {
           if (isValid) {
             isAdmin = true;
-            localStorage.setItem("admin_token", pw); // 💡 수정됨
+            localStorage.setItem("admin_token", pw); 
             adminToken = pw;
             document.getElementById('adminBtn').innerHTML = '🔓 관리자'; document.getElementById('adminBtn').classList.add('unlocked');
             document.getElementById('adminActions').style.display = 'flex'; updateFooterUI();
@@ -1614,7 +791,6 @@
         } else { btn.innerText = '☑️ 다중 선택'; btn.classList.remove('active'); bar.style.display = 'none'; }
       }
 
-    // 🚀 [초정밀 통합 드래그 엔진] (입고/출고 공통)
       let pressTimer = null;
       let isLongPress = false;
       let pressTarget = null;
@@ -1644,7 +820,7 @@
           if (navigator.vibrate) navigator.vibrate(50);
 
           if (type === "cell") {
-            openAddFormWithDate(day);
+            // 빈칸 신규등록 불가
           } else if (type === "item") {
             isDragging = true;
             dragData = { day: day, idx: idx };
@@ -1664,11 +840,9 @@
                  dragGhost.style.color = '#fff';
               } else {
                  let cleanComp = serverData.pendingItems[idx].company.replace(/\[TASK\]/gi, "").trim();
-                 let shortName = getShortName(cleanComp);
-                 let colorObj = getCompanyColor(cleanComp);
-                 dragGhost.style.background = colorObj.bg;
-                 dragGhost.style.color = colorObj.cMain;
-                 dragGhost.innerHTML = shortName;
+                 dragGhost.style.background = '#222';
+                 dragGhost.style.color = '#fff';
+                 dragGhost.innerHTML = cleanComp;
               }
               dragGhost.style.width = "60px"; dragGhost.style.height = "35px"; 
               dragGhost.style.justifyContent = "center"; dragGhost.style.alignItems = "center"; dragGhost.style.display = "flex"; dragGhost.style.borderRadius = "6px"; dragGhost.style.fontSize = "0.85em"; dragGhost.style.fontWeight = "900";
@@ -1678,15 +852,12 @@
               dragGhost.style.width = isWideTask ? "100px" : rect.width + "px";
               dragGhost.style.height = rect.height + "px";
               if (isWideTask) dragOffsetX = 50;
-              dragGhost.classList.remove("linked-left", "linked-right", "item-tag-slim", "edge-left", "edge-right");
-              dragGhost.style.margin = "0px"; dragGhost.style.borderRight = ""; dragGhost.style.borderLeft = ""; dragGhost.style.borderRadius = "8px";
+              dragGhost.style.margin = "0px"; dragGhost.style.borderRadius = "8px";
             }
             
             dragGhost.style.position = "fixed"; dragGhost.style.left = "0px"; dragGhost.style.top = "0px"; dragGhost.style.margin = "0px"; dragGhost.style.zIndex = "999999"; dragGhost.style.opacity = "0.95"; dragGhost.style.pointerEvents = "none"; dragGhost.style.willChange = "transform"; dragGhost.style.boxShadow = "0 15px 35px rgba(0,0,0,0.3)"; dragGhost.style.transition = "none";
             
             document.body.appendChild(dragGhost);
-            
-            // 🚨 화면에 박자마자 즉시 좌표 적용! (입고 버그 픽스)
             dragGhost.style.transform = `translate3d(${clientX - dragOffsetX}px, ${clientY - dragOffsetY}px, 0) scale(1.05)`;
           }
         }, 400); 
@@ -1700,11 +871,9 @@
 
       function updateGhostPosition(x, y) {
         if (!dragGhost) return;
-        
-        // 🚨 픽셀 단위 직접 주입으로 입고 달력 먹통 현상 완벽 해결!
         dragGhost.style.left = (x - dragOffsetX) + "px";
         dragGhost.style.top = (y - dragOffsetY) + "px";
-        dragGhost.style.transform = "scale(1.05)"; // 크기만 살짝 키움
+        dragGhost.style.transform = "scale(1.05)"; 
         
         if (!dragReq) {
           dragReq = requestAnimationFrame(() => {
@@ -1765,7 +934,6 @@
 
         if (!hasMovedDuringDrag) return;
 
-        // 🚨 타겟 결정 안전장치 
         let targetCell = currentDropTarget ? currentDropTarget.closest('.day-cell') : null;
         let isOutsideCalendar = false;
         let targetPending = false;
@@ -1783,7 +951,6 @@
         if (targetCell && !targetCell.classList.contains("empty")) {
           let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
 
-          // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
           if (newDay === dragData.day && currentDropTarget && currentDropTarget.classList.contains('item-tag')) {
               let targetIdx = parseInt(currentDropTarget.getAttribute('data-raw-idx'));
               if (!isNaN(targetIdx)) {
@@ -1796,7 +963,6 @@
                   let insertIdx = isTopInsert ? targetIdx : targetIdx + 1;
                   arr.splice(insertIdx, 0, movedItem);
                   
-                  // 🚨 사용자가 만든 커스텀 순서를 무조건 유지하도록 도장 꽝!
                   serverData.customOrderFlags = serverData.customOrderFlags || {};
                   serverData.customOrderFlags[dragData.day] = true;
 
@@ -1966,15 +1132,15 @@
       }
 
       // =====================================================
-      // 🚀 [OCR 최종 패치] 광활한 핀치 투 줌/이동 엔진 (먹통 버그 해결)
+      // 🚀 [OCR 최종 패치] 광활한 핀치 투 줌/이동 엔진
       // =====================================================
       let ocrTransform = { scale: 1, x: 0, y: 0 };
-      let _ocrGesturesInitialized = false; // 💡 제스처 엔진 중복 실행 방지 플래그
+      let _ocrGesturesInitialized = false; 
       
       function showLastOcrImage() {
           document.getElementById('ocrImageModal').style.display = 'flex';
           document.getElementById('ocrImageContent').innerHTML = '불러오는 중... ⏳';
-          ocrTransform = { scale: 1, x: 0, y: 0 }; // 좌표 초기화
+          ocrTransform = { scale: 1, x: 0, y: 0 }; 
 
           google.script.run.withSuccessHandler(function(url) {
               if (url) {
@@ -1991,8 +1157,6 @@
       function initOcrGestures() {
           const wrapper = document.getElementById('ocrImageWrapper');
           if (!wrapper) return;
-
-          // 💡 중복 등록 방지 (전역 변수로 1번만 세팅)
           if (_ocrGesturesInitialized) return;
           _ocrGesturesInitialized = true;
 
@@ -2001,7 +1165,6 @@
           let initialPinchDist = 0;
           let ocrStartTransform = { scale: 1, x: 0, y: 0 };
 
-          // 💡 매 프레임마다 '현재 살아있는' 이미지를 동적으로 찾아서 움직임! (먹통 해결 핵심)
           const updateTransform = () => {
               const currentImg = document.getElementById('ocrImgElement');
               if(currentImg) currentImg.style.transform = `translate3d(${ocrTransform.x}px, ${ocrTransform.y}px, 0) scale(${ocrTransform.scale})`;
@@ -2044,7 +1207,6 @@
               if (e.touches.length < 2) initialPinchDist = 0;
               if (e.touches.length === 0) isDragging = false;
               
-              // 축소 시 부드러운 원상복구
               if (ocrTransform.scale <= 1) {
                   ocrTransform = { scale: 1, x: 0, y: 0 };
                   const currentImg = document.getElementById('ocrImgElement');
@@ -2072,17 +1234,10 @@
           }, { passive: false });
       }
 
-      function closeModalOnBgClick(e) { 
-        if (isLongPress || isMultiMode) return; 
-        if(e.target === document.getElementById('modal')) document.getElementById('modal').style.display = 'none'; 
-        if(e.target === document.getElementById('ocrImageModal')) document.getElementById('ocrImageModal').style.display = 'none';
-      }
-
       let isDarkMode = false;
       function toggleTheme() { const body = document.body; const themeBtn = document.querySelector('.theme-toggle'); if (isDarkMode) { body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; localStorage.setItem('cal_theme', 'light'); } else { body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; localStorage.setItem('cal_theme', 'dark'); } }
       function changeSize(size) { document.querySelectorAll('.size-btn').forEach(btn => btn.classList.remove('active')); const body = document.body; if(size === 'S') { body.style.fontSize = '80%'; document.getElementById('btnS').classList.add('active'); } if(size === 'M') { body.style.fontSize = '95%'; document.getElementById('btnM').classList.add('active'); } if(size === 'L') { body.style.fontSize = '120%'; document.getElementById('btnL').classList.add('active'); } localStorage.setItem('cal_fontSize', size); }
 
-      // 💡 [추가] 어디서든 쓸 수 있게 밖으로 빼낸 무적의 지문 인식기!
       function getScheduleSig(dataObj) {
         if (!dataObj) return "";
         const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
@@ -2100,9 +1255,6 @@
         return sigs.sort().join("||");
       }
 
-      // =====================================================
-      // 🚀 [스텔스 자동 동기화 엔진] (귀신 데이터 & 가짜 토스트 완벽 차단)
-      // =====================================================
       function silentBackgroundSync() {
         if (isDragging || activeRequests > 0) return; 
         
@@ -2112,17 +1264,13 @@
         if ((modal && modal.style.display === 'flex') || (addModal && addModal.style.display === 'flex') || (ocrModal && ocrModal.style.display === 'flex')) return;
         
         let fetchStartTime = Date.now();
-        
-        // 🚨 [핵심 1] 심부름 보내기 직전의 '연/월'과 '달력 번호표'를 박제해둡니다!
         const reqYear = serverData.year;
         const reqMonth = serverData.month;
         const reqNavId = window.currentNavId;
         
         google.script.run
           .withSuccessHandler((res) => {
-            // 🚨 [핵심 2] 심부름이 끝났는데, 그사이에 유저가 달력을 넘겼다? -> 쿨하게 데이터 폐기!
             if (reqYear !== serverData.year || reqMonth !== serverData.month || reqNavId !== window.currentNavId) return;
-            
             if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
             
             res.year = reqYear;
@@ -2130,21 +1278,13 @@
             res.firstDay = new Date(reqYear, reqMonth - 1, 1).getDay();
             res.daysInMonth = new Date(reqYear, reqMonth, 0).getDate();
 
-            
-
-            
-            
             let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
             
             if (isScheduleChanged) {
               serverData = res; 
-              // 🚨 [핵심 3] 캐시도 박제해둔 연/월(reqYear, reqMonth)에만 안전하게 덮어씁니다.
               localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res)); 
               renderCalendar(); 
-              
-              if (isScheduleChanged) {
-                  showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
-              }
+              showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
             }
             updateSyncTime(); 
           })
@@ -2155,9 +1295,7 @@
       setInterval(silentBackgroundSync, 60000);
       document.addEventListener("visibilitychange", () => { if (document.visibilityState === 'visible') silentBackgroundSync(); });
 
-      // 🚀 [앱 초기화] 
       window.addEventListener('DOMContentLoaded', () => {
-        
         const savedTheme = localStorage.getItem('cal_theme') || 'light';
         const themeBtn = document.querySelector('.theme-toggle');
         if (savedTheme === 'light') { document.body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; } else { document.body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; }
@@ -2172,7 +1310,6 @@
         
         let cachedData = localStorage.getItem(cacheKey);
         let isCacheValid = false;
-        // 💡 [여기에 딱 한 줄 추가!] 앱 켜자마자 올해 1년 치 빨간날부터 장전!
         checkAndFetchHolidays(currentYear);
         if (cachedData) {
             try {
@@ -2196,13 +1333,11 @@
 
         let fetchStartTime = Date.now();
 
-        // 💡 OCR 통신도 백그라운드로 안전하게 요청
         google.script.run.withSuccessHandler(function(timeStr) {
             const el = document.getElementById('ocrTimeText');
             if(el) el.innerText = timeStr;
         }).getOcrLastTimeStr();
 
-        // 💡 입고 데이터 백그라운드 동기화
         google.script.run.withSuccessHandler(function(newData) {
             if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return; 
             
@@ -2227,8 +1362,9 @@
             .catch(err => console.log('서비스 워커 등록 실패:', err));
         });
       }
+
       // =====================================================
-      // 📊 [입고 전용 완결판] 대시보드 & 하이브리드 지시선 엔진
+      // 📊 [입고 전용] 대시보드 엔진 & 요약바 업데이트 픽스!
       // =====================================================
       window.dashMode = 'month';
       window.dashYear = new Date().getFullYear();
@@ -2238,6 +1374,25 @@
       let shareChartIns = null;
       window.activePieIndex = null;
       window.dashCurrentData = null; 
+
+      // 🚨 [에러 해결 1] 하단 요약바 업데이트 (company 대신 bl을 메인으로 스캔)
+      function updateStatsSummary() {
+          let tPal = 0, dPal = 0;
+          const process = (it) => {
+              let rawName = String(it.bl || it.company || "").trim();
+              if (!rawName) return;
+              let clean = rawName.replace(/\[TASK\]/gi, "").trim();
+              if (rawName.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(clean)) return;
+              
+              tPal += parseInt(it.pal) || 0;
+              if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
+          };
+          for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
+          if (serverData.pendingItems) serverData.pendingItems.forEach(process);
+          
+          let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
+          let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
+      }
 
       // 🎨 [플러그인 1] 중앙 풀네임 텍스트
       const pieCenterTextPlugin = {
@@ -2365,6 +1520,20 @@
       Chart.unregister(pieCenterTextPlugin, pieHybridLabelPlugin); 
       Chart.register(pieCenterTextPlugin, pieHybridLabelPlugin);
 
+      // 입고 업체명 컬러 생성
+      function getCompanyColor(compName) {
+        if (!compName) return { bg: "#0a84ff", cMain: "#fff", cSub: "#fff", txtShadow: "none" };
+        let hash = 0;
+        for (let i = 0; i < compName.length; i++) hash = compName.charCodeAt(i) + ((hash << 5) - hash);
+        const colors = ["#FF1A1A", "#FF6600", "#00BB44", "#00BBAA", "#00AAEE", "#1166FF", "#6600FF", "#AA00CC", "#EE0099", "#FF1155"];
+        return { bg: colors[Math.abs(hash) % colors.length], cMain: "#fff", cSub: "#fff", txtShadow: "none" };
+      }
+
+      function getShortName(name) {
+          if(!name) return "";
+          return name.length > 4 ? name.substring(0, 4) : name;
+      }
+
       function setDashMode(mode) {
           window.dashMode = mode;
           document.getElementById('btnDashMonth').classList.toggle('active', mode === 'month');
@@ -2430,16 +1599,15 @@
           let barDetails = []; let totalQty = 0; let doneQty = 0;
           document.getElementById("barDetailBox").style.display = "none";
 
+          // 🚨 [에러 해결 2] 입고는 company 대신 bl을 메인으로 차트를 그립니다!
           if (window.dashMode === 'month') {
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
               let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
               for (let d = 1; d <= days; d++) { labels.push(`${d}일`); barData.push(0); barDetails.push({}); }
 
               const process = (it, dIdx) => {
-                  // 🚨 입고 전용 로직: B/L 번호로 판별!
                   let rawName = String(it.bl || it.company || "").trim();
-                  if (!rawName) return; // 빈 데이터 무시
-                  
+                  if (!rawName) return;
                   let clean = rawName.replace(/\[TASK\]/gi, "").trim();
                   let isTask = rawName.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(clean);
                   
@@ -2449,7 +1617,6 @@
                       if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
                       if (dIdx !== null) {
                           barData[dIdx - 1] += qty;
-                          // 🚨 입고 상세 내역에 뜰 때 앞글자가 아니라 원래 B/L(또는 FWD)이 뜨도록 깔끔하게
                           barDetails[dIdx - 1][clean] = (barDetails[dIdx - 1][clean] || 0) + qty;
                       }
                       compMap[clean] = (compMap[clean] || 0) + qty;
@@ -2465,7 +1632,7 @@
               for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); barDetails.push({}); }
               let yData = yearlyCache[window.dashYear];
               if (!yData) return;
-              barData = yData.monthly.map(m => m.pal); // 🚨 연간 입고량도 pal 고정
+              barData = yData.monthly.map(m => m.pal); 
               totalQty = barData.reduce((a, b) => a + b, 0);
               Object.keys(yData.comp).forEach(k => { compMap[k] = yData.comp[k].pal; });
           }
@@ -2579,24 +1746,7 @@
           } else if (sliderWrapper) sliderWrapper.style.display = "none";
       }
 
-      function updateStatsSummary() {
-          let tPal = 0, dPal = 0;
-          const process = (it) => {
-              // 🚨 입고 전용 맞춤형 필터: bl을 최우선으로 읽고 TASK는 무시!
-              let rawName = String(it.bl || it.company || "").trim();
-              let clean = rawName.replace(/\[TASK\]/gi, "").trim();
-              if (rawName.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(clean)) return;
-              
-              tPal += parseInt(it.pal) || 0;
-              if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
-          };
-          for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
-          if (serverData.pendingItems) serverData.pendingItems.forEach(process);
-          let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
-          let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
-      }
-
-      // 모달창 스와이프 및 바탕 터치 차트 리셋
+      // 🚀 모달창 스와이프 및 바탕 터치 차트 리셋 완벽 엔진
       window.addEventListener('DOMContentLoaded', () => {
           document.getElementById("dashboardModal").addEventListener("click", function(e) {
               if (window.activePieIndex !== null && shareChartIns) {
