@@ -4185,7 +4185,7 @@
               document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${avgDaily})`;
           }
 
-         // 📊 1. 막대 그래프 그리기 (🔥 하이라이트 & 터치 이벤트 추가!)
+        // 📊 1. 막대 그래프 그리기 (🔥 하이라이트 & 터치 이벤트 추가!)
           if (mainChartIns) mainChartIns.destroy();
           
           let defaultBgColor = '#0a84ff';
@@ -4202,7 +4202,6 @@
                   onClick: (e, activeElements) => {
                       let detailBox = document.getElementById("barDetailBox");
                       
-                      // 빈 공간을 누르면 하이라이트 해제 & 패널 닫기
                       if (!activeElements || activeElements.length === 0) {
                           mainChartIns.data.datasets[0].backgroundColor = new Array(labels.length).fill(defaultBgColor);
                           mainChartIns.update();
@@ -4212,20 +4211,17 @@
 
                       const idx = activeElements[0].index;
 
-                      // 1) 내가 누른 막대만 진하게, 나머지는 반투명하게 (하이라이트 효과)
                       let dimColor = document.body.classList.contains("light-mode") ? 'rgba(10, 132, 255, 0.2)' : 'rgba(10, 132, 255, 0.3)';
                       let newColors = new Array(labels.length).fill(dimColor);
                       newColors[idx] = defaultBgColor;
                       mainChartIns.data.datasets[0].backgroundColor = newColors;
                       mainChartIns.update();
 
-                      // 2) 상세 내역 패널에 업체별 뱃지(태그) 그려주기
                       if (window.dashMode === 'month') {
                           let details = barDetails[idx];
                           let total = barData[idx];
                           if (total === 0) { detailBox.style.display = 'none'; return; }
 
-                          // 수량 많은 순으로 정렬
                           let sortedDetail = Object.keys(details).sort((a,b) => details[b] - details[a]);
                           let uStr = window.dashUnit === 'pal' ? 'P' : 'B';
                           
@@ -4233,7 +4229,7 @@
                           html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
                           
                           sortedDetail.forEach(comp => {
-                              let cColor = getCompanyColor(comp).bg; // 도넛 차트랑 똑같은 업체 색상 가져오기
+                              let cColor = getCompanyColor(comp).bg; 
                               html += `<div style="display:flex; align-items:center; gap:5px; background:var(--btn-bg); padding:5px 10px; border-radius:8px; font-size:0.95em; border:1px solid var(--border-color);">
                                   <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${cColor};"></span>
                                   <span style="font-weight:bold; color:var(--text-main);">${getShortName(comp)}</span>
@@ -4246,10 +4242,10 @@
                       }
                   }
               }
-          });
+          }); // 👈 막대그래프 닫기!
 
           // 🍩 2. 파이 차트 (중앙 데이터 & 하이라이트 인터랙션!)
-          window.activePieIndex = null; // 렌더링할 때마다 초기화
+          window.activePieIndex = null; 
           let sortedComps = Object.keys(compMap).filter(k => compMap[k] > 0).sort((a, b) => compMap[b] - compMap[a]);
           let sLabels = []; let sData = []; let sColors = [];
           sortedComps.forEach(c => {
@@ -4264,41 +4260,38 @@
                   datasets: [{ 
                       data: sData, 
                       backgroundColor: [...sColors], 
-                      _originalColors: [...sColors], // 원본 색상 백업
+                      _originalColors: [...sColors], 
                       borderWidth: 2, 
                       borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30" 
                   }] 
               },
               options: {
                   responsive: true, maintainAspectRatio: false, 
-                  cutout: '55%', // 🚨 가운데 글씨가 들어갈 수 있게 도넛 구멍을 55%로 넒힘!
+                  cutout: '55%', 
                   layout: { padding: { left: 90, right: 90, top: 20, bottom: 20 } }, 
                   plugins: { legend: { display: false } },
-                  // 🚨 터치 이벤트 마법!
                   onClick: (e, activeElements) => {
                       const dataset = shareChartIns.data.datasets[0];
                       if (!activeElements || activeElements.length === 0) {
-                          // 빈 공간 누르면 원상복구
                           window.activePieIndex = null;
                           dataset.backgroundColor = [...dataset._originalColors];
                       } else {
                           const idx = activeElements[0].index;
                           if (window.activePieIndex === idx) {
-                              // 한 번 더 누르면 원상복구
                               window.activePieIndex = null;
                               dataset.backgroundColor = [...dataset._originalColors];
                           } else {
-                              // 누른 조각만 빼고 다 회색(반투명)으로 묻혀버림!
                               window.activePieIndex = idx;
                               dataset.backgroundColor = dataset._originalColors.map((color, i) => {
                                   return i === idx ? color : (document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)");
                               });
                           }
                       }
-                      shareChartIns.update(); // 애니메이션과 함께 차트 다시 그리기
+                      shareChartIns.update(); 
                   }
               }
-          });
+          }); // 👈 파이차트 닫기!
+      } // 🚨🚨 바로 여기! renderDashCharts 함수를 최종적으로 닫는 중괄호!!! 🚨🚨
 
       // 달력 바닥에 있는 "하단 요약바"용 업데이트
       function updateStatsSummary() {
