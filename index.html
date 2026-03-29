@@ -1853,205 +1853,78 @@
 
       // 🎨 30PL 색상 팔레트
       const presetPalette = [
-        {
-          bg: "linear-gradient(135deg, #FF3B30, #b3241d)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #FF9F0A, #E67E22)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #D84315, #8F2D0E)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #FFCDD2, #E57373)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #880E4F, #4A148C)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #FFD54F, #FFB300)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #FFF59D, #FBC02D)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #8D6E63, #5D4037)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #D7CCC8, #8D6E63)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #9E9D24, #827717)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #34C759, #248a3d)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #AED581, #689F38)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #00695C, #004D40)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #15e7ca, #06bda6)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #00BCD4, #00838F)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #B2DFDB, #009688)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #007AFF, #0056b3)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #81D4FA, #0288D1)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #13214a, #0b1329)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #5C6BC0, #283593)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #607D8B, #37474F)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #4DD0E1, #0097A7)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #AF52DE, #7a369e)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #E1BEE7, #8E24AA)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #4A148C, #311B92)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #F06292, #C2185B)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #F8BBD0, #D81B60)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #E040FB, #AA00FF)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
-        {
-          bg: "linear-gradient(135deg, #64FFDA, #00BFA5)",
-          cMain: "#111",
-          cSub: "rgba(0,0,0,0.8)",
-          txtShadow: "none",
-        },
-        {
-          bg: "linear-gradient(135deg, #FF6D00, #E65100)",
-          cMain: "#fff",
-          cSub: "rgba(255,255,255,0.9)",
-          txtShadow: "0 1px 2px rgba(0,0,0,0.3)",
-        },
+        { bg: "linear-gradient(135deg, #FFB3BA, #FFC8A2)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 코랄 핑크
+        { bg: "linear-gradient(135deg, #FFDFBA, #FFFFBA)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 연노랑
+        { bg: "linear-gradient(135deg, #BAFFC9, #BAE1FF)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 민트 스카이
+        { bg: "linear-gradient(135deg, #E2B0FF, #9F81F7)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 라벤더
+        { bg: "linear-gradient(135deg, #FDEB71, #F8D800)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 버터 옐로우
+        { bg: "linear-gradient(135deg, #ABECD6, #FBBEDF)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 코튼 캔디
+        { bg: "linear-gradient(135deg, #FFF1EB, #ACE0F9)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 스카이 틴트
+        { bg: "linear-gradient(135deg, #84FAB0, #8FD3F4)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 아쿠아 민트
+        { bg: "linear-gradient(135deg, #FCCB90, #D57EEB)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 선셋
+        { bg: "linear-gradient(135deg, #E0C3FC, #8EC5FC)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 페리윙클
+        { bg: "linear-gradient(135deg, #4FACFE, #00F2FE)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 브라이트 스카이
+        { bg: "linear-gradient(135deg, #43E97B, #38F9D7)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 네온 라임
+        { bg: "linear-gradient(135deg, #FA709A, #FEE140)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 자몽
+        { bg: "linear-gradient(135deg, #B224EF, #7579FF)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 바이올렛
+        { bg: "linear-gradient(135deg, #F5576C, #F093FB)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 핫핑크
+        { bg: "linear-gradient(135deg, #42E695, #3BB2B8)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 청록
+        { bg: "linear-gradient(135deg, #5EE7DF, #B490CA)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 페어리 블루
+        { bg: "linear-gradient(135deg, #D4FC79, #96E6A1)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 말차 그린
+        { bg: "linear-gradient(135deg, #89F7FE, #66A6FF)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 오션 브리즈
+        { bg: "linear-gradient(135deg, #FF0844, #FFB199)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 스트로베리
+        { bg: "linear-gradient(135deg, #96FBC4, #F9F586)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 스프링 글로우
+        { bg: "linear-gradient(135deg, #2AFADF, #4C83FF)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 시안 블루
+        { bg: "linear-gradient(135deg, #FF9A9E, #FECFEF)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 로즈 밀크
+        { bg: "linear-gradient(135deg, #A18CD1, #FBC2EB)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 매화
+        { bg: "linear-gradient(135deg, #F6D365, #FDA085)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 오렌지 소다
+        { bg: "linear-gradient(135deg, #FBC8D4, #9795F0)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 버블검
+        { bg: "linear-gradient(135deg, #C2E9FB, #A1C4FD)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 파우더 블루
+        { bg: "linear-gradient(135deg, #E2D1C3, #FDFCFB)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 라떼 우유
+        { bg: "linear-gradient(135deg, #FFAA85, #B3315F)", cMain: "#fff", cSub: "rgba(255,255,255,0.9)", txtShadow: "0 1px 2px rgba(0,0,0,0.3)" }, // 살몬 핑크
+        { bg: "linear-gradient(135deg, #F3E7E9, #E3EEFF)", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }  // 진주색
       ];
 
+     // 💡 [추가] 달력에 있는 모든 업체의 색상이 절대 안 겹치게 교통정리!
+      function autoResolveColorCollisions() {
+        let usedIndices = new Set();
+        let changed = false;
+        let compsInView = new Set();
+
+        const addComp = (arr) => {
+            if(!arr) return;
+            arr.forEach(it => {
+                let c = String(it.company || it.bl || "");
+                let clean = c.replace(/\[TASK\]/gi, "").trim();
+                let isTask = c.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+                if(!isTask && clean) compsInView.add(getFullName(clean));
+            });
+        };
+        addComp(serverData.pendingItems);
+        for(let d=1; d<=31; d++) addComp(serverData.monthData[d]);
+
+        compsInView.forEach(comp => {
+            let idx = customColors[comp];
+            if (idx === undefined || usedIndices.has(idx)) {
+                let available = [];
+                for(let i=0; i<presetPalette.length; i++) if(!usedIndices.has(i)) available.push(i);
+                idx = available.length > 0 ? available[Math.floor(Math.random() * available.length)] : Math.floor(Math.random() * presetPalette.length);
+                customColors[comp] = idx;
+                changed = true;
+            }
+            usedIndices.add(idx);
+            companyColors[comp] = presetPalette[idx];
+        });
+
+        if (changed) localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
+      }
+
       function getCompanyColor(companyName) {
+        if (!companyName) return presetPalette[0];
         let stdName = getFullName(companyName);
-        if (
-          customColors[stdName] !== undefined &&
-          presetPalette[customColors[stdName]]
-        ) {
-          companyColors[stdName] = presetPalette[customColors[stdName]];
-          return presetPalette[customColors[stdName]];
-        }
         if (companyColors[stdName]) return companyColors[stdName];
-        let hash = 0;
-        for (let i = 0; i < stdName.length; i++)
-          hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
-        let colorIdx = Math.abs(hash) % presetPalette.length;
-        let colorObj = presetPalette[colorIdx];
-        companyColors[stdName] = colorObj;
-        return colorObj;
+        let hash = 0; for (let i = 0; i < stdName.length; i++) hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
+        return presetPalette[Math.abs(hash) % presetPalette.length];
       }
 
       // 💡 [추가] 어디서든 쓸 수 있게 밖으로 빼낸 무적의 지문 인식기!
@@ -2292,16 +2165,19 @@
       function toggleEndDate(prefix, isTask) {
         const group = document.getElementById(`${prefix}-end-date-group`);
         const guide = document.getElementById(`${prefix}-end-date-guide`);
-        const labelExtra = document.getElementById(
-          `${prefix}-date-label-extra`,
-        );
+        const labelExtra = document.getElementById(`${prefix}-date-label-extra`);
+        const shuffleBtn = document.getElementById(`${prefix}-shuffle-btn`);
+        const colorPreview = document.getElementById(`${prefix}-color-preview`);
+
+        if (shuffleBtn) shuffleBtn.style.display = isTask ? "none" : "block";
+        if (colorPreview && isTask) colorPreview.style.display = "none";
+      
         if (group) group.style.display = isTask ? "flex" : "none";
         if (guide) guide.style.display = isTask ? "block" : "none";
         if (labelExtra) labelExtra.style.display = isTask ? "inline" : "none";
-        if (!isTask) {
-          let endInput = document.getElementById(`${prefix}-end-date`);
-          if (endInput) endInput.value = "";
-        }
+        
+        
+        if (!isTask) { let endInput = document.getElementById(`${prefix}-end-date`); if (endInput) endInput.value = ""; }
       }
 
  // 🚀 [기억 상실 방지 엔진 V2] 동명이인 일정들도 헷갈리지 않고 완벽하게 순서 복구!
@@ -2370,6 +2246,7 @@
       };
 
       function renderCalendar() {
+        autoResolveColorCollisions(); // 💡 달력 그리기 직전, 겹치는 색상 자동 감지 및 고유 색상 재배포!
         // 🚀 [무적의 통합 엔진] 이전 렌더링 찌꺼기를 완벽히 지우고, 사용자의 배열 순서를 절대 존중!
         serverData.customOrderFlags = serverData.customOrderFlags || {};
         let slotAllocation = {};
@@ -3405,15 +3282,14 @@
           startDateStr = payload.newDate;
           payload.newEtc = document.getElementById(`edit-etc-${idx}`).value;
 
-          if (tempEditColorObj) {
-            let stdName = getFullName(rawComp); companyColors[stdName] = tempEditColorObj; 
-            let foundIdx = presetPalette.findIndex((p) => p.bg === tempEditColorObj.bg);
-            if (foundIdx !== -1) {
-              customColors[stdName] = foundIdx;
-              localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
-              google.script.run.saveGlobalColor(stdName, foundIdx);
-            }
-            tempEditColorObj = null; 
+          if (tempEditColorObj && tempEditColorIdx !== null) {
+            let stdName = getFullName(rawComp);
+            companyColors[stdName] = tempEditColorObj; 
+            customColors[stdName] = tempEditColorIdx;
+            localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
+            google.script.run.saveGlobalColor(stdName, tempEditColorIdx);
+            tempEditColorObj = null;
+            tempEditColorIdx = null;
           }
         }
 
@@ -3759,11 +3635,11 @@
           
           <div class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
              <span>업체명 (필수)</span>
-             <button type="button" onclick="shuffleColorInModal('${cleanComp}', ${idx})" style="background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:4px 10px; font-size:0.85em; cursor:pointer; font-weight:800; transition:0.2s;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">🎨 색상 셔플</button>
+             <button type="button" id="edit-${idx}-shuffle-btn" style="display:${isTaskMode ? 'none' : 'block'}; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:4px 10px; font-size:0.85em; cursor:pointer; font-weight:800; transition:0.2s;" onclick="shuffleColorInModal('${cleanComp}', ${idx})" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">🎨 색상 셔플</button>
           </div>
           <div class="input-wrapper"><input type="text" id="edit-comp-${idx}" class="edit-input" value="${getFullName(cleanComp)}" autocomplete="off"></div>
 
-          <div id="color-preview-zone-${idx}" style="display:none; margin-top:10px; padding:15px; background:rgba(0,0,0,0.1); border-radius:12px; border:1px solid var(--border-color); align-items:center; justify-content:center; gap:20px; animation: fadeIn 0.3s;">
+          <div id="edit-${idx}-color-preview" style="display:none; margin-top:10px; padding:15px; background:rgba(0,0,0,0.1); border-radius:12px; border:1px solid var(--border-color); align-items:center; justify-content:center; gap:20px; animation: fadeIn 0.3s;">
              <div style="text-align:center;">
                 <div style="font-size:0.75em; color:var(--text-sub); margin-bottom:6px; font-weight:bold;">현재 색상</div>
                 <div id="old-color-box-${idx}" style="width:40px; height:40px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
@@ -3857,48 +3733,41 @@
         }
       }
 
-      // 💡 1. 저장 전까지 색상을 임시로 들고 있을 변수
-      let tempEditColorObj = null;
+      let tempEditColorObj = null; 
+      let tempEditColorIdx = null;
 
-      // 💡 2. 모달창 안에서 셔플 버튼을 눌렀을 때 실행되는 함수
       function shuffleColorInModal(compName, idx) {
         let stdName = getFullName(compName);
-
-        // 현재 색상 (이미 한 번 셔플을 눌러서 임시 색상이 있다면 그걸 기준으로 함)
-        let currentColor = tempEditColorObj
-          ? tempEditColorObj
-          : getCompanyColor(stdName);
-
-        // [중복 방지] 다른 업체들이 현재 달력에서 사용 중인 색상들을 수집
-        let usedBgColors = new Set();
+        
+        let usedIndices = new Set();
         for (let key in companyColors) {
-          if (key !== stdName) usedBgColors.add(companyColors[key].bg);
+            if (key !== stdName) {
+                let pIdx = presetPalette.indexOf(companyColors[key]);
+                if(pIdx !== -1) usedIndices.add(pIdx);
+            }
         }
 
-        // 안 쓰는 색상들만 후보로 추리기 (현재 띄워진 색상도 제외)
-        let availableColors = presetPalette.filter(
-          (p) => !usedBgColors.has(p.bg) && p.bg !== currentColor.bg,
-        );
-
-        // 혹시나 30개를 꽉 채워서 빈 자리가 없다면? (전체 색상 중 현재 색상만 제외하고 후보로)
-        if (availableColors.length === 0) {
-          availableColors = presetPalette.filter(
-            (p) => p.bg !== currentColor.bg,
-          );
+        let currentIdx = customColors[stdName] !== undefined ? customColors[stdName] : -1;
+        
+        let available = [];
+        for (let i = 0; i < presetPalette.length; i++) {
+            if (!usedIndices.has(i) && i !== currentIdx) available.push(i);
         }
 
-        // 남은 후보 중 랜덤으로 하나 뽑기
-        let pickedColor =
-          availableColors[Math.floor(Math.random() * availableColors.length)];
-        tempEditColorObj = pickedColor; // 임시 저장
+        if (available.length === 0) {
+            for (let i = 0; i < presetPalette.length; i++) {
+                if (i !== currentIdx) available.push(i);
+            }
+        }
 
-        // 모달창 UI에 [기존 색상 ➡️ 새 색상] 미리보기 띄우기
-        document.getElementById(`color-preview-zone-${idx}`).style.display =
-          "flex";
-        document.getElementById(`old-color-box-${idx}`).style.background =
-          getCompanyColor(stdName).bg; // 원래 색상
-        document.getElementById(`new-color-box-${idx}`).style.background =
-          pickedColor.bg; // 바뀔 색상
+        let newIdx = available[Math.floor(Math.random() * available.length)];
+        tempEditColorIdx = newIdx;
+        tempEditColorObj = presetPalette[newIdx];
+
+        document.getElementById(`edit-${idx}-color-preview`).style.display = "flex";
+        let oldColorBg = (currentIdx !== -1 && presetPalette[currentIdx]) ? presetPalette[currentIdx].bg : getCompanyColor(stdName).bg;
+        document.getElementById(`old-color-box-${idx}`).style.background = oldColorBg; 
+        document.getElementById(`new-color-box-${idx}`).style.background = tempEditColorObj.bg; 
       }
       
       if ('serviceWorker' in navigator) {
