@@ -1273,6 +1273,91 @@
       .day-cell.drag-over { background: rgba(10, 132, 255, 0.1) !important; outline: 3px dashed #0a84ff !important; outline-offset: -3px; z-index: 10; }
       #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
       #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
+    
+      /* ===================================================== */
+      /* 📊 [3단계] 통계 대시보드 및 하단 요약바 디자인 */
+      /* ===================================================== */
+      .stats-summary-bar {
+        margin-top: 15px;
+        background: linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(52, 199, 89, 0.05));
+        border: 1px solid rgba(10, 132, 255, 0.3);
+        border-radius: 16px;
+        padding: 16px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+      }
+      .stats-summary-bar:active {
+        transform: scale(0.97);
+        background: rgba(10, 132, 255, 0.15);
+      }
+      .stats-title {
+        font-size: 1.05em;
+        font-weight: 900;
+        color: var(--text-main);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .stats-numbers {
+        font-size: 1.2em;
+        font-weight: 900;
+        color: var(--text-main);
+        letter-spacing: -0.5px;
+      }
+      .stats-numbers .done {
+        color: #34c759;
+        font-size: 1.2em;
+      }
+      .stats-numbers .total {
+        color: var(--text-sub);
+        font-size: 0.85em;
+      }
+
+      /* 대시보드 모달 내부 스타일 */
+      #dashboardModal { z-index: 3000; }
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .dash-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 16px;
+        text-align: center;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+      }
+      .dash-card-title {
+        font-size: 0.85em;
+        font-weight: 800;
+        color: var(--text-sub);
+        margin-bottom: 8px;
+      }
+      .dash-card-value {
+        font-size: 1.5em;
+        font-weight: 900;
+        color: var(--text-main);
+      }
+      .chart-container {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 15px;
+        height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-sub);
+        font-weight: bold;
+        margin-bottom: 12px;
+      }
+
     </style>
   </head>
   <body>
@@ -1369,6 +1454,43 @@
         ⚠️ 일정 미정 / 대기 <span id="pendingCount"></span>
       </div>
       <div class="pending-list" id="pendingList"></div>
+    </div>
+
+    <div id="statsSummaryBar" class="stats-summary-bar" onclick="openDashboard()">
+      <div class="stats-title">📊 당월 <span id="statsLabelType">스케줄</span> 진척률</div>
+      <div class="stats-numbers">
+        <span class="done" id="sumDonePal">0</span>
+        <span class="total">/ <span id="sumTotalPal">0</span> PAL</span>
+      </div>
+    </div>
+
+    <div id="dashboardModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()" style="max-height: 90vh;">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title" style="color: #0a84ff;">📈 <span id="dashMonthTitle">이번 달 통계</span></div>
+          <button class="close-btn" onclick="document.getElementById('dashboardModal').style.display = 'none'">✕</button>
+        </div>
+        
+        <div class="dashboard-grid">
+          <div class="dash-card">
+            <div class="dash-card-title">목표 달성률</div>
+            <div class="dash-card-value" id="dashRate" style="color:#0a84ff;">0%</div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-title">일일 평균 처리</div>
+            <div class="dash-card-value" id="dashAvg">0 <span style="font-size:0.5em; color:var(--text-sub);">PAL/일</span></div>
+          </div>
+        </div>
+
+        <div class="chart-container" id="chartArea1">
+          🚧 일별 물동량 그래프 자리
+        </div>
+        <div class="chart-container" id="chartArea2">
+          🚧 업체별 점유율(파이 차트) 자리
+        </div>
+
+      </div>
     </div>
 
     <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
@@ -2527,6 +2649,8 @@
         } else { document.getElementById("pendingSection").style.display = "none"; }
         if (isAdmin) { if (!isMultiMode) document.getElementById("fabBtn").style.display = "flex"; }
         updateSyncTime();
+        // 🚨 [추가] 달력을 다 그리고 나면, 하단 통계 수치도 실시간으로 업데이트!
+        updateStatsSummary();
       }
 
       // 🚀 [달력 이동 로직] 문자열 결합 버그 차단 & 순수 숫자 계산 강제
@@ -3729,6 +3853,72 @@
         </div>
       `;
         attachAutocomplete(`edit-comp-${idx}`);
+      }
+
+      // =====================================================
+      // 📊 [3단계] 스마트 통계 및 대시보드 엔진 (오류 수정판)
+      // =====================================================
+      function updateStatsSummary() {
+        let totalPal = 0;
+        let donePal = 0;
+        
+        const processItem = (it) => {
+            let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
+            let isTask = String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+            
+            if (!isTask) {
+                let p = parseInt(it.pal) || 0;
+                totalPal += p;
+                if (it.isDone === true || String(it.isDone) === "true") {
+                    donePal += p;
+                }
+            }
+        };
+
+        // 당월 달력 + 대기열 스캔
+        for (let d = 1; d <= serverData.daysInMonth; d++) {
+            if (serverData.monthData[d]) serverData.monthData[d].forEach(processItem);
+        }
+        if (serverData.pendingItems) serverData.pendingItems.forEach(processItem);
+
+        // 텍스트 자동 변환 (출고 / 입고)
+        let typeName = currentType === "out" ? "출고" : "입고";
+        let labelEl = document.getElementById("statsLabelType");
+        if(labelEl) labelEl.innerText = typeName;
+
+        // 요약 바 업데이트
+        document.getElementById("sumDonePal").innerText = donePal;
+        document.getElementById("sumTotalPal").innerText = totalPal;
+        
+        // 대시보드 내부 디테일 계산
+        let rate = totalPal > 0 ? Math.round((donePal / totalPal) * 100) : 0;
+        
+        // 🚨 과거/미래 조회 시 분모(나누는 수) 보정 완벽 적용!
+        let now = new Date();
+        let isCurrentMonth = (serverData.year === now.getFullYear() && serverData.month === now.getMonth() + 1);
+        let isPastMonth = (serverData.year < now.getFullYear() || (serverData.year === now.getFullYear() && serverData.month < now.getMonth() + 1));
+        
+        let divider = 1;
+        if (isCurrentMonth) divider = now.getDate(); // 이번 달은 오늘 날짜까지만
+        else if (isPastMonth) divider = serverData.daysInMonth; // 과거 달은 그 달의 총 일수
+        
+        let avg = donePal > 0 ? (donePal / divider).toFixed(1) : 0;
+        
+        let mTitle = document.getElementById("dashMonthTitle");
+        if(mTitle) mTitle.innerText = `${serverData.month}월 ${typeName} 통계`;
+        
+        let dRate = document.getElementById("dashRate");
+        if(dRate) {
+            dRate.innerText = `${rate}%`;
+            dRate.style.color = rate >= 100 ? "#34c759" : (rate > 50 ? "#0a84ff" : "#ff9f0a");
+        }
+        let dAvg = document.getElementById("dashAvg");
+        if(dAvg) dAvg.innerHTML = `${avg} <span style="font-size:0.5em; color:var(--text-sub);">PAL/일</span>`;
+      }
+
+      function openDashboard() {
+          updateStatsSummary();
+          document.getElementById('dashboardModal').style.display = 'flex';
       }
 
       function closeModalOnBgClick(e) {
