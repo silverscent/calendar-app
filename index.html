@@ -11,6 +11,7 @@
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
       /* 💡 눈이 편안한 다크 차콜 색상 적용 */
       :root {
@@ -1483,11 +1484,11 @@
           </div>
         </div>
 
-        <div class="chart-container" id="chartArea1">
-          🚧 일별 물동량 그래프 자리
+        <div class="chart-container" style="height: 220px;">
+          <canvas id="dailyChart"></canvas>
         </div>
-        <div class="chart-container" id="chartArea2">
-          🚧 업체별 점유율(파이 차트) 자리
+        <div class="chart-container" style="height: 220px;">
+          <canvas id="shareChart"></canvas>
         </div>
 
       </div>
@@ -3916,9 +3917,121 @@
         if(dAvg) dAvg.innerHTML = `${avg} <span style="font-size:0.5em; color:var(--text-sub);">PAL/일</span>`;
       }
 
+      // =====================================================
+      // 📊 [최종] Chart.js 그래프 렌더링 엔진
+      // =====================================================
+      let dailyChartInstance = null;
+      let shareChartInstance = null;
+
+      function renderCharts() {
+          // 1. 차트 기본 글씨 색상 (다크모드 대응)
+          Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
+          Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
+          
+          let typeName = currentType === "out" ? "출고량" : "입고량";
+
+          // 2. 데이터 수집용 바구니 준비
+          let daysArray = [];
+          let dailyData = [];
+          for (let d = 1; d <= serverData.daysInMonth; d++) {
+              daysArray.push(`${d}일`);
+              dailyData.push(0);
+          }
+          let compData = {};
+
+          // 3. 달력을 싹 돌면서 데이터 채우기 (TASK 철저히 배제)
+          for (let d = 1; d <= serverData.daysInMonth; d++) {
+              if (serverData.monthData[d]) {
+                  serverData.monthData[d].forEach(it => {
+                      let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
+                      let isTask = String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+                      
+                      if (!isTask) {
+                          let pCount = parseInt(it.pal) || 0;
+                          dailyData[d - 1] += pCount; // 일별 물동량 누적
+                          
+                          let stdName = getFullName(clean);
+                          compData[stdName] = (compData[stdName] || 0) + pCount; // 업체별 물동량 누적
+                      }
+                  });
+              }
+          }
+
+          // 4. [첫 번째 차트] 일별 물동량 (막대 그래프)
+          const ctxDaily = document.getElementById('dailyChart').getContext('2d');
+          if (dailyChartInstance) dailyChartInstance.destroy(); // 기존 차트 포맷(초기화)
+          
+          dailyChartInstance = new Chart(ctxDaily, {
+              type: 'bar',
+              data: {
+                  labels: daysArray,
+                  datasets: [{
+                      label: `일일 ${typeName} (PAL)`,
+                      data: dailyData,
+                      backgroundColor: '#0a84ff',
+                      borderRadius: 4,
+                  }]
+              },
+              options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                      legend: { display: false },
+                      title: { display: true, text: `📅 일별 ${typeName} 추이`, font: { size: 14, weight: 'bold' } }
+                  },
+                  scales: {
+                      x: { grid: { display: false } },
+                      y: { beginAtZero: true, border: { dash: [4, 4] } }
+                  }
+              }
+          });
+
+          // 5. [두 번째 차트] 업체별 점유율 도넛 차트 (달력 색상표와 100% 동기화!)
+          let sortedComps = Object.keys(compData).sort((a, b) => compData[b] - compData[a]); // 물량 많은 순 정렬
+          let shareLabels = [];
+          let shareVals = [];
+          let shareColors = [];
+
+          sortedComps.forEach(comp => {
+              shareLabels.push(getShortName(comp)); // 라벨은 보기 좋게 줄임말로
+              shareVals.push(compData[comp]);
+              shareColors.push(getCompanyColor(comp).bg); // 🚨 핵심: 달력의 그 색상 그대로 가져옴!
+          });
+
+          const ctxShare = document.getElementById('shareChart').getContext('2d');
+          if (shareChartInstance) shareChartInstance.destroy(); // 기존 차트 포맷
+          
+          shareChartInstance = new Chart(ctxShare, {
+              type: 'doughnut',
+              data: {
+                  labels: shareLabels,
+                  datasets: [{
+                      data: shareVals,
+                      backgroundColor: shareColors,
+                      borderWidth: 2,
+                      borderColor: document.body.classList.contains("light-mode") ? "#ffffff" : "#2a2c30" // 다크모드 대응 테두리
+                  }]
+              },
+              options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  cutout: '60%', // 도넛 두께
+                  plugins: {
+                      legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11, weight: 'bold' } } },
+                      title: { display: true, text: `🏢 업체별 ${typeName} 점유율`, font: { size: 14, weight: 'bold' }, padding: { bottom: 15 } }
+                  }
+              }
+          });
+      }
+
       function openDashboard() {
           updateStatsSummary();
           document.getElementById('dashboardModal').style.display = 'flex';
+          
+          // 🚨 [추가] 창이 열릴 때, 아주 살짝 딜레이를 줘서 애니메이션과 함께 그래프가 확! 그려지게 만듦
+          setTimeout(() => {
+              renderCharts();
+          }, 100);
       }
 
       function closeModalOnBgClick(e) {
