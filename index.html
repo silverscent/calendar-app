@@ -4473,53 +4473,83 @@
         });
       }
 
-      // 🚀 [추가] 모달창 손잡이 & 헤더 스와이프(내려 닫기) 엔진
-      document.querySelectorAll('.modal-box').forEach(box => {
-          let startY = 0, currentY = 0, isDragging = false;
-          let header = box.querySelector('.modal-header');
-          let handle = box.querySelector('.bottom-sheet-handle');
-          
-          const startDrag = (e) => {
-              if (box.scrollTop > 5) return; // 🚨 스크롤이 맨 위일 때만 작동!
-              startY = e.touches ? e.touches[0].clientY : e.clientY;
-              isDragging = true;
-              box.style.transition = 'none';
-          };
-
-          // 손잡이나 헤더를 잡았을 때만 스와이프 발동 (안쪽 내용물 터치 방해 금지)
-          if(header) { header.addEventListener('touchstart', startDrag, {passive: true}); header.addEventListener('mousedown', startDrag); }
-          if(handle) { handle.addEventListener('touchstart', startDrag, {passive: true}); handle.addEventListener('mousedown', startDrag); }
-
-          const moveDrag = (e) => {
-              if (!isDragging) return;
-              currentY = e.touches ? e.touches[0].clientY : e.clientY;
-              let diff = currentY - startY;
-              if (diff > 0) {
-                  if (e.cancelable) e.preventDefault();
-                  box.style.transform = `translateY(${diff}px)`;
-              }
-          };
-
-          const endDrag = (e) => {
-              if (!isDragging) return;
-              isDragging = false;
-              let diff = currentY - startY;
-              box.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+      // 🚀 [완벽 수정] 모달창 스와이프(내려 닫기) 100% 보장 엔진!
+      window.addEventListener('DOMContentLoaded', () => {
+          document.querySelectorAll('.overlay-modal').forEach(modal => {
+              const box = modal.querySelector('.modal-box');
+              if (!box) return;
               
-              if (diff > 80) { // 🚨 80px 이상 밑으로 내렸으면 닫기!
-                  box.style.transform = 'translateY(100%)';
-                  setTimeout(() => {
-                      box.closest('.overlay-modal').style.display = 'none';
-                      box.style.transform = ''; 
-                  }, 300);
-              } else { // 덜 내렸으면 제자리로 튕겨 올라감
-                  box.style.transform = 'translateY(0)';
-                  setTimeout(() => { box.style.transform = ''; }, 300);
-              }
-          };
+              // 🚨 핵심: 전체 박스가 아니라 '손잡이'와 '헤더' 영역을 잡았을 때만 스와이프 발동!
+              const handle = box.querySelector('.bottom-sheet-handle');
+              const header = box.querySelector('.modal-header');
+              
+              let startY = 0, currentY = 0, isDragging = false;
 
-          box.addEventListener('touchmove', moveDrag, {passive: false}); box.addEventListener('mousemove', moveDrag);
-          box.addEventListener('touchend', endDrag); box.addEventListener('mouseup', endDrag); box.addEventListener('mouseleave', endDrag);
+              const startDrag = (e) => {
+                  // 모달창 내부 스크롤이 맨 위일 때만 스와이프 허용 (내용물 보며 스크롤하다 닫히는 것 방지)
+                  if (box.scrollTop > 5) return; 
+                  startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                  isDragging = true;
+                  box.style.transition = 'none'; // 드래그 중에는 애니메이션 끄기 (손가락에 딱 붙게)
+                  
+                  // PC 마우스 지원
+                  if (e.type === 'mousedown') {
+                      document.addEventListener('mousemove', moveDrag, { passive: false });
+                      document.addEventListener('mouseup', endDrag);
+                  }
+              };
+
+              const moveDrag = (e) => {
+                  if (!isDragging) return;
+                  currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                  let diff = currentY - startY;
+                  
+                  // 아래로 내릴 때만 작동 (위로 올리는 건 무시)
+                  if (diff > 0) {
+                      if (e.cancelable) e.preventDefault(); // 화면 전체가 당겨지는 현상(Pull-to-refresh) 완벽 방어!
+                      box.style.transform = `translateY(${diff}px)`;
+                  }
+              };
+
+              const endDrag = (e) => {
+                  if (!isDragging) return;
+                  isDragging = false;
+                  let diff = currentY - startY;
+                  
+                  // 손을 뗐을 때 부드럽게 튕기는 애니메이션 적용
+                  box.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                  
+                  if (diff > 80) { // 🚨 80px 이상 내렸으면 아예 닫아버림
+                      box.style.transform = 'translateY(100%)';
+                      setTimeout(() => {
+                          modal.style.display = 'none';
+                          box.style.transform = ''; // 위치 초기화 (다음에 열릴 때를 위해)
+                      }, 250);
+                  } else { // 덜 내렸으면 제자리로 다시 튕겨 올라감
+                      box.style.transform = 'translateY(0)';
+                      setTimeout(() => { box.style.transform = ''; }, 250);
+                  }
+
+                  // PC 마우스 이벤트 해제
+                  if (e.type === 'mouseup' || e.type === 'mouseleave') {
+                      document.removeEventListener('mousemove', moveDrag);
+                      document.removeEventListener('mouseup', endDrag);
+                  }
+              };
+
+              // 터치 이벤트 부착
+              const attachEvents = (el) => {
+                  if (!el) return;
+                  el.addEventListener('touchstart', startDrag, { passive: true });
+                  el.addEventListener('touchmove', moveDrag, { passive: false });
+                  el.addEventListener('touchend', endDrag);
+                  el.addEventListener('touchcancel', endDrag);
+                  el.addEventListener('mousedown', startDrag);
+              };
+
+              attachEvents(handle);
+              attachEvents(header);
+          });
       });
     </script>
   </body>
