@@ -1875,44 +1875,22 @@
         { bg: "#CE93D8", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 19. 라벤더
         { bg: "#F48FB1", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }  // 20. 로즈
       ];
-      // 💡 [수정] 겹치는 색상 원천 차단! 절대 겹치지 않는 스마트 색상 배정기 (영화관 지정좌석제)
+    // 💡 [브라우저 색상 차이 완벽 해결] 똑같은 이름엔 100% 똑같은 색상을 수학적으로(해시) 영구 고정!
       function getCompanyColor(companyName) {
         if (!companyName) return presetPalette[0];
         let stdName = getFullName(companyName);
-        if (!customColors) customColors = {};
         
-        // 1. 이미 지정된 색이 있으면 변함없이 그대로 반환
-        if (customColors[stdName] !== undefined && presetPalette[customColors[stdName]]) {
-          companyColors[stdName] = presetPalette[customColors[stdName]]; 
+        // 1. 관리자가 '셔플'로 강제 지정한 색상이 서버에 있으면 그것부터 최우선 적용!
+        if (customColors && customColors[stdName] !== undefined && presetPalette[customColors[stdName]]) {
           return presetPalette[customColors[stdName]];
         }
-        if (companyColors[stdName]) return companyColors[stdName];
         
-        // 2. 남은 색상 찾기 (현재 달력에서 누가 무슨 색을 쓰고 있는지 싹 다 조사)
-        let usedIndices = new Set();
-        for (let key in customColors) usedIndices.add(customColors[key]);
-        for (let key in companyColors) usedIndices.add(presetPalette.indexOf(companyColors[key]));
-
-        let available = [];
-        for (let i = 0; i < presetPalette.length; i++) {
-            if (!usedIndices.has(i)) available.push(i);
+        // 2. 서버에 없으면? 모든 기기/브라우저가 100% 완벽하게 똑같은 색을 뽑도록 문자열 해시(Hash) 계산
+        let hash = 0;
+        for (let i = 0; i < stdName.length; i++) {
+          hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
         }
-
-        let colorIdx = 0;
-        if (available.length > 0) {
-            // 남은 빈자리 중 가장 첫 번째 쨍한 색상을 줌
-            colorIdx = available[0];
-        } else {
-            // 30개 색상이 모두 꽉 찼을 때만 어쩔 수 없이 해시(Hash)로 배정
-            let hash = 0; 
-            for (let i = 0; i < stdName.length; i++) hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
-            colorIdx = Math.abs(hash) % presetPalette.length;
-        }
-
-        // 3. 한 번 정해진 색상은 스마트폰/브라우저에 도장을 찍어버림 (새로고침해도 안 바뀜!)
-        customColors[stdName] = colorIdx;
-        localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
-        companyColors[stdName] = presetPalette[colorIdx];
+        let colorIdx = Math.abs(hash) % presetPalette.length;
         
         return presetPalette[colorIdx];
       }
@@ -2175,31 +2153,21 @@
         if (!isTask) { let endInput = document.getElementById(`${prefix}-end-date`); if (endInput) endInput.value = ""; }
       }
 
- // 🚀 [기억 상실 방지 엔진 V2] 동명이인 일정들도 헷갈리지 않고 완벽하게 순서 복구!
+ // 🚀 [순서 동기화 완결판] 과거의 고집(로컬 캐시)을 버리고, 무조건 서버가 내려준 '순서표(sortIdx)'에 절대 복종!
       function preserveCustomOrder(newData) {
-          if (!serverData.customOrderFlags) return newData;
-          newData.customOrderFlags = serverData.customOrderFlags;
-          
           for (let d = 1; d <= newData.daysInMonth; d++) {
-              if (newData.monthData[d] && serverData.monthData[d] && newData.customOrderFlags[d]) {
-                  let orderMap = {};
-                  serverData.monthData[d].forEach((item, idx) => {
-                      let k = getMatchKey(item);
-                      if(!orderMap[k]) orderMap[k] = [];
-                      orderMap[k].push(idx); // 동명이인 구분을 위해 배열(줄서기표)로 순서 기억
+              if (newData.monthData[d]) {
+                  newData.monthData[d].sort((a, b) => {
+                      // 서버가 부여한 순서표(sortIdx)를 읽어서 정렬
+                      let aIdx = (a.sortIdx !== undefined && a.sortIdx !== null) ? Number(a.sortIdx) : 999;
+                      let bIdx = (b.sortIdx !== undefined && b.sortIdx !== null) ? Number(b.sortIdx) : 999;
+                      if (aIdx !== bIdx) return aIdx - bIdx;
+                      
+                      // 방금 추가되어 순서표가 없는(999) 신규 일정은 뚱뚱한 애(출고)를 위로
+                      let aSlim = checkIsSlim(a, d); let bSlim = checkIsSlim(b, d);
+                      if (aSlim !== bSlim) return aSlim ? 1 : -1;
+                      return 0;
                   });
-                  
-                  newData.monthData[d].forEach(item => {
-                      let k = getMatchKey(item);
-                      if (orderMap[k] && orderMap[k].length > 0) {
-                          item._tempSortIdx = orderMap[k].shift(); // 기억해둔 순서표를 하나씩 빼서 부여
-                      } else {
-                          item._tempSortIdx = 999; // 텔레그램으로 방금 추가된 새 일정은 맨 밑으로
-                      }
-                  });
-
-                  // 부여받은 순서표대로 다시 쫙 줄 세우기!
-                  newData.monthData[d].sort((a, b) => a._tempSortIdx - b._tempSortIdx);
               }
           }
           return newData;
@@ -2263,15 +2231,6 @@
         // ① 일정 그룹화 및 고유 ID 부여
         for (let d = 1; d <= serverData.daysInMonth; d++) {
             if (!serverData.monthData[d]) continue;
-            
-            if (!serverData.customOrderFlags[d]) {
-                serverData.monthData[d].sort((a, b) => {
-                    let aSlim = checkIsSlim(a, d); let bSlim = checkIsSlim(b, d);
-                    if (aSlim !== bSlim) return aSlim ? 1 : -1; 
-                    return (a.startDate || a.company) < (b.startDate || b.company) ? -1 : 1; 
-                });
-                serverData.customOrderFlags[d] = true;
-            }
             
             serverData.monthData[d].forEach((item) => {
                 if (checkIsSlim(item, d)) { 
@@ -3083,14 +3042,13 @@
                           tIdx = serverData.monthData[d].findIndex(x => mk(x) === targetKey);
                           let iIdx = isTopInsert ? tIdx : tIdx + 1;
                           serverData.monthData[d].splice(iIdx, 0, mItem);
-                          serverData.customOrderFlags[d] = true;
                       }
                   }
 
                   localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
                   renderCalendar();
-
-                  // 👇👇 [추가됨] 프론트엔드에서 서버로 새로운 순서표(번호)를 발급해서 전송! 👇👇
+                  
+                  // 🚀 [추가됨] 폰에서 순서를 바꾼 즉시! 서버(Code.gs)로 새로운 순서표를 발급해서 전송!
                   let orderPayload = { dailyOrders: {} };
                   let dStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
                   orderPayload.dailyOrders[dStr] = {};
@@ -3105,14 +3063,13 @@
                   });
 
                   google.script.run.manageWebOutboundData("UPDATE_ORDER", orderPayload, adminToken);
-                  // 👆👆 여기까지 👆👆
-
                   return;
               }
           }
 
           if (newDay === dragData.day) return;
-          
+
+                    
           let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
           let rawName = item.company || item.bl;
           let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
