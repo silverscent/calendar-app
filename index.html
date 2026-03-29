@@ -1380,7 +1380,31 @@
         font-weight: bold;
         margin-bottom: 12px;
       }
-
+/* 💡 [추가] 파이 차트 다이얼 슬라이더 디자인 */
+      .pie-slider {
+        -webkit-appearance: none;
+        width: 100%;
+        height: 6px;
+        background: rgba(10, 132, 255, 0.2);
+        border-radius: 5px;
+        outline: none;
+        margin-top: 5px;
+      }
+      .pie-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: #0a84ff;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        border: 2.5px solid #fff;
+        transition: transform 0.1s;
+      }
+      .pie-slider::-webkit-slider-thumb:active {
+        transform: scale(1.15);
+      }
     </style>
   </head>
   <body>
@@ -1529,10 +1553,14 @@
         
         <div id="barDetailBox" style="display: none; background: var(--card-bg); border: 1px solid #0a84ff; border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 0.9em; box-shadow: 0 2px 10px rgba(10, 132, 255, 0.1);"></div>
 
-        <div class="chart-container" style="height: 350px; display:flex; flex-direction:column; align-items:center;">
+        <div class="chart-container" style="height: 380px; display:flex; flex-direction:column; align-items:center;">
           <div style="font-weight:900; color:var(--text-main); margin-bottom: 5px;">🏢 업체별 점유율 <span style="font-size:0.75em; color:var(--text-sub);">(조각을 터치해 보세요)</span></div>
-          <div style="position: relative; width: 100%; height: 100%;">
+          <div style="position: relative; width: 100%; flex: 1;">
             <canvas id="shareChart"></canvas>
+          </div>
+          <div id="pieSliderWrapper" style="width: 90%; margin-top: 15px; display:none;">
+            <input type="range" id="pieSlider" class="pie-slider" min="-1" max="0" value="-1">
+            <div style="text-align:center; font-size:0.75em; color:var(--text-sub); margin-top:8px; font-weight:800;">👈 스와이프하여 순위별 탐색 👉</div>
           </div>
         </div>
       </div>
@@ -4248,6 +4276,7 @@
               }
           });
 
+          // 🍩 2. 파이 차트 (하이브리드 엔진 & 다이얼 슬라이더 연동!)
           window.activePieIndex = null; 
           let sortedComps = Object.keys(compMap).filter(k => compMap[k] > 0).sort((a, b) => compMap[b] - compMap[a]);
           let sLabels = []; let sData = []; let sColors = [];
@@ -4256,11 +4285,32 @@
           });
 
           if (shareChartIns) shareChartIns.destroy();
+          
+          // 🚨 [핵심] 차트와 슬라이더를 동시에 조종하는 '마스터 컨트롤러'
+          window.highlightPieSlice = function(idx) {
+              if (!shareChartIns) return;
+              const dataset = shareChartIns.data.datasets[0];
+              let slider = document.getElementById('pieSlider');
+              
+              if (idx === null || idx === -1) {
+                  window.activePieIndex = null;
+                  dataset.backgroundColor = [...dataset._originalColors];
+                  if (slider) slider.value = -1; // 슬라이더 초기화
+              } else {
+                  window.activePieIndex = parseInt(idx, 10);
+                  dataset.backgroundColor = dataset._originalColors.map((color, i) => {
+                      return i === window.activePieIndex ? color : (document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)");
+                  });
+                  if (slider) slider.value = idx; // 슬라이더 위치 동기화
+              }
+              shareChartIns.update(); 
+          };
+
           shareChartIns = new Chart(document.getElementById('shareChart'), {
               type: 'doughnut',
               data: { 
                   labels: sLabels, 
-                  fullNames: sortedComps, // 🚨 풀네임 데이터를 차트 속에 몰래 찔러넣음!
+                  fullNames: sortedComps, 
                   datasets: [{ 
                       data: sData, 
                       backgroundColor: [...sColors], 
@@ -4273,41 +4323,40 @@
                   responsive: true, maintainAspectRatio: false, 
                   cutout: '55%', 
                   layout: { padding: { left: 50, right: 50, top: 15, bottom: 15 } }, 
-                  plugins: { 
-                      legend: { display: false },
-                      tooltip: { enabled: false } // 🚨 거슬리는 검은색 말풍선 팝업 완전 차단!
-                  },
+                  plugins: { legend: { display: false }, tooltip: { enabled: false } },
                   onClick: (e, activeElements) => {
-                      const dataset = shareChartIns.data.datasets[0];
-                      if (!activeElements || activeElements.length === 0) {
-                          window.activePieIndex = null;
-                          dataset.backgroundColor = [...dataset._originalColors];
-                      } else {
+                      // 도넛을 직접 터치했을 때도 마스터 컨트롤러 호출!
+                      if (!activeElements || activeElements.length === 0) window.highlightPieSlice(-1);
+                      else {
                           const idx = activeElements[0].index;
-                          if (window.activePieIndex === idx) {
-                              window.activePieIndex = null;
-                              dataset.backgroundColor = [...dataset._originalColors];
-                          } else {
-                              window.activePieIndex = idx;
-                              dataset.backgroundColor = dataset._originalColors.map((color, i) => {
-                                  return i === idx ? color : (document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)");
-                              });
-                          }
+                          if (window.activePieIndex === idx) window.highlightPieSlice(-1);
+                          else window.highlightPieSlice(idx);
                       }
-                      shareChartIns.update(); 
                   }
               }
           });
+
+          // 🎛️ 슬라이더 범위 세팅 및 연결
+          let sliderWrapper = document.getElementById("pieSliderWrapper");
+          let slider = document.getElementById("pieSlider");
+          if (sLabels.length > 0 && sliderWrapper && slider) {
+              sliderWrapper.style.display = "block";
+              slider.max = sLabels.length - 1; // 1등부터 꼴등까지 범위 설정
+              slider.value = -1; // 시작할 땐 선택 안 됨
+              
+              // 슬라이더를 스르륵 움직일 때마다 차트 업데이트!
+              slider.oninput = function() { window.highlightPieSlice(this.value); };
+          } else if (sliderWrapper) {
+              sliderWrapper.style.display = "none";
+          }
       } // renderDashCharts 종료
 
-      // 🚨 [추가] 대시보드의 빈 바탕(허공)을 터치하면 파이 차트 강제 리셋!
+      // 🚨 [수정] 바탕화면 클릭 시 슬라이더를 터치한 경우는 무시하도록 예외 처리 추가!
       document.getElementById("dashboardModal").addEventListener("click", function(e) {
           if (window.activePieIndex !== null && shareChartIns) {
-              // 캔버스(차트 도화지)가 아닌 엉뚱한 곳을 눌렀을 때만 작동
-              if (e.target.tagName !== "CANVAS") {
-                  window.activePieIndex = null;
-                  shareChartIns.data.datasets[0].backgroundColor = [...shareChartIns.data.datasets[0]._originalColors];
-                  shareChartIns.update();
+              // 클릭한 곳이 캔버스도 아니고, 슬라이더 부품도 아닐 때만 차트 리셋!
+              if (e.target.tagName !== "CANVAS" && e.target.id !== "pieSlider" && !e.target.closest("#pieSliderWrapper")) {
+                  window.highlightPieSlice(-1);
               }
           }
       });
