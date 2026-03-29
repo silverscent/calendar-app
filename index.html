@@ -1266,9 +1266,10 @@
         margin: 0 !important;
       }
       /* ===================================================== */
-      /* 💡 [5번 패치] 드래그 앤 드롭 끼워넣기 표시선 */
-      .insert-line-top { box-shadow: inset 0 4px 0 0 #0a84ff !important; }
-      .insert-line-bottom { box-shadow: inset 0 -4px 0 0 #0a84ff !important; }
+      /* 💡 [5번 패치] 드래그 앤 드롭 끼워넣기 애니메이션 (스르륵 미리보기) */
+      .item-tag { transition: margin 0.25s ease, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s !important; }
+      .insert-line-top { transform: translateY(6px) scale(0.98); box-shadow: inset 0 4px 0 0 #0a84ff, 0 -6px 15px -5px rgba(10,132,255,0.3) !important; z-index: 10; }
+      .insert-line-bottom { transform: translateY(-6px) scale(0.98); box-shadow: inset 0 -4px 0 0 #0a84ff, 0 6px 15px -5px rgba(10,132,255,0.3) !important; z-index: 10; }
       /* 💡 관리자 로그인 창 키보드 가림 방지 (화면 중앙 팝업으로 변경) */
       #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
       #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
@@ -2053,6 +2054,24 @@
         return colorObj;
       }
 
+      // 💡 [추가] 어디서든 쓸 수 있게 밖으로 빼낸 무적의 지문 인식기!
+      function getScheduleSig(dataObj) {
+        if (!dataObj) return "";
+        const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
+        const cleanStr = (s) => String(s || "").replace(/\[TASK\]/gi, "").replace(/\s+/g, "").toUpperCase();
+        let sigs = [];
+
+        if (dataObj.pendingItems) dataObj.pendingItems.forEach(it => sigs.push(`P_${cleanStr(it.company || it.bl)}_${norm(it.pal)}_${norm(it.box)}_${cleanStr(it.etc)}_${it.isDone}`));
+        if (dataObj.monthData) {
+          for (let d in dataObj.monthData) {
+            if (dataObj.monthData[d]) {
+              dataObj.monthData[d].forEach(it => sigs.push(`${d}_${cleanStr(it.company || it.bl)}_${norm(it.pal)}_${norm(it.box)}_${cleanStr(it.etc)}_${it.isDone}`));
+            }
+          }
+        }
+        return sigs.sort().join("||");
+      }
+
       // =====================================================
       // 🚀 [스텔스 자동 동기화 엔진] (귀신 데이터 & 가짜 토스트 완벽 차단)
       // =====================================================
@@ -2083,17 +2102,7 @@
             res.firstDay = new Date(reqYear, reqMonth - 1, 1).getDay();
             res.daysInMonth = new Date(reqYear, reqMonth, 0).getDate();
 
-            // 💡 입고(bl)/출고(company) 모두 완벽 호환되는 지문 대조기
-            const getScheduleSig = (dataObj) => {
-              if (!dataObj) return "";
-              const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
-              let sigs = [];
-              if (dataObj.pendingItems) dataObj.pendingItems.forEach(it => sigs.push(`P_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
-              if (dataObj.monthData) {
-                for (let d in dataObj.monthData) dataObj.monthData[d].forEach(it => sigs.push(`${d}_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
-              }
-              return sigs.sort().join("||");
-            };
+            
 
             
             
