@@ -3921,7 +3921,7 @@
       let shareChartIns = null;
       window.activePieIndex = null;
 
-      // 🎨 [플러그인 1] 도넛 가운데에 정보 띄우기 (터치 시 상세 정보)
+     // 1. 도넛 가운데에 정보 띄우기 (풀네임 적용 및 글씨 크기 대폭 확대)
       const pieCenterTextPlugin = {
           id: 'pieCenterText',
           beforeDraw(chart) {
@@ -3931,30 +3931,40 @@
               const centerY = chart.chartArea.top + chart.chartArea.height / 2;
 
               ctx.save();
-              ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
 
               if (window.activePieIndex !== null) {
                   const idx = window.activePieIndex;
                   const data = chart.data.datasets[0].data;
-                  const labels = chart.data.labels;
                   const colors = chart.data.datasets[0].backgroundColor;
+                  
+                  // 🚨 [핵심] 차트 데이터에서 '풀네임'을 바로 가져옴
+                  const fullNames = chart.data.fullNames; 
+                  const displayName = fullNames ? fullNames[idx] : chart.data.labels[idx];
+                  
                   const totalSum = data.reduce((a, b) => a + b, 0);
                   const percent = ((data[idx] / totalSum) * 100).toFixed(1);
                   const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
 
-                  ctx.font = "bold 16px -apple-system, sans-serif";
+                  // 1️⃣ 업체명 (풀네임)
+                  ctx.font = "bold 15px -apple-system, sans-serif";
                   ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff";
-                  ctx.fillText(labels[idx], centerX, centerY - 20);
+                  // 글씨가 너무 길면 폰트 사이즈를 살짝 줄여서 삐져나가지 않게 방어
+                  if (ctx.measureText(displayName).width > 120) ctx.font = "bold 13px -apple-system, sans-serif";
+                  ctx.fillText(displayName, centerX, centerY - 22);
 
-                  ctx.font = "900 24px -apple-system, sans-serif";
+                  // 2️⃣ 퍼센트 (가장 크게!)
+                  ctx.font = "900 26px -apple-system, sans-serif";
                   ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
-                  ctx.fillText(`${percent}%`, centerX, centerY + 8);
+                  ctx.fillText(`${percent}%`, centerX, centerY + 6);
 
-                  ctx.font = "bold 13px -apple-system, sans-serif";
+                  // 3️⃣ 수량 (크기 키움)
+                  ctx.font = "bold 15px -apple-system, sans-serif";
                   ctx.fillStyle = "gray";
                   ctx.fillText(`(${data[idx]}${unitStr})`, centerX, centerY + 30);
               } else {
-                  ctx.font = "bold 13px -apple-system, sans-serif";
+                  ctx.font = "bold 14px -apple-system, sans-serif";
                   ctx.fillStyle = "gray";
                   ctx.fillText("조각을 터치하세요", centerX, centerY);
               }
@@ -4250,6 +4260,7 @@
               type: 'doughnut',
               data: { 
                   labels: sLabels, 
+                  fullNames: sortedComps, // 🚨 풀네임 데이터를 차트 속에 몰래 찔러넣음!
                   datasets: [{ 
                       data: sData, 
                       backgroundColor: [...sColors], 
@@ -4262,7 +4273,10 @@
                   responsive: true, maintainAspectRatio: false, 
                   cutout: '55%', 
                   layout: { padding: { left: 50, right: 50, top: 15, bottom: 15 } }, 
-                  plugins: { legend: { display: false } },
+                  plugins: { 
+                      legend: { display: false },
+                      tooltip: { enabled: false } // 🚨 거슬리는 검은색 말풍선 팝업 완전 차단!
+                  },
                   onClick: (e, activeElements) => {
                       const dataset = shareChartIns.data.datasets[0];
                       if (!activeElements || activeElements.length === 0) {
@@ -4286,7 +4300,18 @@
           });
       } // renderDashCharts 종료
 
-      
+      // 🚨 [추가] 대시보드의 빈 바탕(허공)을 터치하면 파이 차트 강제 리셋!
+      document.getElementById("dashboardModal").addEventListener("click", function(e) {
+          if (window.activePieIndex !== null && shareChartIns) {
+              // 캔버스(차트 도화지)가 아닌 엉뚱한 곳을 눌렀을 때만 작동
+              if (e.target.tagName !== "CANVAS") {
+                  window.activePieIndex = null;
+                  shareChartIns.data.datasets[0].backgroundColor = [...shareChartIns.data.datasets[0]._originalColors];
+                  shareChartIns.update();
+              }
+          }
+      });
+
       // 달력 바닥에 있는 "하단 요약바"용 업데이트
       function updateStatsSummary() {
           let tPal = 0, dPal = 0;
