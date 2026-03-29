@@ -2436,19 +2436,23 @@
               for (let d = 1; d <= days; d++) { labels.push(`${d}일`); barData.push(0); barDetails.push({}); }
 
               const process = (it, dIdx) => {
-                  let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
-                  let isTask = String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+                  // 🚨 입고 전용 로직: B/L 번호로 판별!
+                  let rawName = String(it.bl || it.company || "").trim();
+                  if (!rawName) return; // 빈 데이터 무시
+                  
+                  let clean = rawName.replace(/\[TASK\]/gi, "").trim();
+                  let isTask = rawName.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(clean);
+                  
                   if (!isTask) {
-                      let qty = parseInt(it.pal) || 0; // 🚨 입고는 무조건 pal 단위 고정
+                      let qty = parseInt(it.pal) || 0; 
                       totalQty += qty;
                       if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
                       if (dIdx !== null) {
                           barData[dIdx - 1] += qty;
-                          let std = getFullName(clean);
-                          barDetails[dIdx - 1][std] = (barDetails[dIdx - 1][std] || 0) + qty;
+                          // 🚨 입고 상세 내역에 뜰 때 앞글자가 아니라 원래 B/L(또는 FWD)이 뜨도록 깔끔하게
+                          barDetails[dIdx - 1][clean] = (barDetails[dIdx - 1][clean] || 0) + qty;
                       }
-                      let stdTotal = getFullName(clean);
-                      compMap[stdTotal] = (compMap[stdTotal] || 0) + qty;
+                      compMap[clean] = (compMap[clean] || 0) + qty;
                   }
               };
               
@@ -2578,8 +2582,11 @@
       function updateStatsSummary() {
           let tPal = 0, dPal = 0;
           const process = (it) => {
-              let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
-              if (String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean))) return;
+              // 🚨 입고 전용 맞춤형 필터: bl을 최우선으로 읽고 TASK는 무시!
+              let rawName = String(it.bl || it.company || "").trim();
+              let clean = rawName.replace(/\[TASK\]/gi, "").trim();
+              if (rawName.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(clean)) return;
+              
               tPal += parseInt(it.pal) || 0;
               if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
           };
