@@ -1523,11 +1523,17 @@
           </div>
         </div>
 
-        <div class="chart-container" style="height: 220px; display:block;">
+        <div class="chart-container" style="height: 220px; display:block; margin-bottom: 8px;">
           <canvas id="mainChart"></canvas>
         </div>
-        <div class="chart-container" style="height: 320px; display:block;">
-          <canvas id="shareChart"></canvas>
+        
+        <div id="barDetailBox" style="display: none; background: var(--card-bg); border: 1px solid #0a84ff; border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 0.9em; box-shadow: 0 2px 10px rgba(10, 132, 255, 0.1);"></div>
+
+        <div class="chart-container" style="height: 350px; display:flex; flex-direction:column; align-items:center;">
+          <div style="font-weight:900; color:var(--text-main); margin-bottom: 5px;">🏢 업체별 점유율 <span style="font-size:0.75em; color:var(--text-sub);">(조각을 터치해 보세요)</span></div>
+          <div style="position: relative; width: 100%; height: 100%;">
+            <canvas id="shareChart"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -3914,7 +3920,57 @@
       let mainChartIns = null;
       let shareChartIns = null;
 
-     // 🎨 [최종 패치 5.0] 차트 위 침범 절대 방지 & 바깥 빈 공간 100% 활용 지시선 엔진!
+     // =====================================================
+      // 🎨 [마법의 플러그인 모음] 도넛 차트 완전체 엔진!
+      // =====================================================
+      window.activePieIndex = null; // 현재 클릭된 파이 조각을 기억할 전역 변수
+
+      // 1. 도넛 가운데에 정보 띄우기 (관리자님 기획!)
+      const pieCenterTextPlugin = {
+          id: 'pieCenterText',
+          beforeDraw(chart) {
+              if (chart.config.type !== 'doughnut') return;
+              const ctx = chart.ctx;
+              const centerX = chart.chartArea.left + chart.chartArea.width / 2;
+              const centerY = chart.chartArea.top + chart.chartArea.height / 2;
+
+              ctx.save();
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+
+              if (window.activePieIndex !== null) {
+                  const idx = window.activePieIndex;
+                  const data = chart.data.datasets[0].data;
+                  const labels = chart.data.labels;
+                  const colors = chart.data.datasets[0].backgroundColor;
+                  const totalSum = data.reduce((a, b) => a + b, 0);
+                  const percent = ((data[idx] / totalSum) * 100).toFixed(1);
+                  const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
+
+                  // 업체명
+                  ctx.font = "bold 15px -apple-system, sans-serif";
+                  ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff"; // 투명해졌을 땐 기본색 방어
+                  ctx.fillText(labels[idx], centerX, centerY - 18);
+
+                  // 퍼센트
+                  ctx.font = "900 22px -apple-system, sans-serif";
+                  ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
+                  ctx.fillText(`${percent}%`, centerX, centerY + 6);
+
+                  // 수량
+                  ctx.font = "bold 13px -apple-system, sans-serif";
+                  ctx.fillStyle = "gray";
+                  ctx.fillText(`(${data[idx]}${unitStr})`, centerX, centerY + 28);
+              } else {
+                  ctx.font = "bold 13px -apple-system, sans-serif";
+                  ctx.fillStyle = "gray";
+                  ctx.fillText("터치하여 상세 보기", centerX, centerY);
+              }
+              ctx.restore();
+          }
+      };
+
+      // 2. 꼬임 방지 + 퍼센트 + 앵커(점) + 투명도 하이라이트 지시선
       const pieLeaderLinePlugin = {
           id: 'pieLeaderLine',
           afterDraw(chart) {
@@ -3923,98 +3979,93 @@
               const meta = chart.getDatasetMeta(0);
               const data = chart.data.datasets[0].data;
               const labels = chart.data.labels;
+              const bgColors = chart.data.datasets[0]._originalColors || chart.data.datasets[0].backgroundColor;
+              const totalSum = data.reduce((a, b) => a + b, 0);
               
               const centerX = chart.chartArea.left + chart.chartArea.width / 2;
               const centerY = chart.chartArea.top + chart.chartArea.height / 2;
-
-              let rightLabels = [];
-              let leftLabels = [];
+              let rightLabels = []; let leftLabels = [];
               const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
-              
-              ctx.font = "bold 12px -apple-system, sans-serif"; // 🚨 글자 크기 12px로 선명하게 확대!
               
               meta.data.forEach((element, index) => {
                   if (data[index] === 0) return;
                   const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
                   const radius = element.outerRadius;
                   const isRight = Math.cos(midAngle) > 0;
-                  
-                  // 선 시작점 (도넛 겉면)
                   const startX = centerX + Math.cos(midAngle) * radius;
                   const startY = centerY + Math.sin(midAngle) * radius;
+                  let elbowX = centerX + Math.cos(midAngle) * (radius + 20);
+                  let elbowY = centerY + Math.sin(midAngle) * (radius + 20);
                   
-                  // 🚨 [핵심 변경] 선 꺾이는 점(Elbow)을 차트 경계에서 '무조건 바깥으로 25px' 튕겨냄!
-                  // (이전 코드처럼 radius에 고정하지 않고 바깥 여백 영역에 생성)
-                  let elbowX = centerX + Math.cos(midAngle) * (radius + 25);
-                  let elbowY = centerY + Math.sin(midAngle) * (radius + 25);
+                  const percent = ((data[index] / totalSum) * 100).toFixed(1);
+                  const text = `${labels[index]} (${data[index]}${unitStr}, ${percent}%)`;
                   
-                  const text = `${labels[index]} (${data[index]}${unitStr})`;
+                  ctx.font = "bold 11px -apple-system, sans-serif";
                   const textWidth = ctx.measureText(text).width;
                   
-                  let obj = { index, text, textWidth, startX, startY, elbowX, elbowY, isRight };
+                  let obj = { index, text, textWidth, startX, startY, elbowX, elbowY, isRight, color: bgColors[index] };
                   if (isRight) rightLabels.push(obj);
                   else leftLabels.push(obj);
               });
 
-              // Y축 충돌 방지 간격 20px로 확대 (꼬임 방지 강화)
               const avoidCollision = (lbls) => {
                   lbls.sort((a, b) => a.elbowY - b.elbowY); 
                   let prevY = -9999;
-                  lbls.forEach(lbl => {
-                      if (lbl.elbowY < prevY + 20) lbl.elbowY = prevY + 20; 
-                      prevY = lbl.elbowY;
-                  });
+                  lbls.forEach(lbl => { if (lbl.elbowY < prevY + 18) lbl.elbowY = prevY + 18; prevY = lbl.elbowY; });
               };
-              avoidCollision(rightLabels);
-              avoidCollision(leftLabels);
+              avoidCollision(rightLabels); avoidCollision(leftLabels);
 
               ctx.save();
-              ctx.font = "bold 12px -apple-system, sans-serif";
               ctx.textBaseline = 'middle';
               
               const drawLabel = (lbl) => {
                   let lineEndX, textX;
-                  
-                  // 🚨 텍스트를 캔버스 양쪽 끝 벽면에 완전 밀착 정렬 (잘림 방지)
                   if (lbl.isRight) {
-                      textX = chart.width - 5;
-                      ctx.textAlign = 'right';
+                      textX = chart.width - 2; ctx.textAlign = 'right';
                       lineEndX = textX - lbl.textWidth - 5;
-                      // 선이 너무 안쪽으로 들어오지 않게 방어
                       if (lineEndX < centerX + meta.data[0].outerRadius + 15) lineEndX = centerX + meta.data[0].outerRadius + 15;
                   } else {
-                      textX = 5;
-                      ctx.textAlign = 'left';
+                      textX = 2; ctx.textAlign = 'left';
                       lineEndX = textX + lbl.textWidth + 5;
-                      // 선이 너무 안쪽으로 들어오지 않게 방어
                       if (lineEndX > centerX - meta.data[0].outerRadius - 15) lineEndX = centerX - meta.data[0].outerRadius - 15;
                   }
                   
-                  // 꺾은선 그리기
+                  let safeElbowX = lbl.elbowX;
+                  if (!lbl.isRight && safeElbowX > centerX - meta.data[0].outerRadius - 15) safeElbowX = centerX - meta.data[0].outerRadius - 15;
+                  if (lbl.isRight && safeElbowX < centerX + meta.data[0].outerRadius + 15) safeElbowX = centerX + meta.data[0].outerRadius + 15;
+
+                  // 🚨 터치된 상태면 선택 안 된 조각의 선과 글씨는 투명하게 만듦!
+                  const isActive = (window.activePieIndex === null || window.activePieIndex === lbl.index);
+                  const isLight = document.body.classList.contains("light-mode");
+                  
+                  ctx.strokeStyle = isActive ? (isLight ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.4)") : "rgba(128,128,128,0.1)";
+                  ctx.fillStyle = isActive ? (isLight ? "#222" : "#eee") : "rgba(128,128,128,0.3)";
+                  
+                  // 선 그리기
                   ctx.beginPath();
                   ctx.moveTo(lbl.startX, lbl.startY);
-                  // 🚨 만약 꺾이는 점(elbowX)이 차트 안쪽이라면 바깥으로 밀어냄
-                  let safeElbowX = lbl.elbowX;
-                  if (!lbl.isRight && safeElbowX > centerX - meta.data[0].outerRadius - 20) safeElbowX = centerX - meta.data[0].outerRadius - 20;
-                  if (lbl.isRight && safeElbowX < centerX + meta.data[0].outerRadius + 20) safeElbowX = centerX + meta.data[0].outerRadius + 20;
-
                   ctx.lineTo(safeElbowX, lbl.elbowY);
                   ctx.lineTo(lineEndX, lbl.elbowY);
-                  ctx.strokeStyle = document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.4)";
                   ctx.lineWidth = 1.2;
                   ctx.stroke();
+
+                  // 앵커 점 찍기
+                  ctx.beginPath();
+                  ctx.arc(lbl.startX, lbl.startY, 3.5, 0, 2 * Math.PI);
+                  ctx.fillStyle = isActive ? lbl.color : "rgba(128,128,128,0.1)"; 
+                  ctx.fill();
                   
-                  // 텍스트 그리기 (색상을 뚜렷하게)
-                  ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
+                  // 텍스트 그리기
+                  ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
+                  ctx.fillStyle = isActive ? (isLight ? "#222" : "#eee") : "rgba(128,128,128,0.3)";
                   ctx.fillText(lbl.text, textX, lbl.elbowY);
               };
 
-              rightLabels.forEach(drawLabel);
-              leftLabels.forEach(drawLabel);
+              rightLabels.forEach(drawLabel); leftLabels.forEach(drawLabel);
               ctx.restore();
           }
       };
-      Chart.register(pieLeaderLinePlugin); // 엔진 재장착!
+      Chart.register(pieCenterTextPlugin, pieLeaderLinePlugin); // 두 개의 엔진 동시 장착!
 
       // ⚙️ 스위치 토글 함수
       function setDashUnit(unit) {
@@ -4066,16 +4117,15 @@
           let typeName = currentType === "out" ? "출고량" : "입고량";
           let unitName = window.dashUnit === 'pal' ? "PAL" : "BOX";
           
-          let labels = []; let barData = []; let compMap = {};
+         let labels = []; let barData = []; let compMap = {};
+          let barDetails = []; // 🚨 [추가] 일자별로 어떤 업체가 몇 개 가져갔는지 저장할 바구니
           let totalQty = 0; let doneQty = 0;
+          
+          document.getElementById("barDetailBox").style.display = "none"; // 열 때마다 일단 숨김
 
           if (window.dashMode === 'month') {
-              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
-              document.getElementById('dashCardTitle1').innerText = "월간 달성률";
-              document.getElementById('dashCardTitle2').innerText = "일일 평균 처리";
-              
               let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
-              for (let d = 1; d <= days; d++) { labels.push(`${d}일`); barData.push(0); }
+              for (let d = 1; d <= days; d++) { labels.push(`${d}일`); barData.push(0); barDetails.push({}); }
 
               const process = (it, dIdx) => {
                   let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
@@ -4085,29 +4135,29 @@
                       totalQty += qty;
                       if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
                       
-                      if (dIdx !== null) barData[dIdx - 1] += qty;
-                      let std = getFullName(clean);
-                      compMap[std] = (compMap[std] || 0) + qty;
+                      if (dIdx !== null) {
+                          barData[dIdx - 1] += qty;
+                          // 🚨 [핵심] 일자별 상세 바구니에 업체명과 수량 꼼꼼히 기록!
+                          let std = getFullName(clean);
+                          barDetails[dIdx - 1][std] = (barDetails[dIdx - 1][std] || 0) + qty;
+                      }
+                      
+                      let stdTotal = getFullName(clean);
+                      compMap[stdTotal] = (compMap[stdTotal] || 0) + qty;
                   }
               };
               for (let d = 1; d <= days; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(it => process(it, d)); }
               if (serverData.pendingItems) serverData.pendingItems.forEach(it => process(it, null));
-              
           } else {
-              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`;
-              document.getElementById('dashCardTitle1').innerText = "연간 총 누적수량";
-              document.getElementById('dashCardTitle2').innerText = "월 평균 처리";
-              
-              for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); }
+              for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); barDetails.push({}); }
               let yData = yearlyCache[window.dashYear];
-              if (!yData) return; // 대기
-              
+              if (!yData) return;
               barData = yData.monthly.map(m => m[window.dashUnit]);
               totalQty = barData.reduce((a, b) => a + b, 0);
               Object.keys(yData.comp).forEach(k => { compMap[k] = yData.comp[k][window.dashUnit]; });
           }
 
-          // 🎛️ 스마트 카드 UI 데이터 매핑
+          // 🎛️ 스마트 카드 UI 데이터 매핑 (기존과 동일하므로 생략 없이 그대로 유지)
           if (window.dashMode === 'month') {
               let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
               let now = new Date();
@@ -4117,7 +4167,6 @@
 
               document.getElementById("dashCardTitle1").innerText = "당월 총 예정 물량";
               document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
-              
               document.getElementById("dashVolDetail").innerText = `완료: ${doneQty.toLocaleString()} (${rate}%)`;
               document.getElementById("dashVolDetail").style.color = rate >= 100 ? "#34c759" : (rate > 50 ? "#0a84ff" : "#ff9f0a");
               
@@ -4127,26 +4176,80 @@
           } else {
               let avgMonthly = totalQty > 0 ? Math.round(totalQty / 12) : 0;
               let avgDaily = totalQty > 0 ? (totalQty / 365).toFixed(1) : 0;
-              
               document.getElementById("dashCardTitle1").innerText = "연간 총 누적수량";
               document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
               document.getElementById("dashVolDetail").innerText = `(1년 전체 합산)`;
               document.getElementById("dashVolDetail").style.color = "#0a84ff";
-              
               document.getElementById("dashCardTitle2").innerText = "월간 평균 처리량";
               document.getElementById("dashAvg").innerHTML = `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/월</span>`;
               document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${avgDaily})`;
           }
 
-          // 📊 1. 막대 그래프 그리기
+         // 📊 1. 막대 그래프 그리기 (🔥 하이라이트 & 터치 이벤트 추가!)
           if (mainChartIns) mainChartIns.destroy();
+          
+          let defaultBgColor = '#0a84ff';
+          let bgColors = new Array(labels.length).fill(defaultBgColor);
+
           mainChartIns = new Chart(document.getElementById('mainChart'), {
               type: 'bar',
-              data: { labels: labels, datasets: [{ label: `수량(${unitName})`, data: barData, backgroundColor: '#0a84ff', borderRadius: 4 }] },
-              options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } } } }
+              data: { labels: labels, datasets: [{ label: `수량(${unitName})`, data: barData, backgroundColor: bgColors, borderRadius: 4 }] },
+              options: { 
+                  responsive: true, maintainAspectRatio: false, 
+                  plugins: { legend: { display: false } }, 
+                  scales: { x: { grid: { display: false } } },
+                  // 👇 그래프 막대를 터치했을 때 발동하는 마법!
+                  onClick: (e, activeElements) => {
+                      let detailBox = document.getElementById("barDetailBox");
+                      
+                      // 빈 공간을 누르면 하이라이트 해제 & 패널 닫기
+                      if (!activeElements || activeElements.length === 0) {
+                          mainChartIns.data.datasets[0].backgroundColor = new Array(labels.length).fill(defaultBgColor);
+                          mainChartIns.update();
+                          detailBox.style.display = 'none';
+                          return;
+                      }
+
+                      const idx = activeElements[0].index;
+
+                      // 1) 내가 누른 막대만 진하게, 나머지는 반투명하게 (하이라이트 효과)
+                      let dimColor = document.body.classList.contains("light-mode") ? 'rgba(10, 132, 255, 0.2)' : 'rgba(10, 132, 255, 0.3)';
+                      let newColors = new Array(labels.length).fill(dimColor);
+                      newColors[idx] = defaultBgColor;
+                      mainChartIns.data.datasets[0].backgroundColor = newColors;
+                      mainChartIns.update();
+
+                      // 2) 상세 내역 패널에 업체별 뱃지(태그) 그려주기
+                      if (window.dashMode === 'month') {
+                          let details = barDetails[idx];
+                          let total = barData[idx];
+                          if (total === 0) { detailBox.style.display = 'none'; return; }
+
+                          // 수량 많은 순으로 정렬
+                          let sortedDetail = Object.keys(details).sort((a,b) => details[b] - details[a]);
+                          let uStr = window.dashUnit === 'pal' ? 'P' : 'B';
+                          
+                          let html = `<div style="font-weight:900; margin-bottom:10px; color:#0a84ff;">📅 ${idx+1}일 상세 내역 <span style="color:var(--text-main); font-size:0.9em;">(총 ${total}${uStr})</span></div>`;
+                          html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+                          
+                          sortedDetail.forEach(comp => {
+                              let cColor = getCompanyColor(comp).bg; // 도넛 차트랑 똑같은 업체 색상 가져오기
+                              html += `<div style="display:flex; align-items:center; gap:5px; background:var(--btn-bg); padding:5px 10px; border-radius:8px; font-size:0.95em; border:1px solid var(--border-color);">
+                                  <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${cColor};"></span>
+                                  <span style="font-weight:bold; color:var(--text-main);">${getShortName(comp)}</span>
+                                  <span style="color:var(--text-sub); font-weight:800;">${details[comp]}${uStr}</span>
+                              </div>`;
+                          });
+                          html += `</div>`;
+                          detailBox.innerHTML = html;
+                          detailBox.style.display = 'block';
+                      }
+                  }
+              }
           });
 
-          // 🍩 2. 파이 차트 (커스텀 지시선 적용 및 여백 최적화)
+          // 🍩 2. 파이 차트 (중앙 데이터 & 하이라이트 인터랙션!)
+          window.activePieIndex = null; // 렌더링할 때마다 초기화
           let sortedComps = Object.keys(compMap).filter(k => compMap[k] > 0).sort((a, b) => compMap[b] - compMap[a]);
           let sLabels = []; let sData = []; let sColors = [];
           sortedComps.forEach(c => {
@@ -4156,15 +4259,46 @@
           if (shareChartIns) shareChartIns.destroy();
           shareChartIns = new Chart(document.getElementById('shareChart'), {
               type: 'doughnut',
-              data: { labels: sLabels, datasets: [{ data: sData, backgroundColor: sColors, borderWidth: 2, borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30" }] },
+              data: { 
+                  labels: sLabels, 
+                  datasets: [{ 
+                      data: sData, 
+                      backgroundColor: [...sColors], 
+                      _originalColors: [...sColors], // 원본 색상 백업
+                      borderWidth: 2, 
+                      borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30" 
+                  }] 
+              },
               options: {
-                  responsive: true, maintainAspectRatio: false, cutout: '45%',
-                  // 🚨 좌우 글씨 여백을 95px로 대폭 키워서 긴 글씨도 절대 안 짤리게 함!
-                  layout: { padding: { left: 95, right: 95, top: 25, bottom: 25 } }, 
-                  plugins: { legend: { display: false } }
+                  responsive: true, maintainAspectRatio: false, 
+                  cutout: '55%', // 🚨 가운데 글씨가 들어갈 수 있게 도넛 구멍을 55%로 넒힘!
+                  layout: { padding: { left: 90, right: 90, top: 20, bottom: 20 } }, 
+                  plugins: { legend: { display: false } },
+                  // 🚨 터치 이벤트 마법!
+                  onClick: (e, activeElements) => {
+                      const dataset = shareChartIns.data.datasets[0];
+                      if (!activeElements || activeElements.length === 0) {
+                          // 빈 공간 누르면 원상복구
+                          window.activePieIndex = null;
+                          dataset.backgroundColor = [...dataset._originalColors];
+                      } else {
+                          const idx = activeElements[0].index;
+                          if (window.activePieIndex === idx) {
+                              // 한 번 더 누르면 원상복구
+                              window.activePieIndex = null;
+                              dataset.backgroundColor = [...dataset._originalColors];
+                          } else {
+                              // 누른 조각만 빼고 다 회색(반투명)으로 묻혀버림!
+                              window.activePieIndex = idx;
+                              dataset.backgroundColor = dataset._originalColors.map((color, i) => {
+                                  return i === idx ? color : (document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)");
+                              });
+                          }
+                      }
+                      shareChartIns.update(); // 애니메이션과 함께 차트 다시 그리기
+                  }
               }
           });
-        }
 
       // 달력 바닥에 있는 "하단 요약바"용 업데이트
       function updateStatsSummary() {
