@@ -3910,22 +3910,18 @@
       }
 
       // =====================================================
-      // 📊 [최종] 다이나믹 대시보드 & 꺾은선 지시선 커스텀 엔진
+      // 📊 [최종 완결판] 다이나믹 대시보드 & 하이브리드 지시선 통합 엔진
       // =====================================================
-      window.dashMode = 'month'; // 'month' or 'year'
-      window.dashUnit = 'pal';   // 'pal' or 'box'
+      window.dashMode = 'month';
+      window.dashUnit = 'pal';
       window.dashYear = new Date().getFullYear();
       window.dashMonth = new Date().getMonth() + 1;
       let yearlyCache = {};
       let mainChartIns = null;
       let shareChartIns = null;
+      window.activePieIndex = null;
 
-     // =====================================================
-      // 🎨 [마법의 플러그인 모음] 도넛 차트 완전체 엔진!
-      // =====================================================
-      window.activePieIndex = null; // 현재 클릭된 파이 조각을 기억할 전역 변수
-
-      // 1. 도넛 가운데에 정보 띄우기 (관리자님 기획!)
+      // 🎨 [플러그인 1] 도넛 가운데에 정보 띄우기 (터치 시 상세 정보)
       const pieCenterTextPlugin = {
           id: 'pieCenterText',
           beforeDraw(chart) {
@@ -3935,8 +3931,7 @@
               const centerY = chart.chartArea.top + chart.chartArea.height / 2;
 
               ctx.save();
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
+              ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
               if (window.activePieIndex !== null) {
                   const idx = window.activePieIndex;
@@ -3947,71 +3942,87 @@
                   const percent = ((data[idx] / totalSum) * 100).toFixed(1);
                   const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
 
-                  // 업체명
-                  ctx.font = "bold 15px -apple-system, sans-serif";
-                  ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff"; // 투명해졌을 땐 기본색 방어
-                  ctx.fillText(labels[idx], centerX, centerY - 18);
+                  ctx.font = "bold 16px -apple-system, sans-serif";
+                  ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff";
+                  ctx.fillText(labels[idx], centerX, centerY - 20);
 
-                  // 퍼센트
-                  ctx.font = "900 22px -apple-system, sans-serif";
+                  ctx.font = "900 24px -apple-system, sans-serif";
                   ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
-                  ctx.fillText(`${percent}%`, centerX, centerY + 6);
+                  ctx.fillText(`${percent}%`, centerX, centerY + 8);
 
-                  // 수량
                   ctx.font = "bold 13px -apple-system, sans-serif";
                   ctx.fillStyle = "gray";
-                  ctx.fillText(`(${data[idx]}${unitStr})`, centerX, centerY + 28);
+                  ctx.fillText(`(${data[idx]}${unitStr})`, centerX, centerY + 30);
               } else {
                   ctx.font = "bold 13px -apple-system, sans-serif";
                   ctx.fillStyle = "gray";
-                  ctx.fillText("터치하여 상세 보기", centerX, centerY);
+                  ctx.fillText("조각을 터치하세요", centerX, centerY);
               }
               ctx.restore();
           }
       };
 
-      // 2. 꼬임 방지 + 퍼센트 + 앵커(점) + 투명도 하이라이트 지시선
-      const pieLeaderLinePlugin = {
-          id: 'pieLeaderLine',
+      // 🎨 [플러그인 2] 하이브리드 지시선 (큰 조각은 안, 작은 조각은 밖으로 뻗침)
+      const pieHybridLabelPlugin = {
+          id: 'pieHybridLabel',
           afterDraw(chart) {
               if (chart.config.type !== 'doughnut') return;
               const ctx = chart.ctx;
               const meta = chart.getDatasetMeta(0);
               const data = chart.data.datasets[0].data;
               const labels = chart.data.labels;
-              const bgColors = chart.data.datasets[0]._originalColors || chart.data.datasets[0].backgroundColor;
               const totalSum = data.reduce((a, b) => a + b, 0);
               
               const centerX = chart.chartArea.left + chart.chartArea.width / 2;
               const centerY = chart.chartArea.top + chart.chartArea.height / 2;
               let rightLabels = []; let leftLabels = [];
-              const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
+              const isLight = document.body.classList.contains("light-mode");
               
               meta.data.forEach((element, index) => {
                   if (data[index] === 0) return;
                   const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
+                  const circumference = element.endAngle - element.startAngle;
                   const radius = element.outerRadius;
                   const isRight = Math.cos(midAngle) > 0;
-                  const startX = centerX + Math.cos(midAngle) * radius;
-                  const startY = centerY + Math.sin(midAngle) * radius;
-                  let elbowX = centerX + Math.cos(midAngle) * (radius + 20);
-                  let elbowY = centerY + Math.sin(midAngle) * (radius + 20);
-                  
                   const percent = ((data[index] / totalSum) * 100).toFixed(1);
-                  const text = `${labels[index]} (${data[index]}${unitStr}, ${percent}%)`;
-                  
-                  ctx.font = "bold 11px -apple-system, sans-serif";
-                  const textWidth = ctx.measureText(text).width;
-                  
-                  let obj = { index, text, textWidth, startX, startY, elbowX, elbowY, isRight, color: bgColors[index] };
-                  if (isRight) rightLabels.push(obj);
-                  else leftLabels.push(obj);
+                  const isActive = (window.activePieIndex === null || window.activePieIndex === index);
+
+                  // 조각이 크면 안에다 이름 적기
+                  if (circumference > 0.35) {
+                      const r = element.innerRadius + (element.outerRadius - element.innerRadius) * 0.55;
+                      const x = centerX + Math.cos(midAngle) * r;
+                      const y = centerY + Math.sin(midAngle) * r;
+                      
+                      ctx.save();
+                      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                      ctx.font = isActive ? "bold 13px -apple-system, sans-serif" : "13px -apple-system, sans-serif";
+                      ctx.fillStyle = isActive ? "#ffffff" : "rgba(255,255,255,0.3)";
+                      if (isActive) { ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 4; }
+                      
+                      ctx.fillText(labels[index], x, y - 6);
+                      ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
+                      ctx.fillText(`${percent}%`, x, y + 8);
+                      ctx.restore();
+                  } else {
+                      // 작으면 밖으로 지시선 뽑기
+                      const startX = centerX + Math.cos(midAngle) * radius;
+                      const startY = centerY + Math.sin(midAngle) * radius;
+                      let elbowX = centerX + Math.cos(midAngle) * (radius + 15);
+                      let elbowY = centerY + Math.sin(midAngle) * (radius + 15);
+                      
+                      const text = `${labels[index]} (${percent}%)`; 
+                      ctx.font = "bold 11px -apple-system, sans-serif";
+                      const textWidth = ctx.measureText(text).width;
+                      let obj = { index, text, textWidth, startX, startY, elbowX, elbowY, isRight };
+                      if (isRight) rightLabels.push(obj); else leftLabels.push(obj);
+                  }
               });
 
+              // 겹침 방지 정렬
               const avoidCollision = (lbls) => {
                   lbls.sort((a, b) => a.elbowY - b.elbowY); 
                   let prevY = -9999;
-                  lbls.forEach(lbl => { if (lbl.elbowY < prevY + 18) lbl.elbowY = prevY + 18; prevY = lbl.elbowY; });
+                  lbls.forEach(lbl => { if (lbl.elbowY < prevY + 16) lbl.elbowY = prevY + 16; prevY = lbl.elbowY; });
               };
               avoidCollision(rightLabels); avoidCollision(leftLabels);
 
@@ -4023,41 +4034,34 @@
                   if (lbl.isRight) {
                       textX = chart.width - 2; ctx.textAlign = 'right';
                       lineEndX = textX - lbl.textWidth - 5;
-                      if (lineEndX < centerX + meta.data[0].outerRadius + 15) lineEndX = centerX + meta.data[0].outerRadius + 15;
+                      if (lineEndX < centerX + meta.data[0].outerRadius + 10) lineEndX = centerX + meta.data[0].outerRadius + 10;
                   } else {
                       textX = 2; ctx.textAlign = 'left';
                       lineEndX = textX + lbl.textWidth + 5;
-                      if (lineEndX > centerX - meta.data[0].outerRadius - 15) lineEndX = centerX - meta.data[0].outerRadius - 15;
+                      if (lineEndX > centerX - meta.data[0].outerRadius - 10) lineEndX = centerX - meta.data[0].outerRadius - 10;
                   }
                   
                   let safeElbowX = lbl.elbowX;
-                  if (!lbl.isRight && safeElbowX > centerX - meta.data[0].outerRadius - 15) safeElbowX = centerX - meta.data[0].outerRadius - 15;
-                  if (lbl.isRight && safeElbowX < centerX + meta.data[0].outerRadius + 15) safeElbowX = centerX + meta.data[0].outerRadius + 15;
+                  if (!lbl.isRight && safeElbowX > centerX - meta.data[0].outerRadius - 10) safeElbowX = centerX - meta.data[0].outerRadius - 10;
+                  if (lbl.isRight && safeElbowX < centerX + meta.data[0].outerRadius + 10) safeElbowX = centerX + meta.data[0].outerRadius + 10;
 
-                  // 🚨 터치된 상태면 선택 안 된 조각의 선과 글씨는 투명하게 만듦!
                   const isActive = (window.activePieIndex === null || window.activePieIndex === lbl.index);
-                  const isLight = document.body.classList.contains("light-mode");
+                  ctx.strokeStyle = isActive ? (isLight ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.3)") : "rgba(128,128,128,0.1)";
                   
-                  ctx.strokeStyle = isActive ? (isLight ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.4)") : "rgba(128,128,128,0.1)";
-                  ctx.fillStyle = isActive ? (isLight ? "#222" : "#eee") : "rgba(128,128,128,0.3)";
-                  
-                  // 선 그리기
                   ctx.beginPath();
                   ctx.moveTo(lbl.startX, lbl.startY);
                   ctx.lineTo(safeElbowX, lbl.elbowY);
                   ctx.lineTo(lineEndX, lbl.elbowY);
-                  ctx.lineWidth = 1.2;
+                  ctx.lineWidth = 1;
                   ctx.stroke();
 
-                  // 앵커 점 찍기
                   ctx.beginPath();
                   ctx.arc(lbl.startX, lbl.startY, 3.5, 0, 2 * Math.PI);
-                  ctx.fillStyle = isActive ? lbl.color : "rgba(128,128,128,0.1)"; 
+                  ctx.fillStyle = isActive ? (isLight ? "rgba(100,100,100,0.7)" : "rgba(180,180,180,0.7)") : "rgba(128,128,128,0.1)"; 
                   ctx.fill();
                   
-                  // 텍스트 그리기
                   ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
-                  ctx.fillStyle = isActive ? (isLight ? "#222" : "#eee") : "rgba(128,128,128,0.3)";
+                  ctx.fillStyle = isActive ? (isLight ? "#444" : "#ccc") : "rgba(128,128,128,0.3)";
                   ctx.fillText(lbl.text, textX, lbl.elbowY);
               };
 
@@ -4065,9 +4069,12 @@
               ctx.restore();
           }
       };
-      Chart.register(pieCenterTextPlugin, pieLeaderLinePlugin); // 두 개의 엔진 동시 장착!
+      
+      // 🚨 이전에 꼬였던 플러그인들 리셋하고 새것만 등록!
+      Chart.unregister(pieCenterTextPlugin, pieHybridLabelPlugin); 
+      Chart.register(pieCenterTextPlugin, pieHybridLabelPlugin);
 
-      // ⚙️ 스위치 토글 함수
+      // ⚙️ 스위치 토글 및 네비게이션 함수들
       function setDashUnit(unit) {
           window.dashUnit = unit;
           document.getElementById('btnDashPal').classList.toggle('active', unit === 'pal');
@@ -4086,16 +4093,13 @@
               window.dashMonth += offset;
               if (window.dashMonth > 12) { window.dashMonth = 1; window.dashYear++; }
               else if (window.dashMonth < 1) { window.dashMonth = 12; window.dashYear--; }
-              
-              // 달력 자체를 넘기면서 데이터 가져옴
               goToAsync(window.dashYear, window.dashMonth); 
-              setTimeout(renderDashCharts, 800); // 통신 기다린 후 렌더링
+              setTimeout(renderDashCharts, 800); 
           } else {
               window.dashYear += offset;
               fetchYearlyAndRender();
           }
       }
-
       function fetchYearlyAndRender() {
           document.getElementById('dashTitleText').innerText = "데이터 불러오는 중...";
           google.script.run.withSuccessHandler(res => {
@@ -4103,11 +4107,10 @@
               renderDashCharts();
           }).getYearlyStatsAsync(currentType, window.dashYear);
       }
-
       function openDashboard() {
           window.dashYear = serverData.year; window.dashMonth = serverData.month;
           document.getElementById('dashboardModal').style.display = 'flex';
-          setTimeout(renderDashCharts, 100); // 애니메이션 딜레이
+          setTimeout(renderDashCharts, 100);
       }
 
       // 📈 핵심 차트 그리기 엔진
@@ -4117,13 +4120,14 @@
           let typeName = currentType === "out" ? "출고량" : "입고량";
           let unitName = window.dashUnit === 'pal' ? "PAL" : "BOX";
           
-         let labels = []; let barData = []; let compMap = {};
-          let barDetails = []; // 🚨 [추가] 일자별로 어떤 업체가 몇 개 가져갔는지 저장할 바구니
+          let labels = []; let barData = []; let compMap = {};
+          let barDetails = []; 
           let totalQty = 0; let doneQty = 0;
           
-          document.getElementById("barDetailBox").style.display = "none"; // 열 때마다 일단 숨김
+          document.getElementById("barDetailBox").style.display = "none";
 
           if (window.dashMode === 'month') {
+              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
               let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
               for (let d = 1; d <= days; d++) { labels.push(`${d}일`); barData.push(0); barDetails.push({}); }
 
@@ -4137,11 +4141,9 @@
                       
                       if (dIdx !== null) {
                           barData[dIdx - 1] += qty;
-                          // 🚨 [핵심] 일자별 상세 바구니에 업체명과 수량 꼼꼼히 기록!
                           let std = getFullName(clean);
                           barDetails[dIdx - 1][std] = (barDetails[dIdx - 1][std] || 0) + qty;
                       }
-                      
                       let stdTotal = getFullName(clean);
                       compMap[stdTotal] = (compMap[stdTotal] || 0) + qty;
                   }
@@ -4149,6 +4151,7 @@
               for (let d = 1; d <= days; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(it => process(it, d)); }
               if (serverData.pendingItems) serverData.pendingItems.forEach(it => process(it, null));
           } else {
+              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`; 
               for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); barDetails.push({}); }
               let yData = yearlyCache[window.dashYear];
               if (!yData) return;
@@ -4157,7 +4160,6 @@
               Object.keys(yData.comp).forEach(k => { compMap[k] = yData.comp[k][window.dashUnit]; });
           }
 
-          // 🎛️ 스마트 카드 UI 데이터 매핑 (기존과 동일하므로 생략 없이 그대로 유지)
           if (window.dashMode === 'month') {
               let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
               let now = new Date();
@@ -4185,9 +4187,7 @@
               document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${avgDaily})`;
           }
 
-        // 📊 1. 막대 그래프 그리기 (🔥 하이라이트 & 터치 이벤트 추가!)
           if (mainChartIns) mainChartIns.destroy();
-          
           let defaultBgColor = '#0a84ff';
           let bgColors = new Array(labels.length).fill(defaultBgColor);
 
@@ -4198,19 +4198,15 @@
                   responsive: true, maintainAspectRatio: false, 
                   plugins: { legend: { display: false } }, 
                   scales: { x: { grid: { display: false } } },
-                  // 👇 그래프 막대를 터치했을 때 발동하는 마법!
                   onClick: (e, activeElements) => {
                       let detailBox = document.getElementById("barDetailBox");
-                      
                       if (!activeElements || activeElements.length === 0) {
                           mainChartIns.data.datasets[0].backgroundColor = new Array(labels.length).fill(defaultBgColor);
                           mainChartIns.update();
                           detailBox.style.display = 'none';
                           return;
                       }
-
                       const idx = activeElements[0].index;
-
                       let dimColor = document.body.classList.contains("light-mode") ? 'rgba(10, 132, 255, 0.2)' : 'rgba(10, 132, 255, 0.3)';
                       let newColors = new Array(labels.length).fill(dimColor);
                       newColors[idx] = defaultBgColor;
@@ -4221,13 +4217,11 @@
                           let details = barDetails[idx];
                           let total = barData[idx];
                           if (total === 0) { detailBox.style.display = 'none'; return; }
-
                           let sortedDetail = Object.keys(details).sort((a,b) => details[b] - details[a]);
                           let uStr = window.dashUnit === 'pal' ? 'P' : 'B';
                           
                           let html = `<div style="font-weight:900; margin-bottom:10px; color:#0a84ff;">📅 ${idx+1}일 상세 내역 <span style="color:var(--text-main); font-size:0.9em;">(총 ${total}${uStr})</span></div>`;
                           html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
-                          
                           sortedDetail.forEach(comp => {
                               let cColor = getCompanyColor(comp).bg; 
                               html += `<div style="display:flex; align-items:center; gap:5px; background:var(--btn-bg); padding:5px 10px; border-radius:8px; font-size:0.95em; border:1px solid var(--border-color);">
@@ -4242,9 +4236,8 @@
                       }
                   }
               }
-          }); // 👈 막대그래프 닫기!
+          });
 
-          // 🍩 2. 파이 차트 (중앙 데이터 & 하이라이트 인터랙션!)
           window.activePieIndex = null; 
           let sortedComps = Object.keys(compMap).filter(k => compMap[k] > 0).sort((a, b) => compMap[b] - compMap[a]);
           let sLabels = []; let sData = []; let sColors = [];
@@ -4268,7 +4261,7 @@
               options: {
                   responsive: true, maintainAspectRatio: false, 
                   cutout: '55%', 
-                  layout: { padding: { left: 90, right: 90, top: 20, bottom: 20 } }, 
+                  layout: { padding: { left: 50, right: 50, top: 15, bottom: 15 } }, 
                   plugins: { legend: { display: false } },
                   onClick: (e, activeElements) => {
                       const dataset = shareChartIns.data.datasets[0];
@@ -4290,9 +4283,10 @@
                       shareChartIns.update(); 
                   }
               }
-          }); // 👈 파이차트 닫기!
-      } // 🚨🚨 바로 여기! renderDashCharts 함수를 최종적으로 닫는 중괄호!!! 🚨🚨
+          });
+      } // renderDashCharts 종료
 
+      
       // 달력 바닥에 있는 "하단 요약바"용 업데이트
       function updateStatsSummary() {
           let tPal = 0, dPal = 0;
