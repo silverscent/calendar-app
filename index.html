@@ -4116,6 +4116,7 @@
       Chart.unregister(pieCenterTextPlugin, pieHybridLabelPlugin); 
       Chart.register(pieCenterTextPlugin, pieHybridLabelPlugin);
 
+     
       // ⚙️ 스위치 토글 및 네비게이션 함수들
       function setDashUnit(unit) {
           window.dashUnit = unit;
@@ -4135,47 +4136,66 @@
               window.dashMonth += offset;
               if (window.dashMonth > 12) { window.dashMonth = 1; window.dashYear++; }
               else if (window.dashMonth < 1) { window.dashMonth = 12; window.dashYear--; }
-              goToAsync(window.dashYear, window.dashMonth); 
-              setTimeout(renderDashCharts, 800); 
+              
+              // 🚨 [핵심 수정] 무거운 goToAsync(달력 이동) 대신, 대시보드 전용 데이터만 가볍게 빼옵니다!
+              fetchDashMonthAndRender(); 
           } else {
               window.dashYear += offset;
               fetchYearlyAndRender();
           }
       }
-      function fetchYearlyAndRender() {
+
+      // 🚨 [신규] 대시보드용 월간 데이터 독립 호출 엔진 (달력 UI 건드림 X)
+      window.dashCurrentData = null; // 대시보드가 임시로 쓸 데이터 바구니
+      function fetchDashMonthAndRender() {
           document.getElementById('dashTitleText').innerText = "데이터 불러오는 중...";
           
-          // 💡 [속도 개선 핵심] 폰 메모리(로컬 스토리지)에 저장된 연간 데이터가 있다면 0초 만에 즉시 띄움!
-          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYear}`;
+          let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
           let cached = localStorage.getItem(cacheKey);
           if (cached) {
               try {
-                  yearlyCache[window.dashYear] = JSON.parse(cached);
-                  renderDashCharts(); // 즉시 화면 렌더링!
+                  let parsed = JSON.parse(cached);
+                  window.dashCurrentData = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+                  renderDashCharts();
               } catch(e) {}
           }
 
-          // 화면엔 캐시 데이터를 띄워두고, 뒷단에서 조용히 서버 최신 데이터를 가져옴 (스텔스 업데이트)
+          // 뒷단에서 몰래 서버 최신화 (달력은 그대로 둠)
+          google.script.run
+              .withSuccessHandler(res => {
+                  let finalData = typeof res === 'string' ? JSON.parse(res) : res;
+                  window.dashCurrentData = finalData;
+                  localStorage.setItem(cacheKey, JSON.stringify(finalData));
+                  if (window.dashMode === 'month') renderDashCharts();
+              })
+              .withFailureHandler(err => {
+                  if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲";
+              })
+              .getCalendarDataAsync(currentType, window.dashYear, window.dashMonth);
+      }
+
+      function fetchYearlyAndRender() {
+          document.getElementById('dashTitleText').innerText = "데이터 불러오는 중...";
+          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYear}`;
+          let cached = localStorage.getItem(cacheKey);
+          if (cached) {
+              try { yearlyCache[window.dashYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {}
+          }
           google.script.run
               .withSuccessHandler(res => {
                   yearlyCache[res.year] = res;
-                  localStorage.setItem(cacheKey, JSON.stringify(res)); // 지갑(캐시) 갱신
-                  
-                  // 유저가 아직 다른 년도로 안 넘어가고 해당 화면을 보고 있다면 쥐도새도 모르게 스르륵 업데이트!
-                  if (window.dashMode === 'year' && window.dashYear === res.year) {
-                      renderDashCharts();
-                  }
+                  localStorage.setItem(cacheKey, JSON.stringify(res)); 
+                  if (window.dashMode === 'year' && window.dashYear === res.year) renderDashCharts();
               })
               .withFailureHandler(err => {
-                  // 서버가 뻗었어도 캐시가 있으면 티 내지 않음. 캐시마저 없을 때만 실패 표시!
-                  if (window.dashMode === 'year' && !cached) {
-                      document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲";
-                  }
-              })
-              .getYearlyStatsAsync(currentType, window.dashYear);
+                  if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲";
+              }).getYearlyStatsAsync(currentType, window.dashYear);
       }
+
       function openDashboard() {
           window.dashYear = serverData.year; window.dashMonth = serverData.month;
+          // 🚨 창을 열 때 현재 바탕에 있는 달력 데이터를 복사해서 통계용으로 씁니다
+          window.dashCurrentData = serverData; 
           document.getElementById('dashboardModal').style.display = 'flex';
           setTimeout(renderDashCharts, 100);
       }
@@ -4215,8 +4235,18 @@
                       compMap[stdTotal] = (compMap[stdTotal] || 0) + qty;
                   }
               };
-              for (let d = 1; d <= days; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(it => process(it, d)); }
-              if (serverData.pendingItems) serverData.pendingItems.forEach(it => process(it, null));
+              
+              // 🚨 [핵심 수정] 무거운 바탕 달력(serverData)을 건드리지 않고, 독립된 대시보드 데이터(dashCurrentData)만 스캔!
+              if (window.dashCurrentData) {
+                  for (let d = 1; d <= days; d++) { 
+                      if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d]) {
+                          window.dashCurrentData.monthData[d].forEach(it => process(it, d)); 
+                      }
+                  }
+                  if (window.dashCurrentData.pendingItems) {
+                      window.dashCurrentData.pendingItems.forEach(it => process(it, null));
+                  }
+              }
           } else {
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`; 
               for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); barDetails.push({}); }
