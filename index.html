@@ -1875,52 +1875,25 @@
         { bg: "#CE93D8", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }, // 19. 라벤더
         { bg: "#F48FB1", cMain: "#111", cSub: "rgba(0,0,0,0.7)", txtShadow: "none" }  // 20. 로즈
       ];
-    // 💡 [패치 1&2] 색상 중복 배정 & 셔플 참조 오류 완벽 해결!
+    // 💡 [패치 1] 색상 무단 변경 버그 완벽 차단! 순수 100% 해시 영구 고정 알고리즘
       function getCompanyColor(companyName) {
         if (!companyName) return presetPalette[0];
         let stdName = getFullName(companyName);
-        if (!customColors) customColors = {};
         
-        // 1. 이미 지정된 색이 있으면 최우선 반환
-        if (customColors[stdName] !== undefined && presetPalette[customColors[stdName]]) {
+        // 1. 관리자가 '셔플'로 수동 저장해둔 색상이 있으면 무조건 1순위 적용
+        if (customColors && customColors[stdName] !== undefined && presetPalette[customColors[stdName]]) {
           companyColors[stdName] = presetPalette[customColors[stdName]]; 
           return presetPalette[customColors[stdName]];
         }
         if (companyColors[stdName]) return companyColors[stdName];
         
-        // 2. 남은 색상 찾기 (indexOf 객체 참조 버그 해결!)
-        let usedIndices = new Set();
-        for (let key in customColors) usedIndices.add(customColors[key]);
-        for (let key in companyColors) {
-            let foundIdx = presetPalette.findIndex(p => p.bg === companyColors[key].bg);
-            if (foundIdx !== -1) usedIndices.add(foundIdx);
-        }
-
-        let available = [];
-        for (let i = 0; i < presetPalette.length; i++) {
-            if (!usedIndices.has(i)) available.push(i);
-        }
-
-        let colorIdx = 0;
+        // 2. 수동 지정이 없으면 글자를 계산해 절대 변하지 않는 고유 색상 부여 (남은 색상 계산 X)
         let hash = 0; 
         for (let i = 0; i < stdName.length; i++) hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
+        let colorIdx = Math.abs(hash) % presetPalette.length;
 
-        if (available.length > 0) {
-            // 남은 색상 중에서 해시로 랜덤 배정 (초기 겹침 완벽 차단)
-            colorIdx = available[Math.abs(hash) % available.length];
-        } else {
-            colorIdx = Math.abs(hash) % presetPalette.length;
-        }
-
-        customColors[stdName] = colorIdx;
+        // 화면 렌더링 중 서버 무한 통신 버그 제거 (메모리에만 저장)
         companyColors[stdName] = presetPalette[colorIdx];
-        
-        // 🚨 방금 부여한 고유 색상을 서버로 몰래 전송해서 다른 기기에도 영구 고정!
-        setTimeout(() => {
-            localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
-            google.script.run.saveGlobalColor(stdName, colorIdx);
-        }, 100);
-
         return presetPalette[colorIdx];
       }
 
@@ -2022,16 +1995,15 @@
 
             
             
-            // ... (기존 코드) ...
+            // 🚨 [패치 2] 유령 업데이트 방지: 서버 데이터를 지문 검사하기 전에! 클라이언트 순서에 맞게 먼저 정렬합니다.
+            if (typeof preserveCustomOrder === "function") {
+                res = preserveCustomOrder(res);
+            }
+            
             let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
             
             if (isScheduleChanged) {
-              // 🚨 [핵심 패치 2] 동기화로 새 일정이 들어와도 기존 순서는 절대 사수!
-              if (typeof preserveCustomOrder === "function") {
-                  res = preserveCustomOrder(res);
-              }
-              
-              serverData = res; 
+              serverData = res;
               localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res)); 
               renderCalendar(); 
               
@@ -2643,12 +2615,14 @@
           res.year = safeYear;
           res.month = safeMonth;
           res.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
-          res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
+         res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
+          
+          // 🚨 [패치 3] 달력 넘길 때도 동일하게 정렬부터 하고 지문 검사!
+          if(typeof preserveCustomOrder === "function") res = preserveCustomOrder(res);
           
           let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
           
           if (isScheduleChanged) {
-              if(typeof preserveCustomOrder === "function") res = preserveCustomOrder(res);
               serverData = res;
               localStorage.setItem(cacheKey, JSON.stringify(res)); 
               renderCalendar();
