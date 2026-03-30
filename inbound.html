@@ -14,7 +14,6 @@
       body.light-mode { --bg-color: #f4f6f9; --card-bg: #ffffff; --text-main: #222222; --text-sub: #777777; --border-color: #e5e5e5; --header-bg: #ffffff; --sun-color: #fa5252; --sat-color: #228be6; --btn-bg: #e9ecef; --btn-text: #495057; --btn-active-bg: #228be6; --btn-active-text: #ffffff; }
       body { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif; background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 12px 12px calc(80px + env(safe-area-inset-bottom)) 12px; font-size: var(--base-font-size); transition: 0.3s; -webkit-font-smoothing: antialiased; }
 
-      /* 🚨 [수정 1] 메뉴 세로 깨짐 복구! 억지 반응형(vw, clamp)을 모두 빼고 안전한 Flexbox로 복구 */
       .top-wrapper { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; background: var(--header-bg); padding: 12px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); position: relative; overflow: hidden; border: 2px solid transparent; transition: box-shadow 0.3s, border-color 0.3s, transform 0.2s; box-sizing: border-box; }
       .top-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
       .title-area { display: flex; flex-direction: row; align-items: center; gap: 6px; }
@@ -75,33 +74,16 @@
       .pending-vol { color: var(--text-sub); font-size: 0.85em; flex: 1; font-weight: 600; }
       
       .info-footer { text-align: center; font-size: 0.8em; color: var(--text-sub); margin-top: 20px; font-weight: 600; }
-      .overlay-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); align-items: flex-end; justify-content: center; z-index: 2500; backdrop-filter: blur(4px); }
-      .modal-box { background: var(--bg-color); width: 100%; max-width: 500px; padding: 25px 20px max(25px, env(safe-area-inset-bottom)) 20px; border-radius: 24px 24px 0 0; max-height: 85vh; overflow-y: auto; box-sizing: border-box; }
+
+      /* 🚨 [복구 1] 날아갔던 모달창, 스피너, 토스트 CSS 완벽 복구 */
+      .overlay-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); align-items: flex-end; justify-content: center; z-index: 2500; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: fadeIn 0.2s; padding: 0; }
+      .modal-box { background: var(--bg-color); width: 100%; max-width: 500px; padding: 25px 20px max(25px, env(safe-area-inset-bottom)) 20px; border-radius: 24px 24px 0 0; max-height: 85vh; overflow-y: auto; box-sizing: border-box; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2); animation: slideUpSheet 0.35s cubic-bezier(0.175, 0.885, 0.32, 1); }
       .bottom-sheet-handle { width: 40px; height: 5px; background: var(--border-color); border-radius: 3px; margin: -10px auto 20px auto; }
       .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
-      .modal-title { font-size: 1.3em; font-weight: 900; }
-      .close-btn { background: var(--btn-bg); border: none; font-size: 1.2em; color: var(--text-main); width: 32px; height: 32px; border-radius: 50%; }
+      .modal-title { font-size: 1.3em; font-weight: 900; letter-spacing: -0.5px; }
+      .close-btn { background: var(--btn-bg); border: none; font-size: 1.2em; color: var(--text-main); cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+      .close-btn:active { transform: scale(0.9); }
 
-      /* 📊 [입고 통계 대시보드] 전용 디자인 */
-      .stats-summary-bar { margin-top: 15px; background: linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(52, 199, 89, 0.05)); border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-      .stats-title { font-size: 1.05em; font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
-      .stats-numbers { font-size: 1.2em; font-weight: 900; color: var(--text-main); letter-spacing: -0.5px; }
-      .stats-numbers .done { color: #34c759; } .stats-numbers .total { color: var(--text-sub); font-size: 0.85em; }
-
-      .dash-control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-      .dash-nav { display: flex; align-items: center; gap: 10px; font-size: 1.2em; font-weight: 900; }
-      .dash-nav button { background: var(--btn-bg); border: none; color: var(--text-main); width: 32px; height: 32px; border-radius: 8px; font-weight: bold; }
-      .dash-toggles { display: flex; background: var(--btn-bg); padding: 4px; border-radius: 10px; gap: 2px; }
-      .dash-toggles button { background: transparent; border: none; color: var(--text-sub); padding: 4px 15px; font-weight: 800; font-size: 0.9em; border-radius: 8px; }
-      .dash-toggles button.active { background: #0a84ff; color: white; }
-      
-      .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
-      .dash-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px; text-align: center; }
-      .dash-card-title { font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: 8px; }
-      .dash-card-value { font-size: 1.5em; font-weight: 900; color: var(--text-main); }
-      .chart-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 15px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
-    
-      /* 🚀 날아갔던 모달창, 토스트, 스피너 CSS 완벽 복구 */
       .picker-year-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; font-size: 1.3em; font-weight: 900; }
       .year-btn { background: var(--btn-bg); border: none; width: 44px; height: 44px; border-radius: 12px; font-weight: bold; cursor: pointer; color: var(--text-main); transition: 0.2s; }
       .year-btn:active { transform: scale(0.9); }
@@ -121,6 +103,25 @@
       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       @keyframes slideUpSheet { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+      /* 📊 [입고 통계 대시보드] 전용 디자인 */
+      .stats-summary-bar { margin-top: 15px; background: linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(52, 199, 89, 0.05)); border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+      .stats-title { font-size: 1.05em; font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+      .stats-numbers { font-size: 1.2em; font-weight: 900; color: var(--text-main); letter-spacing: -0.5px; }
+      .stats-numbers .done { color: #34c759; } .stats-numbers .total { color: var(--text-sub); font-size: 0.85em; }
+
+      .dash-control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+      .dash-nav { display: flex; align-items: center; gap: 10px; font-size: 1.2em; font-weight: 900; }
+      .dash-nav button { background: var(--btn-bg); border: none; color: var(--text-main); width: 32px; height: 32px; border-radius: 8px; font-weight: bold; }
+      .dash-toggles { display: flex; background: var(--btn-bg); padding: 4px; border-radius: 10px; gap: 2px; }
+      .dash-toggles button { background: transparent; border: none; color: var(--text-sub); padding: 4px 15px; font-weight: 800; font-size: 0.9em; border-radius: 8px; }
+      .dash-toggles button.active { background: #0a84ff; color: white; }
+      
+      .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+      .dash-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px; text-align: center; }
+      .dash-card-title { font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: 8px; }
+      .dash-card-value { font-size: 1.5em; font-weight: 900; color: var(--text-main); }
+      .chart-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 15px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
     </style>
   </head>
   <body>
@@ -153,7 +154,6 @@
           </div>
         </div>
       </div>
-      <div class="admin-actions" id="adminActions"><button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button></div>
     </div>
 
     <div class="legend-bar-wrapper">
@@ -182,6 +182,16 @@
     </div>
 
     <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
+
+    <div id="monthPickerModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="picker-year-row">
+          <button class="year-btn" onclick="changePickerYear(-1)">◀</button><span id="pickerYearText"></span><button class="year-btn" onclick="changePickerYear(1)">▶</button>
+        </div>
+        <div class="month-grid-ui" id="pickerMonthGrid"></div>
+      </div>
+    </div>
 
     <div id="dashboardModal" class="overlay-modal" style="display:none;">
       <div class="modal-box" style="max-height: 90vh;">
@@ -229,6 +239,24 @@
       </div>
     </div>
 
+    <div id="adminLoginModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title" id="modalTitle">🔒 관리자 인증</div>
+          <button class="close-btn" onclick="document.getElementById('adminLoginModal').style.display = 'none'">✕</button>
+        </div>
+        <div style="margin-bottom: 15px; font-size: 0.95em; color: var(--text-sub); font-weight: 600;">관리자 권한을 활성화하려면 비밀번호를 입력하세요.</div>
+        <div style="display: flex; align-items: center; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 0 12px; transition: 0.2s;">
+          <input type="password" id="adminPwInput" style="flex: 1; border: none; background: transparent; color: var(--text-main); padding: 16px 5px; font-size: 1.1em; outline: none; font-weight: bold;" placeholder="비밀번호" />
+          <button type="button" onmousedown="event.preventDefault(); togglePwView();" ontouchstart="event.preventDefault(); togglePwView()" style="background: none; border: none; font-size: 1.2em; cursor: pointer; padding: 5px;">
+            <span id="pwToggleIcon">👁️</span>
+          </button>
+        </div>
+        <button class="save-btn" style="width: 100%; margin-top: 20px; background: #0a84ff; color: #fff; border: none; padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 1.05em;" onclick="submitAdminLogin()">🔓 인증하기</button>
+      </div>
+    </div>
+
     <script>
       // 🔗 1. 구글 웹앱 URL (입고용) 
       const GAS_API_URL = "https://script.google.com/macros/s/AKfycbypqPheUf90aE4uFepC9gsa1GCqCpwXj7xTGslXVGBI7SCoc_MH4trKdFrh8tKzyp_FQg/exec";
@@ -253,7 +281,7 @@
           }).getYearlyHolidays(year);
       }
 
-      // 🚀 [초정밀 통신 엔진] 브라우저 고집 꺾기 & 안전한 파싱(Crash 방지)
+      // 🚀 [복구 4] 초정밀 통신 엔진 (서버가 응답을 엉뚱하게 줘도 절대 Crash 나지 않는 강철 맷집 탑재!)
       const google = {
           script: {
               get run() { 
@@ -269,7 +297,7 @@
                           fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(payload), signal: controller.signal })
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId);
-                                  // 🚨 [버그 픽스] 평문(String)이 와도 절대 뻗지 않는 강철 맷집!
+                                  // 🚨 평문(String) 응답이 와도 뻗지 않는 안전 파싱 로직
                                   let finalData = d;
                                   if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
                                   if(this._ok) this._ok(finalData); 
@@ -283,11 +311,10 @@
                           const controller = new AbortController();
                           const timeoutId = setTimeout(() => controller.abort(), 15000);
                           
-                          // 🚨 [핵심 동기화 패치] URL 끝에 &t=시간 난수를 붙여 1분 캐시 강제 파괴!
+                          // 🚨 URL 끝에 &t=시간 난수를 붙여 1분 캐시 강제 파괴!
                           fetch(`${GAS_API_URL}?api=true&type=${type}&year=${y}&month=${m}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId);
-                                  // 🚨 [버그 픽스] 달력 데이터 넘어갈 때도 뻗지 않게 강철 맷집 적용!
                                   let finalData = d;
                                   if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
                                   if(this._ok) this._ok(finalData); 
@@ -314,7 +341,6 @@
                           const controller = new AbortController();
                           const timeoutId = setTimeout(() => controller.abort(), 10000); 
 
-                          // 🚨 [핵심 동기화 패치] 연간 통계도 캐시 파괴 난수 탑재!
                           fetch(`${GAS_API_URL}?api=true&action=yearlyStats&type=${type}&year=${y}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId); 
@@ -339,6 +365,11 @@
       function updateSyncTime() {
          const now = new Date(); const hh = String(now.getHours()).padStart(2, '0'); const mm = String(now.getMinutes()).padStart(2, '0');
          document.getElementById('lastSyncTime').innerText = `최근 ${hh}:${mm}`;
+      }
+
+      let activeRequests = 0;
+      function setLoadingState(isLoading) {
+          if (isLoading) activeRequests++; else activeRequests = Math.max(0, activeRequests - 1);
       }
 
       function renderCalendar() {
@@ -458,12 +489,6 @@
         }).withFailureHandler(err => {}).getCalendarDataAsync(currentType, safeYear, safeMonth);
       }
 
-      function updateLocalState(action, payload, idx) {
-        lastLocalUpdateTime = Date.now();
-        localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
-        Object.keys(localStorage).forEach(k => { if (k.startsWith(`yearly_stats_cache_${currentType}_`)) localStorage.removeItem(k); });
-      }
-
       function toggleAdmin() {
         const btn = document.getElementById('adminBtn');
         if(isAdmin) {
@@ -489,22 +514,7 @@
       let isDarkMode = false;
       function toggleTheme() { const body = document.body; const themeBtn = document.querySelector('.theme-toggle'); if (isDarkMode) { body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; localStorage.setItem('cal_theme', 'light'); } else { body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; localStorage.setItem('cal_theme', 'dark'); } }
       function changeSize(size) { document.querySelectorAll('.size-btn').forEach(btn => btn.classList.remove('active')); const body = document.body; if(size === 'S') { body.style.fontSize = '80%'; document.getElementById('btnS').classList.add('active'); } if(size === 'M') { body.style.fontSize = '95%'; document.getElementById('btnM').classList.add('active'); } if(size === 'L') { body.style.fontSize = '120%'; document.getElementById('btnL').classList.add('active'); } localStorage.setItem('cal_fontSize', size); }
-
-      function silentBackgroundSync() {
-        let fetchStartTime = Date.now();
-        const reqYear = serverData.year; const reqMonth = serverData.month; const reqNavId = window.currentNavId;
-        
-        google.script.run
-          .withSuccessHandler((res) => {
-            if (reqYear !== serverData.year || reqMonth !== serverData.month || reqNavId !== window.currentNavId) return;
-            if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
-            
-            res.year = reqYear; res.month = reqMonth;
-            res.firstDay = new Date(reqYear, reqMonth - 1, 1).getDay(); res.daysInMonth = new Date(reqYear, reqMonth, 0).getDate();
-            serverData = res; localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res)); 
-            renderCalendar(); updateSyncTime(); 
-          }).getCalendarDataAsync(currentType, reqYear, reqMonth);
-      }
+      function togglePwView() { const input = document.getElementById("adminPwInput"); const icon = document.getElementById("pwToggleIcon"); if (input.type === "password") { input.type = "text"; icon.innerText = "🙈"; } else { input.type = "password"; icon.innerText = "👁️"; } }
 
       window.addEventListener('DOMContentLoaded', () => {
         const savedTheme = localStorage.getItem('cal_theme') || 'light';
@@ -544,6 +554,40 @@
             localStorage.setItem(cacheKey, JSON.stringify(newData)); 
             if (serverData.year === currentYear && serverData.month === currentMonth) { serverData = newData; renderCalendar(); }
         }).getCalendarDataAsync(currentType, currentYear, currentMonth);
+
+        document.querySelectorAll('.overlay-modal').forEach(modal => {
+            const box = modal.querySelector('.modal-box'); if (!box) return;
+            const handle = box.querySelector('.bottom-sheet-handle'); const header = box.querySelector('.modal-header');
+            let startY = 0, currentY = 0, isDragging = false;
+
+            const startDrag = (e) => {
+                if (box.scrollTop > 5) return; 
+                startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                isDragging = true; box.style.transition = 'none';
+                if (e.type === 'mousedown') { document.addEventListener('mousemove', moveDrag, { passive: false }); document.addEventListener('mouseup', endDrag); }
+            };
+            const moveDrag = (e) => {
+                if (!isDragging) return;
+                currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                let diff = currentY - startY;
+                if (diff > 0) { if (e.cancelable) e.preventDefault(); box.style.transform = `translateY(${diff}px)`; }
+            };
+            const endDrag = (e) => {
+                if (!isDragging) return;
+                isDragging = false; let diff = currentY - startY;
+                box.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                if (diff > 80) { box.style.transform = 'translateY(100%)'; setTimeout(() => { modal.style.display = 'none'; box.style.transform = ''; }, 250);
+                } else { box.style.transform = 'translateY(0)'; setTimeout(() => { box.style.transform = ''; }, 250); }
+                if (e.type === 'mouseup' || e.type === 'mouseleave') { document.removeEventListener('mousemove', moveDrag); document.removeEventListener('mouseup', endDrag); }
+            };
+
+            const attachEvents = (el) => {
+                if (!el) return;
+                el.addEventListener('touchstart', startDrag, { passive: true }); el.addEventListener('touchmove', moveDrag, { passive: false });
+                el.addEventListener('touchend', endDrag); el.addEventListener('touchcancel', endDrag); el.addEventListener('mousedown', startDrag);
+            };
+            attachEvents(handle); attachEvents(header);
+        });
       });
 
       // =====================================================
@@ -558,7 +602,6 @@
       window.activePieIndex = null;
       window.dashCurrentData = null; 
 
-      // 🚨 [핵심 수정] 하단 요약바 완벽 복구
       function updateStatsSummary() {
           let tPal = 0, dPal = 0;
           const process = (it) => {
@@ -574,7 +617,6 @@
           let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
       }
 
-      // 🎨 [플러그인 1] 중앙 풀네임 텍스트
       const pieCenterTextPlugin = {
           id: 'pieCenterText',
           beforeDraw(chart) {
@@ -681,7 +723,6 @@
           let barDetails = []; let totalQty = 0; let doneQty = 0;
           document.getElementById("barDetailBox").style.display = "none";
 
-          // 🚨 [핵심 버그 수정 2] 입고 전용 B/L 및 타입(SEA/AIR) 렌더링 로직 완벽 이식
           if (window.dashMode === 'month') {
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
               let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
@@ -715,7 +756,6 @@
               barData = yData.monthly.map(m => m.pal); 
               totalQty = barData.reduce((a, b) => a + b, 0);
               
-              // 🚨 [입고 년도 버그 픽스] 서버에서 분류해 준 SEA / AIR 데이터를 완벽하게 맵핑!
               compMap['🚢 해상 (SEA)'] = (yData.comp['SEA'] && yData.comp['SEA'].pal) || 0;
               compMap['✈️ 항공 (AIR)'] = (yData.comp['AIR'] && yData.comp['AIR'].pal) || 0;
           }
@@ -789,7 +829,6 @@
               }
           });
 
-          // 해상/항공 두 조각만 나오므로 심플하게 구성
           let sLabels = []; let sData = []; let sColors = [];
           if (compMap['🚢 해상 (SEA)'] > 0) { sLabels.push('🚢 해상 (SEA)'); sData.push(compMap['🚢 해상 (SEA)']); sColors.push('#0a84ff'); }
           if (compMap['✈️ 항공 (AIR)'] > 0) { sLabels.push('✈️ 항공 (AIR)'); sData.push(compMap['✈️ 항공 (AIR)']); sColors.push('#ff453a'); }
@@ -819,48 +858,6 @@
               }
           });
       }
-
-      window.addEventListener('DOMContentLoaded', () => {
-          document.getElementById("dashboardModal").addEventListener("click", function(e) {
-              if (window.activePieIndex !== null && shareChartIns) {
-                  if (e.target.tagName !== "CANVAS") { window.activePieIndex = null; shareChartIns.data.datasets[0].backgroundColor = [...shareChartIns.data.datasets[0]._originalColors]; shareChartIns.update(); }
-              }
-          });
-
-          document.querySelectorAll('.overlay-modal').forEach(modal => {
-              const box = modal.querySelector('.modal-box'); if (!box) return;
-              const handle = box.querySelector('.bottom-sheet-handle'); const header = box.querySelector('.modal-header');
-              let startY = 0, currentY = 0, isDragging = false;
-
-              const startDrag = (e) => {
-                  if (box.scrollTop > 5) return; 
-                  startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-                  isDragging = true; box.style.transition = 'none';
-                  if (e.type === 'mousedown') { document.addEventListener('mousemove', moveDrag, { passive: false }); document.addEventListener('mouseup', endDrag); }
-              };
-              const moveDrag = (e) => {
-                  if (!isDragging) return;
-                  currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-                  let diff = currentY - startY;
-                  if (diff > 0) { if (e.cancelable) e.preventDefault(); box.style.transform = `translateY(${diff}px)`; }
-              };
-              const endDrag = (e) => {
-                  if (!isDragging) return;
-                  isDragging = false; let diff = currentY - startY;
-                  box.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                  if (diff > 80) { box.style.transform = 'translateY(100%)'; setTimeout(() => { modal.style.display = 'none'; box.style.transform = ''; }, 250);
-                  } else { box.style.transform = 'translateY(0)'; setTimeout(() => { box.style.transform = ''; }, 250); }
-                  if (e.type === 'mouseup' || e.type === 'mouseleave') { document.removeEventListener('mousemove', moveDrag); document.removeEventListener('mouseup', endDrag); }
-              };
-
-              const attachEvents = (el) => {
-                  if (!el) return;
-                  el.addEventListener('touchstart', startDrag, { passive: true }); el.addEventListener('touchmove', moveDrag, { passive: false });
-                  el.addEventListener('touchend', endDrag); el.addEventListener('touchcancel', endDrag); el.addEventListener('mousedown', startDrag);
-              };
-              attachEvents(handle); attachEvents(header);
-          });
-      });
     </script>
   </body>
 </html>
