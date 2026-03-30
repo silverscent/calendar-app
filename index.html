@@ -1753,17 +1753,16 @@
                           const controller = new AbortController();
                           const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-                          fetch(`${GAS_API_URL}?api=true&type=${type}&year=${y}&month=${m}`, { signal: controller.signal })
+                          // 🚨 [동기화 버그 핀포인트 픽스] URL 끝에 '&t=${Date.now()}'를 붙여 브라우저 캐시 강제 파괴!
+                          fetch(`${GAS_API_URL}?api=true&type=${type}&year=${y}&month=${m}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId);
-                                  let finalData = d;
-                                  if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
+                                  let finalData = typeof d === 'string' ? JSON.parse(d) : d;
                                   if(this._ok) this._ok(finalData); 
                               }).catch(e => { 
                                   clearTimeout(timeoutId);
                                   if(this._err) this._err(e); 
-                              })
-                              .finally(() => setLoadingState(false)); 
+                              }).finally(() => setLoadingState(false)); 
                       },
                       manageWebOutboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'out', action: act, data: data, token: tk }); },
                       manageWebInboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'in', action: act, data: data, token: tk }); },
