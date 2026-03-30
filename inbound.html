@@ -22,20 +22,20 @@
       .title-btn { background: var(--btn-bg); color: var(--text-main); padding: 8px 14px; border-radius: 10px; font-size: 1.15em; font-weight: 800; display: flex; align-items: center; gap: 6px; cursor: pointer; border: none; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
       
       .controls-area, .action-row-right { display: flex; align-items: center; gap: 8px; }
-      .size-toggle { display: flex; background: var(--btn-bg); border-radius: 10px; overflow: hidden; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05); }
-      .size-btn { background: transparent; border: none; color: var(--btn-text); font-size: 0.85em; font-weight: 700; padding: 6px 12px; cursor: pointer; transition: 0.2s; }
+      .size-toggle { display: flex; background: var(--btn-bg); border-radius: 10px; overflow: hidden; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05); flex-shrink: 0; }
+      .size-btn { background: transparent; border: none; color: var(--btn-text); font-size: 0.85em; font-weight: 700; padding: 6px 12px; cursor: pointer; transition: 0.2s; white-space: nowrap;}
       .size-btn.active { background: var(--btn-active-bg); color: var(--btn-active-text); }
       .theme-toggle { background: var(--btn-bg); border: none; font-size: 1.1em; padding: 6px 8px; border-radius: 10px; cursor: pointer; }
       .admin-btn { background: var(--btn-bg); color: var(--text-main); border: none; font-size: 0.85em; font-weight: 800; padding: 6px 12px; border-radius: 10px; cursor: pointer; transition: 0.3s; display: flex; align-items: center; gap: 4px; }
       .admin-btn.unlocked { background: #34c759; color: white; box-shadow: 0 4px 10px rgba(52, 199, 89, 0.3); }
       
       .sync-area { display: flex; align-items: center; gap: 5px; }
-      .sync-time { font-size: 0.75em; font-weight: 800; color: var(--text-sub); }
+      .sync-time { font-size: 0.75em; font-weight: 800; color: var(--text-sub); margin-right: 2px;}
       .sync-btn { background: var(--btn-bg); color: var(--text-main); border: none; font-size: 1em; padding: 5px 8px; border-radius: 8px; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
       .sync-btn:active { transform: rotate(180deg) scale(0.9); }
       .admin-actions { display: none; gap: 8px; justify-content: flex-end; margin-top: 4px; }
       .multi-btn { background: var(--border-color); color: var(--text-main); border: none; padding: 6px 12px; border-radius: 10px; font-size: 0.85em; font-weight: 800; cursor: pointer; transition: 0.2s; }
-      .multi-btn.active { background: #ff3b30; color: white; }
+      .multi-btn.active { background: #ff3b30; color: white; box-shadow: 0 4px 10px rgba(255, 59, 48, 0.3);}
       .ocr-btn { background: #0a84ff; color: white; border: none; padding: 6px 12px; border-radius: 10px; font-size: 0.85em; font-weight: 800; cursor: pointer; transition: 0.2s; box-shadow: 0 2px 6px rgba(10, 132, 255, 0.3); }
 
       .legend-bar-wrapper { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 5px; }
@@ -45,13 +45,15 @@
       .color-sea { background: linear-gradient(135deg, #0a84ff, #005bb5); }
       .color-air { background: linear-gradient(135deg, #ff453a, #cc2920); }
 
-      .calendar-container { background: var(--border-color); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--border-color); box-shadow: 0 5px 20px rgba(0, 0, 0, 0.03); }
+      .calendar-container { background: var(--border-color); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--border-color); box-shadow: 0 5px 20px rgba(0, 0, 0, 0.03);}
       .grid-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; }
       .day-header { background: var(--header-bg); text-align: center; padding: 10px 0; font-size: 0.75em; font-weight: 800; color: var(--text-sub); }
       .day-header.sun { color: var(--sun-color); }
       .day-header.sat { color: var(--sat-color); }
       .day-cell { background: var(--card-bg); min-height: 65px; padding: 4px; position: relative; cursor: pointer; display: flex; flex-direction: column; gap: 3px; user-select: none; transition: 0.15s ease-out; }
       .day-cell.empty { background: var(--header-bg); cursor: default; }
+      .day-cell.drag-over { background: rgba(10,132,255,0.1) !important; outline: 2px dashed #0a84ff !important; outline-offset: -2px; transform: scale(0.96); z-index: 10; }
+
       .date-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; padding: 0 2px; }
       .date-num { font-size: 0.9em; font-weight: 700; }
       .date-num.sun { color: var(--sun-color); }
@@ -60,19 +62,25 @@
       .today-cell { background: rgba(255, 59, 48, 0.05) !important; box-shadow: inset 0 0 0 1px rgba(255, 59, 48, 0.3) !important; border-radius: 4px; }
       .today-cell .date-num { color: inherit !important; font-weight: 900; }
 
-      .item-tag { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 5px; padding: 4px 2px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15); width: 100%; box-sizing: border-box; overflow: hidden; margin-bottom: 1px; min-height: 36px; }
+      .item-tag { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 5px; padding: 4px 2px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15); width: 100%; box-sizing: border-box; overflow: hidden; margin-bottom: 1px; min-height: 36px; transition: background 0.15s, opacity 0.15s !important; }
       .has-etc { border-left: 4px solid #ffd60a !important; }
       .pal-main { font-size: 1.25em !important; font-weight: 900; color: #fff; letter-spacing: -1px !important; text-align: center; }
       .bl-sub { font-size: 0.75em !important; font-weight: 800; color: rgba(255, 255, 255, 0.9); margin-top: 2px; letter-spacing: -0.5px !important; }
       .done-mark { opacity: 0.6; border-left: none !important; }
       .done-mark .pal-main, .done-mark .bl-sub { text-decoration: none !important; text-shadow: none !important; }
       .item-tag.cell-pressing { transform: scale(0.92); filter: brightness(1.2); }
+      .insert-line-top { border-top: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
+      .insert-line-bottom { border-bottom: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
+
+      /* 🚨 다중 선택 강조 CSS 완벽 복구 */
+      .multi-selected { outline: 3px solid #ff3b30 !important; filter: brightness(1.1); transform: scale(0.95); z-index: 5; }
 
       .pending-container { margin-top: 15px; background: var(--card-bg); border-radius: 16px; padding: 15px; border: 1px solid var(--border-color); display: none; }
       .pending-title { font-size: 1em; font-weight: 800; color: #ff9f0a; margin-bottom: 12px; }
       .pending-item { display: flex; align-items: center; background: var(--bg-color); padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border-color); cursor: pointer; margin-bottom: 8px; }
       .pending-comp { font-weight: 800; font-size: 0.95em; width: 90px; }
       .pending-vol { color: var(--text-sub); font-size: 0.85em; flex: 1; font-weight: 600; }
+      
       .info-footer { text-align: center; font-size: 0.8em; color: var(--text-sub); margin-top: 20px; font-weight: 600; }
 
       /* 모달 복구 */
@@ -96,8 +104,19 @@
       .done-toggle-btn { background: rgba(52, 199, 89, 0.15); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.3); }
 
       .modal-vol { font-size: 0.95em; color: var(--text-sub); font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; }
-      .modal-etc { font-size: 0.85em; color: #ff9f0a; background: rgba(255, 159, 10, 0.1); padding: 4px 10px; border-radius: 8px; display: inline-block; margin-top: 6px; font-weight: 800; border: 1px solid rgba(255, 159, 10, 0.2); }
+      .modal-etc { font-size: 0.85em; color: #ff9f0a; background: rgba(255, 159, 10, 0.1); padding: 4px 10px; border-radius: 8px; display: inline-block; margin-top: 6px; font-weight: 800; border: 1px solid rgba(255, 159, 10, 0.2); word-break: break-all;}
       .status-badge { position: absolute; bottom: 14px; right: 16px; background: rgba(52, 199, 89, 0.1); border: 1px solid rgba(52, 199, 89, 0.4); color: #34c759; font-size: 0.85em; font-weight: 900; padding: 6px 12px; border-radius: 20px; display: flex; align-items: center; gap: 5px; backdrop-filter: blur(5px); }
+
+      .edit-form { display: flex; flex-direction: column; gap: 14px; margin-top: 5px; width: 100%; }
+      .form-label { font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: -8px; padding-left: 4px; }
+      .edit-input { width: 100%; box-sizing: border-box; padding: 14px 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--card-bg); color: var(--text-main); font-size: 1em; font-weight: bold; appearance: none; transition: border 0.2s; }
+      .edit-input:focus { border-color: #0a84ff; outline: none; }
+      .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+      .save-btn { flex: 2; background: #0a84ff; color: #fff; border: none; padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 1.05em; transition: 0.2s; }
+      .save-btn:active { transform: scale(0.97); }
+      .cancel-btn { flex: 1; background: var(--btn-bg); color: var(--text-main); border: none; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; transition: 0.2s; }
+      .cancel-btn:active { transform: scale(0.97); }
+      .delete-btn { width: 100%; background: rgba(255, 59, 48, 0.1); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; margin-top: 5px; transition: 0.2s; }
 
       .picker-year-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; font-size: 1.3em; font-weight: 900; }
       .year-btn { background: var(--btn-bg); border: none; width: 44px; height: 44px; border-radius: 12px; font-weight: bold; cursor: pointer; color: var(--text-main); transition: 0.2s; }
@@ -107,16 +126,9 @@
       .month-btn:active { transform: scale(0.95); }
       .month-btn.current { background: rgba(10, 132, 255, 0.1); border-color: #0a84ff; color: #0a84ff; }
 
-      /* 🚨 [복구] 네온, 토스트, 스피너 등 누락 CSS 모두 복원 */
-      .top-wrapper.syncing-glow { transform: scale(1.005); border-color: rgba(10, 132, 255, 0.7) !important; animation: frameNeonGlowOptimal 3s linear infinite !important; }
-      @keyframes frameNeonGlowOptimal { 0% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); } 33% { border-color: rgba(52,199,89,0.7); box-shadow: 0 0 14px rgba(52,199,89,0.5), 0 0 7px rgba(52,199,89,0.3), inset 0 0 7px rgba(52,199,89,0.1); } 66% { border-color: rgba(10,132,255,0.7); box-shadow: 0 0 14px rgba(10,132,255,0.5), 0 0 7px rgba(10,132,255,0.3), inset 0 0 7px rgba(10,132,255,0.1); } 100% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); } }
-      .top-wrapper::after { content: ''; position: absolute; bottom: 0; left: -50%; width: 50%; height: 2px; background: linear-gradient(90deg, transparent, #0a84ff, #34c759, #ffd60a, transparent); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
-      .top-wrapper.syncing-glow::after { opacity: 1; animation: loadingBarSweep 0.8s infinite cubic-bezier(0.4, 0, 0.2, 1); }
-      @keyframes loadingBarSweep { 0% { left: -50%; } 100% { left: 100%; } }
-
-      #toast { visibility: hidden; min-width: 250px; background: rgba(40, 44, 52, 0.95); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); color: #fff; text-align: center; border-radius: 30px; padding: 14px 24px; position: fixed; z-index: 99999; left: 50%; top: env(safe-area-inset-top, 10px); transform: translate3d(-50%, -150%, 0) scale(0.9); font-size: 0.95em; font-weight: 900; opacity: 0; transition: visibility 0.5s, opacity 0.4s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); letter-spacing: -0.3px; border: 2px solid transparent; animation: rainbowGlow 3s linear infinite; }
+      #toast { visibility: hidden; min-width: 250px; background: rgba(40, 44, 52, 0.95); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); color: #fff; text-align: center; border-radius: 30px; padding: 14px 24px; position: fixed; z-index: 99999; left: 50%; top: env(safe-area-inset-top, 10px); transform: translate3d(-50%, -150%, 0) scale(0.9); font-size: 0.95em; font-weight: 900; opacity: 0; transition: visibility 0.5s, opacity 0.4s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); letter-spacing: -0.3px; border: 2px solid transparent; }
       body.light-mode #toast { background: rgba(255, 255, 255, 0.95); color: #222; border: 2px solid transparent; }
-      #toast.show { visibility: visible; opacity: 1; transform: translate3d(-50%, 20px, 0) scale(1); }
+      #toast.show { visibility: visible; opacity: 1; transform: translate3d(-50%, 20px, 0) scale(1); animation: rainbowGlow 3s linear infinite; }
       @keyframes rainbowGlow { 0% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.5); border-color: rgba(255, 59, 48, 0.7); } 33% { box-shadow: 0 0 15px rgba(52, 199, 89, 0.5); border-color: rgba(52, 199, 89, 0.7); } 66% { box-shadow: 0 0 15px rgba(10, 132, 255, 0.5); border-color: rgba(10, 132, 255, 0.7); } 100% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.5); border-color: rgba(255, 59, 48, 0.7); } }
 
       #globalLoader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: white; font-weight: bold; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
@@ -125,15 +137,15 @@
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       @keyframes slideUpSheet { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
-      /* OCR 줌 모달 디자인 복구 */
-      #ocrImageModal .modal-box { max-width: 100% !important; height: 98vh !important; max-height: 98vh !important; padding: 10px 0 max(10px, env(safe-area-inset-bottom)) 0 !important; display: flex; flex-direction: column; border-radius: 20px 20px 0 0 !important; }
-      #ocrImageWrapper { flex: 1; width: 100%; overflow: hidden !important; background: #ffffff !important; border: none !important; position: relative; touch-action: none; cursor: grab; display: flex; align-items: center; justify-content: center; }
-      #ocrImageWrapper:active { cursor: grabbing; }
-      #ocrImageContent { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-      #ocrImageContent img { max-width: 100% !important; max-height: 100% !important; width: auto !important; height: auto !important; object-fit: contain; transform-origin: center center !important; transition: none !important; }
+      /* 네온 로딩 바 복구 */
+      .top-wrapper.syncing-glow { transform: scale(1.005); border-color: rgba(10, 132, 255, 0.7) !important; animation: frameNeonGlowOptimal 3s linear infinite !important; }
+      @keyframes frameNeonGlowOptimal { 0% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); } 33% { border-color: rgba(52,199,89,0.7); box-shadow: 0 0 14px rgba(52,199,89,0.5), 0 0 7px rgba(52,199,89,0.3), inset 0 0 7px rgba(52,199,89,0.1); } 66% { border-color: rgba(10,132,255,0.7); box-shadow: 0 0 14px rgba(10,132,255,0.5), 0 0 7px rgba(10,132,255,0.3), inset 0 0 7px rgba(10,132,255,0.1); } 100% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); } }
+      .top-wrapper::after { content: ''; position: absolute; bottom: 0; left: -50%; width: 50%; height: 2px; background: linear-gradient(90deg, transparent, #0a84ff, #34c759, #ffd60a, transparent); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+      .top-wrapper.syncing-glow::after { opacity: 1; animation: loadingBarSweep 0.8s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+      @keyframes loadingBarSweep { 0% { left: -50%; } 100% { left: 100%; } }
 
-      /* 다중 선택 UI 복구 */
-      #multiActionBar { display: none; position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); background: rgba(30, 30, 30, 0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 12px 18px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); z-index: 2000; align-items: center; gap: 8px; animation: slideUpToast 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); border: 1px solid rgba(255, 255, 255, 0.1); white-space: nowrap; }
+      /* 다중선택 하단바 */
+      #multiActionBar { display: none; position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); background: rgba(30, 30, 30, 0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 12px 18px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); z-index: 2000; align-items: center; gap: 8px; border: 1px solid rgba(255, 255, 255, 0.1); white-space: nowrap; }
       body.light-mode #multiActionBar { background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(0, 0, 0, 0.1); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); }
       .sel-count-text { font-weight: 900; color: var(--text-main); font-size: 0.95em; margin-right: 4px; }
       .multi-action-btn { border: none; padding: 10px 16px; border-radius: 20px; font-weight: 800; font-size: 0.85em; cursor: pointer; transition: 0.2s; }
@@ -142,16 +154,12 @@
       .btn-multi-undo { background: #ff9f0a; color: white; }
       .btn-multi-del { background: #ff3b30; color: white; }
 
-      /* 수정 폼 UI 복구 */
-      .edit-form { display: flex; flex-direction: column; gap: 14px; margin-top: 5px; width: 100%; }
-      .form-label { font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: -8px; padding-left: 4px; }
-      .edit-input { width: 100%; box-sizing: border-box; padding: 14px 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--card-bg); color: var(--text-main); font-size: 1em; font-weight: bold; appearance: none; transition: border 0.2s; }
-      .edit-input:focus { border-color: #0a84ff; outline: none; }
-      .btn-row { display: flex; gap: 10px; margin-top: 10px; }
-      .save-btn { flex: 2; background: #0a84ff; color: #fff; border: none; padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 1.05em; transition: 0.2s; }
-      .save-btn:active { transform: scale(0.97); }
-      .cancel-btn { flex: 1; background: var(--btn-bg); color: var(--text-main); border: none; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; transition: 0.2s; }
-      .delete-btn { width: 100%; background: rgba(255, 59, 48, 0.1); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; margin-top: 5px; transition: 0.2s; }
+      /* OCR 줌 모달 디자인 복구 */
+      #ocrImageModal .modal-box { max-width: 100% !important; height: 98vh !important; max-height: 98vh !important; padding: 10px 0 max(10px, env(safe-area-inset-bottom)) 0 !important; display: flex; flex-direction: column; border-radius: 20px 20px 0 0 !important; }
+      #ocrImageWrapper { flex: 1; width: 100%; overflow: hidden !important; background: #ffffff !important; border: none !important; position: relative; touch-action: none; cursor: grab; display: flex; align-items: center; justify-content: center; }
+      #ocrImageWrapper:active { cursor: grabbing; }
+      #ocrImageContent { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+      #ocrImageContent img { max-width: 100% !important; max-height: 100% !important; width: auto !important; height: auto !important; object-fit: contain; transform-origin: center center !important; transition: none !important; }
 
       /* 📊 [입고 통계 대시보드] 전용 디자인 */
       .stats-summary-bar { margin-top: 15px; background: linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(52, 199, 89, 0.05)); border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
@@ -176,7 +184,6 @@
   </head>
   <body>
     <div id="globalLoader"><div class="spinner"></div></div>
-    
     <div id="toast">메시지</div>
 
     <div class="top-wrapper">
@@ -242,7 +249,7 @@
       <div class="stats-numbers"><span class="done" id="sumDonePal">0</span><span class="total">/ <span id="sumTotalPal">0</span> P</span></div>
     </div>
 
-    <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
+    <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인 및 수정 / 꾹 누르기: 이동</div>
 
     <div id="modal" class="overlay-modal" onclick="closeModalOnBgClick(event)">
       <div class="modal-box" onclick="event.stopPropagation()">
@@ -343,7 +350,6 @@
     </div>
 
     <script>
-      // 🔗 구글 웹앱 URL
       const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxaD9CugTvbE50_C2rR0EaSZ1MkywACeYwiYD_MuPZBZNDpjVwK1VOH31MdtxznD49k/exec";
       const currentType = "in"; 
       
@@ -354,6 +360,7 @@
       let adminToken = localStorage.getItem("admin_token");
       let isAdmin = adminToken ? true : false;
       let isMultiMode = false;
+      let selectedItems = [];
       window.yearlyHolidays = {}; 
 
       function checkAndFetchHolidays(year) {
@@ -366,7 +373,7 @@
           }).getYearlyHolidays(year);
       }
 
-      // 🚀 통신 엔진 (JSON.parse 에러 완벽 방어!)
+      // 🚀 통신 엔진 (JSON 파싱 에러 완전 차단)
       const google = {
           script: {
               get run() { 
@@ -378,7 +385,6 @@
                           setLoadingState(true); 
                           const controller = new AbortController();
                           const timeoutId = setTimeout(() => controller.abort(), 25000); 
-                          
                           fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(payload), signal: controller.signal })
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId);
@@ -394,7 +400,6 @@
                           setLoadingState(true); 
                           const controller = new AbortController();
                           const timeoutId = setTimeout(() => controller.abort(), 25000);
-                          
                           fetch(`${GAS_API_URL}?api=true&type=${type}&year=${y}&month=${m}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId);
@@ -406,7 +411,6 @@
                                   if(this._err) this._err(e); 
                               }).finally(() => setLoadingState(false)); 
                       },
-                      manageWebOutboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'out', action: act, data: data, token: tk }); },
                       manageWebInboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'in', action: act, data: data, token: tk }); },
                       verifyAdminPw: function(pw) {
                           setLoadingState(true);
@@ -418,8 +422,19 @@
                       getOcrLastTimeStr: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }); },
                       getYearlyHolidays: function(y) { this._call({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: y }); },
                       getYearlyStatsAsync: function(type, y) { 
-                          // 🚨 [패치 2] 연간 통계도 복잡한 GET(fetch) 버리고, 무조건 뚫리는 POST(_call)로 일원화!
-                          this._call({ source: 'vercel', action: 'GET_YEARLY_STATS', type: type, year: y }); 
+                          setLoadingState(true);
+                          const controller = new AbortController();
+                          const timeoutId = setTimeout(() => controller.abort(), 15000); 
+                          fetch(`${GAS_API_URL}?api=true&action=yearlyStats&type=${type}&year=${y}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
+                              .then(r => r.json()).then(d => { 
+                                  clearTimeout(timeoutId); 
+                                  let finalData = d;
+                                  if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
+                                  if(this._ok) this._ok(finalData); 
+                              }).catch(e => { 
+                                  clearTimeout(timeoutId); 
+                                  if(this._err) this._err(e); 
+                              }).finally(() => setLoadingState(false)); 
                       }
                   };
               }
@@ -448,7 +463,7 @@
           }
       }
 
-      // 🚨 [복구] 최근 OCR 이미지 띄우기
+      // 🚨 최근 OCR 이미지 띄우기 및 제스처 
       function showLastOcrImage() {
           setLoadingState(true);
           document.getElementById('ocrImageModal').style.display = 'flex';
@@ -470,7 +485,6 @@
               .getLastOcrImageUrl();
       }
 
-      // 🚨 [복구] 핀치투줌 (두 손가락 확대)
       let ocrTransform = { scale: 1, x: 0, y: 0 };
       let _ocrGesturesInitialized = false;
       function initOcrGestures() {
@@ -510,7 +524,7 @@
           wrapper.addEventListener('wheel', (e) => { e.preventDefault(); const delta = e.deltaY > 0 ? -0.15 : 0.15; ocrTransform.scale = Math.max(1, Math.min(ocrTransform.scale + delta, 6)); if (ocrTransform.scale <= 1) { ocrTransform.x = 0; ocrTransform.y = 0; } requestAnimationFrame(updateTransform); }, { passive: false });
       }
 
-      // 🚨 [복구] 다중 선택 로직
+      // 🚨 다중 선택 기능 및 드래그 앤 드롭 변수
       function toggleMultiMode() {
         isMultiMode = !isMultiMode; selectedItems = [];
         document.querySelectorAll('.item-tag, .pending-item').forEach(el => el.classList.remove('multi-selected'));
@@ -572,20 +586,174 @@
         localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
       }
 
-      // 🚨 [복구] 상세 내역 및 모달 열기
+      // 🚨 [복구] 드래그 앤 드롭 함수 및 터치 핸들러
+      let pressTimer = null; let isLongPress = false; let pressTarget = null;
+      let startX = 0, startY = 0; let isDragging = false; let dragGhost = null; let dragData = null;
+      let hasMovedDuringDrag = false; let dragOffsetX = 0, dragOffsetY = 0; let dragReq = null; let lastDropTarget = null;
+
+      function startPress(e, type, day, idx = null) {
+        if (!isAdmin || isMultiMode) return;
+        cancelPress(); isLongPress = false; hasMovedDuringDrag = false;
+        pressTarget = e.currentTarget;
+        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        startX = clientX; startY = clientY;
+        pressTarget.classList.add("cell-pressing");
+
+        pressTimer = setTimeout(() => {
+          isLongPress = true; if (pressTarget) pressTarget.classList.remove("cell-pressing");
+          if (navigator.vibrate) navigator.vibrate(50);
+          if (type === "item") {
+            isDragging = true; dragData = { day: day, idx: idx };
+            let rect = pressTarget.getBoundingClientRect();
+            dragOffsetX = clientX - rect.left; dragOffsetY = clientY - rect.top;
+            dragGhost = pressTarget.cloneNode(true);
+            pressTarget.style.opacity = "0.3"; 
+
+            if (day === "pending") {
+              dragGhost.className = "item-tag";
+              let cClass = serverData.pendingItems[idx].sType === 'SEA' ? 'color-sea' : 'color-air';
+              dragGhost.classList.add(cClass);
+              dragGhost.innerHTML = serverData.pendingItems[idx].bl.slice(-4);
+              dragGhost.style.color = '#fff';
+              dragGhost.style.width = "60px"; dragGhost.style.height = "35px"; 
+              dragGhost.style.justifyContent = "center"; dragGhost.style.alignItems = "center"; dragGhost.style.display = "flex"; dragGhost.style.borderRadius = "6px"; dragGhost.style.fontSize = "0.85em"; dragGhost.style.fontWeight = "900";
+              dragOffsetX = 30; dragOffsetY = 17;
+            } else {
+              dragGhost.style.width = rect.width + "px"; dragGhost.style.height = rect.height + "px";
+              dragGhost.style.margin = "0px"; dragGhost.style.borderRadius = "8px";
+            }
+            dragGhost.style.position = "fixed"; dragGhost.style.left = "0px"; dragGhost.style.top = "0px"; dragGhost.style.margin = "0px"; dragGhost.style.zIndex = "999999"; dragGhost.style.opacity = "0.95"; dragGhost.style.pointerEvents = "none"; dragGhost.style.willChange = "transform"; dragGhost.style.boxShadow = "0 15px 35px rgba(0,0,0,0.3)"; dragGhost.style.transition = "none";
+            document.body.appendChild(dragGhost);
+            dragGhost.style.transform = `translate3d(${clientX - dragOffsetX}px, ${clientY - dragOffsetY}px, 0) scale(1.05)`;
+          }
+        }, 400); 
+      }
+
+      function cancelPress() {
+        if (isDragging) return;
+        if (pressTimer) clearTimeout(pressTimer);
+        if (pressTarget) { pressTarget.classList.remove("cell-pressing"); pressTarget = null; }
+      }
+
+      function updateGhostPosition(x, y) {
+        if (!dragGhost) return;
+        dragGhost.style.left = (x - dragOffsetX) + "px"; dragGhost.style.top = (y - dragOffsetY) + "px"; dragGhost.style.transform = "scale(1.05)"; 
+        if (!dragReq) {
+          dragReq = requestAnimationFrame(() => {
+            let dropElement = document.elementFromPoint(x, y);
+            let targetCell = dropElement ? dropElement.closest(".day-cell:not(.empty)") : null;
+            let targetItem = dropElement ? dropElement.closest(".item-tag") : null;
+            document.querySelectorAll(".insert-line-top, .insert-line-bottom, .drag-over").forEach(el => el.classList.remove("insert-line-top", "insert-line-bottom", "drag-over"));
+
+            if (targetCell) {
+              if (targetItem && targetItem !== pressTarget) {
+                let rect = targetItem.getBoundingClientRect();
+                if (y < rect.top + rect.height / 2) targetItem.classList.add("insert-line-top");
+                else targetItem.classList.add("insert-line-bottom");
+                lastDropTarget = targetItem;
+              } else {
+                targetCell.classList.add("drag-over"); lastDropTarget = targetCell;
+              }
+            } else { lastDropTarget = null; }
+            dragReq = null;
+          });
+        }
+      }
+
+      document.addEventListener("touchmove", function (e) { if (isDragging) { e.preventDefault(); hasMovedDuringDrag = true; updateGhostPosition(e.touches[0].clientX, e.touches[0].clientY); } }, { passive: false });
+      document.addEventListener("mousemove", function (e) { if (isDragging) { hasMovedDuringDrag = true; updateGhostPosition(e.clientX, e.clientY); } });
+      document.addEventListener("touchend", endDrag); document.addEventListener("mouseup", endDrag);
+
+      function endDrag(e) {
+        if (!isDragging) return;
+        isDragging = false;
+        if (dragReq) { cancelAnimationFrame(dragReq); dragReq = null; }
+
+        let x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+        let y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+        
+        if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+        if (pressTarget) { pressTarget.style.opacity = "1"; }
+
+        let currentDropTarget = lastDropTarget;
+        let isTopInsert = currentDropTarget ? currentDropTarget.classList.contains('insert-line-top') : false;
+
+        if (lastDropTarget) {
+          lastDropTarget.classList.remove("drag-over", "insert-line-top", "insert-line-bottom"); lastDropTarget = null;
+        }
+        if (!hasMovedDuringDrag) return;
+
+        let targetCell = currentDropTarget ? currentDropTarget.closest('.day-cell') : null;
+        let isOutsideCalendar = false; let targetPending = false;
+        
+        if (!targetCell) {
+            let dropElement = document.elementFromPoint(x, y);
+            targetCell = dropElement ? dropElement.closest(".day-cell") : null;
+            isOutsideCalendar = !dropElement || (!dropElement.closest(".calendar-container") && !dropElement.closest(".overlay-modal"));
+            targetPending = dropElement ? dropElement.closest(".pending-container") : null;
+        }
+
+        let item = dragData.day === "pending" ? serverData.pendingItems[dragData.idx] : serverData.monthData[dragData.day][dragData.idx];
+        let oldDateStr = dragData.day === "pending" ? "미정" : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+
+        if (targetCell && !targetCell.classList.contains("empty")) {
+          let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
+
+          if (newDay === dragData.day && currentDropTarget && currentDropTarget.classList.contains('item-tag')) {
+              let targetIdx = parseInt(currentDropTarget.getAttribute('data-raw-idx'));
+              if (!isNaN(targetIdx)) {
+                  let arr = serverData.monthData[dragData.day]; let movedItem = arr[dragData.idx]; let targetItem = arr[targetIdx];
+                  arr.splice(dragData.idx, 1);
+                  if (targetIdx > dragData.idx) targetIdx--; 
+                  let insertIdx = isTopInsert ? targetIdx : targetIdx + 1;
+                  arr.splice(insertIdx, 0, movedItem);
+                  localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+                  renderCalendar(); return;
+              }
+          }
+
+          if (newDay === dragData.day) return;
+          
+          let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
+          if (confirm(`🚚 [${item.bl}] 일정을 ${newDay}일로 이동하시겠습니까?`)) { executeMove(item, oldDateStr, newDateStr, dragData.idx); }
+        } else if (isOutsideCalendar || targetPending) {
+          if (dragData.day === "pending") return;
+          if (confirm(`🚚 [${item.bl}] 일정을 '미정(대기)'으로 변경하시겠습니까?`)) { executeMove(item, oldDateStr, "미정", dragData.idx); }
+        }
+      }
+
+      function executeMove(item, oldDateStr, newDateStr, idx) {
+        let payload = { action: 'EDIT', oldBL: item.bl, oldDate: oldDateStr, oldDone: item.isDone, oldPal: String(item.pal||""), newDate: newDateStr, newEtc: item.etc };
+        updateLocalState('EDIT', payload, idx); renderCalendar(); 
+        google.script.run.withSuccessHandler(res => {
+          if(!res.success) { showToast('❌ 서버 저장 실패! 데이터를 다시 불러옵니다.', 2000); goToAsync(serverData.year, serverData.month); }
+        }).withFailureHandler(err => {
+          showToast('❌ 통신 오류! 데이터를 다시 불러옵니다.', 2000); goToAsync(serverData.year, serverData.month);
+        }).manageWebInboundData('EDIT', payload, adminToken);
+      }
+
+      // 🚨 [복구 & 픽스] 다중 선택 시 빨간 테두리 완벽 표시
       function handleItemClick(e, day, idx, bl, isDone) {
         if (isMultiMode) {
-          const el = e.currentTarget; let dateStr = day === 'pending' ? '미정' : `${serverData.year}-${String(serverData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const el = e.currentTarget; 
+          let dateStr = day === 'pending' ? '미정' : `${serverData.year}-${String(serverData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
           let isItemDone = isDone === true || String(isDone) === "true";
           let itemKey = `${bl}_${dateStr}_${isItemDone}_${idx}`;
           let item = day === 'pending' ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
           const safeStr = (val) => (val === "" || val == null) ? "" : String(val).trim();
+          
           let existingIdx = selectedItems.findIndex(i => i.key === itemKey);
-          if (existingIdx > -1) { selectedItems.splice(existingIdx, 1); el.classList.remove('multi-selected'); }
-          else { selectedItems.push({ key: itemKey, bl: bl, dateStr: dateStr, isDone: isItemDone, pal: safeStr(item.pal) }); el.classList.add('multi-selected'); }
+          if (existingIdx > -1) { 
+              selectedItems.splice(existingIdx, 1); 
+              el.classList.remove('multi-selected'); 
+          } else { 
+              selectedItems.push({ key: itemKey, bl: bl, dateStr: dateStr, isDone: isItemDone, pal: safeStr(item.pal) }); 
+              el.classList.add('multi-selected'); 
+          }
           document.getElementById('selCount').innerText = selectedItems.length; return;
         }
-        showModal(day);
+        if (isLongPress) { setTimeout(() => { isLongPress = false; }, 100); return; } showModal(day);
       }
       function handleCellClick(e, day) { if (isMultiMode) return; showModal(day); }
 
@@ -708,7 +876,11 @@
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
               if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
           }
-          dateRowHtml += `</div>`; let cellHtml = `<div class="${cellClass}" onclick="handleCellClick(event, ${day})">${dateRowHtml}`;
+          dateRowHtml += `</div>`; 
+          
+          // 🚨 [복구] 셀 영역 터치 시 이벤트 바인딩
+          let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
+          let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
 
           if(dayData && dayData.length > 0) {
             dayData.forEach((item, idx) => {
@@ -724,7 +896,9 @@
               let innerHtml = `<span class="pal-main">${item.pal}</span><span class="bl-sub">${iconHtml}${shortName}</span>`;
 
               let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
-              let bindItem = `onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.bl}', ${isItemDone})"`;
+              // 🚨 [복구] 아이템(조각) 터치 시 이벤트 바인딩 및 다중선택 UI 표시용
+              let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.bl}', ${isItemDone})"`;
+              
               cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}" ${bindItem}>${innerHtml}</div>`;
             });
           }
@@ -739,7 +913,8 @@
           serverData.pendingItems.forEach((item, idx) => {
             let isItemDone = item.isDone === true || String(item.isDone) === "true";
             let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : '';
-            let bindPending = `onclick="handleItemClick(event, 'pending', ${idx}, '${item.bl}', ${isItemDone})"`;
+            // 🚨 대기열 아이템 터치 이벤트
+            let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.bl}', ${isItemDone})"`;
             pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;"><div class="pending-comp">${checkIcon}${item.bl}</div><div class="pending-vol">📦 ${item.pal}P (${item.sType})</div></div></div>`;
           });
           document.getElementById('pendingList').innerHTML = pListHtml;
@@ -836,7 +1011,6 @@
         if (savedTheme === 'light') { document.body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; } else { document.body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; }
         const savedSize = localStorage.getItem('cal_fontSize') || 'M'; changeSize(savedSize);
 
-        // 🚨 [패치 3] 새로고침 시 관리자(초록색 자물쇠) UI 완벽 복구
         if(isAdmin) {
             const btn = document.getElementById('adminBtn');
             if(btn) { btn.innerHTML = '🔓 관리자'; btn.classList.add('unlocked'); }
@@ -875,44 +1049,7 @@
             localStorage.setItem(cacheKey, JSON.stringify(newData)); 
             if (serverData.year === currentYear && serverData.month === currentMonth) { serverData = newData; renderCalendar(); }
         }).getCalendarDataAsync(currentType, currentYear, currentMonth);
-
-        document.querySelectorAll('.overlay-modal').forEach(modal => {
-            const box = modal.querySelector('.modal-box'); if (!box) return;
-            const handle = box.querySelector('.bottom-sheet-handle'); const header = box.querySelector('.modal-header');
-            if(!handle || !header) return;
-            let startY = 0, currentY = 0, isDragging = false;
-
-            const startDrag = (e) => {
-                if (box.scrollTop > 5) return; 
-                startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-                isDragging = true; box.style.transition = 'none';
-                if (e.type === 'mousedown') { document.addEventListener('mousemove', moveDrag, { passive: false }); document.addEventListener('mouseup', endDrag); }
-            };
-            const moveDrag = (e) => {
-                if (!isDragging) return;
-                currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-                let diff = currentY - startY;
-                if (diff > 0) { if (e.cancelable) e.preventDefault(); box.style.transform = `translateY(${diff}px)`; }
-            };
-            const endDrag = (e) => {
-                if (!isDragging) return;
-                isDragging = false; let diff = currentY - startY;
-                box.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                if (diff > 80) { box.style.transform = 'translateY(100%)'; setTimeout(() => { modal.style.display = 'none'; box.style.transform = ''; }, 250);
-                } else { box.style.transform = 'translateY(0)'; setTimeout(() => { box.style.transform = ''; }, 250); }
-                if (e.type === 'mouseup' || e.type === 'mouseleave') { document.removeEventListener('mousemove', moveDrag); document.removeEventListener('mouseup', endDrag); }
-            };
-            const attachEvents = (el) => {
-                el.addEventListener('touchstart', startDrag, { passive: true }); el.addEventListener('touchmove', moveDrag, { passive: false });
-                el.addEventListener('touchend', endDrag); el.addEventListener('touchcancel', endDrag); el.addEventListener('mousedown', startDrag);
-            };
-            attachEvents(handle); attachEvents(header);
-        });
       });
-
-      function closeModalOnBgClick(e) {
-         if (e.target.classList.contains('overlay-modal')) e.target.style.display = 'none';
-      }
 
       // =====================================================
       // 📊 [입고 대시보드 스택바(Stack) + 배지 디자인 전면 개편]
