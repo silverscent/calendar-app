@@ -15,6 +15,19 @@
       body { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif; background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 12px 12px calc(80px + env(safe-area-inset-bottom)) 12px; font-size: var(--base-font-size); transition: 0.3s; -webkit-font-smoothing: antialiased; }
 
       .top-wrapper { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; background: var(--header-bg); padding: 12px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); position: relative; overflow: hidden; border: 2px solid transparent; transition: box-shadow 0.3s, border-color 0.3s, transform 0.2s; box-sizing: border-box; }
+      
+      /* 🚨 [복구] 네온 로딩 & 게이지 바 CSS (이게 빠져서 불빛이 안 들어왔습니다) */
+      .top-wrapper.syncing-glow { transform: scale(1.005); border-color: rgba(10, 132, 255, 0.7) !important; animation: frameNeonGlowOptimal 3s linear infinite !important; }
+      @keyframes frameNeonGlowOptimal {
+        0% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); }
+        33% { border-color: rgba(52,199,89,0.7); box-shadow: 0 0 14px rgba(52,199,89,0.5), 0 0 7px rgba(52,199,89,0.3), inset 0 0 7px rgba(52,199,89,0.1); }
+        66% { border-color: rgba(10,132,255,0.7); box-shadow: 0 0 14px rgba(10,132,255,0.5), 0 0 7px rgba(10,132,255,0.3), inset 0 0 7px rgba(10,132,255,0.1); }
+        100% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); }
+      }
+      .top-wrapper::after { content: ''; position: absolute; bottom: 0; left: -50%; width: 50%; height: 2px; background: linear-gradient(90deg, transparent, #0a84ff, #34c759, #ffd60a, transparent); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+      .top-wrapper.syncing-glow::after { opacity: 1; animation: loadingBarSweep 0.8s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+      @keyframes loadingBarSweep { 0% { left: -50%; } 100% { left: 100%; } }
+
       .top-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
       .title-area { display: flex; flex-direction: row; align-items: center; gap: 6px; }
       .nav-arrow { background: var(--btn-bg); color: var(--text-main); border: none; border-radius: 10px; padding: 8px 14px; cursor: pointer; font-size: 1.05em; font-weight: bold; transition: 0.2s; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
@@ -75,6 +88,7 @@
       
       .info-footer { text-align: center; font-size: 0.8em; color: var(--text-sub); margin-top: 20px; font-weight: 600; }
 
+      /* 🚨 [복구] 날아갔던 모달창 뼈대와 애니메이션 CSS 완벽 복구 */
       .overlay-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); align-items: flex-end; justify-content: center; z-index: 2500; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: fadeIn 0.2s; padding: 0; }
       .modal-box { background: var(--bg-color); width: 100%; max-width: 500px; padding: 25px 20px max(25px, env(safe-area-inset-bottom)) 20px; border-radius: 24px 24px 0 0; max-height: 85vh; overflow-y: auto; box-sizing: border-box; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2); animation: slideUpSheet 0.35s cubic-bezier(0.175, 0.885, 0.32, 1); }
       .bottom-sheet-handle { width: 40px; height: 5px; background: var(--border-color); border-radius: 3px; margin: -10px auto 20px auto; }
@@ -82,6 +96,33 @@
       .modal-title { font-size: 1.3em; font-weight: 900; letter-spacing: -0.5px; }
       .close-btn { background: var(--btn-bg); border: none; font-size: 1.2em; color: var(--text-main); cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
       .close-btn:active { transform: scale(0.9); }
+
+      .modal-card { position: relative; display: flex; align-items: flex-start; background: var(--card-bg); border-radius: 14px; padding: 18px; margin-bottom: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03); flex-wrap: wrap; padding-bottom: 35px; }
+      .modal-icon { width: 14px; height: 14px; border-radius: 50%; margin-top: 5px; margin-right: 15px; flex-shrink: 0; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2); }
+      .modal-info { flex: 1; width: 100%; min-width: 0; }
+      .modal-comp-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px; flex-wrap: nowrap; }
+      .modal-comp { font-size: 1.1em; font-weight: 900; flex: 1 1 0%; word-break: keep-all; overflow-wrap: break-word; line-height: 1.3; letter-spacing: -0.5px; margin-right: 10px; }
+      .action-btn-group { display: flex; gap: 8px; flex-shrink: 0; }
+      
+      .edit-toggle-btn, .done-toggle-btn { background: var(--btn-bg); color: var(--text-main); border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.85em; cursor: pointer; font-weight: 800; transition: 0.2s; }
+      .edit-toggle-btn:active, .done-toggle-btn:active { transform: scale(0.95); }
+      .done-toggle-btn { background: rgba(52, 199, 89, 0.15); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.3); }
+
+      .modal-vol { font-size: 0.95em; color: var(--text-sub); font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; }
+      .modal-etc { font-size: 0.85em; color: #ff9f0a; background: rgba(255, 159, 10, 0.1); padding: 4px 10px; border-radius: 8px; display: inline-block; margin-top: 6px; font-weight: 800; border: 1px solid rgba(255, 159, 10, 0.2); }
+      .status-badge { position: absolute; bottom: 14px; right: 16px; background: rgba(52, 199, 89, 0.1); border: 1px solid rgba(52, 199, 89, 0.4); color: #34c759; font-size: 0.85em; font-weight: 900; padding: 6px 12px; border-radius: 20px; display: flex; align-items: center; gap: 5px; backdrop-filter: blur(5px); }
+
+      /* 신규/수정 폼 디자인 */
+      .edit-form { display: flex; flex-direction: column; gap: 14px; width: 100%; margin-top: 15px; }
+      .form-label { font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: -8px; padding-left: 4px; }
+      .edit-input { width: 100%; box-sizing: border-box; padding: 14px 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--card-bg); color: var(--text-main); font-size: 1em; font-weight: bold; appearance: none; -webkit-appearance: none; transition: border 0.2s; }
+      .edit-input:focus { border-color: #0a84ff; outline: none; }
+      .edit-row { display: flex; gap: 12px; width: 100%; }
+      .edit-row > div { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+      .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+      .save-btn { flex: 2; background: #0a84ff; color: #fff; border: none; padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 1.05em; transition: 0.2s; }
+      .cancel-btn { flex: 1; background: var(--btn-bg); color: var(--text-main); border: none; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; transition: 0.2s; }
+      .delete-btn { width: 100%; background: rgba(255, 59, 48, 0.1); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); padding: 14px; border-radius: 12px; font-weight: 900; cursor: pointer; margin-top: 5px; transition: 0.2s; }
 
       .picker-year-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; font-size: 1.3em; font-weight: 900; }
       .year-btn { background: var(--btn-bg); border: none; width: 44px; height: 44px; border-radius: 12px; font-weight: bold; cursor: pointer; color: var(--text-main); transition: 0.2s; }
@@ -91,11 +132,9 @@
       .month-btn:active { transform: scale(0.95); }
       .month-btn.current { background: rgba(10, 132, 255, 0.1); border-color: #0a84ff; color: #0a84ff; }
 
-      #toast { visibility: hidden; min-width: 250px; background: rgba(40, 44, 52, 0.95); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); color: #fff; text-align: center; border-radius: 30px; padding: 14px 24px; position: fixed; z-index: 99999; left: 50%; top: env(safe-area-inset-top, 10px); transform: translate3d(-50%, -150%, 0) scale(0.9); font-size: 0.95em; font-weight: 900; opacity: 0; transition: visibility 0.5s, opacity 0.4s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); letter-spacing: -0.3px; border: 2px solid transparent; background-clip: padding-box; animation: rainbowGlow 3s linear infinite; }
+      #toast { visibility: hidden; min-width: 250px; background: rgba(40, 44, 52, 0.95); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); color: #fff; text-align: center; border-radius: 30px; padding: 14px 24px; position: fixed; z-index: 99999; left: 50%; top: env(safe-area-inset-top, 10px); transform: translate3d(-50%, -150%, 0) scale(0.9); font-size: 0.95em; font-weight: 900; opacity: 0; transition: visibility 0.5s, opacity 0.4s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); letter-spacing: -0.3px; border: 2px solid transparent; }
       body.light-mode #toast { background: rgba(255, 255, 255, 0.95); color: #222; border: 2px solid transparent; }
-      #toast.show { visibility: visible; opacity: 1; transform: translate3d(-50%, 20px, 0) scale(1); }
-
-      @keyframes rainbowGlow { 0% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.5); border-color: rgba(255, 59, 48, 0.7); } 33% { box-shadow: 0 0 15px rgba(52, 199, 89, 0.5); border-color: rgba(52, 199, 89, 0.7); } 66% { box-shadow: 0 0 15px rgba(10, 132, 255, 0.5); border-color: rgba(10, 132, 255, 0.7); } 100% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.5); border-color: rgba(255, 59, 48, 0.7); } }
+      #toast.show { visibility: visible; opacity: 1; transform: translate3d(-50%, 20px, 0) scale(1); animation: rainbowGlow 3s linear infinite; }
 
       #globalLoader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: white; font-weight: bold; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
       .spinner { border: 4px solid rgba(255, 255, 255, 0.2); border-top: 4px solid #fff; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin-bottom: 12px; }
@@ -111,9 +150,10 @@
 
       .dash-control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
       .dash-nav { display: flex; align-items: center; gap: 10px; font-size: 1.2em; font-weight: 900; }
-      .dash-nav button { background: var(--btn-bg); border: none; color: var(--text-main); width: 32px; height: 32px; border-radius: 8px; font-weight: bold; }
+      .dash-nav button { background: var(--btn-bg); border: none; color: var(--text-main); width: 32px; height: 32px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+      .dash-nav button:active { transform: scale(0.9); }
       .dash-toggles { display: flex; background: var(--btn-bg); padding: 4px; border-radius: 10px; gap: 2px; }
-      .dash-toggles button { background: transparent; border: none; color: var(--text-sub); padding: 4px 15px; font-weight: 800; font-size: 0.9em; border-radius: 8px; }
+      .dash-toggles button { background: transparent; border: none; color: var(--text-sub); padding: 4px 15px; font-weight: 800; font-size: 0.9em; border-radius: 8px; cursor: pointer; transition: 0.2s; }
       .dash-toggles button.active { background: #0a84ff; color: white; }
       
       .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
@@ -182,6 +222,17 @@
     </div>
 
     <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
+
+    <div id="modal" class="overlay-modal" onclick="closeModalOnBgClick(event)">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title" id="modalTitle">상세 내역</div>
+          <button class="close-btn" onclick="document.getElementById('modal').style.display = 'none'">✕</button>
+        </div>
+        <div id="modalContent"></div>
+      </div>
+    </div>
 
     <div id="monthPickerModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
       <div class="modal-box" onclick="event.stopPropagation()">
@@ -269,6 +320,7 @@
       let serverData = { year: todayDateObj.getFullYear(), month: todayDateObj.getMonth() + 1, firstDay: 0, daysInMonth: 31, monthData: {}, pendingItems: [] };
       let adminToken = localStorage.getItem("admin_token");
       let isAdmin = adminToken ? true : false;
+      let isMultiMode = false;
       window.yearlyHolidays = {}; 
 
       function checkAndFetchHolidays(year) {
@@ -344,7 +396,9 @@
                           fetch(`${GAS_API_URL}?api=true&action=yearlyStats&type=${type}&year=${y}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId); 
-                                  if(this._ok) this._ok(d); 
+                                  let finalData = d;
+                                  if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
+                                  if(this._ok) this._ok(finalData); 
                               }).catch(e => { 
                                   clearTimeout(timeoutId); 
                                   if(this._err) this._err(e); 
@@ -370,6 +424,143 @@
       let activeRequests = 0;
       function setLoadingState(isLoading) {
           if (isLoading) activeRequests++; else activeRequests = Math.max(0, activeRequests - 1);
+          const topFrame = document.querySelector('.top-wrapper');
+          if (topFrame) {
+              if (activeRequests > 0) topFrame.classList.add('syncing-glow');
+              else topFrame.classList.remove('syncing-glow');
+          }
+      }
+
+      // 🚨 [복구 5] 최근 OCR 버튼 함수 복구 완료!
+      function showLastOcrImage() {
+          setLoadingState(true);
+          google.script.run
+              .withSuccessHandler(url => {
+                  setLoadingState(false);
+                  if (url) window.open(url, '_blank');
+                  else showToast("❌ 최근 처리된 이미지가 없습니다.", 2000);
+              })
+              .withFailureHandler(err => {
+                  setLoadingState(false); showToast("❌ 통신 오류", 2000);
+              })
+              .getLastOcrImageUrl();
+      }
+
+      // 🚨 [복구 6] 셀 터치 이벤트 복구 (이거 없어서 상세창이 안 열림)
+      function handleCellClick(e, day) {
+        if (isMultiMode) return;
+        showModal(day);
+      }
+
+      function handleItemClick(e, day, idx, bl, isDone) {
+        if (isMultiMode) {
+          const el = e.currentTarget;
+          let dateStr = day === "pending" ? "미정" : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          let isItemDone = isDone === true || String(isDone) === "true";
+          let item = day === "pending" ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
+          
+          let itemKey = `${bl}_${dateStr}_${isItemDone}_${idx}`;
+          let existingIdx = selectedItems.findIndex((i) => i.key === itemKey);
+          if (existingIdx > -1) {
+            selectedItems.splice(existingIdx, 1); el.classList.remove("multi-selected");
+          } else {
+            selectedItems.push({ key: itemKey, bl: bl, dateStr: dateStr, isDone: isItemDone, pal: item.pal || "" });
+            el.classList.add("multi-selected");
+          }
+          document.getElementById("selCount").innerText = selectedItems.length;
+          return;
+        }
+        showModal(day);
+      }
+
+      // 🚨 [복구 7] 달력 터치 시 열리는 상세 내역 모달 복구
+      function showModal(day) {
+        let dayData = day === "pending" ? serverData.pendingItems : serverData.monthData[day];
+        if (!dayData || dayData.length === 0) return;
+        
+        let titleText = "", dateStr = "";
+        if (day === "pending") {
+          titleText = "⚠️ 일정 미정 / 대기 상세"; dateStr = "미정";
+        } else {
+          const dayOfWeekIdx = ["일", "월", "화", "수", "목", "금", "토"];
+          const dayOfWeek = dayOfWeekIdx[new Date(serverData.year, serverData.month - 1, day).getDay()];
+          titleText = `${serverData.month}월 ${day}일 (${dayOfWeek})`;
+          dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        }
+        
+        document.getElementById("modalTitle").innerText = titleText;
+        let contentHtml = "";
+        dayData.forEach((item, idx) => {
+          let isItemDone = item.isDone === true || String(item.isDone) === "true";
+          let isDoneClass = isItemDone ? "done-mark" : "";
+          let bgStyle = item.sType === 'SEA' ? "background: linear-gradient(135deg, #0a84ff, #005bb5);" : "background: linear-gradient(135deg, #ff453a, #cc2920);";
+
+          let actionBtns = "";
+          if (isAdmin) {
+            if (!isItemDone) {
+              actionBtns = `<div class="action-btn-group"><button class="done-toggle-btn" onclick="submitCMS('DONE', '${item.bl}', '${dateStr}', ${idx}, false)">✅ 완료</button></div>`;
+            } else {
+              actionBtns = `<div class="action-btn-group"><button class="edit-toggle-btn" style="color:#ff9f0a; border: 1px solid #ff9f0a; background: rgba(255,159,10,0.1);" onclick="submitCMS('UNDO_DONE', '${item.bl}', '${dateStr}', ${idx}, true)">⏪ 취소</button></div>`;
+            }
+          }
+
+          let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/gi, "").trim() : "";
+          let etcHtml = meaningfulEtc !== "" ? `<div class="modal-etc">📍 비고: ${meaningfulEtc}</div>` : "";
+          let iconHtml = isItemDone ? `<span class="done-icon" style="font-size: 13px !important; margin-right: 4px;">✅</span>` : "";
+          
+          let stampHtml = isItemDone ? `<div class="status-badge"><span style="font-size: 1.1em; line-height: 1;">✔️</span> 입고 완료</div>` : "";
+
+          contentHtml += `<div class="modal-card">
+                            <div class="modal-icon ${isDoneClass}" style="${bgStyle}"></div>
+                            <div class="modal-info">
+                                <div class="modal-comp-row"><span class="modal-comp" style="font-size:1.05em; font-weight:800;">${item.bl}</span>${actionBtns}</div>
+                                <div class="modal-vol" style="display:flex; align-items:center;">${iconHtml}📦 ${item.pal}P (${item.sType})</div>
+                                ${etcHtml}
+                            </div>
+                            ${stampHtml}
+                        </div>`;
+        });
+        document.getElementById("modalContent").innerHTML = contentHtml;
+        document.getElementById("modal").style.display = "flex";
+      }
+
+      function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = false) {
+        let oldPal = "";
+        let currentIsDone = isDone === true || String(isDone) === "true";
+        if (idx !== null) {
+          let day = oldDate === "미정" ? "pending" : parseInt(oldDate.split("-")[2], 10);
+          let item = day === "pending" ? serverData.pendingItems[idx] : serverData.monthData[day] ? serverData.monthData[day][idx] : null;
+          if (item) { oldPal = item.pal; currentIsDone = item.isDone === true || String(item.isDone) === "true"; }
+        }
+        
+        let payload = { action: action, oldBL: oldBL, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal };
+        if (action === "DONE") { if (!confirm(`✅ [${oldBL}] 입고를 완료 처리하시겠습니까?`)) return; } 
+        else if (action === "UNDO_DONE") { if (!confirm(`⏪ [${oldBL}] 입고 완료 상태를 취소하시겠습니까?`)) return; }
+
+        document.getElementById("modal").style.display = "none";
+
+        // 🚨 서버 가기 전에 로컬에 즉시 반영 (낙관적 UI)
+        let oldDay = oldDate === "미정" ? "pending" : parseInt(oldDate.split("-")[2], 10);
+        let arr = oldDay === "pending" ? serverData.pendingItems : serverData.monthData[oldDay];
+        if (arr && arr[idx]) {
+            if (action === "DONE") arr[idx].isDone = true;
+            if (action === "UNDO_DONE") arr[idx].isDone = false;
+        }
+        lastLocalUpdateTime = Date.now();
+        localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+        Object.keys(localStorage).forEach(k => { if (k.startsWith(`yearly_stats_cache_${currentType}_`)) localStorage.removeItem(k); });
+        renderCalendar();
+
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (!res.success) { showToast("❌ 서버 실패! 복구합니다.", 2500); goToAsync(serverData.year, serverData.month); }
+          })
+          .withFailureHandler((err) => { showToast("❌ 통신 오류! 복구합니다.", 2500); goToAsync(serverData.year, serverData.month); })
+          .manageWebInboundData(action, payload, adminToken);
+      }
+
+      function closeModalOnBgClick(e) {
+        if (e.target === document.getElementById("modal")) document.getElementById("modal").style.display = "none";
       }
 
       function renderCalendar() {
@@ -397,7 +588,7 @@
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
               if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
           }
-          dateRowHtml += `</div>`; let cellHtml = `<div class="${cellClass}">${dateRowHtml}`;
+          dateRowHtml += `</div>`; let cellHtml = `<div class="${cellClass}" onclick="handleCellClick(event, ${day})">${dateRowHtml}`;
 
           if(dayData && dayData.length > 0) {
             dayData.forEach((item, idx) => {
@@ -413,7 +604,8 @@
               let innerHtml = `<span class="pal-main">${item.pal}</span><span class="bl-sub">${iconHtml}${shortName}</span>`;
 
               let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
-              cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}">${innerHtml}</div>`;
+              let bindItem = `onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.bl}', ${isItemDone})"`;
+              cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}" ${bindItem}>${innerHtml}</div>`;
             });
           }
           cellHtml += `</div>`; rowHtml += cellHtml; cellCount++;
@@ -427,7 +619,8 @@
           serverData.pendingItems.forEach((item, idx) => {
             let isItemDone = item.isDone === true || String(item.isDone) === "true";
             let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : '';
-            pListHtml += `<div class="pending-item"><div style="display:flex; align-items:center; width:100%; pointer-events:none;"><div class="pending-comp">${checkIcon}${item.bl}</div><div class="pending-vol">📦 ${item.pal}P (${item.sType})</div></div></div>`;
+            let bindPending = `onclick="handleItemClick(event, 'pending', ${idx}, '${item.bl}', ${isItemDone})"`;
+            pListHtml += `<div class="pending-item" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;"><div class="pending-comp">${checkIcon}${item.bl}</div><div class="pending-vol">📦 ${item.pal}P (${item.sType})</div></div></div>`;
           });
           document.getElementById('pendingList').innerHTML = pListHtml;
         } else { document.getElementById('pendingSection').style.display = 'none'; }
@@ -555,11 +748,13 @@
             if (serverData.year === currentYear && serverData.month === currentMonth) { serverData = newData; renderCalendar(); }
         }).getCalendarDataAsync(currentType, currentYear, currentMonth);
 
+        // 모달창 스와이프 기능 (에러 방지)
         document.querySelectorAll('.overlay-modal').forEach(modal => {
             const box = modal.querySelector('.modal-box'); if (!box) return;
             const handle = box.querySelector('.bottom-sheet-handle'); const header = box.querySelector('.modal-header');
+            if(!handle || !header) return;
+            
             let startY = 0, currentY = 0, isDragging = false;
-
             const startDrag = (e) => {
                 if (box.scrollTop > 5) return; 
                 startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
@@ -580,9 +775,7 @@
                 } else { box.style.transform = 'translateY(0)'; setTimeout(() => { box.style.transform = ''; }, 250); }
                 if (e.type === 'mouseup' || e.type === 'mouseleave') { document.removeEventListener('mousemove', moveDrag); document.removeEventListener('mouseup', endDrag); }
             };
-
             const attachEvents = (el) => {
-                if (!el) return;
                 el.addEventListener('touchstart', startDrag, { passive: true }); el.addEventListener('touchmove', moveDrag, { passive: false });
                 el.addEventListener('touchend', endDrag); el.addEventListener('touchcancel', endDrag); el.addEventListener('mousedown', startDrag);
             };
@@ -617,7 +810,7 @@
           let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
       }
 
-      // 🚨 [복구 5] 파이 차트 "조각 안"에 글씨 넣기 (해상/항공 전용)
+      // 🚨 파이 차트 "조각 안"에 글씨 넣기
       const pieCenterTextPlugin = {
           id: 'pieCenterText',
           beforeDraw(chart) {
@@ -712,7 +905,7 @@
           }
       }
 
-      // 🚨 [복구 6] 대시보드 넘길 때 0.1초 컷 낙관적 UI 적용 (무한 로딩 방어)
+      // 🚨 대시보드 넘길 때 0.1초 컷 낙관적 UI 적용 (무한 로딩 방어)
       function fetchDashMonthAndRender() {
           document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월 (조회중)`;
           let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
@@ -721,7 +914,6 @@
           if (cached) { 
               try { window.dashCurrentData = JSON.parse(cached); renderDashCharts(); } catch(e) {} 
           } else {
-              // 껍데기로 먼저 화면 띄우기
               window.dashCurrentData = { monthData: {}, pendingItems: [] };
               renderDashCharts();
               document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
@@ -809,13 +1001,13 @@
               let yData = yearlyCache[window.dashYear];
               if (!yData) return;
               
-              // 🚨 [복구 7] 연간 차트 상세내역 데이터 매핑
+              // 🚨 [핵심] 연간 차트 클릭용 상세내역 데이터 매핑 완료!
               barData = yData.monthly.map(m => m.pal); 
               barDetails = yData.monthly.map(m => m.details || {}); 
               totalQty = barData.reduce((a, b) => a + b, 0);
               
-              compMap['🚢 해상 (SEA)'] = (yData.comp['SEA'] && yData.comp['SEA'].pal) || 0;
-              compMap['✈️ 항공 (AIR)'] = (yData.comp['AIR'] && yData.comp['AIR'].pal) || 0;
+              compMap['🚢 해상 (SEA)'] = (yData.comp['🚢 해상 (SEA)'] && yData.comp['🚢 해상 (SEA)'].pal) || 0;
+              compMap['✈️ 항공 (AIR)'] = (yData.comp['✈️ 항공 (AIR)'] && yData.comp['✈️ 항공 (AIR)'].pal) || 0;
           }
 
           if (window.dashMode === 'month') {
