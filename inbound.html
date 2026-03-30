@@ -418,20 +418,8 @@
                       getOcrLastTimeStr: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }); },
                       getYearlyHolidays: function(y) { this._call({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: y }); },
                       getYearlyStatsAsync: function(type, y) { 
-                          setLoadingState(true);
-                          const controller = new AbortController();
-                          const timeoutId = setTimeout(() => controller.abort(), 15000); 
-
-                          fetch(`${GAS_API_URL}?api=true&action=yearlyStats&type=${type}&year=${y}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
-                              .then(r => r.json()).then(d => { 
-                                  clearTimeout(timeoutId); 
-                                  let finalData = d;
-                                  if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
-                                  if(this._ok) this._ok(finalData); 
-                              }).catch(e => { 
-                                  clearTimeout(timeoutId); 
-                                  if(this._err) this._err(e); 
-                              }).finally(() => setLoadingState(false)); 
+                          // 🚨 [패치 2] 연간 통계도 복잡한 GET(fetch) 버리고, 무조건 뚫리는 POST(_call)로 일원화!
+                          this._call({ source: 'vercel', action: 'GET_YEARLY_STATS', type: type, year: y }); 
                       }
                   };
               }
@@ -848,7 +836,13 @@
         if (savedTheme === 'light') { document.body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; } else { document.body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; }
         const savedSize = localStorage.getItem('cal_fontSize') || 'M'; changeSize(savedSize);
 
-        if(isAdmin) document.getElementById('adminActions').style.display = 'flex';
+        // 🚨 [패치 3] 새로고침 시 관리자(초록색 자물쇠) UI 완벽 복구
+        if(isAdmin) {
+            const btn = document.getElementById('adminBtn');
+            if(btn) { btn.innerHTML = '🔓 관리자'; btn.classList.add('unlocked'); }
+            const actions = document.getElementById('adminActions');
+            if(actions) actions.style.display = 'flex';
+        }
 
         let now = new Date(); let currentYear = now.getFullYear(); let currentMonth = now.getMonth() + 1;
         let cacheKey = `cal_cache_${currentType}_${currentYear}_${currentMonth}`;
