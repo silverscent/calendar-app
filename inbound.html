@@ -232,7 +232,7 @@
           }).getYearlyHolidays(year);
       }
 
-      // 🚀 [초정밀 통신 엔진] 브라우저 고집 꺾기 & 타임아웃 25초 연장
+      // 🚀 [초정밀 통신 엔진] 브라우저 고집 꺾기 & 타임아웃 15초 적용
       const google = {
           script: {
               get run() { 
@@ -243,7 +243,7 @@
                       _call: function(payload) {
                           setLoadingState(true); 
                           const controller = new AbortController();
-                          const timeoutId = setTimeout(() => controller.abort(), 25000); // 🚨 데이터가 많아도 끊기지 않게 25초로 대폭 연장!
+                          const timeoutId = setTimeout(() => controller.abort(), 15000); 
                           
                           fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(payload), signal: controller.signal })
                               .then(r => r.json()).then(d => { 
@@ -252,15 +252,15 @@
                                   if(this._ok) this._ok(finalData); 
                               }).catch(e => { 
                                   clearTimeout(timeoutId);
-                                  if(this._err) this._err(e); 
+                                  if(this._err) this._err(e.name === 'AbortError' ? new Error('통신 지연 (15초 초과)') : e); 
                               }).finally(() => setLoadingState(false)); 
                       },
                       getCalendarDataAsync: function(type, y, m) {
                           setLoadingState(true); 
                           const controller = new AbortController();
-                          const timeoutId = setTimeout(() => controller.abort(), 25000); // 🚨 25초 연장
+                          const timeoutId = setTimeout(() => controller.abort(), 15000);
                           
-                          // 🚨 [동기화 핵심] URL 끝에 &t=시간(난수)을 붙여서 브라우저가 절대 예전 캐시를 못 쓰게 강제 서버 통신시킴!
+                          // 🚨 [핵심 동기화 패치] URL 끝에 &t=시간 난수를 붙여 1분 캐시 강제 파괴!
                           fetch(`${GAS_API_URL}?api=true&type=${type}&year=${y}&month=${m}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId);
@@ -287,9 +287,9 @@
                       getYearlyStatsAsync: function(type, y) { 
                           setLoadingState(true);
                           const controller = new AbortController();
-                          const timeoutId = setTimeout(() => controller.abort(), 25000); // 🚨 25초 연장
+                          const timeoutId = setTimeout(() => controller.abort(), 10000); 
 
-                          // 🚨 [동기화 핵심] 연간 통계도 매번 새로운 시간 난수를 붙여서 실시간 동기화!
+                          // 🚨 [핵심 동기화 패치] 연간 통계도 캐시 파괴 난수 탑재!
                           fetch(`${GAS_API_URL}?api=true&action=yearlyStats&type=${type}&year=${y}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId); 
