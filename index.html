@@ -1521,14 +1521,21 @@
 
         <div class="dash-control-row">
           <div class="dash-nav">
-            <button onclick="navDashDate(-1)">◀</button>
-            <span id="dashTitleText">2026년 3월</span>
-            <button onclick="navDashDate(1)">▶</button>
+            <button onclick="navDashDate(-1)">◀</button><span id="dashTitleText">조회중...</span><button onclick="navDashDate(1)">▶</button>
           </div>
-          <div style="display: flex; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub);">
-    <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
-    <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
-  </div>
+          <div class="dash-toggles">
+             <button id="btnDashPal" class="active" onclick="setDashUnit('pal')">P</button>
+             <button id="btnDashBox" onclick="setDashUnit('box')">B</button>
+             <div style="width:1px; background:var(--border-color); margin:0 2px;"></div>
+             <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월별</button>
+             <button id="btnDashYear" onclick="setDashMode('year')">연간</button>
+          </div>
+        </div>
+        
+        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: 15px; padding-right: 4px;">
+          <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
+          <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
+        </div>
 
           <div class="dash-toggles">
             <button id="btnDashPal" class="active" onclick="setDashUnit('pal')">P</button>
@@ -4408,12 +4415,18 @@
               }
           });
 
-          // 🚨 [커스텀 터치 엔진] 출고 달력 날짜 글씨 터치/스와이프 완벽 인식
+          // 🚨 [커스텀 터치 엔진] 출고: 손가락 뗄 때 튀는 현상 방어막 적용
           const mainCanvas = document.getElementById('mainChart');
           mainCanvas.style.touchAction = 'pan-y'; 
 
-          const triggerChartInteraction = (clientX) => {
+          let lastTouchX = -999;
+          const triggerChartInteraction = (clientX, isForce = false) => {
               if (!mainChartIns) return;
+              
+              // 💡 10픽셀 미만의 미세한 움직임(손 뗄 때 지문 밀림) 무시
+              if (!isForce && Math.abs(clientX - lastTouchX) < 10) return; 
+              lastTouchX = clientX;
+
               const rect = mainCanvas.getBoundingClientRect();
               const chartArea = mainChartIns.chartArea;
               if (!chartArea) return;
@@ -4428,14 +4441,15 @@
               window.highlightBarOnly(idx);
           };
 
-          mainCanvas.ontouchstart = (e) => { triggerChartInteraction(e.touches[0].clientX); };
-          mainCanvas.ontouchmove = (e) => { triggerChartInteraction(e.touches[0].clientX); };
+          // 이벤트 부착
+          mainCanvas.ontouchstart = (e) => { triggerChartInteraction(e.touches[0].clientX, true); };
+          mainCanvas.ontouchmove = (e) => { triggerChartInteraction(e.touches[0].clientX, false); };
           mainCanvas.ontouchend = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
           
-          mainCanvas.onmousemove = (e) => { triggerChartInteraction(e.clientX); };
+          mainCanvas.onmousemove = (e) => { triggerChartInteraction(e.clientX, false); };
           mainCanvas.onmouseup = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
           mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); };
-
+          
           // 🍩 2. 파이 차트 (하이브리드 엔진 & 다이얼 슬라이더 연동!) ... (이하 기존 코드 유지)
 
           // 🍩 2. 파이 차트 (하이브리드 엔진 & 다이얼 슬라이더 연동!)

@@ -1231,14 +1231,15 @@
           <div class="dash-nav">
             <button onclick="navDashDate(-1)">◀</button><span id="dashTitleText">조회중...</span><button onclick="navDashDate(1)">▶</button>
           </div>
-          <div style="display: flex; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub);">
-    <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
-    <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
-  </div>
           <div class="dash-toggles">
             <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월별</button>
             <button id="btnDashYear" onclick="setDashMode('year')">연간</button>
           </div>
+        </div>
+        
+        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: 15px; padding-right: 4px;">
+          <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
+          <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
         </div>
         
         <div class="dashboard-grid">
@@ -2675,18 +2676,23 @@
               }
           });
 
-          // 🚨 [커스텀 터치 엔진] 캔버스 하단 날짜 글씨까지 완벽하게 터치/스와이프 인식
+         // 🚨 [커스텀 터치 엔진] 입고: 손가락 뗄 때 튀는 현상(미세 떨림) 완벽 방어!
           const mainCanvas = document.getElementById('mainChart');
-          mainCanvas.style.touchAction = 'pan-y'; // 가로 스와이프 차단, 세로 스크롤(위아래 넘기기)은 부드럽게 허용
+          mainCanvas.style.touchAction = 'pan-y'; 
 
-          const triggerChartInteraction = (clientX) => {
+          let lastTouchX = -999; // 마지막 X 좌표 기억용
+          const triggerChartInteraction = (clientX, isForce = false) => {
               if (!mainChartIns) return;
+              
+              // 💡 [핵심 방어막] 손을 뗄 때 발생하는 10픽셀 이하의 미세한 움직임은 무시!
+              if (!isForce && Math.abs(clientX - lastTouchX) < 10) return; 
+              lastTouchX = clientX;
+
               const rect = mainCanvas.getBoundingClientRect();
               const chartArea = mainChartIns.chartArea;
               if (!chartArea) return;
               
               let xCoord = clientX - rect.left;
-              // 캔버스 범위를 벗어나도 가장자리로 인식
               let x = Math.max(chartArea.left, Math.min(xCoord, chartArea.right));
               let width = chartArea.right - chartArea.left;
               let percent = (x - chartArea.left) / width;
@@ -2696,15 +2702,17 @@
               window.highlightBarOnly(idx);
           };
 
-          // 모바일 터치 이벤트
-          mainCanvas.ontouchstart = (e) => { triggerChartInteraction(e.touches[0].clientX); };
-          mainCanvas.ontouchmove = (e) => { triggerChartInteraction(e.touches[0].clientX); };
+          // 모바일 터치 이벤트 (touchstart일 때는 강제로 갱신, move일 때는 데드존 검사)
+          mainCanvas.ontouchstart = (e) => { triggerChartInteraction(e.touches[0].clientX, true); };
+          mainCanvas.ontouchmove = (e) => { triggerChartInteraction(e.touches[0].clientX, false); };
           mainCanvas.ontouchend = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
           
           // PC 마우스 이벤트
-          mainCanvas.onmousemove = (e) => { triggerChartInteraction(e.clientX); };
+          mainCanvas.onmousemove = (e) => { triggerChartInteraction(e.clientX, false); };
           mainCanvas.onmouseup = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
           mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); };
+
+          
           // 🍩 파이 차트 
           window.activePieIndex = null;
           let sLabels = []; let sData = []; let sColors = [];
