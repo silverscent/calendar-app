@@ -1877,13 +1877,24 @@
       let isProcessing = false;
       // 👇 이 줄을 하나 추가하세요! (내 폰에서 마지막으로 조작한 시간을 기억할 변수)
       let lastLocalUpdateTime = 0;
-      // 💡 [추가] 과거 유령 버그 시절에 오염된 캐시 싹 다 소독(삭제)하기!
-      if (!localStorage.getItem("cache_wiped_v2")) {
-        Object.keys(localStorage).forEach((k) => {
-          if (k.startsWith("cal_cache_")) localStorage.removeItem(k);
-        });
-        localStorage.setItem("cache_wiped_v2", "true");
-      }
+
+      // 💡 [수정] 버전을 v2에서 v3로 올리면 접속하는 모든 사람의 유령 데이터가 싹 소독됩니다.
+      // 1. 브라우저 창고(localStorage)에 'cache_wiped_v3'라는 도장이 찍혀 있는지 검사합니다.
+if (!localStorage.getItem('cache_wiped_v3')) { 
+
+    // 2. 도장이 없다면? "아, 이 사람은 v3 업데이트 이후 처음 접속했구나!" 하고 
+    //    오염된 유령 데이터 캐시를 싹 지워버립니다.
+    Object.keys(localStorage).forEach(k => { 
+        if(k.startsWith('cal_cache_') || k.startsWith('yearly_stats_cache_')) {
+            localStorage.removeItem(k); 
+        }
+    });
+    window.globalPendingItems = []; 
+
+    // 3. 🚨 [가장 중요한 부분] 대청소가 끝났으니, 브라우저 창고에 'cache_wiped_v3'라는 도장을 콱 찍어둡니다.
+    localStorage.setItem('cache_wiped_v3', 'true'); 
+}
+
       // 💡 2. 빈 뼈대 데이터로 시작 (Vercel에서는 구글 서버가 데이터를 쏘아줄 때까지 로딩 화면으로 대기)
       let serverData = {
         year: todayDateObj.getFullYear(),
