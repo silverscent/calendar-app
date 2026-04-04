@@ -1073,6 +1073,9 @@
       }
       .chart-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 15px; display: flex;
         align-items: center; justify-content: center; margin-bottom: 12px; }
+        /* 💡 입고 달력 관리자 로그인 창 센터링 픽스 */
+      #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
+      #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
     </style>
   </head>
   <body>
@@ -1253,7 +1256,7 @@
         <div id="barDetailBox" style="display: none; background: var(--card-bg); border: 1px solid #0a84ff; border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 0.9em; box-shadow: 0 2px 10px rgba(10, 132, 255, 0.1);"></div>
 
         <div class="chart-container" style="height: 380px; display:flex; flex-direction:column; align-items:center;">
-          <div style="font-weight:900; color:var(--text-main); margin-bottom: 5px;">🚢 타입별 점유율 <span style="font-size:0.75em; color:var(--text-sub);">(조각을 터치해 보세요)</span></div>
+          <div style="font-weight:900; color:var(--text-main); margin-bottom: 5px;">🚢/✈️ 타입별 점유율 <span style="font-size:0.75em; color:var(--text-sub);">(조각을 터치해 보세요)</span></div>
           <div style="position: relative; width: 100%; flex: 1;">
             <canvas id="shareChart"></canvas>
           </div>
@@ -1455,7 +1458,6 @@
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
           let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           
-          // 💡 [수정완료] currentYmd 로 이름표를 맞추고 방어막을 씌웠습니다!
           let isHoliday = false;
           if (window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true) {
               isHoliday = true;
@@ -1465,16 +1467,20 @@
           let dateRowHtml = `<div class="date-row"><span class="${dateClass}" style="${redStyle}">${day}</span>`;
           if (dayData && dayData.length > 0) {
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
-          // 💡 (수정 후) '합' 글자 제거
           if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
           }
           dateRowHtml += `</div>`;
           let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
+          
           if(dayData && dayData.length > 0) {
             dayData.forEach((item, idx) => {
               let isItemDone = item.isDone === true || String(item.isDone) === "true";
-              let cClass = item.sType === 'SEA' ? 'color-sea' : 'color-air';
-              let tagClass = `item-tag ${cClass}`;
+              
+              // 💡 [핵심 수정 1] 파스텔톤 색상 지정
+              let isAir = item.sType === 'AIR';
+              let pastelBg = isAir ? '#FF99CC' : '#99CCFF'; // 항공: 파스텔 핑크, 해상: 파스텔 하늘
+              
+              let tagClass = `item-tag`;
               if (isItemDone) tagClass += " done-mark";
               
               let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
@@ -1483,14 +1489,15 @@
               let iconHtml = isItemDone ? `<span class="done-icon">✅</span>` : '';
               let shortName = item.bl.length > 4 ? item.bl.slice(-4) : item.bl;
               if (item.bl.startsWith('발행전')) shortName = '발행전';
-              // 💡 (수정 후) P 삭제!
+              
               let innerHtml = `<span class="pal-main">${item.pal}</span><span class="bl-sub">${iconHtml}${shortName}</span>`;
               let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
               let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.bl}', ${isItemDone})"`;
 
-              // 🚨 이 부분에 data-raw-idx를 추가해 줍니다!
-              // 💡 [수정완료] 입고 달력에 맞게 고쳤습니다!
-              cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}" ${bindItem}>${innerHtml}</div>`;
+              // 💡 [핵심 수정 2] 스타일(style) 속성으로 파스텔 배경색과 글자색 강제 적용
+              let customStyle = `background-color: ${pastelBg} !important; color: #111 !important; border: 1px solid rgba(0,0,0,0.1);`;
+
+              cellHtml += `<div class="${tagClass}" style="${customStyle}" data-raw-idx="${originalIdx}" ${bindItem}>${innerHtml}</div>`;
             });
           }
           cellHtml += `</div>`;
@@ -1498,6 +1505,8 @@
         }
         while(cellCount % 7 !== 0) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
         rowHtml += '</div>'; grid.innerHTML = rowHtml;
+        
+        // --- 하단 대기열(미정) 렌더링 부분 ---
         if (serverData.pendingItems && serverData.pendingItems.length > 0) {
           document.getElementById('pendingSection').style.display = 'block';
           document.getElementById('pendingCount').innerText = `(${serverData.pendingItems.length}건)`;
@@ -1508,12 +1517,17 @@
             let isItemDone = item.isDone === true || String(item.isDone) === "true";
             let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.bl}', ${isItemDone})"`;
             let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : '';
-            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;"><div class="pending-comp">${checkIcon}${item.bl}</div><div class="pending-vol">📦 ${item.pal}P (${item.sType})</div>${etcTag}</div></div>`;
+            
+            // 💡 [핵심 수정 3] 대기열 항목 앞에 파스텔톤 동그라미 아이콘 추가
+            let isPendingAir = item.sType === 'AIR';
+            let pendingPastelBg = isPendingAir ? '#FF99CC' : '#99CCFF';
+            let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${pendingPastelBg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
+
+            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${item.bl}</div><div class="pending-vol">📦 ${item.pal}P (${item.sType})</div>${etcTag}</div></div>`;
           });
           document.getElementById('pendingList').innerHTML = pListHtml;
         } else { document.getElementById('pendingSection').style.display = 'none'; }
         
-        // 🚀 [개발 추가] 대시보드 통계 업데이트 반영
         updateStatsSummary();
         updateSyncTime();
       }
@@ -2374,35 +2388,129 @@
           setTimeout(renderDashCharts, 100);
       }
 
+ // 💡 [추가] 파이 차트 중앙 텍스트 & 하이브리드 지시선 플러그인
+      const pieCenterTextPlugin = {
+          id: 'pieCenterText',
+          beforeDraw(chart) {
+              if (chart.config.type !== 'doughnut') return;
+              const ctx = chart.ctx;
+              const centerX = chart.chartArea.left + chart.chartArea.width / 2;
+              const centerY = chart.chartArea.top + chart.chartArea.height / 2;
+              ctx.save();
+              ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+              if (window.activePieIndex !== null) {
+                  const idx = window.activePieIndex;
+                  const data = chart.data.datasets[0].data;
+                  const colors = chart.data.datasets[0].backgroundColor;
+                  const labels = chart.data.labels;
+                  const totalSum = data.reduce((a, b) => a + b, 0);
+                  const percent = ((data[idx] / totalSum) * 100).toFixed(1);
+                  
+                  ctx.font = "bold 15px -apple-system, sans-serif";
+                  ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff";
+                  ctx.fillText(labels[idx], centerX, centerY - 22);
+
+                  ctx.font = "900 26px -apple-system, sans-serif";
+                  ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
+                  ctx.fillText(`${percent}%`, centerX, centerY + 6);
+
+                  ctx.font = "bold 15px -apple-system, sans-serif";
+                  ctx.fillStyle = "gray";
+                  ctx.fillText(`(${data[idx]}P)`, centerX, centerY + 30);
+              } else {
+                  ctx.font = "bold 14px -apple-system, sans-serif";
+                  ctx.fillStyle = "gray";
+                  ctx.fillText("조각을 터치하세요", centerX, centerY);
+              }
+              ctx.restore();
+          }
+      };
+
+      const pieHybridLabelPlugin = {
+          id: 'pieHybridLabel',
+          afterDraw(chart) {
+              if (chart.config.type !== 'doughnut') return;
+              const ctx = chart.ctx; const meta = chart.getDatasetMeta(0); const data = chart.data.datasets[0].data;
+              const labels = chart.data.labels; const totalSum = data.reduce((a, b) => a + b, 0);
+              const centerX = chart.chartArea.left + chart.chartArea.width / 2; const centerY = chart.chartArea.top + chart.chartArea.height / 2;
+              let rightLabels = []; let leftLabels = []; const isLight = document.body.classList.contains("light-mode");
+              
+              meta.data.forEach((element, index) => {
+                  if (data[index] === 0) return;
+                  const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
+                  const circumference = element.endAngle - element.startAngle;
+                  const radius = element.outerRadius; const isRight = Math.cos(midAngle) > 0;
+                  const percent = ((data[index] / totalSum) * 100).toFixed(1);
+                  const isActive = (window.activePieIndex === null || window.activePieIndex === index);
+
+                  if (circumference > 0.35) {
+                      const r = element.innerRadius + (element.outerRadius - element.innerRadius) * 0.55;
+                      const x = centerX + Math.cos(midAngle) * r; const y = centerY + Math.sin(midAngle) * r;
+                      ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                      ctx.font = isActive ? "bold 13px -apple-system, sans-serif" : "13px -apple-system, sans-serif";
+                      ctx.fillStyle = isActive ? "#111" : "rgba(128,128,128,0.5)"; // 파스텔톤이라 글씨 검정색
+                      ctx.fillText(labels[index], x, y - 6);
+                      ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
+                      ctx.fillText(`${percent}%`, x, y + 8); ctx.restore();
+                  } else {
+                      const startX = centerX + Math.cos(midAngle) * radius; const startY = centerY + Math.sin(midAngle) * radius;
+                      let elbowX = centerX + Math.cos(midAngle) * (radius + 15); let elbowY = centerY + Math.sin(midAngle) * (radius + 15);
+                      const text = `${labels[index]} (${percent}%)`;
+                      ctx.font = "bold 11px -apple-system, sans-serif";
+                      let obj = { index, text, textWidth: ctx.measureText(text).width, startX, startY, elbowX, elbowY, isRight };
+                      if (isRight) rightLabels.push(obj); else leftLabels.push(obj);
+                  }
+              });
+
+              const avoidCollision = (lbls) => {
+                  lbls.sort((a, b) => a.elbowY - b.elbowY); let prevY = -9999;
+                  lbls.forEach(lbl => { if (lbl.elbowY < prevY + 16) lbl.elbowY = prevY + 16; prevY = lbl.elbowY; });
+              };
+              avoidCollision(rightLabels); avoidCollision(leftLabels);
+
+              ctx.save(); ctx.textBaseline = 'middle';
+              const drawLabel = (lbl) => {
+                  let lineEndX, textX;
+                  if (lbl.isRight) { textX = chart.width - 2; ctx.textAlign = 'right'; lineEndX = textX - lbl.textWidth - 5; if (lineEndX < centerX + meta.data[0].outerRadius + 10) lineEndX = centerX + meta.data[0].outerRadius + 10; } 
+                  else { textX = 2; ctx.textAlign = 'left'; lineEndX = textX + lbl.textWidth + 5; if (lineEndX > centerX - meta.data[0].outerRadius - 10) lineEndX = centerX - meta.data[0].outerRadius - 10; }
+                  
+                  let safeElbowX = lbl.elbowX;
+                  if (!lbl.isRight && safeElbowX > centerX - meta.data[0].outerRadius - 10) safeElbowX = centerX - meta.data[0].outerRadius - 10;
+                  if (lbl.isRight && safeElbowX < centerX + meta.data[0].outerRadius + 10) safeElbowX = centerX + meta.data[0].outerRadius + 10;
+                  const isActive = (window.activePieIndex === null || window.activePieIndex === lbl.index);
+                  
+                  ctx.strokeStyle = isActive ? (isLight ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.3)") : "rgba(128,128,128,0.1)";
+                  ctx.beginPath(); ctx.moveTo(lbl.startX, lbl.startY); ctx.lineTo(safeElbowX, lbl.elbowY); ctx.lineTo(lineEndX, lbl.elbowY); ctx.lineWidth = 1; ctx.stroke();
+                  ctx.beginPath(); ctx.arc(lbl.startX, lbl.startY, 3.5, 0, 2 * Math.PI);
+                  ctx.fillStyle = isActive ? (isLight ? "rgba(100,100,100,0.7)" : "rgba(180,180,180,0.7)") : "rgba(128,128,128,0.1)"; ctx.fill();
+                  ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
+                  ctx.fillStyle = isActive ? (isLight ? "#444" : "#ccc") : "rgba(128,128,128,0.3)"; ctx.fillText(lbl.text, textX, lbl.elbowY);
+              };
+              rightLabels.forEach(drawLabel); leftLabels.forEach(drawLabel); ctx.restore();
+          }
+      };
+
+      Chart.unregister(pieCenterTextPlugin, pieHybridLabelPlugin); 
+      Chart.register(pieCenterTextPlugin, pieHybridLabelPlugin);
+
+      // 📊 [입고 전용 파스텔톤 적용] 통계 엔진
       function renderDashCharts() {
           Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
           Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
           
-          let unitName = "PAL"; // 입고는 PAL 고정
-          let labels = [];
-          // 💡 [핵심 수정] barData 하나 대신, 해상과 항공 배열을 각각 분리해서 준비합니다!
-          let seaData = []; 
-          let airData = []; 
+          let unitName = "PAL"; 
+          let labels = []; let seaData = []; let airData = []; 
           let compMap = { '🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0 }; 
-          let barDetails = []; 
-          let totalQty = 0; let doneQty = 0;
+          let barDetails = []; let totalQty = 0; let doneQty = 0;
           document.getElementById("barDetailBox").style.display = "none";
-
-          // 💡 체크박스 상태 확인
           const includePending = document.getElementById('includePendingCheck')?.checked;
 
           if (window.dashMode === 'month') {
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
               let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
-              // 날짜 수만큼 0으로 기본값 세팅
-              for (let d = 1; d <= days; d++) { 
-                  labels.push(`${d}일`); 
-                  seaData.push(0); 
-                  airData.push(0); 
-                  barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); 
-              }
+              for (let d = 1; d <= days; d++) { labels.push(`${d}일`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
 
-              // 💡 입고 전용 데이터 처리 함수
               const process = (it, dIdx) => {
                   let clean = String(it.bl || "").trim();
                   if (clean && clean !== "미정") {
@@ -2413,31 +2521,19 @@
                       let isAir = it.sType === 'AIR';
                       let typeLabel = isAir ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
 
-                      // 1. 막대 차트용 (날짜가 있을 때만 수단별로 갈라서 넣음)
                       if (dIdx !== null) {
-                          if (isAir) airData[dIdx - 1] += qty;
-                          else seaData[dIdx - 1] += qty;
-                          
+                          if (isAir) airData[dIdx - 1] += qty; else seaData[dIdx - 1] += qty;
                           barDetails[dIdx - 1][typeLabel] += qty;
                       }
-
-                      // 2. 도넛 차트용 (수단별 합산)
                       if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
                   }
               };
 
-              // 💡 월간 데이터 스캔
               if (window.dashCurrentData) {
-                  // 확정 건 처리
                   for (let d = 1; d <= days; d++) { 
-                      if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d]) {
-                          window.dashCurrentData.monthData[d].forEach(it => process(it, d));
-                      }
+                      if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d]) window.dashCurrentData.monthData[d].forEach(it => process(it, d));
                   }
-                  // 미정 건 처리 (체크 시에만)
-                  if (includePending && window.dashCurrentData.pendingItems) {
-                      window.dashCurrentData.pendingItems.forEach(it => process(it, null));
-                  }
+                  if (includePending && window.dashCurrentData.pendingItems) window.dashCurrentData.pendingItems.forEach(it => process(it, null));
               }
           } else {
               // 💡 연간 요약 모드
@@ -2453,11 +2549,22 @@
               if (yData) {
                   for (let i = 0; i < 12; i++) {
                       let mData = yData.monthly[i] || {};
-                      seaData[i] = mData.sea || mData.pal || 0; // 서버 포맷에 따라 유연하게 대처
-                      airData[i] = mData.air || 0;
+                      let details = mData.details || {};
+                      
+                      // 💡 [핵심] 회원님의 Code.gs 구조에 맞춰 details 객체에서 값을 꺼냅니다!
+                      let mSea = details['🚢 해상 (SEA)'] || 0;
+                      let mAir = details['✈️ 항공 (AIR)'] || 0;
+                      
+                      seaData[i] = mSea; 
+                      airData[i] = mAir; 
                       totalQty += parseInt(mData.pal) || 0;
                   }
-                  compMap = { '🚢 해상 (SEA)': yData.sea || 0, '✈️ 항공 (AIR)': yData.air || 0 };
+                  
+                  // 💡 compData에서도 Code.gs 구조에 맞게 pal 수량을 꺼냅니다.
+                  let ySea = yData.comp['🚢 해상 (SEA)'] ? yData.comp['🚢 해상 (SEA)'].pal : 0;
+                  let yAir = yData.comp['✈️ 항공 (AIR)'] ? yData.comp['✈️ 항공 (AIR)'].pal : 0;
+                  
+                  compMap = { '🚢 해상 (SEA)': ySea, '✈️ 항공 (AIR)': yAir };
               }
 
               // 💡 연간 모드 미정건 합산
@@ -2475,11 +2582,10 @@
               }
           }
 
-          // 📊 상단 카드 숫자 업데이트
+          // 상단 카드 요약 (기존 유지)
           if (window.dashMode === 'month') {
               let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
-              let now = new Date();
-              let isCurrentMonth = (window.dashYear === now.getFullYear() && window.dashMonth === now.getMonth() + 1);
+              let now = new Date(); let isCurrentMonth = (window.dashYear === now.getFullYear() && window.dashMonth === now.getMonth() + 1);
               let divider = isCurrentMonth ? Math.max(1, now.getDate()) : new Date(window.dashYear, window.dashMonth, 0).getDate();
               let avgDaily = doneQty > 0 ? (doneQty / divider).toFixed(1) : 0;
               document.getElementById("dashCardTitle1").innerText = "당월 총 예정 물량";
@@ -2493,22 +2599,21 @@
               let avgMonthly = totalQty > 0 ? Math.round(totalQty / 12) : 0;
               document.getElementById("dashCardTitle1").innerText = "연간 총 누적수량";
               document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
-              document.getElementById("dashVolDetail").innerText = `(1년 전체 합산)`;
-              document.getElementById("dashVolDetail").style.color = "#0a84ff";
+              document.getElementById("dashVolDetail").innerText = `(1년 전체 합산)`; document.getElementById("dashVolDetail").style.color = "#0a84ff";
               document.getElementById("dashCardTitle2").innerText = "월간 평균 처리량";
               document.getElementById("dashAvg").innerHTML = `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/월</span>`;
               document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${(totalQty / 365).toFixed(1)})`;
           }
 
-          // 📊 차트 생성 (기존 사용하시던 스택 차트 로직 유지)
+          // 📊 막대 차트 (파스텔톤 적용)
           if (mainChartIns) mainChartIns.destroy();
           mainChartIns = new Chart(document.getElementById('mainChart'), {
               type: 'bar',
               data: { 
                   labels: labels, 
                   datasets: [
-                      { label: `🚢 해상`, data: seaData, backgroundColor: '#0a84ff', stack: 'Stack 0', borderRadius: 4 },
-                      { label: `✈️ 항공`, data: airData, backgroundColor: '#ff453a', stack: 'Stack 0', borderRadius: 4 }
+                      { label: `🚢 해상`, data: seaData, backgroundColor: '#99CCFF', stack: 'Stack 0', borderRadius: 4 }, // 파스텔 하늘
+                      { label: `✈️ 항공`, data: airData, backgroundColor: '#FF99CC', stack: 'Stack 0', borderRadius: 4 }  // 파스텔 핑크
                   ] 
               },
               options: { 
@@ -2517,22 +2622,19 @@
                   onClick: (e, activeElements) => {
                       let detailBox = document.getElementById("barDetailBox");
                       if (!activeElements || activeElements.length === 0) {
-                          mainChartIns.data.datasets[0].backgroundColor = '#0a84ff';
-                          mainChartIns.data.datasets[1].backgroundColor = '#ff453a';
+                          mainChartIns.data.datasets[0].backgroundColor = '#99CCFF';
+                          mainChartIns.data.datasets[1].backgroundColor = '#FF99CC';
                           mainChartIns.update(); detailBox.style.display = 'none'; return;
                       }
                       const idx = activeElements[0].index;
-                      let dimColor = document.body.classList.contains("light-mode") ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+                      let dimColor = document.body.classList.contains("light-mode") ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
+                      let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#99CCFF';
+                      let newAirColors = new Array(labels.length).fill(dimColor); newAirColors[idx] = '#FF99CC';
                       
-                      let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#0a84ff';
-                      let newAirColors = new Array(labels.length).fill(dimColor); newAirColors[idx] = '#ff453a';
-                      
-                      mainChartIns.data.datasets[0].backgroundColor = newSeaColors;
-                      mainChartIns.data.datasets[1].backgroundColor = newAirColors;
+                      mainChartIns.data.datasets[0].backgroundColor = newSeaColors; mainChartIns.data.datasets[1].backgroundColor = newAirColors;
                       mainChartIns.update();
 
-                      let details = barDetails[idx];
-                      let total = seaData[idx] + airData[idx];
+                      let details = barDetails[idx]; let total = seaData[idx] + airData[idx];
                       if (total === 0) { detailBox.style.display = 'none'; return; }
                       
                       let timeLabel = window.dashMode === 'month' ? `${idx+1}일` : `${idx+1}월`;
@@ -2540,35 +2642,55 @@
                       html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
                       
                       if (details['🚢 해상 (SEA)'] > 0) {
-                          html += `<div style="display:flex; align-items:center; gap:6px; background:#0a84ff; color:#fff; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(10,132,255,0.3);">
-                              <span style="font-weight:900;">🚢 해상</span>
-                              <span style="font-weight:800; opacity:0.9;">${details['🚢 해상 (SEA)']}P</span>
+                          html += `<div style="display:flex; align-items:center; gap:6px; background:#99CCFF; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(153,204,255,0.4);">
+                              <span style="font-weight:900;">🚢 해상</span><span style="font-weight:800; opacity:0.9;">${details['🚢 해상 (SEA)']}P</span>
                           </div>`;
                       }
                       if (details['✈️ 항공 (AIR)'] > 0) {
-                          html += `<div style="display:flex; align-items:center; gap:6px; background:#ff453a; color:#fff; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(255,69,58,0.3);">
-                              <span style="font-weight:900;">✈️ 항공</span>
-                              <span style="font-weight:800; opacity:0.9;">${details['✈️ 항공 (AIR)']}P</span>
+                          html += `<div style="display:flex; align-items:center; gap:6px; background:#FF99CC; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(255,153,204,0.4);">
+                              <span style="font-weight:900;">✈️ 항공</span><span style="font-weight:800; opacity:0.9;">${details['✈️ 항공 (AIR)']}P</span>
                           </div>`;
                       }
-                      html += `</div>`;
-                      detailBox.innerHTML = html; detailBox.style.display = 'block';
+                      html += `</div>`; detailBox.innerHTML = html; detailBox.style.display = 'block';
                   }
               }
           });
 
+          // 🍩 파이 차트 (파스텔톤 적용)
+          window.activePieIndex = null;
           let sLabels = []; let sData = []; let sColors = [];
-          if (compMap['🚢 해상 (SEA)'] > 0) { sLabels.push('🚢 해상 (SEA)'); sData.push(compMap['🚢 해상 (SEA)']); sColors.push('#0a84ff'); }
-          if (compMap['✈️ 항공 (AIR)'] > 0) { sLabels.push('✈️ 항공 (AIR)'); sData.push(compMap['✈️ 항공 (AIR)']); sColors.push('#ff453a'); }
+          if (compMap['🚢 해상 (SEA)'] > 0) { sLabels.push('🚢 해상 (SEA)'); sData.push(compMap['🚢 해상 (SEA)']); sColors.push('#99CCFF'); }
+          if (compMap['✈️ 항공 (AIR)'] > 0) { sLabels.push('✈️ 항공 (AIR)'); sData.push(compMap['✈️ 항공 (AIR)']); sColors.push('#FF99CC'); }
+
+          window.highlightPieSlice = function(idx) {
+              if (!shareChartIns) return;
+              const dataset = shareChartIns.data.datasets[0];
+              let slider = document.getElementById('pieSlider');
+              if (idx === null || String(idx) === "-1") {
+                  window.activePieIndex = null; dataset.backgroundColor = [...dataset._originalColors];
+                  if (slider) slider.value = -1;
+              } else {
+                  window.activePieIndex = parseInt(idx, 10);
+                  dataset.backgroundColor = dataset._originalColors.map((color, i) => i === window.activePieIndex ? color : (document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)"));
+                  if (slider) slider.value = window.activePieIndex; 
+              }
+              shareChartIns.update();
+          };
 
           if (shareChartIns) shareChartIns.destroy();
           shareChartIns = new Chart(document.getElementById('shareChart'), {
               type: 'doughnut',
               data: { labels: sLabels, datasets: [{ data: sData, backgroundColor: [...sColors], _originalColors: [...sColors], borderWidth: 2, borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30" }] },
               options: {
-                  responsive: true, maintainAspectRatio: false, cutout: '55%', layout: { padding: { left: 20, right: 20, top: 15, bottom: 15 } }, 
+                  responsive: true, maintainAspectRatio: false, cutout: '55%', layout: { padding: { left: 50, right: 50, top: 15, bottom: 15 } }, 
                   plugins: { legend: { display: false }, tooltip: { enabled: false } },
-                  animation: { animateScale: true, animateRotate: true }
+                  onClick: (e, activeElements) => {
+                      if (!activeElements || activeElements.length === 0) window.highlightPieSlice(-1);
+                      else {
+                          const idx = activeElements[0].index;
+                          if (window.activePieIndex === idx) window.highlightPieSlice(-1); else window.highlightPieSlice(idx);
+                      }
+                  }
               }
           });
       }
