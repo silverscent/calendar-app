@@ -2378,111 +2378,111 @@
           Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
           Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
           
-          let labels = []; 
-          let seaData = [];
-          let airData = [];
-          let compMap = { '🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0 };
+          let unitName = "PAL"; // 입고는 PAL 고정
+          let labels = [];
+          let barData = []; 
+          let compMap = { '🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0 }; // 입고 전용 수단 맵
           let barDetails = []; 
           let totalQty = 0; let doneQty = 0;
           document.getElementById("barDetailBox").style.display = "none";
 
+          // 💡 체크박스 상태 확인
+          const includePending = document.getElementById('includePendingCheck')?.checked;
+
           if (window.dashMode === 'month') {
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
               let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
-              for (let d = 1; d <= days; d++) { labels.push(`${d}일`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
+              for (let d = 1; d <= days; d++) { labels.push(`${d}일`); barData.push(0); barDetails.push({}); }
 
+              // 💡 입고 전용 데이터 처리 함수
               const process = (it, dIdx) => {
-                  let rawName = String(it.bl || "").trim();
-                  if (!rawName || rawName === "미정") return;
-                  let qty = parseInt(it.pal) || 0; 
-                  totalQty += qty;
-                  if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
-                  
-                  let isAir = it.sType === 'AIR';
-                  let typeLabel = isAir ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
-                  if (dIdx !== null) {
-                      if(isAir) airData[dIdx - 1] += qty;
-                      else seaData[dIdx - 1] += qty;
-                      barDetails[dIdx - 1][typeLabel] += qty;
+                  let clean = String(it.bl || "").trim();
+                  if (clean && clean !== "미정") {
+                      let qty = parseInt(it.pal) || 0;
+                      totalQty += qty;
+                      if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
+                      
+                      // 1. 막대 차트용 (날짜가 있을 때만)
+                      if (dIdx !== null) {
+                          barData[dIdx - 1] += qty;
+                      }
+
+                      // 2. 도넛 차트용 (수단별 합산 - 날짜 유무 상관없이 수행)
+                      let isAir = it.sType === 'AIR';
+                      let typeLabel = isAir ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
+                      if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
                   }
-                  compMap[typeLabel] += qty;
               };
-              
-             
-      // ✅ [월별 처리] 확정 데이터 및 미정 데이터 합산
-      if (window.dashCurrentData) {
-          for (let d = 1; d <= days; d++) { 
-              if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d]) {
-                  window.dashCurrentData.monthData[d].forEach(it => process(it, d));
+
+              // 💡 월간 데이터 스캔
+              if (window.dashCurrentData) {
+                  // 확정 건 처리
+                  for (let d = 1; d <= days; d++) { 
+                      if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d]) {
+                          window.dashCurrentData.monthData[d].forEach(it => process(it, d));
+                      }
+                  }
+                  // 미정 건 처리 (체크 시에만)
+                  if (includePending && window.dashCurrentData.pendingItems) {
+                      window.dashCurrentData.pendingItems.forEach(it => process(it, null));
+                  }
               }
-          }
-          
-          // 💡 [옵션] 미정건 포함 체크 시에만 합산 처리
-          if (includePending && window.dashCurrentData.pendingItems) {
-              window.dashCurrentData.pendingItems.forEach(it => process(it, null));
-          }
-      }
           } else {
+              // 💡 연간 요약 모드
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`;
               for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
               
               let yData = yearlyCache[window.dashYear];
               if (yData) {
-                  seaData = yData.monthly.map(m => (m.details['🚢 해상 (SEA)'] || 0));
-                  airData = yData.monthly.map(m => (m.details['✈️ 항공 (AIR)'] || 0));
-                  for (let i = 0; i < 12; i++) {
-                      barDetails[i]['🚢 해상 (SEA)'] = seaData[i];
-                      barDetails[i]['✈️ 항공 (AIR)'] = airData[i];
-                  }
-                  totalQty = seaData.reduce((a,b)=>a+b,0) + airData.reduce((a,b)=>a+b,0);
-                  compMap['🚢 해상 (SEA)'] = (yData.comp['🚢 해상 (SEA)'] && yData.comp['🚢 해상 (SEA)'].pal) || 0;
-                  compMap['✈️ 항공 (AIR)'] = (yData.comp['✈️ 항공 (AIR)'] && yData.comp['✈️ 항공 (AIR)'].pal) || 0;
-             } else {
-              seaData = new Array(12).fill(0);
-              airData = new Array(12).fill(0);
+                  barData = yData.monthly.map(m => m.pal);
+                  totalQty = barData.reduce((a, b) => a + b, 0);
+                  compMap = { '🚢 해상 (SEA)': yData.sea, '✈️ 항공 (AIR)': yData.air };
+              }
+
+              // 💡 연간 모드 미정건 합산
+              if (includePending && window.dashCurrentData && window.dashCurrentData.pendingItems) {
+                  window.dashCurrentData.pendingItems.forEach(it => {
+                      let clean = String(it.bl || "").trim();
+                      if (clean && clean !== "미정") {
+                          let qty = parseInt(it.pal) || 0;
+                          totalQty += qty;
+                          let isAir = it.sType === 'AIR';
+                          let typeLabel = isAir ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
+                          if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
+                      }
+                  });
+              }
           }
 
-          // 💡 [연간 추가] 미정건 포함 체크 시 합산 (연간 모드 전용 계산 로직)
-          if (includePending && window.dashCurrentData && window.dashCurrentData.pendingItems) {
-              window.dashCurrentData.pendingItems.forEach(it => {
-                  let rawName = String(it.bl || "").trim();
-                  if (!rawName || rawName === "미정") return;
-                  let qty = parseInt(it.pal) || 0; 
-                  totalQty += qty;
-                  
-                  let isAir = it.sType === 'AIR';
-                  let typeLabel = isAir ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
-                  if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
-              });
-          }
-      } // <-- 여기가 else 블록이 끝나는 중괄호입니다.
-
+          // 📊 상단 카드 숫자 업데이트 (이후 로직은 기존과 동일)
           if (window.dashMode === 'month') {
               let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
               let now = new Date();
               let isCurrentMonth = (window.dashYear === now.getFullYear() && window.dashMonth === now.getMonth() + 1);
               let divider = isCurrentMonth ? Math.max(1, now.getDate()) : new Date(window.dashYear, window.dashMonth, 0).getDate();
               let avgDaily = doneQty > 0 ? (doneQty / divider).toFixed(1) : 0;
-              
-              document.getElementById("dashCardTitle1").innerText = "당월 총 입고 예정";
-              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">P</span>`;
+              document.getElementById("dashCardTitle1").innerText = "당월 총 예정 물량";
+              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
               document.getElementById("dashVolDetail").innerText = `완료: ${doneQty.toLocaleString()} (${rate}%)`;
               document.getElementById("dashVolDetail").style.color = rate >= 100 ? "#34c759" : (rate > 50 ? "#0a84ff" : "#ff9f0a");
-              document.getElementById("dashCardTitle2").innerText = "일일 평균 입고량";
-              document.getElementById("dashAvg").innerHTML = `${avgDaily} <span style="font-size:0.5em; color:var(--text-sub);">P/일</span>`;
+              document.getElementById("dashCardTitle2").innerText = "일일 평균 처리량";
+              document.getElementById("dashAvg").innerHTML = `${avgDaily} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/일</span>`;
               document.getElementById("dashDaysDetail").innerText = `(월 누적: ${doneQty.toLocaleString()})`;
           } else {
-              let avgMonthly = totalQty > 0 ? Math.round(totalQty / 12) : 0;
-              let avgDaily = totalQty > 0 ? (totalQty / 365).toFixed(1) : 0;
-              
+              let totalSum = barData.reduce((a, b) => a + b, 0);
+              let avgMonthly = totalSum > 0 ? Math.round(totalSum / 12) : 0;
               document.getElementById("dashCardTitle1").innerText = "연간 총 누적수량";
-              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">P</span>`;
+              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
               document.getElementById("dashVolDetail").innerText = `(1년 전체 합산)`;
               document.getElementById("dashVolDetail").style.color = "#0a84ff";
               document.getElementById("dashCardTitle2").innerText = "월간 평균 처리량";
-              document.getElementById("dashAvg").innerHTML = `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">P/월</span>`;
-              document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${avgDaily})`;
+              document.getElementById("dashAvg").innerHTML = `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/월</span>`;
+              document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${(totalQty / 365).toFixed(1)})`;
           }
+
+          // 차트 생성 (mainChart, shareChart) 부분은 기존 코드와 동일하게 유지...
+          // (생략된 뒷부분은 기존 renderDashCharts의 Chart 생성 로직을 그대로 사용하세요)
+      }
 
           if (mainChartIns) mainChartIns.destroy();
           mainChartIns = new Chart(document.getElementById('mainChart'), {
