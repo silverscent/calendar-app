@@ -1132,8 +1132,8 @@
         <span id="ocrTimeText" style="color: var(--text-main)">불러오는 중...</span>
       </div>
       <div class="legend-bar">
-        <div class="legend-item"><div class="legend-color color-sea"></div> 🚢 해상(SEA)</div>
-        <div class="legend-item"><div class="legend-color color-air"></div> ✈️ 항공(AIR)</div>
+        <div class="legend-item"><div class="legend-color" style="background:#99CCFF; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">🚢 해상</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:#FF99CC; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">✈️ 항공</span></div>
       </div>
     </div>
 
@@ -1433,11 +1433,7 @@
 
       function renderCalendar() {
         for (let d = 1; d <= serverData.daysInMonth; d++) {
-            if (serverData.monthData[d]) {
-                serverData.monthData[d].forEach((item, idx) => {
-                    item._rawIdx = idx;
-                });
-            }
+            if (serverData.monthData[d]) { serverData.monthData[d].forEach((item, idx) => { item._rawIdx = idx; }); }
         }
         document.getElementById('calTitle').innerText = `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2,'0')}`;
         const grid = document.getElementById('calendarGrid');
@@ -1452,22 +1448,18 @@
           const dayOfWeek = (serverData.firstDay + day - 1) % 7;
           let dateClass = "date-num";
           if(dayOfWeek === 0) dateClass += " sun"; if(dayOfWeek === 6) dateClass += " sat";
-          let isToday = (isThisMonthView && day === todayDayNumber);
-          let cellClass = isToday ? "day-cell today-cell" : "day-cell";
+          let cellClass = (isThisMonthView && day === todayDayNumber) ? "day-cell today-cell" : "day-cell";
           let dayData = serverData.monthData[day];
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
           let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           
-          let isHoliday = false;
-          if (window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true) {
-              isHoliday = true;
-          }
+          let isHoliday = window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true;
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
 
           let dateRowHtml = `<div class="date-row"><span class="${dateClass}" style="${redStyle}">${day}</span>`;
           if (dayData && dayData.length > 0) {
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
-          if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
+              if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
           }
           dateRowHtml += `</div>`;
           let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
@@ -1475,14 +1467,11 @@
           if(dayData && dayData.length > 0) {
             dayData.forEach((item, idx) => {
               let isItemDone = item.isDone === true || String(item.isDone) === "true";
-              
-              // 💡 [핵심 수정 1] 파스텔톤 색상 지정
               let isAir = item.sType === 'AIR';
-              let pastelBg = isAir ? '#FF99CC' : '#99CCFF'; // 항공: 파스텔 핑크, 해상: 파스텔 하늘
+              let pastelBg = isAir ? '#FF99CC' : '#99CCFF';
               
               let tagClass = `item-tag`;
               if (isItemDone) tagClass += " done-mark";
-              
               let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
               if (meaningfulEtc !== '') tagClass += " has-etc";
 
@@ -1494,31 +1483,34 @@
               let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
               let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.bl}', ${isItemDone})"`;
 
-              // 💡 [핵심 수정 2] 스타일(style) 속성으로 파스텔 배경색과 글자색 강제 적용
-              let customStyle = `background-color: ${pastelBg} !important; color: #111 !important; border: 1px solid rgba(0,0,0,0.1);`;
+              // 💡 [디테일 2 수정] 완료 여부에 따른 극명한 글씨색 대비
+              let textColor = isItemDone ? '#ffffff' : '#111111';
+              let textShadow = isItemDone ? 'text-shadow: 0px 1px 2px rgba(0,0,0,0.6);' : '';
+              let customStyle = `background-color: ${pastelBg} !important; color: ${textColor} !important; ${textShadow} border: 1px solid rgba(0,0,0,0.1);`;
 
               cellHtml += `<div class="${tagClass}" style="${customStyle}" data-raw-idx="${originalIdx}" ${bindItem}>${innerHtml}</div>`;
             });
           }
-          cellHtml += `</div>`;
-          rowHtml += cellHtml; cellCount++;
+          cellHtml += `</div>`; rowHtml += cellHtml; cellCount++;
         }
         while(cellCount % 7 !== 0) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
         rowHtml += '</div>'; grid.innerHTML = rowHtml;
         
-        // --- 하단 대기열(미정) 렌더링 부분 ---
-        if (serverData.pendingItems && serverData.pendingItems.length > 0) {
+        // 💡 [디테일 7 수정] 미정건 전역 상태 유지 로직
+        if (serverData.pendingItems) { window.globalPendingItems = serverData.pendingItems; }
+        let currentPending = window.globalPendingItems || [];
+
+        if (currentPending.length > 0) {
           document.getElementById('pendingSection').style.display = 'block';
-          document.getElementById('pendingCount').innerText = `(${serverData.pendingItems.length}건)`;
+          document.getElementById('pendingCount').innerText = `(${currentPending.length}건)`;
           let pListHtml = "";
-          serverData.pendingItems.forEach((item, idx) => {
+          currentPending.forEach((item, idx) => {
             let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
             let etcTag = meaningfulEtc !== '' ? `<div class="pending-etc">${meaningfulEtc}</div>` : '';
             let isItemDone = item.isDone === true || String(item.isDone) === "true";
             let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.bl}', ${isItemDone})"`;
             let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : '';
             
-            // 💡 [핵심 수정 3] 대기열 항목 앞에 파스텔톤 동그라미 아이콘 추가
             let isPendingAir = item.sType === 'AIR';
             let pendingPastelBg = isPendingAir ? '#FF99CC' : '#99CCFF';
             let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${pendingPastelBg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
@@ -1528,8 +1520,7 @@
           document.getElementById('pendingList').innerHTML = pListHtml;
         } else { document.getElementById('pendingSection').style.display = 'none'; }
         
-        updateStatsSummary();
-        updateSyncTime();
+        updateStatsSummary(); updateSyncTime();
       }
 
       function navMonth(offset) { 
@@ -2009,9 +2000,12 @@
         let contentHtml = "";
         dayData.forEach((item, idx) => {
           let isItemDone = item.isDone === true || String(item.isDone) === "true";
-          let cClass = item.sType === 'SEA' ? 'color-sea' : 'color-air';
-          if (isItemDone) cClass += " done-mark";
           let typeIcon = item.sType === 'SEA' ? '🚢' : '✈️';
+          
+          // 💡 [핵심] 해상/항공에 맞춰 파스텔 배경색 지정
+          let isAir = item.sType === 'AIR';
+          let pastelBg = isAir ? '#FF99CC' : '#99CCFF';
+          let iconOpacity = isItemDone ? '0.4' : '1'; // 완료된 건은 흐리게
 
           let actionBtns = '';
           if (isAdmin) {
@@ -2024,7 +2018,7 @@
           let stampHtml = isItemDone ? `<div class="status-badge"><span style="font-size: 1.1em; line-height: 1;">✔️</span> 입고 완료</div>` : '';
 
           contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
-                              <div class="modal-icon ${cClass}"></div>
+                              <div class="modal-icon" style="background-color: ${pastelBg}; opacity: ${iconOpacity}; box-shadow: 0 2px 5px rgba(0,0,0,0.15);"></div>
                               <div class="modal-info">
                                   <div class="modal-comp-row"><span class="modal-comp">${item.pal}P</span>${actionBtns}</div>
                                   <div class="modal-vol">📄 B/L: ${item.bl} | ${typeIcon} 타입: ${item.sType}</div>
@@ -2604,59 +2598,88 @@
               document.getElementById("dashAvg").innerHTML = `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/월</span>`;
               document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${(totalQty / 365).toFixed(1)})`;
           }
+// ... (renderDashCharts 내부, 상단 카드 요약 로직 바로 밑부터 교체) ...
 
-          // 📊 막대 차트 (파스텔톤 적용)
+          // 💡 스와이프(Hover) 선택을 위한 전역 공유 변수 할당
+          window.dashSeaData = seaData;
+          window.dashAirData = airData;
+          window.dashBarDetails = barDetails;
+
+          // 💡 공통 바 선택 함수 (클릭 & 스와이프에서 공통 사용)
+          window.selectBarIndex = function(idx) {
+              let detailBox = document.getElementById("barDetailBox");
+              if (idx === null || idx === undefined || idx < 0) {
+                  mainChartIns.data.datasets[0].backgroundColor = '#99CCFF';
+                  mainChartIns.data.datasets[1].backgroundColor = '#FF99CC';
+                  mainChartIns.update(); detailBox.style.display = 'none'; return;
+              }
+              let dimColor = document.body.classList.contains("light-mode") ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
+              let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#99CCFF';
+              let newAirColors = new Array(labels.length).fill(dimColor); newAirColors[idx] = '#FF99CC';
+              
+              mainChartIns.data.datasets[0].backgroundColor = newSeaColors; mainChartIns.data.datasets[1].backgroundColor = newAirColors;
+              mainChartIns.update();
+
+              let details = window.dashBarDetails[idx]; let total = window.dashSeaData[idx] + window.dashAirData[idx];
+              if (total === 0) { detailBox.style.display = 'none'; return; }
+              
+              let timeLabel = window.dashMode === 'month' ? `${idx+1}일` : `${idx+1}월`;
+              let html = `<div style="font-weight:900; margin-bottom:10px; color:var(--text-main);">📅 ${timeLabel} 입고 내역 <span style="color:#0a84ff; font-size:0.9em;">(총 ${total}P)</span></div>`;
+              html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
+              
+              if (details['🚢 해상 (SEA)'] > 0) {
+                  html += `<div style="display:flex; align-items:center; gap:6px; background:#99CCFF; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(153,204,255,0.4);">
+                      <span style="font-weight:900;">🚢 해상</span><span style="font-weight:800; opacity:0.9;">${details['🚢 해상 (SEA)']}P</span>
+                  </div>`;
+              }
+              if (details['✈️ 항공 (AIR)'] > 0) {
+                  html += `<div style="display:flex; align-items:center; gap:6px; background:#FF99CC; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(255,153,204,0.4);">
+                      <span style="font-weight:900;">✈️ 항공</span><span style="font-weight:800; opacity:0.9;">${details['✈️ 항공 (AIR)']}P</span>
+                  </div>`;
+              }
+              html += `</div>`; detailBox.innerHTML = html; detailBox.style.display = 'block';
+          };
+
+          // 📊 막대 차트 (모바일 스와이프 기능 + 총합 툴팁 적용)
           if (mainChartIns) mainChartIns.destroy();
           mainChartIns = new Chart(document.getElementById('mainChart'), {
               type: 'bar',
               data: { 
                   labels: labels, 
                   datasets: [
-                      { label: `🚢 해상`, data: seaData, backgroundColor: '#99CCFF', stack: 'Stack 0', borderRadius: 4 }, // 파스텔 하늘
-                      { label: `✈️ 항공`, data: airData, backgroundColor: '#FF99CC', stack: 'Stack 0', borderRadius: 4 }  // 파스텔 핑크
+                      { label: `🚢 해상`, data: seaData, backgroundColor: '#99CCFF', stack: 'Stack 0', borderRadius: 4 },
+                      { label: `✈️ 항공`, data: airData, backgroundColor: '#FF99CC', stack: 'Stack 0', borderRadius: 4 }
                   ] 
               },
               options: { 
-                  responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, 
+                  responsive: true, maintainAspectRatio: false, 
+                  interaction: { mode: 'index', intersect: false }, // 💡 좌우 스와이프만으로 막대 잡히게 하는 핵심 옵션!
+                  plugins: { 
+                      legend: { display: false },
+                      // 💡 [디테일 5 수정] 터치 시 말풍선에는 '총합'만 깔끔하게 노출
+                      tooltip: {
+                          enabled: true, mode: 'index', intersect: false,
+                          callbacks: {
+                              title: (items) => window.dashMode === 'month' ? `${items[0].label} 입고량` : `${items[0].label} 입고량`,
+                              label: () => null, // 개별 내역 숨김 (하단 뱃지로 대체)
+                              footer: (items) => {
+                                  let tSum = items.reduce((a, b) => a + b.parsed.y, 0);
+                                  return `총 ${tSum}P`;
+                              }
+                          }
+                      }
+                  }, 
                   scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } },
-                  onClick: (e, activeElements) => {
-                      let detailBox = document.getElementById("barDetailBox");
-                      if (!activeElements || activeElements.length === 0) {
-                          mainChartIns.data.datasets[0].backgroundColor = '#99CCFF';
-                          mainChartIns.data.datasets[1].backgroundColor = '#FF99CC';
-                          mainChartIns.update(); detailBox.style.display = 'none'; return;
-                      }
-                      const idx = activeElements[0].index;
-                      let dimColor = document.body.classList.contains("light-mode") ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
-                      let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#99CCFF';
-                      let newAirColors = new Array(labels.length).fill(dimColor); newAirColors[idx] = '#FF99CC';
-                      
-                      mainChartIns.data.datasets[0].backgroundColor = newSeaColors; mainChartIns.data.datasets[1].backgroundColor = newAirColors;
-                      mainChartIns.update();
-
-                      let details = barDetails[idx]; let total = seaData[idx] + airData[idx];
-                      if (total === 0) { detailBox.style.display = 'none'; return; }
-                      
-                      let timeLabel = window.dashMode === 'month' ? `${idx+1}일` : `${idx+1}월`;
-                      let html = `<div style="font-weight:900; margin-bottom:10px; color:#0a84ff;">📅 ${timeLabel} 입고 내역 <span style="color:var(--text-main); font-size:0.9em;">(총 ${total}P)</span></div>`;
-                      html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
-                      
-                      if (details['🚢 해상 (SEA)'] > 0) {
-                          html += `<div style="display:flex; align-items:center; gap:6px; background:#99CCFF; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(153,204,255,0.4);">
-                              <span style="font-weight:900;">🚢 해상</span><span style="font-weight:800; opacity:0.9;">${details['🚢 해상 (SEA)']}P</span>
-                          </div>`;
-                      }
-                      if (details['✈️ 항공 (AIR)'] > 0) {
-                          html += `<div style="display:flex; align-items:center; gap:6px; background:#FF99CC; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(255,153,204,0.4);">
-                              <span style="font-weight:900;">✈️ 항공</span><span style="font-weight:800; opacity:0.9;">${details['✈️ 항공 (AIR)']}P</span>
-                          </div>`;
-                      }
-                      html += `</div>`; detailBox.innerHTML = html; detailBox.style.display = 'block';
+                  // 💡 [디테일 6 수정] 손가락으로 문지르거나 터치할 때 즉시 반응
+                  onHover: (e, elements) => { if (elements && elements.length > 0) window.selectBarIndex(elements[0].index); },
+                  onClick: (e, elements) => { 
+                      if (elements && elements.length > 0) window.selectBarIndex(elements[0].index); 
+                      else window.selectBarIndex(-1); 
                   }
               }
           });
 
-          // 🍩 파이 차트 (파스텔톤 적용)
+          // 🍩 파이 차트 
           window.activePieIndex = null;
           let sLabels = []; let sData = []; let sColors = [];
           if (compMap['🚢 해상 (SEA)'] > 0) { sLabels.push('🚢 해상 (SEA)'); sData.push(compMap['🚢 해상 (SEA)']); sColors.push('#99CCFF'); }
@@ -2683,7 +2706,8 @@
               data: { labels: sLabels, datasets: [{ data: sData, backgroundColor: [...sColors], _originalColors: [...sColors], borderWidth: 2, borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30" }] },
               options: {
                   responsive: true, maintainAspectRatio: false, cutout: '55%', layout: { padding: { left: 50, right: 50, top: 15, bottom: 15 } }, 
-                  plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                  // 💡 [디테일 4 수정] datalabels 옵션을 꺼서 조각 안의 하얀 글씨(퍼센트) 영구 제거
+                  plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
                   onClick: (e, activeElements) => {
                       if (!activeElements || activeElements.length === 0) window.highlightPieSlice(-1);
                       else {
