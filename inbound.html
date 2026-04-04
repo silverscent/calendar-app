@@ -2597,7 +2597,7 @@
           window.dashAirData = airData;
           window.dashBarDetails = barDetails;
 
-          // 💡 1. 막대 색깔 하이라이트 + [빈 데이터 스킵(스냅) 로직]
+         // 💡 1. 막대 색깔 하이라이트 + [빈 데이터 스킵(스냅) 로직]
           window.lastHoveredBarIndex = -1;
           window.highlightBarOnly = function(idx) {
               if (idx === null || idx === undefined || idx < 0) {
@@ -2605,16 +2605,15 @@
                   mainChartIns.data.datasets[0].backgroundColor = '#99CCFF';
                   mainChartIns.data.datasets[1].backgroundColor = '#FF99CC';
                   mainChartIns.update();
-                  document.getElementById("barDetailBox").style.display = 'none';
+                  // 🚨 [패치 1] 여기서 상세 박스를 숨기지 않습니다! 마우스가 나가도 내역은 유지됨!
                   return;
               }
 
-              // 🚨 [핵심: 스킵 기능] 데이터가 0인 곳을 스와이프하면 가장 가까운 막대로 자석처럼 스냅!
               let validIndices = [];
               for(let i = 0; i < labels.length; i++) {
                   if ((window.dashSeaData[i] + window.dashAirData[i]) > 0) validIndices.push(i);
               }
-              if (validIndices.length === 0) return; // 데이터가 아예 없으면 무시
+              if (validIndices.length === 0) return; 
 
               let closestIdx = validIndices[0];
               let minDiff = Math.abs(idx - closestIdx);
@@ -2622,9 +2621,9 @@
                   let diff = Math.abs(idx - validIndices[i]);
                   if(diff < minDiff) { minDiff = diff; closestIdx = validIndices[i]; }
               }
-              idx = closestIdx; // 가장 가까운 값이 있는 인덱스로 강제 고정
+              idx = closestIdx; 
 
-              if (idx === window.lastHoveredBarIndex) return; // 중복 실행 방지
+              if (idx === window.lastHoveredBarIndex) return; 
               window.lastHoveredBarIndex = idx;
 
               let dimColor = document.body.classList.contains("light-mode") ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
@@ -2634,7 +2633,6 @@
               mainChartIns.data.datasets[0].backgroundColor = newSeaColors; 
               mainChartIns.data.datasets[1].backgroundColor = newAirColors;
               
-              // 툴팁(말풍선)도 스냅된 막대 위치로 강제 이동
               if (mainChartIns.tooltip) {
                   mainChartIns.tooltip.setActiveElements([{ datasetIndex: 0, index: idx }, { datasetIndex: 1, index: idx }], { x: 0, y: 0 });
               }
@@ -2667,11 +2665,9 @@
               html += `</div>`; 
               detailBox.innerHTML = html; 
               detailBox.style.display = 'block';
-              // 💫 스르륵 나타나는 애니메이션
               detailBox.animate([{opacity: 0, transform: 'translateY(-5px)'}, {opacity: 1, transform: 'translateY(0)'}], {duration: 250, fill: 'forwards'});
           };
 
-          // 📊 막대 차트 생성 (Chart.js 네이티브 이벤트 비활성화)
           if (mainChartIns) mainChartIns.destroy();
           mainChartIns = new Chart(document.getElementById('mainChart'), {
               type: 'bar',
@@ -2691,21 +2687,21 @@
                       }
                   }, 
                   scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } },
-                  events: [] // 🚨 Chart.js 고유의 터치 이벤트를 끄고 아래 커스텀 엔진에 100% 위임
+                  events: [] 
               }
           });
 
-         // 🚨 [커스텀 터치 엔진] 입고: 손가락 뗄 때 튀는 현상(미세 떨림) 완벽 방어!
+          // 🚨 [커스텀 터치 엔진] 입고
           const mainCanvas = document.getElementById('mainChart');
           mainCanvas.style.touchAction = 'pan-y'; 
 
-          let lastTouchX = -999; // 마지막 X 좌표 기억용
+          let lastProcessedX = -999;
           const triggerChartInteraction = (clientX, isForce = false) => {
               if (!mainChartIns) return;
               
-              // 💡 [핵심 방어막] 손을 뗄 때 발생하는 10픽셀 이하의 미세한 움직임은 무시!
-              if (!isForce && Math.abs(clientX - lastTouchX) < 10) return; 
-              lastTouchX = clientX;
+              // 🚨 [패치 2] 15px 이하의 미세한 움직임(손가락 뗄 때 롤링 현상) 완벽 무시!
+              if (!isForce && Math.abs(clientX - lastProcessedX) < 15) return; 
+              lastProcessedX = clientX;
 
               const rect = mainCanvas.getBoundingClientRect();
               const chartArea = mainChartIns.chartArea;
@@ -2721,19 +2717,23 @@
               window.highlightBarOnly(idx);
           };
 
-          // 모바일 터치 이벤트 (touchstart일 때는 강제로 갱신, move일 때는 데드존 검사)
           mainCanvas.ontouchstart = (e) => { triggerChartInteraction(e.touches[0].clientX, true); };
           mainCanvas.ontouchmove = (e) => { triggerChartInteraction(e.touches[0].clientX, false); };
-          mainCanvas.ontouchend = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
+          mainCanvas.ontouchend = () => { 
+              if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); 
+              else document.getElementById("barDetailBox").style.display = 'none'; // 빈 공간 탭하면 닫힘
+          };
           
-          // PC 마우스 이벤트 (🚨 [요청 2 반영] onclick 이벤트 추가로 클릭 시 즉각 반응!)
           mainCanvas.onmousemove = (e) => { triggerChartInteraction(e.clientX, false); };
           mainCanvas.onclick = (e) => { 
               triggerChartInteraction(e.clientX, true); 
               if (window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); 
+              else document.getElementById("barDetailBox").style.display = 'none'; // 빈 공간 클릭하면 닫힘
           };
-          mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); };
+          // 마우스가 차트 밖으로 나가도 상세 내역은 유지됩니다.
+          mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); }; 
 
+          // (이후 파이 차트 로직 유지)
 
           // 🍩 파이 차트 
           window.activePieIndex = null;
