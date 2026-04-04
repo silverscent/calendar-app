@@ -3990,7 +3990,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       let shareChartIns = null;
       window.activePieIndex = null;
 
-     // 1. 도넛 가운데에 정보 띄우기 (풀네임 적용 및 글씨 크기 대폭 확대)
+     // 1. 도넛 가운데에 정보 띄우기 (풀네임 적용 및 글자 짤림 완벽 방어)
       const pieCenterTextPlugin = {
           id: 'pieCenterText',
           beforeDraw(chart) {
@@ -4016,12 +4016,21 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   const percent = ((data[idx] / totalSum) * 100).toFixed(1);
                   const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
 
-                  // 1️⃣ 업체명 (풀네임)
+                  // 1️⃣ 업체명 (폰트 사이즈 플렉서블 + 장평 강제 조절)
                   ctx.font = "bold 15px -apple-system, sans-serif";
                   ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff";
-                  // 글씨가 너무 길면 폰트 사이즈를 살짝 줄여서 삐져나가지 않게 방어
-                  if (ctx.measureText(displayName).width > 120) ctx.font = "bold 13px -apple-system, sans-serif";
-                  ctx.fillText(displayName, centerX, centerY - 22);
+                  
+                  // 글씨가 너무 길면 폰트 사이즈를 단계별로 줄여서 삐져나가지 않게 방어
+                  let textWidth = ctx.measureText(displayName).width;
+                  if (textWidth > 100) {
+                      ctx.font = "bold 11px -apple-system, sans-serif";
+                  } else if (textWidth > 80) {
+                      ctx.font = "bold 13px -apple-system, sans-serif";
+                  }
+                  
+                  // 🚨 4번째 파라미터(100)를 주면, 너비가 100px을 초과할 경우 브라우저가 글자 폭(장평)을 
+                  // 좁게 압축해서라도 밖으로 튀어나가지 않게 100% 방어해 줍니다.
+                  ctx.fillText(displayName, centerX, centerY - 22, 100);
 
                   // 2️⃣ 퍼센트 (가장 크게!)
                   ctx.font = "900 26px -apple-system, sans-serif";
@@ -4033,9 +4042,11 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   ctx.fillStyle = "gray";
                   ctx.fillText(`(${data[idx]}${unitStr})`, centerX, centerY + 30);
               } else {
+                  // 🚨 [패치] 기본 문구는 작은 폰에서도 안 짤리도록 예쁘게 두 줄로 쪼갬!
                   ctx.font = "bold 14px -apple-system, sans-serif";
                   ctx.fillStyle = "gray";
-                  ctx.fillText("조각을 터치하세요", centerX, centerY);
+                  ctx.fillText("👆 조각을", centerX, centerY - 10);
+                  ctx.fillText("터치하세요", centerX, centerY + 10);
               }
               ctx.restore();
           }

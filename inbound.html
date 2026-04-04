@@ -1146,8 +1146,8 @@
         <span id="ocrTimeText" style="color: var(--text-main)">불러오는 중...</span>
       </div>
       <div class="legend-bar">
-        <div class="legend-item"><div class="legend-color" style="background:#99CCFF; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">🚢 해상</span></div>
-        <div class="legend-item"><div class="legend-color" style="background:#FF99CC; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">✈️ 항공</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:#01DDFB; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">🚢 해상</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:#FF6B9F; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">✈️ 항공</span></div>
       </div>
     </div>
 
@@ -1498,7 +1498,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
             dayData.forEach((item, idx) => {
               let isItemDone = item.isDone === true || String(item.isDone) === "true";
               let isAir = item.sType === 'AIR';
-              let pastelBg = isAir ? '#FF99CC' : '#99CCFF';
+              let pastelBg = isAir ? '#FF6B9F' : '#01DDFB';
               
               let tagClass = `item-tag`;
               if (isItemDone) tagClass += " done-mark";
@@ -1546,7 +1546,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
             let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : '';
             
             let isPendingAir = item.sType === 'AIR';
-            let pendingPastelBg = isPendingAir ? '#FF99CC' : '#99CCFF';
+            let pendingPastelBg = isPendingAir ? '#FF6B9F' : '#01DDFB';
             let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${pendingPastelBg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
 
             pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${item.bl}</div><div class="pending-vol">📦 ${item.pal}P (${item.sType})</div>${etcTag}</div></div>`;
@@ -2054,7 +2054,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           
           // 💡 [핵심] 해상/항공에 맞춰 파스텔 배경색 지정
           let isAir = item.sType === 'AIR';
-          let pastelBg = isAir ? '#FF99CC' : '#99CCFF';
+          let pastelBg = isAir ? '#FF6B9F' : '#01DDFB';
           let iconOpacity = isItemDone ? '0.8' : '1'; // 완료된 건은 흐리게
 
           let actionBtns = '';
@@ -2409,7 +2409,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           setTimeout(renderDashCharts, 100);
       }
 
- // 💡 [추가] 파이 차트 중앙 텍스트 & 하이브리드 지시선 플러그인
+ // 1. 도넛 가운데에 정보 띄우기 (풀네임 적용 및 글자 짤림 완벽 방어)
       const pieCenterTextPlugin = {
           id: 'pieCenterText',
           beforeDraw(chart) {
@@ -2417,32 +2417,55 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               const ctx = chart.ctx;
               const centerX = chart.chartArea.left + chart.chartArea.width / 2;
               const centerY = chart.chartArea.top + chart.chartArea.height / 2;
+
               ctx.save();
-              ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
 
               if (window.activePieIndex !== null) {
                   const idx = window.activePieIndex;
                   const data = chart.data.datasets[0].data;
                   const colors = chart.data.datasets[0].backgroundColor;
-                  const labels = chart.data.labels;
+                  
+                  // 🚨 [핵심] 차트 데이터에서 '풀네임'을 바로 가져옴
+                  const fullNames = chart.data.fullNames; 
+                  const displayName = fullNames ? fullNames[idx] : chart.data.labels[idx];
+                  
                   const totalSum = data.reduce((a, b) => a + b, 0);
                   const percent = ((data[idx] / totalSum) * 100).toFixed(1);
-                  
+                  const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
+
+                  // 1️⃣ 업체명 (폰트 사이즈 플렉서블 + 장평 강제 조절)
                   ctx.font = "bold 15px -apple-system, sans-serif";
                   ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff";
-                  ctx.fillText(labels[idx], centerX, centerY - 22);
+                  
+                  // 글씨가 너무 길면 폰트 사이즈를 단계별로 줄여서 삐져나가지 않게 방어
+                  let textWidth = ctx.measureText(displayName).width;
+                  if (textWidth > 100) {
+                      ctx.font = "bold 11px -apple-system, sans-serif";
+                  } else if (textWidth > 80) {
+                      ctx.font = "bold 13px -apple-system, sans-serif";
+                  }
+                  
+                  // 🚨 4번째 파라미터(100)를 주면, 너비가 100px을 초과할 경우 브라우저가 글자 폭(장평)을 
+                  // 좁게 압축해서라도 밖으로 튀어나가지 않게 100% 방어해 줍니다.
+                  ctx.fillText(displayName, centerX, centerY - 22, 100);
 
+                  // 2️⃣ 퍼센트 (가장 크게!)
                   ctx.font = "900 26px -apple-system, sans-serif";
                   ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
                   ctx.fillText(`${percent}%`, centerX, centerY + 6);
 
+                  // 3️⃣ 수량 (크기 키움)
                   ctx.font = "bold 15px -apple-system, sans-serif";
                   ctx.fillStyle = "gray";
-                  ctx.fillText(`(${data[idx]}P)`, centerX, centerY + 30);
+                  ctx.fillText(`(${data[idx]}${unitStr})`, centerX, centerY + 30);
               } else {
+                  // 🚨 [패치] 기본 문구는 작은 폰에서도 안 짤리도록 예쁘게 두 줄로 쪼갬!
                   ctx.font = "bold 14px -apple-system, sans-serif";
                   ctx.fillStyle = "gray";
-                  ctx.fillText("조각을 터치하세요", centerX, centerY);
+                  ctx.fillText("👆 조각을", centerX, centerY - 10);
+                  ctx.fillText("터치하세요", centerX, centerY + 10);
               }
               ctx.restore();
           }
@@ -2635,8 +2658,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           window.highlightBarOnly = function(idx) {
               if (idx === null || idx === undefined || idx < 0) {
                   window.lastHoveredBarIndex = -1;
-                  mainChartIns.data.datasets[0].backgroundColor = '#99CCFF';
-                  mainChartIns.data.datasets[1].backgroundColor = '#FF99CC';
+                  mainChartIns.data.datasets[0].backgroundColor = '#01DDFB';
+                  mainChartIns.data.datasets[1].backgroundColor = '#FF6B9F';
                   mainChartIns.update();
                   // 🚨 [패치 1] 여기서 상세 박스를 숨기지 않습니다! 마우스가 나가도 내역은 유지됨!
                   return;
@@ -2660,8 +2683,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               window.lastHoveredBarIndex = idx;
 
               let dimColor = document.body.classList.contains("light-mode") ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
-              let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#99CCFF';
-              let newAirColors = new Array(labels.length).fill(dimColor); newAirColors[idx] = '#FF99CC';
+              let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#01DDFB';
+              let newAirColors = new Array(labels.length).fill(dimColor); newAirColors[idx] = '#FF6B9F';
               
               mainChartIns.data.datasets[0].backgroundColor = newSeaColors; 
               mainChartIns.data.datasets[1].backgroundColor = newAirColors;
@@ -2686,12 +2709,12 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
               
               if (details['🚢 해상 (SEA)'] > 0) {
-                  html += `<div style="display:flex; align-items:center; gap:6px; background:#99CCFF; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(153,204,255,0.4);">
+                  html += `<div style="display:flex; align-items:center; gap:6px; background:#01DDFB; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(1,221,251,0.4);">
                       <span style="font-weight:900;">🚢 해상</span><span style="font-weight:800; opacity:0.9;">${details['🚢 해상 (SEA)']}P</span>
                   </div>`;
               }
               if (details['✈️ 항공 (AIR)'] > 0) {
-                  html += `<div style="display:flex; align-items:center; gap:6px; background:#FF99CC; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(255,153,204,0.4);">
+                  html += `<div style="display:flex; align-items:center; gap:6px; background:#FF6B9F; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(255,107,159,0.4);">
                       <span style="font-weight:900;">✈️ 항공</span><span style="font-weight:800; opacity:0.9;">${details['✈️ 항공 (AIR)']}P</span>
                   </div>`;
               }
@@ -2704,7 +2727,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           if (mainChartIns) mainChartIns.destroy();
           mainChartIns = new Chart(document.getElementById('mainChart'), {
               type: 'bar',
-              data: { labels: labels, datasets: [{ label: `🚢 해상`, data: seaData, backgroundColor: '#99CCFF', stack: 'Stack 0', borderRadius: 4 }, { label: `✈️ 항공`, data: airData, backgroundColor: '#FF99CC', stack: 'Stack 0', borderRadius: 4 }] },
+              data: { labels: labels, datasets: [{ label: `🚢 해상`, data: seaData, backgroundColor: '#01DDFB', stack: 'Stack 0', borderRadius: 4 }, { label: `✈️ 항공`, data: airData, backgroundColor: '#FF6B9F', stack: 'Stack 0', borderRadius: 4 }] },
               options: { 
                   responsive: true, maintainAspectRatio: false, 
                   interaction: { mode: 'index', intersect: false, axis: 'x' }, 
@@ -2773,8 +2796,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           // 🍩 파이 차트 
           window.activePieIndex = null;
           let sLabels = []; let sData = []; let sColors = [];
-          if (compMap['🚢 해상 (SEA)'] > 0) { sLabels.push('🚢 해상 (SEA)'); sData.push(compMap['🚢 해상 (SEA)']); sColors.push('#99CCFF'); }
-          if (compMap['✈️ 항공 (AIR)'] > 0) { sLabels.push('✈️ 항공 (AIR)'); sData.push(compMap['✈️ 항공 (AIR)']); sColors.push('#FF99CC'); }
+          if (compMap['🚢 해상 (SEA)'] > 0) { sLabels.push('🚢 해상 (SEA)'); sData.push(compMap['🚢 해상 (SEA)']); sColors.push('#01DDFB'); }
+          if (compMap['✈️ 항공 (AIR)'] > 0) { sLabels.push('✈️ 항공 (AIR)'); sData.push(compMap['✈️ 항공 (AIR)']); sColors.push('#FF6B9F'); }
 
           window.highlightPieSlice = function(idx) {
               if (!shareChartIns) return;
