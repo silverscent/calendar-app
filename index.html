@@ -1524,17 +1524,17 @@
             <button onclick="navDashDate(-1)">◀</button><span id="dashTitleText">조회중...</span><button onclick="navDashDate(1)">▶</button>
           </div>
           <div class="dash-toggles">
-             <button id="btnDashPal" class="active" onclick="setDashUnit('pal')">P</button>
-             <button id="btnDashBox" onclick="setDashUnit('box')">B</button>
-             <div style="width:1px; background:var(--border-color); margin:0 2px;"></div>
              <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월별</button>
              <button id="btnDashYear" onclick="setDashMode('year')">연간</button>
           </div>
         </div>
         
-        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub); margin-bottom: 15px; padding-right: 4px;">
-          <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
-          <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 4px;">
+          <span id="dashSubTitleText" style="font-weight: 900; color: var(--text-main); font-size: 1.05em;">조회중...</span>
+          <div style="display: flex; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub);">
+            <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
+            <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
+          </div>
         </div>
         
         <div class="dashboard-grid">
@@ -4148,9 +4148,12 @@
       window.dashCurrentData = null; // 대시보드가 임시로 쓸 데이터 바구니
 
       function fetchDashMonthAndRender() {
-          // 💡 1. 타이틀은 달력을 넘기자마자 즉시 변경! (버튼 멈춤 현상 완벽 해결)
+          // 💡 달력 넘기는 부분은 짧게, 서브타이틀은 길게!
           document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
+          let sub = document.getElementById('dashSubTitleText');
+          if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약 (조회중)`;
           
+          // ... (아래 캐시 조회 등 기존 코드 유지) ...
           let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
           let cached = localStorage.getItem(cacheKey);
           
@@ -4189,9 +4192,12 @@
       }
 
       function fetchYearlyAndRender() {
-          // 💡 1. 연간 요약 타이틀도 즉시 변경!
-          document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`;
+          // 💡 연간은 화살표 사이에 년도만!
+          document.getElementById('dashTitleText').innerText = `${window.dashYear}년`;
+          let sub = document.getElementById('dashSubTitleText');
+          if (sub) sub.innerText = `${window.dashYear}년 연간 요약 (조회중)`;
           
+          // ... (아래 캐시 조회 등 기존 코드 유지) ...
           let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYear}`;
           let cached = localStorage.getItem(cacheKey);
           
@@ -4250,7 +4256,11 @@
           const includePending = document.getElementById('includePendingCheck')?.checked;
 
           if (window.dashMode === 'month') {
+              // 💡 월별 타이틀 분리
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
+              let sub = document.getElementById('dashSubTitleText');
+              if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
+              
               let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
               for (let d = 1; d <= days; d++) { labels.push(`${d}일`); barData.push(0); barDetails.push({}); }
 
@@ -4284,7 +4294,10 @@
                   }
               }
           } else {
-              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`;
+              // 💡 연간 타이틀 분리
+              document.getElementById('dashTitleText').innerText = `${window.dashYear}년`;
+              let sub = document.getElementById('dashSubTitleText');
+              if (sub) sub.innerText = `${window.dashYear}년 연간 요약`;
               for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); barDetails.push({}); }
               
               let yData = yearlyCache[window.dashYear];
@@ -4471,8 +4484,12 @@
           mainCanvas.ontouchmove = (e) => { triggerChartInteraction(e.touches[0].clientX, false); };
           mainCanvas.ontouchend = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
           
+          // PC 마우스 이벤트 (🚨 [요청 2 반영] onclick 이벤트 추가로 클릭 시 즉각 반응!)
           mainCanvas.onmousemove = (e) => { triggerChartInteraction(e.clientX, false); };
-          mainCanvas.onmouseup = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
+          mainCanvas.onclick = (e) => { 
+              triggerChartInteraction(e.clientX, true); 
+              if (window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); 
+          };
           mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); };
 
           // 🍩 2. 파이 차트 (하이브리드 엔진 & 다이얼 슬라이더 연동!) ... (이하 기존 코드 유지)
