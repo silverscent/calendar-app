@@ -1223,6 +1223,10 @@
           <div class="dash-nav">
             <button onclick="navDashDate(-1)">◀</button><span id="dashTitleText">조회중...</span><button onclick="navDashDate(1)">▶</button>
           </div>
+          <div style="display: flex; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub);">
+    <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
+    <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
+  </div>
           <div class="dash-toggles">
             <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월별</button>
             <button id="btnDashYear" onclick="setDashMode('year')">연간</button>
@@ -2249,8 +2253,9 @@
               tPal += parseInt(it.pal) || 0;
               if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
           };
-          for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
-          if (serverData.pendingItems) serverData.pendingItems.forEach(process);
+          // ✅ [수정 후] (pendingItems 처리 줄 삭제 또는 주석 처리)
+      for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
+      // if (serverData.pendingItems) serverData.pendingItems.forEach(process); 🚨 미정 데이터 제외
           
           let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
           let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
@@ -2403,10 +2408,20 @@
                   compMap[typeLabel] += qty;
               };
               
-              if (window.dashCurrentData) {
-                  for (let d = 1; d <= days; d++) { if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d]) window.dashCurrentData.monthData[d].forEach(it => process(it, d)); }
-                  if (window.dashCurrentData.pendingItems) window.dashCurrentData.pendingItems.forEach(it => process(it, null));
+             
+      // ✅ [월별 처리] 확정 데이터 및 미정 데이터 합산
+      if (window.dashCurrentData) {
+          for (let d = 1; d <= days; d++) { 
+              if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d]) {
+                  window.dashCurrentData.monthData[d].forEach(it => process(it, d));
               }
+          }
+          
+          // 💡 [옵션] 미정건 포함 체크 시에만 합산 처리
+          if (includePending && window.dashCurrentData.pendingItems) {
+              window.dashCurrentData.pendingItems.forEach(it => process(it, null));
+          }
+      }
           } else {
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`;
               for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
@@ -2422,11 +2437,25 @@
                   totalQty = seaData.reduce((a,b)=>a+b,0) + airData.reduce((a,b)=>a+b,0);
                   compMap['🚢 해상 (SEA)'] = (yData.comp['🚢 해상 (SEA)'] && yData.comp['🚢 해상 (SEA)'].pal) || 0;
                   compMap['✈️ 항공 (AIR)'] = (yData.comp['✈️ 항공 (AIR)'] && yData.comp['✈️ 항공 (AIR)'].pal) || 0;
-              } else {
-                  seaData = new Array(12).fill(0);
-                  airData = new Array(12).fill(0);
-              }
+             } else {
+              seaData = new Array(12).fill(0);
+              airData = new Array(12).fill(0);
           }
+
+          // 💡 [연간 추가] 미정건 포함 체크 시 합산 (연간 모드 전용 계산 로직)
+          if (includePending && window.dashCurrentData && window.dashCurrentData.pendingItems) {
+              window.dashCurrentData.pendingItems.forEach(it => {
+                  let rawName = String(it.bl || "").trim();
+                  if (!rawName || rawName === "미정") return;
+                  let qty = parseInt(it.pal) || 0; 
+                  totalQty += qty;
+                  
+                  let isAir = it.sType === 'AIR';
+                  let typeLabel = isAir ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
+                  if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
+              });
+          }
+      } // <-- 여기가 else 블록이 끝나는 중괄호입니다.
 
           if (window.dashMode === 'month') {
               let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;

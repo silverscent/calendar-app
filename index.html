@@ -1525,6 +1525,11 @@
             <span id="dashTitleText">2026년 3월</span>
             <button onclick="navDashDate(1)">▶</button>
           </div>
+          <div style="display: flex; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub);">
+    <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
+    <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
+  </div>
+
           <div class="dash-toggles">
             <button id="btnDashPal" class="active" onclick="setDashUnit('pal')">P</button>
             <button id="btnDashBox" onclick="setDashUnit('box')">B</button>
@@ -4203,11 +4208,14 @@
           let typeName = currentType === "out" ? "출고량" : "입고량";
           let unitName = window.dashUnit === 'pal' ? "PAL" : "BOX";
           
-          let labels = []; let barData = []; let compMap = {};
+          let labels = [];
+          let barData = []; let compMap = {};
           let barDetails = []; 
           let totalQty = 0; let doneQty = 0;
-          
           document.getElementById("barDetailBox").style.display = "none";
+
+          // 💡 [추가] 미정건 포함 체크박스 상태 확인
+          const includePending = document.getElementById('includePendingCheck')?.checked;
 
           if (window.dashMode === 'month') {
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
@@ -4221,7 +4229,6 @@
                       let qty = parseInt(it[window.dashUnit]) || 0;
                       totalQty += qty;
                       if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
-                      
                       if (dIdx !== null) {
                           barData[dIdx - 1] += qty;
                           let std = getFullName(clean);
@@ -4231,27 +4238,51 @@
                       compMap[stdTotal] = (compMap[stdTotal] || 0) + qty;
                   }
               };
-              
-              // 🚨 [핵심 수정] 무거운 바탕 달력(serverData)을 건드리지 않고, 독립된 대시보드 데이터(dashCurrentData)만 스캔!
+
+              // 💡 [월간 데이터 처리]
               if (window.dashCurrentData) {
                   for (let d = 1; d <= days; d++) { 
                       if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d]) {
-                          window.dashCurrentData.monthData[d].forEach(it => process(it, d)); 
+                          window.dashCurrentData.monthData[d].forEach(it => process(it, d));
                       }
                   }
-                  if (window.dashCurrentData.pendingItems) {
+                  // 💡 미정건 포함 체크 시에만 합산 처리 (process 함수 재사용)
+                  if (includePending && window.dashCurrentData.pendingItems) {
                       window.dashCurrentData.pendingItems.forEach(it => process(it, null));
                   }
               }
           } else {
-              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`; 
+              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`;
               for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); barDetails.push({}); }
+              
               let yData = yearlyCache[window.dashYear];
               if (!yData) return;
+              
               barData = yData.monthly.map(m => m[window.dashUnit]);
               totalQty = barData.reduce((a, b) => a + b, 0);
               Object.keys(yData.comp).forEach(k => { compMap[k] = yData.comp[k][window.dashUnit]; });
+
+              // 💡 [연간 추가] 연간 모드에서도 체크 시 미정 데이터 합산 (출고 전용 로직)
+              if (includePending && window.dashCurrentData && window.dashCurrentData.pendingItems) {
+                  window.dashCurrentData.pendingItems.forEach(it => {
+                      let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
+                      let isTask = String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+                      
+                      // 작업(TASK)이 아닌 순수 화물만 통계에 포함
+                      if (!isTask) {
+                          // 현재 선택된 단위(P/B)에 맞춰서 수량 추출
+                          let qty = parseInt(it[window.dashUnit]) || 0; 
+                          totalQty += qty;
+                          
+                          // 도넛 차트용 업체별 점유율 계산
+                          let stdTotal = getFullName(clean);
+                          compMap[stdTotal] = (compMap[stdTotal] || 0) + qty;
+                      }
+                  });
+              }
           }
+
+          // ... (이 아래로 if (window.dashMode === 'month') { let rate = ...  코드가 이어짐)
 
           if (window.dashMode === 'month') {
               let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
@@ -4426,8 +4457,9 @@
               tPal += parseInt(it.pal) || 0;
               if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
           };
-          for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
-          if (serverData.pendingItems) serverData.pendingItems.forEach(process);
+          // ✅ [수정 후] (pendingItems 처리 줄 삭제 또는 주석 처리)
+      for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
+      // if (serverData.pendingItems) serverData.pendingItems.forEach(process); 🚨 미정 데이터 제외
 
           let elType = document.getElementById("statsLabelType"); if(elType) elType.innerText = currentType === "out" ? "출고" : "입고";
           let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
