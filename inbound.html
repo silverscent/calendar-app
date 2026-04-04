@@ -1558,6 +1558,7 @@
         document.getElementById('pickerMonthGrid').innerHTML = gridHtml;
       }
 
+    
       // 🚀 [초고속 월 이동] 오염된 캐시 치료 + 깜빡임 방지 100% 최적화
       function goToAsync(year, month) {
         const toastEl = document.getElementById("toast");
@@ -1566,8 +1567,11 @@
 
         let safeYear = parseInt(year, 10);
         let safeMonth = parseInt(month, 10);
-        // 💡 [여기에 딱 한 줄 추가!] 연도가 바뀌었을 수 있으니 무조건 검사 지시!
+
         checkAndFetchHolidays(safeYear);
+
+        // 💡 [핵심 패치] 달력을 넘기기 전에 현재 가지고 있는 '미정(대기)' 최신 목록을 배낭에 챙깁니다!
+        let globalPending = window.globalPendingItems && window.globalPendingItems.length > 0 ? window.globalPendingItems : (serverData.pendingItems || []);
 
         const cacheKey = `cal_cache_${currentType}_${safeYear}_${safeMonth}`;
         const cachedData = localStorage.getItem(cacheKey);
@@ -1585,20 +1589,21 @@
             } catch(e) { }
         } 
         
-        // 💡 [수정] goToAsync 내부의 if (!isCacheValid) 부분을 아래 코드로 교체
-      if (!isCacheValid) {
-          let tempFirstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
-          let tempDays = new Date(safeYear, safeMonth, 0).getDate();
-          
-          // 🚨 [핵심] 전역 변수에 보관된 미정건이 있으면 무조건 1순위로 끌어옵니다.
-          let fallbackPending = window.globalPendingItems && window.globalPendingItems.length > 0 ? window.globalPendingItems : (serverData.pendingItems || []);
-          serverData = { year: safeYear, month: safeMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {}, pendingItems: fallbackPending };
-      }
+        if (!isCacheValid) {
+            let tempFirstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
+            let tempDays = new Date(safeYear, safeMonth, 0).getDate();
+            serverData = { year: safeYear, month: safeMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {} };
+        }
+        
+        // 💡 [핵심 패치] 새로 연 달력에 캐시 상관없이 아까 챙겨둔 '미정(대기)' 목록을 무조건 덮어씌움!
+        serverData.pendingItems = globalPending;
         
         renderCalendar();
+        
         window.currentNavId = (window.currentNavId || 0) + 1;
         let myNavId = window.currentNavId;
         let fetchStartTime = Date.now();
+        // ... (아래 google.script.run 부분은 기존 그대로 유지) ...
         google.script.run.withSuccessHandler(res => {
           // 🚨 [핵심 방어막] 달력을 연타해서 빠르게 넘기면, 가장 마지막 달력만 진짜로 인정!
           if (myNavId !== window.currentNavId) return; 
@@ -1649,8 +1654,11 @@
         } else if (action === 'UNDO_DONE') { arr[idx].isDone = false;
         }
         
+        // 💡 updateLocalState 함수의 맨 마지막 부분
         lastLocalUpdateTime = Date.now();
         localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+        // 👇👇 이 1줄을 반드시 추가하세요! 👇👇
+        Object.keys(localStorage).forEach(k => { if (k.startsWith(`yearly_stats_cache_${currentType}_`)) localStorage.removeItem(k); });
       }
 
       function updateMultiLocalState(action, items) {
@@ -1666,7 +1674,11 @@
                else if (action === 'MULTI_UNDO_DONE') arr[idx].isDone = false;
             }
         });
-        lastLocalUpdateTime = Date.now(); localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+        // 💡 updateMultiLocalState 함수의 맨 마지막 부분
+        lastLocalUpdateTime = Date.now(); 
+        localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+        // 👇👇 이 1줄을 반드시 추가하세요! 👇👇
+        Object.keys(localStorage).forEach(k => { if (k.startsWith(`yearly_stats_cache_${currentType}_`)) localStorage.removeItem(k); });
       }
 
       if (isAdmin) {

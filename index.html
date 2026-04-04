@@ -1524,6 +1524,9 @@
             <button onclick="navDashDate(-1)">◀</button><span id="dashTitleText">조회중...</span><button onclick="navDashDate(1)">▶</button>
           </div>
           <div class="dash-toggles">
+             <button id="btnDashPal" class="active" onclick="setDashUnit('pal')">P</button>
+             <button id="btnDashBox" onclick="setDashUnit('box')">B</button>
+             <div style="width:1px; background:var(--border-color); margin:0 2px;"></div>
              <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월별</button>
              <button id="btnDashYear" onclick="setDashMode('year')">연간</button>
           </div>
