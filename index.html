@@ -4146,20 +4146,32 @@
 
       // 🚨 [신규] 대시보드용 월간 데이터 독립 호출 엔진 (달력 UI 건드림 X)
       window.dashCurrentData = null; // 대시보드가 임시로 쓸 데이터 바구니
+
       function fetchDashMonthAndRender() {
-          document.getElementById('dashTitleText').innerText = "데이터 불러오는 중...";
+          // 💡 1. 타이틀은 달력을 넘기자마자 즉시 변경! (버튼 멈춤 현상 완벽 해결)
+          document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
           
           let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
           let cached = localStorage.getItem(cacheKey);
+          
           if (cached) {
               try {
                   let parsed = JSON.parse(cached);
                   window.dashCurrentData = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
                   renderDashCharts();
               } catch(e) {}
+          } else {
+              // 💡 2. 캐시가 없으면 빈 뼈대로 차트를 지우고, 카드에 모래시계 표시!
+              window.dashCurrentData = { monthData: {}, pendingItems: [] };
+              renderDashCharts();
+              
+              document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
+              document.getElementById('dashVolDetail').innerText = "조회중...";
+              document.getElementById('dashTotal').innerHTML = "0";
+              document.getElementById('dashAvg').innerText = "⏳";
           }
 
-          // 뒷단에서 몰래 서버 최신화 (달력은 그대로 둠)
+          // 뒷단에서 몰래 서버 최신화
           google.script.run
               .withSuccessHandler(res => {
                   let finalData = typeof res === 'string' ? JSON.parse(res) : res;
@@ -4168,18 +4180,37 @@
                   if (window.dashMode === 'month') renderDashCharts();
               })
               .withFailureHandler(err => {
-                  if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲";
+                  if (window.dashMode === 'month' && !cached) {
+                      document.getElementById('dashCardTitle1').innerText = "불러오기 실패 🥲";
+                      document.getElementById('dashAvg').innerText = "❌";
+                  }
               })
               .getCalendarDataAsync(currentType, window.dashYear, window.dashMonth);
       }
 
       function fetchYearlyAndRender() {
-          document.getElementById('dashTitleText').innerText = "데이터 불러오는 중...";
+          // 💡 1. 연간 요약 타이틀도 즉시 변경!
+          document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`;
+          
           let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYear}`;
           let cached = localStorage.getItem(cacheKey);
+          
           if (cached) {
               try { yearlyCache[window.dashYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {}
+          } else {
+              // 💡 2. 캐시가 없으면 더미 데이터로 차트를 초기화하고 모래시계 띄우기!
+              let dummyArr = [];
+              for(let i=0; i<12; i++) dummyArr.push({pal:0, box:0, details:{}});
+              yearlyCache[window.dashYear] = { year: window.dashYear, monthly: dummyArr, comp: {} };
+              
+              renderDashCharts();
+              
+              document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
+              document.getElementById('dashVolDetail').innerText = "조회중...";
+              document.getElementById('dashTotal').innerHTML = "0";
+              document.getElementById('dashAvg').innerText = "⏳";
           }
+          
           google.script.run
               .withSuccessHandler(res => {
                   yearlyCache[res.year] = res;
@@ -4187,7 +4218,10 @@
                   if (window.dashMode === 'year' && window.dashYear === res.year) renderDashCharts();
               })
               .withFailureHandler(err => {
-                  if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲";
+                  if (window.dashMode === 'year' && !cached) {
+                      document.getElementById('dashCardTitle1').innerText = "불러오기 실패 🥲";
+                      document.getElementById('dashAvg').innerText = "❌";
+                  }
               }).getYearlyStatsAsync(currentType, window.dashYear);
       }
 
