@@ -2571,22 +2571,41 @@
               document.getElementById("dashAvg").innerHTML = `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/월</span>`;
               document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${(totalQty / 365).toFixed(1)})`;
           }
-// ... (renderDashCharts 내부, 상단 카드 요약 로직 바로 밑부터 교체) ...
+// 상단 카드 정보 업데이트 (기존 코드와 동일...)
+// 💡 스와이프(Hover) 선택을 위한 전역 공유 변수 할당
+          window.dashSeaData = seaData;
+          window.dashAirData = airData;
+          window.dashBarDetails = barDetails;
 
-          // 💡 [핵심] 1. 스와이프 시 "막대 색깔"만 바꾸는 함수
+          // 💡 1. 막대 색깔 하이라이트 + [빈 데이터 스킵(스냅) 로직]
           window.lastHoveredBarIndex = -1;
           window.highlightBarOnly = function(idx) {
-              if (idx === window.lastHoveredBarIndex) return; // 중복 실행 방지
-              window.lastHoveredBarIndex = idx;
-              let detailBox = document.getElementById("barDetailBox");
-
               if (idx === null || idx === undefined || idx < 0) {
+                  window.lastHoveredBarIndex = -1;
                   mainChartIns.data.datasets[0].backgroundColor = '#99CCFF';
                   mainChartIns.data.datasets[1].backgroundColor = '#FF99CC';
                   mainChartIns.update();
-                  detailBox.style.display = 'none'; // 차트 밖으로 나가면 숨김
+                  document.getElementById("barDetailBox").style.display = 'none';
                   return;
               }
+
+              // 🚨 [핵심: 스킵 기능] 데이터가 0인 곳을 스와이프하면 가장 가까운 막대로 자석처럼 스냅!
+              let validIndices = [];
+              for(let i = 0; i < labels.length; i++) {
+                  if ((window.dashSeaData[i] + window.dashAirData[i]) > 0) validIndices.push(i);
+              }
+              if (validIndices.length === 0) return; // 데이터가 아예 없으면 무시
+
+              let closestIdx = validIndices[0];
+              let minDiff = Math.abs(idx - closestIdx);
+              for(let i = 1; i < validIndices.length; i++) {
+                  let diff = Math.abs(idx - validIndices[i]);
+                  if(diff < minDiff) { minDiff = diff; closestIdx = validIndices[i]; }
+              }
+              idx = closestIdx; // 가장 가까운 값이 있는 인덱스로 강제 고정
+
+              if (idx === window.lastHoveredBarIndex) return; // 중복 실행 방지
+              window.lastHoveredBarIndex = idx;
 
               let dimColor = document.body.classList.contains("light-mode") ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
               let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#99CCFF';
@@ -2594,16 +2613,21 @@
               
               mainChartIns.data.datasets[0].backgroundColor = newSeaColors; 
               mainChartIns.data.datasets[1].backgroundColor = newAirColors;
+              
+              // 툴팁(말풍선)도 스냅된 막대 위치로 강제 이동
+              if (mainChartIns.tooltip) {
+                  mainChartIns.tooltip.setActiveElements([{ datasetIndex: 0, index: idx }, { datasetIndex: 1, index: idx }], { x: 0, y: 0 });
+              }
               mainChartIns.update();
           };
 
-          // 💡 [핵심] 2. 손을 뗐을 때 "상세 내역 박스"를 스르륵 띄우는 함수
+          // 💡 2. 손 뗐을 때 상세내역 스르륵 호출
           window.showDetailBox = function(idx) {
               let detailBox = document.getElementById("barDetailBox");
               if (idx === null || idx === undefined || idx < 0) return;
 
-              let details = barDetails[idx]; 
-              let total = seaData[idx] + airData[idx];
+              let details = window.dashBarDetails[idx]; 
+              let total = window.dashSeaData[idx] + window.dashAirData[idx];
               if (total === 0) { detailBox.style.display = 'none'; return; }
               
               let timeLabel = window.dashMode === 'month' ? `${idx+1}일` : `${idx+1}월`;
@@ -2627,14 +2651,13 @@
               detailBox.animate([{opacity: 0, transform: 'translateY(-5px)'}, {opacity: 1, transform: 'translateY(0)'}], {duration: 250, fill: 'forwards'});
           };
 
-          // 📊 막대 차트 생성 
+          // 📊 막대 차트 생성 (Chart.js 네이티브 이벤트 비활성화)
           if (mainChartIns) mainChartIns.destroy();
           mainChartIns = new Chart(document.getElementById('mainChart'), {
               type: 'bar',
               data: { labels: labels, datasets: [{ label: `🚢 해상`, data: seaData, backgroundColor: '#99CCFF', stack: 'Stack 0', borderRadius: 4 }, { label: `✈️ 항공`, data: airData, backgroundColor: '#FF99CC', stack: 'Stack 0', borderRadius: 4 }] },
               options: { 
                   responsive: true, maintainAspectRatio: false, 
-                  // 🚨 axis: 'x' 를 추가하면 바닥 글씨(날짜)를 문질러도 차트가 반응합니다!
                   interaction: { mode: 'index', intersect: false, axis: 'x' }, 
                   plugins: { 
                       legend: { display: false },
@@ -2642,25 +2665,46 @@
                           enabled: true, mode: 'index', intersect: false,
                           callbacks: {
                               title: (items) => window.dashMode === 'month' ? `${items[0].label} 입고량` : `${items[0].label} 입고량`,
-                              label: () => null, // 개별 팝업 숨김
+                              label: () => null, 
                               footer: (items) => `총 ${items.reduce((a, b) => a + b.parsed.y, 0)}P`
                           }
                       }
                   }, 
                   scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } },
-                  // 🚨 문지를 땐 색깔만 하이라이트!
-                  onHover: (e, elements) => { 
-                      if (elements && elements.length > 0) window.highlightBarOnly(elements[0].index); 
-                  },
+                  events: [] // 🚨 Chart.js 고유의 터치 이벤트를 끄고 아래 커스텀 엔진에 100% 위임
               }
           });
 
-          // 🚨 손가락을 뗄 때, 마우스를 클릭/뗄 때 비로소 상세내역 박스 호출
+          // 🚨 [커스텀 터치 엔진] 캔버스 하단 날짜 글씨까지 완벽하게 터치/스와이프 인식
           const mainCanvas = document.getElementById('mainChart');
+          mainCanvas.style.touchAction = 'pan-y'; // 가로 스와이프 차단, 세로 스크롤(위아래 넘기기)은 부드럽게 허용
+
+          const triggerChartInteraction = (clientX) => {
+              if (!mainChartIns) return;
+              const rect = mainCanvas.getBoundingClientRect();
+              const chartArea = mainChartIns.chartArea;
+              if (!chartArea) return;
+              
+              let xCoord = clientX - rect.left;
+              // 캔버스 범위를 벗어나도 가장자리로 인식
+              let x = Math.max(chartArea.left, Math.min(xCoord, chartArea.right));
+              let width = chartArea.right - chartArea.left;
+              let percent = (x - chartArea.left) / width;
+              
+              let idx = Math.floor(percent * labels.length);
+              idx = Math.min(Math.max(idx, 0), labels.length - 1);
+              window.highlightBarOnly(idx);
+          };
+
+          // 모바일 터치 이벤트
+          mainCanvas.ontouchstart = (e) => { triggerChartInteraction(e.touches[0].clientX); };
+          mainCanvas.ontouchmove = (e) => { triggerChartInteraction(e.touches[0].clientX); };
           mainCanvas.ontouchend = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
+          
+          // PC 마우스 이벤트
+          mainCanvas.onmousemove = (e) => { triggerChartInteraction(e.clientX); };
           mainCanvas.onmouseup = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
           mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); };
-
           // 🍩 파이 차트 
           window.activePieIndex = null;
           let sLabels = []; let sData = []; let sColors = [];
