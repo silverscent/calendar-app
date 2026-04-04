@@ -2380,8 +2380,10 @@
           
           let unitName = "PAL"; // 입고는 PAL 고정
           let labels = [];
-          let barData = []; 
-          let compMap = { '🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0 }; // 입고 전용 수단 맵
+          // 💡 [핵심 수정] barData 하나 대신, 해상과 항공 배열을 각각 분리해서 준비합니다!
+          let seaData = []; 
+          let airData = []; 
+          let compMap = { '🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0 }; 
           let barDetails = []; 
           let totalQty = 0; let doneQty = 0;
           document.getElementById("barDetailBox").style.display = "none";
@@ -2392,7 +2394,13 @@
           if (window.dashMode === 'month') {
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
               let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
-              for (let d = 1; d <= days; d++) { labels.push(`${d}일`); barData.push(0); barDetails.push({}); }
+              // 날짜 수만큼 0으로 기본값 세팅
+              for (let d = 1; d <= days; d++) { 
+                  labels.push(`${d}일`); 
+                  seaData.push(0); 
+                  airData.push(0); 
+                  barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); 
+              }
 
               // 💡 입고 전용 데이터 처리 함수
               const process = (it, dIdx) => {
@@ -2402,14 +2410,18 @@
                       totalQty += qty;
                       if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
                       
-                      // 1. 막대 차트용 (날짜가 있을 때만)
-                      if (dIdx !== null) {
-                          barData[dIdx - 1] += qty;
-                      }
-
-                      // 2. 도넛 차트용 (수단별 합산 - 날짜 유무 상관없이 수행)
                       let isAir = it.sType === 'AIR';
                       let typeLabel = isAir ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
+
+                      // 1. 막대 차트용 (날짜가 있을 때만 수단별로 갈라서 넣음)
+                      if (dIdx !== null) {
+                          if (isAir) airData[dIdx - 1] += qty;
+                          else seaData[dIdx - 1] += qty;
+                          
+                          barDetails[dIdx - 1][typeLabel] += qty;
+                      }
+
+                      // 2. 도넛 차트용 (수단별 합산)
                       if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
                   }
               };
@@ -2430,13 +2442,22 @@
           } else {
               // 💡 연간 요약 모드
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`;
-              for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
+              for (let m = 1; m <= 12; m++) { 
+                  labels.push(`${m}월`); 
+                  seaData.push(0); 
+                  airData.push(0); 
+                  barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); 
+              }
               
               let yData = yearlyCache[window.dashYear];
               if (yData) {
-                  barData = yData.monthly.map(m => m.pal);
-                  totalQty = barData.reduce((a, b) => a + b, 0);
-                  compMap = { '🚢 해상 (SEA)': yData.sea, '✈️ 항공 (AIR)': yData.air };
+                  for (let i = 0; i < 12; i++) {
+                      let mData = yData.monthly[i] || {};
+                      seaData[i] = mData.sea || mData.pal || 0; // 서버 포맷에 따라 유연하게 대처
+                      airData[i] = mData.air || 0;
+                      totalQty += parseInt(mData.pal) || 0;
+                  }
+                  compMap = { '🚢 해상 (SEA)': yData.sea || 0, '✈️ 항공 (AIR)': yData.air || 0 };
               }
 
               // 💡 연간 모드 미정건 합산
@@ -2454,7 +2475,7 @@
               }
           }
 
-          // 📊 상단 카드 숫자 업데이트 (이후 로직은 기존과 동일)
+          // 📊 상단 카드 숫자 업데이트
           if (window.dashMode === 'month') {
               let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
               let now = new Date();
@@ -2469,8 +2490,7 @@
               document.getElementById("dashAvg").innerHTML = `${avgDaily} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/일</span>`;
               document.getElementById("dashDaysDetail").innerText = `(월 누적: ${doneQty.toLocaleString()})`;
           } else {
-              let totalSum = barData.reduce((a, b) => a + b, 0);
-              let avgMonthly = totalSum > 0 ? Math.round(totalSum / 12) : 0;
+              let avgMonthly = totalQty > 0 ? Math.round(totalQty / 12) : 0;
               document.getElementById("dashCardTitle1").innerText = "연간 총 누적수량";
               document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
               document.getElementById("dashVolDetail").innerText = `(1년 전체 합산)`;
@@ -2480,10 +2500,7 @@
               document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${(totalQty / 365).toFixed(1)})`;
           }
 
-          // 차트 생성 (mainChart, shareChart) 부분은 기존 코드와 동일하게 유지...
-          // (생략된 뒷부분은 기존 renderDashCharts의 Chart 생성 로직을 그대로 사용하세요)
-      
-
+          // 📊 차트 생성 (기존 사용하시던 스택 차트 로직 유지)
           if (mainChartIns) mainChartIns.destroy();
           mainChartIns = new Chart(document.getElementById('mainChart'), {
               type: 'bar',
@@ -2555,7 +2572,6 @@
               }
           });
       }
-
       // 🚀 [앱 초기화] 
       window.addEventListener('DOMContentLoaded', () => {
         
