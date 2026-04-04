@@ -4311,8 +4311,61 @@
               document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${avgDaily})`;
           }
 
-          if (mainChartIns) mainChartIns.destroy();
+          // 💡 1. 스와이프 시 "막대 색깔"만 부드럽게 바꾸는 전역 함수
+          window.lastHoveredBarIndex = -1;
           let defaultBgColor = '#0a84ff';
+
+          window.highlightBarOnly = function(idx) {
+              if (idx === window.lastHoveredBarIndex) return; // 중복 실행 방지
+              window.lastHoveredBarIndex = idx;
+              let detailBox = document.getElementById("barDetailBox");
+
+              if (idx === null || idx === undefined || idx < 0) {
+                  mainChartIns.data.datasets[0].backgroundColor = new Array(labels.length).fill(defaultBgColor);
+                  mainChartIns.update();
+                  detailBox.style.display = 'none'; // 차트 밖으로 나가면 즉시 숨김
+                  return;
+              }
+
+              let dimColor = document.body.classList.contains("light-mode") ? 'rgba(10, 132, 255, 0.2)' : 'rgba(10, 132, 255, 0.3)';
+              let newColors = new Array(labels.length).fill(dimColor);
+              newColors[idx] = defaultBgColor;
+              mainChartIns.data.datasets[0].backgroundColor = newColors;
+              mainChartIns.update();
+          };
+
+          // 💡 2. 손을 뗐을 때 "상세 내역 박스"를 스르륵 띄우는 함수
+          window.showDetailBox = function(idx) {
+              let detailBox = document.getElementById("barDetailBox");
+              if (idx === null || idx === undefined || idx < 0) return;
+
+              if (window.dashMode === 'month') {
+                  let details = barDetails[idx];
+                  let total = barData[idx];
+                  if (total === 0) { detailBox.style.display = 'none'; return; }
+                  let sortedDetail = Object.keys(details).sort((a,b) => details[b] - details[a]);
+                  let uStr = window.dashUnit === 'pal' ? 'P' : 'B';
+                  
+                  let html = `<div style="font-weight:900; margin-bottom:10px; color:#0a84ff;">📅 ${idx+1}일 상세 내역 <span style="color:var(--text-main); font-size:0.9em;">(총 ${total}${uStr})</span></div>`;
+                  html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+                  sortedDetail.forEach(comp => {
+                      let cColor = getCompanyColor(comp).bg; 
+                      html += `<div style="display:flex; align-items:center; gap:5px; background:var(--btn-bg); padding:5px 10px; border-radius:8px; font-size:0.95em; border:1px solid var(--border-color);">
+                          <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${cColor};"></span>
+                          <span style="font-weight:bold; color:var(--text-main);">${getShortName(comp)}</span>
+                          <span style="color:var(--text-sub); font-weight:800;">${details[comp]}${uStr}</span>
+                      </div>`;
+                  });
+                  html += `</div>`;
+                  detailBox.innerHTML = html;
+                  detailBox.style.display = 'block';
+                  // 💫 부드럽게 나타나는 애니메이션 효과
+                  detailBox.animate([{opacity: 0, transform: 'translateY(-5px)'}, {opacity: 1, transform: 'translateY(0)'}], {duration: 250, fill: 'forwards'});
+              }
+          };
+
+          // 📊 막대 차트 생성 
+          if (mainChartIns) mainChartIns.destroy();
           let bgColors = new Array(labels.length).fill(defaultBgColor);
 
           mainChartIns = new Chart(document.getElementById('mainChart'), {
@@ -4320,47 +4373,40 @@
               data: { labels: labels, datasets: [{ label: `수량(${unitName})`, data: barData, backgroundColor: bgColors, borderRadius: 4 }] },
               options: { 
                   responsive: true, maintainAspectRatio: false, 
-                  plugins: { legend: { display: false } }, 
+                  // 🚨 [핵심] axis: 'x' 를 추가해 바닥 글씨(날짜)를 문질러도 차트가 반응하게 만듭니다!
+                  interaction: { mode: 'index', intersect: false, axis: 'x' }, 
+                  plugins: { 
+                      legend: { display: false },
+                      // 💡 툴팁(말풍선)을 아주 간결하게 정리
+                      tooltip: {
+                          enabled: true, mode: 'index', intersect: false,
+                          callbacks: {
+                              title: (items) => window.dashMode === 'month' ? `${items[0].label} 출고량` : `${items[0].label} 출고량`,
+                              label: () => null, // 개별 내역 숨김
+                              footer: (items) => `총 ${items[0].parsed.y}${window.dashUnit === 'pal' ? 'P' : 'B'}`
+                          }
+                      }
+                  }, 
                   scales: { x: { grid: { display: false } } },
-                  onClick: (e, activeElements) => {
-                      let detailBox = document.getElementById("barDetailBox");
-                      if (!activeElements || activeElements.length === 0) {
-                          mainChartIns.data.datasets[0].backgroundColor = new Array(labels.length).fill(defaultBgColor);
-                          mainChartIns.update();
-                          detailBox.style.display = 'none';
-                          return;
-                      }
-                      const idx = activeElements[0].index;
-                      let dimColor = document.body.classList.contains("light-mode") ? 'rgba(10, 132, 255, 0.2)' : 'rgba(10, 132, 255, 0.3)';
-                      let newColors = new Array(labels.length).fill(dimColor);
-                      newColors[idx] = defaultBgColor;
-                      mainChartIns.data.datasets[0].backgroundColor = newColors;
-                      mainChartIns.update();
-
-                      if (window.dashMode === 'month') {
-                          let details = barDetails[idx];
-                          let total = barData[idx];
-                          if (total === 0) { detailBox.style.display = 'none'; return; }
-                          let sortedDetail = Object.keys(details).sort((a,b) => details[b] - details[a]);
-                          let uStr = window.dashUnit === 'pal' ? 'P' : 'B';
-                          
-                          let html = `<div style="font-weight:900; margin-bottom:10px; color:#0a84ff;">📅 ${idx+1}일 상세 내역 <span style="color:var(--text-main); font-size:0.9em;">(총 ${total}${uStr})</span></div>`;
-                          html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
-                          sortedDetail.forEach(comp => {
-                              let cColor = getCompanyColor(comp).bg; 
-                              html += `<div style="display:flex; align-items:center; gap:5px; background:var(--btn-bg); padding:5px 10px; border-radius:8px; font-size:0.95em; border:1px solid var(--border-color);">
-                                  <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${cColor};"></span>
-                                  <span style="font-weight:bold; color:var(--text-main);">${getShortName(comp)}</span>
-                                  <span style="color:var(--text-sub); font-weight:800;">${details[comp]}${uStr}</span>
-                              </div>`;
-                          });
-                          html += `</div>`;
-                          detailBox.innerHTML = html;
-                          detailBox.style.display = 'block';
-                      }
+                  // 🚨 손가락을 문지를 땐 팝업 없이 색깔만 따라다니게!
+                  onHover: (e, elements) => { 
+                      if (elements && elements.length > 0) window.highlightBarOnly(elements[0].index); 
+                  },
+                  // 🚨 PC 클릭 시에도 색깔만 바꾸도록 (onmouseup에서 팝업 처리)
+                  onClick: (e, elements) => {
+                      if (elements && elements.length > 0) window.highlightBarOnly(elements[0].index);
+                      else window.highlightBarOnly(-1);
                   }
               }
           });
+
+          // 🚨 [터치/마우스 이벤트 핵심] 손가락을 화면에서 뗄 때만 스르륵 나타남
+          const mainCanvas = document.getElementById('mainChart');
+          mainCanvas.ontouchend = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
+          mainCanvas.onmouseup = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
+          mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); };
+
+          // 🍩 2. 파이 차트 (하이브리드 엔진 & 다이얼 슬라이더 연동!) ... (이하 기존 코드 유지)
 
           // 🍩 2. 파이 차트 (하이브리드 엔진 & 다이얼 슬라이더 연동!)
           window.activePieIndex = null; 
