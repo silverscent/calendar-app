@@ -12,6 +12,7 @@
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="manifest_in.json">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
       /* 💡 눈이 편안한 다크 차콜 색상 적용 */
       :root {
@@ -315,7 +316,7 @@
         cursor: default;
       }
       .day-cell.drag-over { 
-        background: rgba(10,132,255,0.1) !important; 
+        background: rgba(10,132,255,0.1) !important;
         outline: 2px dashed #0a84ff !important; 
         outline-offset: -2px;
         transform: scale(0.96); 
@@ -357,7 +358,8 @@
       }
       /* 💡 [2번 패치] 오늘 날짜 붉은 바탕은 유지하되, 글자 색깔은 요일 본연의 색 유지 */
       .today-cell .date-num {
-        color: inherit !important; /* 🚨 이 부분을 inherit으로 변경! */
+        color: inherit !important;
+        /* 🚨 이 부분을 inherit으로 변경! */
         font-weight: 900;
       }
 
@@ -407,8 +409,9 @@
         justify-content: center;
       }
 
+      /* 완료된 건은 파스텔 배경 위에서 흰색 글씨 + 그림자 유지 (가독성 향상) */
       .done-mark {
-        opacity: 0.6;
+        opacity: 0.85; /* 0.6에서 0.85로 진하게 변경 */
         border-left: none !important;
       }
       .done-mark .pal-main,
@@ -469,15 +472,21 @@
       .pending-item:active {
         transform: scale(0.98);
       }
+      /* 💡 [패치] 미정건 텍스트 말줄임표 제거 및 자동 두 줄 바꿈 적용 */
       .pending-comp {
         font-weight: 800;
         font-size: 0.95em;
-        width: 90px;
+        flex: 1;                   /* 남은 공간을 모두 차지하되 */
+        white-space: normal;       /* 🚨 강제로 한 줄로 만드는 옵션을 끄고 줄바꿈 허용 */
+        word-break: keep-all;      /* 단어 단위로 예쁘게 줄바꿈 */
+        overflow-wrap: break-word; /* 띄어쓰기 없는 긴 B/L 넘버 등도 강제로 끊어서 줄바꿈 */
+        line-height: 1.3;
+        margin-right: 8px;
       }
       .pending-vol {
         color: var(--text-sub);
         font-size: 0.85em;
-        flex: 1;
+        flex-shrink: 0;            /* 🚨 수량 텍스트는 겹치거나 찌그러지지 않고 무조건 자기 영역 유지 */
         font-weight: 600;
       }
       .pending-etc {
@@ -487,6 +496,8 @@
         padding: 3px 8px;
         border-radius: 6px;
         font-weight: bold;
+        flex-shrink: 0;            /* 🚨 비고(태그) 역시 찌그러지지 않고 영역 무조건 사수 */
+        margin-left: 6px;
       }
 
       .info-footer {
@@ -539,9 +550,12 @@
       .multi-action-btn:active {
         transform: scale(0.95);
       }
-      .btn-multi-done { background: #34c759; color: white; }
-      .btn-multi-undo { background: #ff9f0a; color: white; }
-      .btn-multi-del { background: #ff3b30; color: white; }
+      .btn-multi-done { background: #34c759; color: white;
+      }
+      .btn-multi-undo { background: #ff9f0a; color: white;
+      }
+      .btn-multi-del { background: #ff3b30; color: white;
+      }
 
       .overlay-modal {
         display: none;
@@ -786,7 +800,8 @@
         transition: 0.2s;
         box-shadow: 0 4px 10px rgba(10, 132, 255, 0.3);
       }
-      .save-btn:active { transform: scale(0.97); }
+      .save-btn:active { transform: scale(0.97);
+      }
       .cancel-btn {
         flex: 1;
         background: var(--btn-bg);
@@ -798,7 +813,8 @@
         cursor: pointer;
         transition: 0.2s;
       }
-      .cancel-btn:active { transform: scale(0.97); }
+      .cancel-btn:active { transform: scale(0.97);
+      }
       .delete-btn {
         width: 100%;
         background: rgba(255, 59, 48, 0.1);
@@ -811,33 +827,73 @@
         margin-top: 5px;
         transition: 0.2s;
       }
-      .delete-btn:active { transform: scale(0.97); background: rgba(255, 59, 48, 0.2); }
+      .delete-btn:active { transform: scale(0.97);
+      background: rgba(255, 59, 48, 0.2); }
 
-      .picker-year-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; font-size: 1.3em; font-weight: 900; }
-      .year-btn { background: var(--btn-bg); border: none; width: 44px; height: 44px; border-radius: 12px; font-weight: bold; cursor: pointer; color: var(--text-main); transition: 0.2s; }
+      .picker-year-row { display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 25px; font-size: 1.3em; font-weight: 900; }
+      .year-btn { background: var(--btn-bg); border: none; width: 44px;
+      height: 44px; border-radius: 12px; font-weight: bold; cursor: pointer; color: var(--text-main); transition: 0.2s;
+      }
       .year-btn:active { transform: scale(0.9); }
-      .month-grid-ui { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-      .month-btn { background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 0; font-size: 1.05em; font-weight: 800; cursor: pointer; transition: 0.2s; }
-      .month-btn:active { transform: scale(0.95); }
-      .month-btn.current { background: rgba(10, 132, 255, 0.1); border-color: #0a84ff; color: #0a84ff; }
+      .month-grid-ui { display: grid;
+      grid-template-columns: repeat(4, 1fr); gap: 12px; }
+      .month-btn { background: var(--card-bg); color: var(--text-main);
+      border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 0; font-size: 1.05em; font-weight: 800; cursor: pointer; transition: 0.2s;
+      }
+      .month-btn:active { transform: scale(0.95);
+      }
+      .month-btn.current { background: rgba(10, 132, 255, 0.1); border-color: #0a84ff; color: #0a84ff;
+      }
 
-      #toast { visibility: hidden; min-width: 250px; background: rgba(40, 44, 52, 0.95); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); color: #fff; text-align: center; border-radius: 30px; padding: 14px 24px; position: fixed; z-index: 99999; left: 50%; top: env(safe-area-inset-top, 10px); transform: translate3d(-50%, -150%, 0) scale(0.9); font-size: 0.95em; font-weight: 900; opacity: 0; transition: visibility 0.5s, opacity 0.4s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); letter-spacing: -0.3px; border: 2px solid transparent; background-clip: padding-box; animation: rainbowGlow 3s linear infinite; }
-      body.light-mode #toast { background: rgba(255, 255, 255, 0.95); color: #222; border: 2px solid transparent; }
-      #toast.show { visibility: visible; opacity: 1; transform: translate3d(-50%, 20px, 0) scale(1); }
-      @keyframes rainbowGlow { 0% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.5); border-color: rgba(255, 59, 48, 0.7); } 20% { box-shadow: 0 0 15px rgba(255, 159, 10, 0.5); border-color: rgba(255, 159, 10, 0.7); } 40% { box-shadow: 0 0 15px rgba(52, 199, 89, 0.5); border-color: rgba(52, 199, 89, 0.7); } 60% { box-shadow: 0 0 15px rgba(10, 132, 255, 0.5); border-color: rgba(10, 132, 255, 0.7); } 80% { box-shadow: 0 0 15px rgba(175, 82, 222, 0.5); border-color: rgba(175, 82, 222, 0.7); } 100% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.5); border-color: rgba(255, 59, 48, 0.7); } }
+      #toast { visibility: hidden; min-width: 250px; background: rgba(40, 44, 52, 0.95); backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px); color: #fff; text-align: center; border-radius: 30px; padding: 14px 24px; position: fixed; z-index: 99999; left: 50%; top: env(safe-area-inset-top, 10px);
+      transform: translate3d(-50%, -150%, 0) scale(0.9); font-size: 0.95em; font-weight: 900; opacity: 0;
+      transition: visibility 0.5s, opacity 0.4s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); letter-spacing: -0.3px; border: 2px solid transparent; background-clip: padding-box;
+      animation: rainbowGlow 3s linear infinite; }
+      body.light-mode #toast { background: rgba(255, 255, 255, 0.95);
+      color: #222; border: 2px solid transparent; }
+      #toast.show { visibility: visible; opacity: 1;
+      transform: translate3d(-50%, 20px, 0) scale(1); }
+      @keyframes rainbowGlow { 0% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.5);
+      border-color: rgba(255, 59, 48, 0.7); } 20% { box-shadow: 0 0 15px rgba(255, 159, 10, 0.5);
+      border-color: rgba(255, 159, 10, 0.7); } 40% { box-shadow: 0 0 15px rgba(52, 199, 89, 0.5);
+      border-color: rgba(52, 199, 89, 0.7); } 60% { box-shadow: 0 0 15px rgba(10, 132, 255, 0.5);
+      border-color: rgba(10, 132, 255, 0.7); } 80% { box-shadow: 0 0 15px rgba(175, 82, 222, 0.5);
+      border-color: rgba(175, 82, 222, 0.7); } 100% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.5);
+      border-color: rgba(255, 59, 48, 0.7); } }
 
-      #globalLoader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; color: white; font-weight: bold; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
-      .spinner { border: 4px solid rgba(255, 255, 255, 0.2); border-top: 4px solid #fff; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin-bottom: 12px; }
-      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-      @keyframes slideUpSheet { from { transform: translateY(100%); } to { transform: translateY(0); } }
+      #globalLoader { display: none; position: fixed; top: 0;
+      left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 9999; justify-content: center; align-items: center; flex-direction: column;
+      color: white; font-weight: bold; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+      .spinner { border: 4px solid rgba(255, 255, 255, 0.2);
+      border-top: 4px solid #fff; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin-bottom: 12px;
+      }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg);
+      } }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1;
+      } }
+      @keyframes slideUpSheet { from { transform: translateY(100%); } to { transform: translateY(0);
+      } }
 
-      .top-wrapper { position: relative; overflow: hidden; border: 2px solid transparent; transition: box-shadow 0.3s, border-color 0.3s, transform 0.2s; box-sizing: border-box; }
-      .top-wrapper.syncing-glow { transform: scale(1.005); border-color: rgba(10, 132, 255, 0.7) !important; animation: frameNeonGlowOptimal 3s linear infinite !important; }
-      @keyframes frameNeonGlowOptimal { 0% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); } 33% { border-color: rgba(52,199,89,0.7); box-shadow: 0 0 14px rgba(52,199,89,0.5), 0 0 7px rgba(52,199,89,0.3), inset 0 0 7px rgba(52,199,89,0.1); } 66% { border-color: rgba(10,132,255,0.7); box-shadow: 0 0 14px rgba(10,132,255,0.5), 0 0 7px rgba(10,132,255,0.3), inset 0 0 7px rgba(10,132,255,0.1); } 100% { border-color: rgba(255,59,48,0.7); box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); } }
-      .top-wrapper::after { content: ''; position: absolute; bottom: 0; left: -50%; width: 50%; height: 2px; background: linear-gradient(90deg, transparent, #0a84ff, #34c759, #ffd60a, transparent); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
-      .top-wrapper.syncing-glow::after { opacity: 1; animation: loadingBarSweep 0.8s infinite cubic-bezier(0.4, 0, 0.2, 1); }
-      @keyframes loadingBarSweep { 0% { left: -50%; } 100% { left: 100%; } }
+      .top-wrapper { position: relative; overflow: hidden; border: 2px solid transparent;
+      transition: box-shadow 0.3s, border-color 0.3s, transform 0.2s; box-sizing: border-box; }
+      .top-wrapper.syncing-glow { transform: scale(1.005);
+      border-color: rgba(10, 132, 255, 0.7) !important; animation: frameNeonGlowOptimal 3s linear infinite !important;
+      }
+      @keyframes frameNeonGlowOptimal { 0% { border-color: rgba(255,59,48,0.7);
+      box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); } 33% { border-color: rgba(52,199,89,0.7);
+      box-shadow: 0 0 14px rgba(52,199,89,0.5), 0 0 7px rgba(52,199,89,0.3), inset 0 0 7px rgba(52,199,89,0.1); } 66% { border-color: rgba(10,132,255,0.7);
+      box-shadow: 0 0 14px rgba(10,132,255,0.5), 0 0 7px rgba(10,132,255,0.3), inset 0 0 7px rgba(10,132,255,0.1); } 100% { border-color: rgba(255,59,48,0.7);
+      box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1);
+      } }
+      .top-wrapper::after { content: ''; position: absolute; bottom: 0; left: -50%; width: 50%;
+      height: 2px; background: linear-gradient(90deg, transparent, #0a84ff, #34c759, #ffd60a, transparent); opacity: 0; transition: opacity 0.2s; pointer-events: none;
+      }
+      .top-wrapper.syncing-glow::after { opacity: 1; animation: loadingBarSweep 0.8s infinite cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      @keyframes loadingBarSweep { 0% { left: -50%; } 100% { left: 100%;
+      } }
 
       /* 🚀 [추가] OCR 이미지 모달 광활화 & 핀치투줌 대응 */
       #ocrImageModal .modal-box {
@@ -853,7 +909,8 @@
         flex: 1;
         width: 100%;
         overflow: hidden !important; 
-        background: #ffffff !important; /* 💡 검정색(#111)에서 흰색으로 변경! */
+        background: #ffffff !important; /* 💡 검정색(#111)에서 흰색으로 변경!
+        */
         border-radius: 0;
         border: none !important;
         position: relative;
@@ -880,7 +937,8 @@
         height: auto !important;
         object-fit: contain;
         transform-origin: center center !important;
-        transition: none !important; /* 드래그 렉 방지 */
+        transition: none !important;
+        /* 드래그 렉 방지 */
         border-radius: 0 !important;
       }
 
@@ -898,7 +956,8 @@
         gap: 1vw !important;
         white-space: nowrap !important;
       }
-      /* 🚨 화살표(.nav-arrow) 추가 완료! */
+      /* 🚨 화살표(.nav-arrow) 추가 완료!
+      */
       .title-btn, .admin-btn, .size-btn, .theme-toggle, .sync-btn, .multi-btn, .ocr-btn, .nav-arrow {
         white-space: nowrap !important;
         font-size: clamp(0.7em, 3vw, 1.15em) !important; 
@@ -911,12 +970,14 @@
 
       /* 2. 상세 모달창 - 긴 글씨 완벽 줄바꿈 (Flexbox 탈출 방지) */
       .modal-comp-row {
-        flex-wrap: nowrap !important; 
+        flex-wrap: nowrap !important;
         align-items: flex-start !important; 
       }
       .modal-comp {
-        flex: 1 1 0% !important;   /* 🚨 핵심: 남은 공간만 차지하되, 절대 밖으로 안 밀어냄 */
-        min-width: 0 !important;   /* 🚨 핵심: 긴 텍스트가 버튼을 밀어내는 현상 완벽 차단 */
+        flex: 1 1 0% !important;
+        /* 🚨 핵심: 남은 공간만 차지하되, 절대 밖으로 안 밀어냄 */
+        min-width: 0 !important;
+        /* 🚨 핵심: 긴 텍스트가 버튼을 밀어내는 현상 완벽 차단 */
         white-space: normal !important;
         word-break: keep-all !important;
         overflow-wrap: break-word !important; 
@@ -924,18 +985,19 @@
         margin-right: 10px !important;
       }
       .action-btn-group {
-        flex-shrink: 0 !important; /* 완료/수정 버튼은 절대 안 찌그러지게 튼튼하게 고정 */
+        flex-shrink: 0 !important;
+        /* 완료/수정 버튼은 절대 안 찌그러지게 튼튼하게 고정 */
       }
 
       /* 3. 출고/입고완료 도장 - 비고(메모) 가려짐 완벽 해결 */
       .modal-card {
         position: relative !important;
         /* 🚨 핵심: 바닥에 55px의 '도장 전용 영토'를 강제 확보해서 글씨가 절대 못 내려오게 함 */
-        padding-bottom: 55px !important; 
+        padding-bottom: 55px !important;
       }
       .status-badge {
         /* 원래의 예쁜 우측 하단 절대 위치로 복구 */
-        position: absolute !important; 
+        position: absolute !important;
         bottom: 14px !important;
         right: 16px !important;
         margin: 0 !important;
@@ -953,28 +1015,81 @@
       .ocr-time-info span, .legend-item {
         font-size: clamp(0.7em, 2.5vw, 0.85em) !important;
       }
-      /* 💡 [3번 패치] 파레트 P 제거 대신 숫자를 더 크고 강렬하게, 짤림 방지 */
+      /* 💡 [수정] 부모 태그(검정/흰색)의 색상을 그대로 상속받도록 inherit 적용 */
       .pal-main {
-        font-size: 1.25em !important; /* 숫자 크기 극대화 */
-        letter-spacing: -1px !important; /* 자간을 좁혀서 공간 확보 */
+        font-size: 1.25em !important;
+        letter-spacing: -1px !important;
+        color: inherit !important; 
+      }
+      .bl-sub {
+        font-size: clamp(0.55em, 2.2vw, 0.75em) !important;
+        letter-spacing: -0.5px !important;
+        white-space: nowrap !important;
+        color: inherit !important; 
+        opacity: 0.9;
+      }
+      /* 완료된 건은 파스텔 배경 위에서 흰색 글씨 + 그림자 유지 */
+      .done-mark {
+        color: #ffffff !important;
       }
       .daily-total {
         font-size: 0.75em !important;
         letter-spacing: -0.5px !important;
       }
       /* 💡 [5번 패치] 드래그 앤 드롭 끼워넣기 표시선 */
-      .insert-line-top { box-shadow: inset 0 4px 0 0 #0a84ff !important; }
-      .insert-line-bottom { box-shadow: inset 0 -4px 0 0 #0a84ff !important; }
-      /* 💡 관리자 로그인 창 키보드 가림 방지 (화면 중앙 팝업으로 변경) */
-      #adminLoginModal { align-items: center !important; padding: 20px; }
-      #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
-    /* 💡 B/L 넘버 및 도장 자동 크기 조절 (박스 밖으로 탈출 방지) */
-      .bl-sub {
-        font-size: clamp(0.55em, 2.2vw, 0.75em) !important;
-        letter-spacing: -0.5px !important;
-        white-space: nowrap !important;
+      .insert-line-top { box-shadow: inset 0 4px 0 0 #0a84ff !important;
       }
-      .done-icon { font-size: clamp(9px, 2.5vw, 12px) !important; }
+      .insert-line-bottom { box-shadow: inset 0 -4px 0 0 #0a84ff !important;
+      }
+      /* 💡 관리자 로그인 창 키보드 가림 방지 (화면 중앙 팝업으로 변경) */
+      #adminLoginModal { align-items: center !important;
+      padding: 20px; }
+      #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important;
+      }
+    
+      .done-icon { font-size: clamp(9px, 2.5vw, 12px) !important;
+      }
+
+      /* ===================================================== */
+      /* 📊 [개발 추가] 대시보드 전용 디자인 추가 */
+      /* ===================================================== */
+      .stats-summary-bar { margin-top: 15px;
+        background: linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(52, 199, 89, 0.05)); border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px;
+        padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+      }
+      .stats-title { font-size: 1.05em; font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 8px;
+      }
+      .stats-numbers { font-size: 1.2em; font-weight: 900; color: var(--text-main); letter-spacing: -0.5px;
+      }
+      .stats-numbers .done { color: #34c759; } .stats-numbers .total { color: var(--text-sub); font-size: 0.85em;
+      }
+      .dash-control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
+      }
+      .dash-nav { display: flex; align-items: center; gap: 10px; font-size: 1.2em; font-weight: 900;
+      }
+      .dash-nav button { background: var(--btn-bg); border: none; color: var(--text-main); width: 32px; height: 32px;
+        border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+      .dash-nav button:active { transform: scale(0.9);
+      }
+      .dash-toggles { display: flex; background: var(--btn-bg); padding: 4px; border-radius: 10px; gap: 2px;
+      }
+      .dash-toggles button { background: transparent; border: none; color: var(--text-sub); padding: 4px 15px; font-weight: 800;
+        font-size: 0.9em; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+      .dash-toggles button.active { background: #0a84ff;
+        color: white; }
+      .dashboard-grid { display: grid;
+        grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+      .dash-card { background: var(--card-bg);
+        border: 1px solid var(--border-color); border-radius: 14px; padding: 16px; text-align: center; }
+      .dash-card-title { font-size: 0.85em;
+        font-weight: 800; color: var(--text-sub); margin-bottom: 8px; }
+      .dash-card-value { font-size: 1.5em; font-weight: 900; color: var(--text-main);
+      }
+      .chart-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 15px; display: flex;
+        align-items: center; justify-content: center; margin-bottom: 12px; }
+        /* 💡 입고 달력 관리자 로그인 창 센터링 픽스 */
+      #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
+      #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
     </style>
   </head>
   <body>
@@ -1031,8 +1146,8 @@
         <span id="ocrTimeText" style="color: var(--text-main)">불러오는 중...</span>
       </div>
       <div class="legend-bar">
-        <div class="legend-item"><div class="legend-color color-sea"></div> 🚢 해상(SEA)</div>
-        <div class="legend-item"><div class="legend-color color-air"></div> ✈️ 항공(AIR)</div>
+        <div class="legend-item"><div class="legend-color" style="background:#99CCFF; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">🚢 해상</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:#FF99CC; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">✈️ 항공</span></div>
       </div>
     </div>
 
@@ -1052,6 +1167,11 @@
     <div class="pending-container" id="pendingSection">
       <div class="pending-title">⚠️ 입고 보류 / 대기 <span id="pendingCount"></span></div>
       <div class="pending-list" id="pendingList"></div>
+    </div>
+
+    <div id="statsSummaryBar" class="stats-summary-bar" onclick="openDashboard()">
+      <div class="stats-title">📊 당월 입고 진척률</div>
+      <div class="stats-numbers"><span class="done" id="sumDonePal">0</span><span class="total">/ <span id="sumTotalPal">0</span> P</span></div>
     </div>
 
     <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
@@ -1108,6 +1228,60 @@
       </div>
     </div>
 
+    <div id="dashboardModal" class="overlay-modal" style="display:none;">
+      <div class="modal-box" style="max-height: 90vh;">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header" style="margin-bottom: 10px;">
+          <div class="modal-title" style="color: #0a84ff;">📈 입고 통계 대시보드</div>
+          <button class="close-btn" onclick="document.getElementById('dashboardModal').style.display = 'none'">✕</button>
+        </div>
+
+        <div class="dash-control-row">
+          <div class="dash-nav">
+            <button onclick="navDashDate(-1)">◀</button><span id="dashTitleText">조회중...</span><button onclick="navDashDate(1)">▶</button>
+          </div>
+          <div class="dash-toggles">
+             <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월별</button>
+             <button id="btnDashYear" onclick="setDashMode('year')">연간</button>
+          </div>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 4px;">
+          <span id="dashSubTitleText" style="font-weight: 900; color: var(--text-main); font-size: 1.05em;">조회중...</span>
+          <div style="display: flex; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub);">
+            <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
+            <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
+          </div>
+        </div>
+        
+        <div class="dashboard-grid">
+          <div class="dash-card">
+            <div class="dash-card-title" id="dashCardTitle1">당월 총 입고 예정</div>
+            <div class="dash-card-value" id="dashTotal" style="color:var(--text-main);">0</div>
+            <div id="dashVolDetail" style="font-size:0.9em; color:#0a84ff; margin-top:6px; font-weight:900;">완료: 0 (0%)</div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-title" id="dashCardTitle2">일일 평균 입고량</div>
+            <div class="dash-card-value" id="dashAvg">0</div>
+            <div id="dashDaysDetail" style="font-size:0.85em; color:var(--text-sub); margin-top:6px; font-weight:800;">(월간 총합: 0)</div>
+          </div>
+        </div>
+
+        <div class="chart-container" style="height: 220px; display:block; margin-bottom: 8px;">
+          <canvas id="mainChart"></canvas>
+        </div>
+        
+        <div id="barDetailBox" style="display: none; background: var(--card-bg); border: 1px solid #0a84ff; border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 0.9em; box-shadow: 0 2px 10px rgba(10, 132, 255, 0.1);"></div>
+
+        <div class="chart-container" style="height: 380px; display:flex; flex-direction:column; align-items:center;">
+          <div style="font-weight:900; color:var(--text-main); margin-bottom: 5px;">🚢/✈️ 타입별 점유율 <span style="font-size:0.75em; color:var(--text-sub);">(조각을 터치해 보세요)</span></div>
+          <div style="position: relative; width: 100%; flex: 1;">
+            <canvas id="shareChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script>
       // 🔗 1. 구글 웹앱 URL (입고용)
       const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxaD9CugTvbE50_C2rR0EaSZ1MkywACeYwiYD_MuPZBZNDpjVwK1VOH31MdtxznD49k/exec";
@@ -1116,11 +1290,23 @@
       const todayDateObj = new Date();
       let isProcessing = false;
       let lastLocalUpdateTime = 0;
+      
+// 💡 [수정] 버전을 v2에서 v3로 올리면 접속하는 모든 사람의 유령 데이터가 싹 소독됩니다.
+      // 1. 브라우저 창고(localStorage)에 'cache_wiped_v3'라는 도장이 찍혀 있는지 검사합니다.
+if (!localStorage.getItem('cache_wiped_v3')) { 
 
-      if (!localStorage.getItem('cache_wiped_v2')) {
-          Object.keys(localStorage).forEach(k => { if(k.startsWith('cal_cache_')) localStorage.removeItem(k); });
-          localStorage.setItem('cache_wiped_v2', 'true');
-      }
+    // 2. 도장이 없다면? "아, 이 사람은 v3 업데이트 이후 처음 접속했구나!" 하고 
+    //    오염된 유령 데이터 캐시를 싹 지워버립니다.
+    Object.keys(localStorage).forEach(k => { 
+        if(k.startsWith('cal_cache_') || k.startsWith('yearly_stats_cache_')) {
+            localStorage.removeItem(k); 
+        }
+    });
+    window.globalPendingItems = []; 
+
+    // 3. 🚨 [가장 중요한 부분] 대청소가 끝났으니, 브라우저 창고에 'cache_wiped_v3'라는 도장을 콱 찍어둡니다.
+    localStorage.setItem('cache_wiped_v3', 'true'); 
+}
 
       let serverData = { year: todayDateObj.getFullYear(), month: todayDateObj.getMonth() + 1, firstDay: 0, daysInMonth: 31, monthData: {}, pendingItems: [] };
       // 💡 [수정] 앱을 꺼도 관리자 로그인 유지
@@ -1134,10 +1320,10 @@
           const cacheKey = `holidays_${year}`;
           const cached = localStorage.getItem(cacheKey);
           const now = Date.now();
-          const TTL = 7 * 24 * 60 * 60 * 1000; // 🚨 유통기한: 7일 (밀리초)
+          const TTL = 7 * 24 * 60 * 60 * 1000;
+          // 🚨 유통기한: 7일 (밀리초)
 
           let needsFetch = true;
-
           if (cached) {
               try {
                   const parsed = JSON.parse(cached);
@@ -1166,14 +1352,14 @@
           script: {
               get run() { 
                   return {
-                      _ok: null, _err: null,
+                      _ok: null, 
+                      _err: null,
                       withSuccessHandler: function(cb) { this._ok = cb; return this; },
                       withFailureHandler: function(cb) { this._err = cb; return this; },
                       _call: function(payload) {
-                          setLoadingState(true); 
+                          setLoadingState(true);
                           const controller = new AbortController();
-                          const timeoutId = setTimeout(() => controller.abort(), 15000); 
-                          
+                          const timeoutId = setTimeout(() => controller.abort(), 15000);
                           fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(payload), signal: controller.signal })
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId);
@@ -1184,13 +1370,12 @@
                                   clearTimeout(timeoutId);
                                   if(this._err) this._err(e.name === 'AbortError' ? new Error('통신 지연 (15초 초과)') : e); 
                               })
-                              .finally(() => setLoadingState(false)); 
+                              .finally(() => setLoadingState(false));
                       },
                       getCalendarDataAsync: function(type, y, m) {
-                          setLoadingState(true); 
+                          setLoadingState(true);
                           const controller = new AbortController();
                           const timeoutId = setTimeout(() => controller.abort(), 15000);
-
                           // 🚨 [동기화 버그 핀포인트 픽스] URL 끝에 '&t=${Date.now()}'를 붙여 브라우저 캐시 강제 파괴!
                           fetch(`${GAS_API_URL}?api=true&type=${type}&year=${y}&month=${m}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
                               .then(r => r.json()).then(d => { 
@@ -1200,7 +1385,7 @@
                               }).catch(e => { 
                                   clearTimeout(timeoutId);
                                   if(this._err) this._err(e); 
-                              }).finally(() => setLoadingState(false)); 
+                              }).finally(() => setLoadingState(false));
                       },
                       manageWebOutboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'out', action: act, data: data, token: tk }); },
                       manageWebInboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'in', action: act, data: data, token: tk }); },
@@ -1220,8 +1405,25 @@
                       // 🚨 기존 코드 마지막에 쉼표(,)를 꼭 찍어주시고 아래 줄을 추가하세요!
                       getOcrLastTimeStr: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }); },
                       
-                      // 👇👇 [여기 추가!] 어댑터에 1년 치 공휴일 요청 버튼 장착! 👇👇
-                      getYearlyHolidays: function(y) { this._call({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: y }); }
+                      // 👇👇 [여기 추가!] 어댑터에 1년 치 공휴일 요청 버튼 장착!
+                      getYearlyHolidays: function(y) { this._call({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: y }); },
+
+                      // 🚀 [개발 추가] 대시보드 통계 API 연동
+                      getYearlyStatsAsync: function(type, y) { 
+                          setLoadingState(true);
+                          const controller = new AbortController();
+                          const timeoutId = setTimeout(() => controller.abort(), 15000);
+                          fetch(`${GAS_API_URL}?api=true&action=yearlyStats&type=${type}&year=${y}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
+                              .then(r => r.json()).then(d => { 
+                                  clearTimeout(timeoutId); 
+                                  let finalData = d;
+                                  if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
+                                  if(this._ok) this._ok(finalData); 
+                              }).catch(e => { 
+                                  clearTimeout(timeoutId); 
+                                  if(this._err) this._err(e); 
+                              }).finally(() => setLoadingState(false));
+                      }
                   };
               }
           }
@@ -1229,7 +1431,8 @@
 
       let activeRequests = 0;
       function setLoadingState(isLoading) {
-          if (isLoading) activeRequests++; else activeRequests = Math.max(0, activeRequests - 1);
+          if (isLoading) activeRequests++;
+          else activeRequests = Math.max(0, activeRequests - 1);
           const topFrame = document.querySelector('.top-wrapper');
           if (topFrame) {
               if (activeRequests > 0) topFrame.classList.add('syncing-glow');
@@ -1238,7 +1441,7 @@
       }
 
       function showToast(msg, duration = 2500) {
-          if (msg.includes("중...") || msg.includes("완료")) return; 
+          if (msg.includes("중...") || msg.includes("완료")) return;
           const toast = document.getElementById("toast"); toast.innerText = msg; toast.className = "show";
           if (window.toastTimer) clearTimeout(window.toastTimer);
           if (duration > 0) { window.toastTimer = setTimeout(() => { toast.className = toast.className.replace("show", ""); }, duration); }
@@ -1260,11 +1463,7 @@
 
       function renderCalendar() {
         for (let d = 1; d <= serverData.daysInMonth; d++) {
-            if (serverData.monthData[d]) {
-                serverData.monthData[d].forEach((item, idx) => {
-                    item._rawIdx = idx;
-                });
-            }
+            if (serverData.monthData[d]) { serverData.monthData[d].forEach((item, idx) => { item._rawIdx = idx; }); }
         }
         document.getElementById('calTitle').innerText = `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2,'0')}`;
         const grid = document.getElementById('calendarGrid');
@@ -1279,76 +1478,83 @@
           const dayOfWeek = (serverData.firstDay + day - 1) % 7;
           let dateClass = "date-num";
           if(dayOfWeek === 0) dateClass += " sun"; if(dayOfWeek === 6) dateClass += " sat";
-
-          let isToday = (isThisMonthView && day === todayDayNumber);
-          let cellClass = isToday ? "day-cell today-cell" : "day-cell";
+          let cellClass = (isThisMonthView && day === todayDayNumber) ? "day-cell today-cell" : "day-cell";
           let dayData = serverData.monthData[day];
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
-
           let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           
-          // 💡 [수정완료] currentYmd 로 이름표를 맞추고 방어막을 씌웠습니다!
-          let isHoliday = false;
-          if (window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true) {
-              isHoliday = true;
-          }
+          let isHoliday = window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true;
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
 
           let dateRowHtml = `<div class="date-row"><span class="${dateClass}" style="${redStyle}">${day}</span>`;
           if (dayData && dayData.length > 0) {
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
-             // 🚨 (수정 전) if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}P</span>`;
-          // 💡 (수정 후) '합' 글자 제거
-          if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
+              if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
           }
           dateRowHtml += `</div>`;
           let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
-
+          
           if(dayData && dayData.length > 0) {
             dayData.forEach((item, idx) => {
               let isItemDone = item.isDone === true || String(item.isDone) === "true";
-              let cClass = item.sType === 'SEA' ? 'color-sea' : 'color-air';
-              let tagClass = `item-tag ${cClass}`;
-              if (isItemDone) tagClass += " done-mark";
+              let isAir = item.sType === 'AIR';
+              let pastelBg = isAir ? '#FF99CC' : '#99CCFF';
               
+              let tagClass = `item-tag`;
+              if (isItemDone) tagClass += " done-mark";
               let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
               if (meaningfulEtc !== '') tagClass += " has-etc";
 
               let iconHtml = isItemDone ? `<span class="done-icon">✅</span>` : '';
               let shortName = item.bl.length > 4 ? item.bl.slice(-4) : item.bl;
               if (item.bl.startsWith('발행전')) shortName = '발행전';
-              // 🚨 (수정 전) let innerHtml = `<span class="pal-main">${item.pal}P</span>...
-              // 💡 (수정 후) P 삭제!
+              
               let innerHtml = `<span class="pal-main">${item.pal}</span><span class="bl-sub">${iconHtml}${shortName}</span>`;
-
               let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
               let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.bl}', ${isItemDone})"`;
 
-              // 🚨 이 부분에 data-raw-idx를 추가해 줍니다!
-              // 💡 [수정완료] 입고 달력에 맞게 고쳤습니다!
-              cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}" ${bindItem}>${innerHtml}</div>`;
+              // 💡 [디테일 2 수정] 완료 여부에 따른 극명한 글씨색 대비
+              let textColor = isItemDone ? '#ffffff' : '#111111';
+              let textShadow = isItemDone ? 'text-shadow: 0px 1px 2px rgba(0,0,0,0.6);' : '';
+              let customStyle = `background-color: ${pastelBg} !important; color: ${textColor} !important; ${textShadow} border: 1px solid rgba(0,0,0,0.1);`;
+
+              cellHtml += `<div class="${tagClass}" style="${customStyle}" data-raw-idx="${originalIdx}" ${bindItem}>${innerHtml}</div>`;
             });
           }
           cellHtml += `</div>`; rowHtml += cellHtml; cellCount++;
         }
         while(cellCount % 7 !== 0) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
         rowHtml += '</div>'; grid.innerHTML = rowHtml;
+        
+        // 💡 [수정] 미정건 전역 상태 유지 로직 확실하게 고정
+        if (serverData.pendingItems && serverData.pendingItems.length > 0) { 
+            window.globalPendingItems = serverData.pendingItems; 
+        } else if (window.globalPendingItems && window.globalPendingItems.length > 0) {
+            serverData.pendingItems = window.globalPendingItems;
+        }
+        let currentPending = serverData.pendingItems || [];
 
-        if (serverData.pendingItems && serverData.pendingItems.length > 0) {
+        if (currentPending.length > 0) {
           document.getElementById('pendingSection').style.display = 'block';
-          document.getElementById('pendingCount').innerText = `(${serverData.pendingItems.length}건)`;
+          document.getElementById('pendingCount').innerText = `(${currentPending.length}건)`;
           let pListHtml = "";
-          serverData.pendingItems.forEach((item, idx) => {
+          currentPending.forEach((item, idx) => {
             let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
             let etcTag = meaningfulEtc !== '' ? `<div class="pending-etc">${meaningfulEtc}</div>` : '';
             let isItemDone = item.isDone === true || String(item.isDone) === "true";
             let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.bl}', ${isItemDone})"`;
             let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : '';
-            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;"><div class="pending-comp">${checkIcon}${item.bl}</div><div class="pending-vol">📦 ${item.pal}P (${item.sType})</div>${etcTag}</div></div>`;
+            
+            let isPendingAir = item.sType === 'AIR';
+            let pendingPastelBg = isPendingAir ? '#FF99CC' : '#99CCFF';
+            let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${pendingPastelBg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
+
+            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${item.bl}</div><div class="pending-vol">📦 ${item.pal}P (${item.sType})</div>${etcTag}</div></div>`;
           });
           document.getElementById('pendingList').innerHTML = pListHtml;
         } else { document.getElementById('pendingSection').style.display = 'none'; }
-        updateSyncTime();
+        
+        updateStatsSummary(); updateSyncTime();
       }
 
       function navMonth(offset) { 
@@ -1364,15 +1570,16 @@
       function openPicker() { tempPickerYear = parseInt(serverData.year, 10); renderPicker(); document.getElementById('monthPickerModal').style.display = 'flex'; }
       function changePickerYear(offset) { tempPickerYear += offset; renderPicker(); }
       function renderPicker() { 
-        document.getElementById('pickerYearText').innerText = `${tempPickerYear}년`; 
+        document.getElementById('pickerYearText').innerText = `${tempPickerYear}년`;
         let gridHtml = ''; 
         for (let i = 1; i <= 12; i++) { 
           let isCurrent = (tempPickerYear === parseInt(serverData.year, 10) && i === parseInt(serverData.month, 10)) ? 'current' : ''; 
-          gridHtml += `<button class="month-btn ${isCurrent}" onclick="document.getElementById('monthPickerModal').style.display='none'; goToAsync(${tempPickerYear}, ${i})">${i}월</button>`; 
+          gridHtml += `<button class="month-btn ${isCurrent}" onclick="document.getElementById('monthPickerModal').style.display='none'; goToAsync(${tempPickerYear}, ${i})">${i}월</button>`;
         } 
-        document.getElementById('pickerMonthGrid').innerHTML = gridHtml; 
+        document.getElementById('pickerMonthGrid').innerHTML = gridHtml;
       }
 
+    
       // 🚀 [초고속 월 이동] 오염된 캐시 치료 + 깜빡임 방지 100% 최적화
       function goToAsync(year, month) {
         const toastEl = document.getElementById("toast");
@@ -1382,8 +1589,10 @@
         let safeYear = parseInt(year, 10);
         let safeMonth = parseInt(month, 10);
 
-        // 💡 [여기에 딱 한 줄 추가!] 연도가 바뀌었을 수 있으니 무조건 검사 지시!
         checkAndFetchHolidays(safeYear);
+
+        // 💡 [핵심 패치] 달력을 넘기기 전에 현재 가지고 있는 '미정(대기)' 최신 목록을 배낭에 챙깁니다!
+        let globalPending = window.globalPendingItems && window.globalPendingItems.length > 0 ? window.globalPendingItems : (serverData.pendingItems || []);
 
         const cacheKey = `cal_cache_${currentType}_${safeYear}_${safeMonth}`;
         const cachedData = localStorage.getItem(cacheKey);
@@ -1404,15 +1613,18 @@
         if (!isCacheValid) {
             let tempFirstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
             let tempDays = new Date(safeYear, safeMonth, 0).getDate();
-            serverData = { year: safeYear, month: safeMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {}, pendingItems: serverData.pendingItems || [] };
+            serverData = { year: safeYear, month: safeMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {} };
         }
         
-        renderCalendar(); 
+        // 💡 [핵심 패치] 새로 연 달력에 캐시 상관없이 아까 챙겨둔 '미정(대기)' 목록을 무조건 덮어씌움!
+        serverData.pendingItems = globalPending;
+        
+        renderCalendar();
         
         window.currentNavId = (window.currentNavId || 0) + 1;
         let myNavId = window.currentNavId;
-        let fetchStartTime = Date.now(); 
-
+        let fetchStartTime = Date.now();
+        // ... (아래 google.script.run 부분은 기존 그대로 유지) ...
         google.script.run.withSuccessHandler(res => {
           // 🚨 [핵심 방어막] 달력을 연타해서 빠르게 넘기면, 가장 마지막 달력만 진짜로 인정!
           if (myNavId !== window.currentNavId) return; 
@@ -1434,7 +1646,6 @@
             }
             return sigs.sort().join("||");
           };
-
           let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
 
           localStorage.setItem(cacheKey, JSON.stringify(res)); 
@@ -1453,7 +1664,6 @@
         let newDay = (payload.newDate && payload.newDate !== '미정') ? parseInt(payload.newDate.split('-')[2], 10) : 'pending';
         let arr = oldDay === 'pending' ? serverData.pendingItems : serverData.monthData[oldDay];
         if(!arr) return;
-
         if (action === 'EDIT') {
           let item = arr.splice(idx, 1)[0];
           if(payload.newEtc !== undefined) item.etc = payload.newEtc;
@@ -1462,10 +1672,14 @@
           newArr.push(item);
         } else if (action === 'DELETE') { arr.splice(idx, 1);
         } else if (action === 'DONE') { arr[idx].isDone = true;
-        } else if (action === 'UNDO_DONE') { arr[idx].isDone = false; }
+        } else if (action === 'UNDO_DONE') { arr[idx].isDone = false;
+        }
         
+        // 💡 updateLocalState 함수의 맨 마지막 부분
         lastLocalUpdateTime = Date.now();
         localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+        // 👇👇 이 1줄을 반드시 추가하세요! 👇👇
+        Object.keys(localStorage).forEach(k => { if (k.startsWith(`yearly_stats_cache_${currentType}_`)) localStorage.removeItem(k); });
       }
 
       function updateMultiLocalState(action, items) {
@@ -1481,18 +1695,24 @@
                else if (action === 'MULTI_UNDO_DONE') arr[idx].isDone = false;
             }
         });
-        lastLocalUpdateTime = Date.now(); localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+        // 💡 updateMultiLocalState 함수의 맨 마지막 부분
+        lastLocalUpdateTime = Date.now(); 
+        localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+        // 👇👇 이 1줄을 반드시 추가하세요! 👇👇
+        Object.keys(localStorage).forEach(k => { if (k.startsWith(`yearly_stats_cache_${currentType}_`)) localStorage.removeItem(k); });
       }
 
       if (isAdmin) {
-        const btn = document.getElementById('adminBtn'); btn.innerHTML = '🔓 관리자'; btn.classList.add('unlocked');
+        const btn = document.getElementById('adminBtn');
+        btn.innerHTML = '🔓 관리자'; btn.classList.add('unlocked');
         document.getElementById('adminActions').style.display = 'flex';
       }
 
       function toggleAdmin() {
         const btn = document.getElementById('adminBtn');
         if(isAdmin) {
-          isAdmin = false; localStorage.removeItem("admin_token"); // 💡 수정됨
+          isAdmin = false; localStorage.removeItem("admin_token");
+          // 💡 수정됨
           adminToken = null;
           btn.innerHTML = '🔒 잠김'; btn.classList.remove('unlocked');
           document.getElementById('adminActions').style.display = 'none'; updateFooterUI();
@@ -1503,7 +1723,8 @@
       }
 
       function submitAdminLogin() {
-        let pw = document.getElementById('adminPwInput').value; if(!pw) return;
+        let pw = document.getElementById('adminPwInput').value;
+        if(!pw) return;
         document.getElementById('adminLoginModal').style.display = 'none'; showToast("🔒 보안 인증 중...", 0);
         google.script.run.withSuccessHandler(function(isValid) {
           if (isValid) {
@@ -1518,18 +1739,23 @@
       }
 
       function togglePwView() {
-        const input = document.getElementById('adminPwInput'); const icon = document.getElementById('pwToggleIcon');
-        if (input.type === 'password') { input.type = 'text'; icon.innerText = '🙈'; } else { input.type = 'password'; icon.innerText = '👁️'; }
+        const input = document.getElementById('adminPwInput');
+        const icon = document.getElementById('pwToggleIcon');
+        if (input.type === 'password') { input.type = 'text'; icon.innerText = '🙈';
+        } else { input.type = 'password'; icon.innerText = '👁️'; }
       }
 
-      let isMultiMode = false; let selectedItems = [];
+      let isMultiMode = false;
+      let selectedItems = [];
       function toggleMultiMode() {
         isMultiMode = !isMultiMode; selectedItems = [];
         document.querySelectorAll('.item-tag, .pending-item').forEach(el => el.classList.remove('multi-selected'));
         const btn = document.getElementById('multiBtn'); const bar = document.getElementById('multiActionBar');
         if (isMultiMode) {
-          btn.innerText = '❌ 취소'; btn.classList.add('active'); bar.style.display = 'flex'; document.getElementById('selCount').innerText = '0';
-        } else { btn.innerText = '☑️ 다중 선택'; btn.classList.remove('active'); bar.style.display = 'none'; }
+          btn.innerText = '❌ 취소'; btn.classList.add('active'); bar.style.display = 'flex';
+          document.getElementById('selCount').innerText = '0';
+        } else { btn.innerText = '☑️ 다중 선택'; btn.classList.remove('active'); bar.style.display = 'none';
+        }
       }
 
     // 🚀 [초정밀 통합 드래그 엔진] (입고/출고 공통)
@@ -1555,14 +1781,13 @@
         let clientY = e.touches ? e.touches[0].clientY : e.clientY;
         startX = clientX; startY = clientY;
         pressTarget.classList.add("cell-pressing");
-
         pressTimer = setTimeout(() => {
           isLongPress = true;
           if (pressTarget) pressTarget.classList.remove("cell-pressing");
           if (navigator.vibrate) navigator.vibrate(50);
 
           if (type === "cell") {
-            openAddFormWithDate(day);
+            if (typeof openAddFormWithDate === "function") openAddFormWithDate(day);
           } else if (type === "item") {
             isDragging = true;
             dragData = { day: day, idx: idx };
@@ -1582,13 +1807,15 @@
                  dragGhost.style.color = '#fff';
               } else {
                  let cleanComp = serverData.pendingItems[idx].company.replace(/\[TASK\]/gi, "").trim();
-                 let shortName = getShortName(cleanComp);
-                 let colorObj = getCompanyColor(cleanComp);
-                 dragGhost.style.background = colorObj.bg;
-                 dragGhost.style.color = colorObj.cMain;
+                 let shortName = typeof getShortName === "function" ? getShortName(cleanComp) : cleanComp.slice(0, 4);
+                 if (typeof getCompanyColor === "function") {
+                    let colorObj = getCompanyColor(cleanComp);
+                    dragGhost.style.background = colorObj.bg;
+                    dragGhost.style.color = colorObj.cMain;
+                 }
                  dragGhost.innerHTML = shortName;
               }
-              dragGhost.style.width = "60px"; dragGhost.style.height = "35px"; 
+              dragGhost.style.width = "60px"; dragGhost.style.height = "35px";
               dragGhost.style.justifyContent = "center"; dragGhost.style.alignItems = "center"; dragGhost.style.display = "flex"; dragGhost.style.borderRadius = "6px"; dragGhost.style.fontSize = "0.85em"; dragGhost.style.fontWeight = "900";
               dragOffsetX = 30; dragOffsetY = 17;
             } else {
@@ -1600,14 +1827,16 @@
               dragGhost.style.margin = "0px"; dragGhost.style.borderRight = ""; dragGhost.style.borderLeft = ""; dragGhost.style.borderRadius = "8px";
             }
             
-            dragGhost.style.position = "fixed"; dragGhost.style.left = "0px"; dragGhost.style.top = "0px"; dragGhost.style.margin = "0px"; dragGhost.style.zIndex = "999999"; dragGhost.style.opacity = "0.95"; dragGhost.style.pointerEvents = "none"; dragGhost.style.willChange = "transform"; dragGhost.style.boxShadow = "0 15px 35px rgba(0,0,0,0.3)"; dragGhost.style.transition = "none";
+            dragGhost.style.position = "fixed";
+            dragGhost.style.left = "0px"; dragGhost.style.top = "0px"; dragGhost.style.margin = "0px"; dragGhost.style.zIndex = "999999"; dragGhost.style.opacity = "0.95"; dragGhost.style.pointerEvents = "none";
+            dragGhost.style.willChange = "transform"; dragGhost.style.boxShadow = "0 15px 35px rgba(0,0,0,0.3)"; dragGhost.style.transition = "none";
             
             document.body.appendChild(dragGhost);
             
             // 🚨 화면에 박자마자 즉시 좌표 적용! (입고 버그 픽스)
             dragGhost.style.transform = `translate3d(${clientX - dragOffsetX}px, ${clientY - dragOffsetY}px, 0) scale(1.05)`;
           }
-        }, 400); 
+        }, 400);
       }
 
       function cancelPress() {
@@ -1618,7 +1847,6 @@
 
       function updateGhostPosition(x, y) {
         if (!dragGhost) return;
-        
         // 🚨 픽셀 단위 직접 주입으로 입고 달력 먹통 현상 완벽 해결!
         dragGhost.style.left = (x - dragOffsetX) + "px";
         dragGhost.style.top = (y - dragOffsetY) + "px";
@@ -1655,11 +1883,9 @@
       document.addEventListener("touchmove", function (e) {
           if (isDragging) { e.preventDefault(); hasMovedDuringDrag = true; updateGhostPosition(e.touches[0].clientX, e.touches[0].clientY); }
       }, { passive: false });
-      
       document.addEventListener("mousemove", function (e) {
           if (isDragging) { hasMovedDuringDrag = true; updateGhostPosition(e.clientX, e.clientY); }
       });
-      
       document.addEventListener("touchend", endDrag); document.addEventListener("mouseup", endDrag);
 
       function endDrag(e) {
@@ -1675,19 +1901,16 @@
 
         let currentDropTarget = lastDropTarget;
         let isTopInsert = currentDropTarget ? currentDropTarget.classList.contains('insert-line-top') : false;
-
         if (lastDropTarget) {
           lastDropTarget.classList.remove("drag-over", "insert-line-top", "insert-line-bottom");
           lastDropTarget = null;
         }
 
         if (!hasMovedDuringDrag) return;
-
         // 🚨 타겟 결정 안전장치 
         let targetCell = currentDropTarget ? currentDropTarget.closest('.day-cell') : null;
         let isOutsideCalendar = false;
         let targetPending = false;
-        
         if (!targetCell) {
             let dropElement = document.elementFromPoint(x, y);
             targetCell = dropElement ? dropElement.closest(".day-cell") : null;
@@ -1697,10 +1920,8 @@
 
         let item = dragData.day === "pending" ? serverData.pendingItems[dragData.idx] : serverData.monthData[dragData.day][dragData.idx];
         let oldDateStr = dragData.day === "pending" ? "미정" : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
-
         if (targetCell && !targetCell.classList.contains("empty")) {
           let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
-
           // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
           if (newDay === dragData.day && currentDropTarget && currentDropTarget.classList.contains('item-tag')) {
               let targetIdx = parseInt(currentDropTarget.getAttribute('data-raw-idx'));
@@ -1725,7 +1946,6 @@
           }
 
           if (newDay === dragData.day) return;
-          
           let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
           let rawName = item.company || item.bl;
           let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
@@ -1754,22 +1974,27 @@
 
       function handleItemClick(e, day, idx, bl, isDone) {
         if (isMultiMode) {
-          const el = e.currentTarget; let dateStr = day === 'pending' ? '미정' : `${serverData.year}-${String(serverData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const el = e.currentTarget;
+          let dateStr = day === 'pending' ? '미정' : `${serverData.year}-${String(serverData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
           let isItemDone = isDone === true || String(isDone) === "true";
           let itemKey = `${bl}_${dateStr}_${isItemDone}_${idx}`;
           let item = day === 'pending' ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
           const safeStr = (val) => (val === "" || val == null) ? "" : String(val).trim();
           let existingIdx = selectedItems.findIndex(i => i.key === itemKey);
           if (existingIdx > -1) { selectedItems.splice(existingIdx, 1); el.classList.remove('multi-selected'); }
-          else { selectedItems.push({ key: itemKey, bl: bl, dateStr: dateStr, isDone: isItemDone, pal: safeStr(item.pal) }); el.classList.add('multi-selected'); }
+          else { selectedItems.push({ key: itemKey, bl: bl, dateStr: dateStr, isDone: isItemDone, pal: safeStr(item.pal) });
+          el.classList.add('multi-selected'); }
           document.getElementById('selCount').innerText = selectedItems.length; return;
         }
         if (isLongPress) { setTimeout(() => { isLongPress = false; }, 100); return; } showModal(day);
       }
-      function handleCellClick(e, day) { if (isMultiMode) return; if (isLongPress) { setTimeout(() => { isLongPress = false; }, 100); return; } showModal(day); }
+      function handleCellClick(e, day) { if (isMultiMode) return;
+        if (isLongPress) { setTimeout(() => { isLongPress = false; }, 100); return; } showModal(day);
+      }
 
       function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = false) {
-        let oldPal = ""; const safeStr = (val) => (val === "" || val == null) ? "" : String(val).trim();
+        let oldPal = "";
+        const safeStr = (val) => (val === "" || val == null) ? "" : String(val).trim();
         let currentIsDone = isDone === true || String(isDone) === "true";
         if (idx !== null) {
           let day = oldDate === '미정' ? 'pending' : parseInt(oldDate.split('-')[2], 10);
@@ -1777,7 +2002,6 @@
           if (item) { oldPal = safeStr(item.pal); currentIsDone = item.isDone === true || String(item.isDone) === "true"; }
         }
         let payload = { action: action, oldBL: oldBL, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal };
-
         if (action === 'DONE') { if (!confirm(`✅ [${oldBL}] 입고를 완료 처리하시겠습니까?`)) return; }
         else if (action === 'UNDO_DONE') { if (!confirm(`⏪ [${oldBL}] 입고 완료 상태를 취소하시겠습니까?`)) return; }
         else if (action === 'DELETE') { if (!confirm(`⚠️ 정말 [${oldBL}] 입고 스케줄을 영구 삭제하시겠습니까?`)) return; }
@@ -1787,7 +2011,6 @@
         }
 
         document.getElementById('modal').style.display = 'none';
-
         setTimeout(() => {
             updateLocalState(action, payload, idx);
             renderCalendar();
@@ -1805,8 +2028,7 @@
         if (!confirm(`⚠️ 선택된 ${selectedItems.length}개의 일정을 일괄 [${actionName}] 하시겠습니까?`)) return;
 
         let itemsToProcess = [...selectedItems];
-        toggleMultiMode(); 
-
+        toggleMultiMode();
         setTimeout(() => {
             updateMultiLocalState(action, itemsToProcess); renderCalendar();
             google.script.run.withSuccessHandler(function(res) {
@@ -1821,14 +2043,19 @@
         if(!dayData || dayData.length === 0) return;
         let titleText = "", dateStr = "";
         if (day === 'pending') { titleText = "⚠️ 입고 보류 / 대기 상세"; dateStr = "미정"; }
-        else { const dayOfWeekIdx = ['일','월','화','수','목','금','토']; const dayOfWeek = dayOfWeekIdx[new Date(serverData.year, serverData.month - 1, day).getDay()]; titleText = `${serverData.month}월 ${day}일 (${dayOfWeek})`; dateStr = `${serverData.year}-${String(serverData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`; }
+        else { const dayOfWeekIdx = ['일','월','화','수','목','금','토'];
+          const dayOfWeek = dayOfWeekIdx[new Date(serverData.year, serverData.month - 1, day).getDay()]; titleText = `${serverData.month}월 ${day}일 (${dayOfWeek})`; dateStr = `${serverData.year}-${String(serverData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        }
         document.getElementById('modalTitle').innerText = titleText;
         let contentHtml = "";
         dayData.forEach((item, idx) => {
           let isItemDone = item.isDone === true || String(item.isDone) === "true";
-          let cClass = item.sType === 'SEA' ? 'color-sea' : 'color-air';
-          if (isItemDone) cClass += " done-mark";
           let typeIcon = item.sType === 'SEA' ? '🚢' : '✈️';
+          
+          // 💡 [핵심] 해상/항공에 맞춰 파스텔 배경색 지정
+          let isAir = item.sType === 'AIR';
+          let pastelBg = isAir ? '#FF99CC' : '#99CCFF';
+          let iconOpacity = isItemDone ? '0.8' : '1'; // 완료된 건은 흐리게
 
           let actionBtns = '';
           if (isAdmin) {
@@ -1841,7 +2068,7 @@
           let stampHtml = isItemDone ? `<div class="status-badge"><span style="font-size: 1.1em; line-height: 1;">✔️</span> 입고 완료</div>` : '';
 
           contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
-                              <div class="modal-icon ${cClass}"></div>
+                              <div class="modal-icon" style="background-color: ${pastelBg}; opacity: ${iconOpacity}; box-shadow: 0 2px 5px rgba(0,0,0,0.15);"></div>
                               <div class="modal-info">
                                   <div class="modal-comp-row"><span class="modal-comp">${item.pal}P</span>${actionBtns}</div>
                                   <div class="modal-vol">📄 B/L: ${item.bl} | ${typeIcon} 타입: ${item.sType}</div>
@@ -1855,7 +2082,8 @@
       }
 
       function openEditForm(day, idx, bl, dateStr, pal, etc) {
-        const card = document.getElementById(`modal-card-${day}-${idx}`); let inputDateVal = dateStr === '미정' ? '' : dateStr;
+        const card = document.getElementById(`modal-card-${day}-${idx}`);
+        let inputDateVal = dateStr === '미정' ? '' : dateStr;
         card.style.flexDirection = ''; card.style.alignItems = '';
         card.innerHTML = `
           <div class="edit-form" style="width: 100%; padding:0; border:none; margin-top:0;">
@@ -1918,7 +2146,7 @@
           let startX = 0, startY = 0;
           let initialPinchDist = 0;
           let ocrStartTransform = { scale: 1, x: 0, y: 0 };
-
+          
           // 💡 매 프레임마다 '현재 살아있는' 이미지를 동적으로 찾아서 움직임! (먹통 해결 핵심)
           const updateTransform = () => {
               const currentImg = document.getElementById('ocrImgElement');
@@ -1943,7 +2171,6 @@
                   ocrStartTransform = { ...ocrTransform };
               }
           }, { passive: false });
-
           wrapper.addEventListener('touchmove', (e) => {
               e.preventDefault();
               if (e.touches.length === 1 && isDragging) {
@@ -1957,7 +2184,6 @@
                   requestAnimationFrame(updateTransform);
               }
           }, { passive: false });
-
           wrapper.addEventListener('touchend', (e) => {
               if (e.touches.length < 2) initialPinchDist = 0;
               if (e.touches.length === 0) isDragging = false;
@@ -1973,7 +2199,6 @@
                   }
               }
           });
-
           wrapper.addEventListener('mousedown', (e) => {
               isDragging = true; startX = e.clientX - ocrTransform.x; startY = e.clientY - ocrTransform.y;
           });
@@ -1991,26 +2216,32 @@
       }
 
       function closeModalOnBgClick(e) { 
-        if (isLongPress || isMultiMode) return; 
+        if (isLongPress || isMultiMode) return;
         if(e.target === document.getElementById('modal')) document.getElementById('modal').style.display = 'none'; 
         if(e.target === document.getElementById('ocrImageModal')) document.getElementById('ocrImageModal').style.display = 'none';
+        if(e.target === document.getElementById('dashboardModal')) document.getElementById('dashboardModal').style.display = 'none';
       }
 
       let isDarkMode = false;
-      function toggleTheme() { const body = document.body; const themeBtn = document.querySelector('.theme-toggle'); if (isDarkMode) { body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; localStorage.setItem('cal_theme', 'light'); } else { body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; localStorage.setItem('cal_theme', 'dark'); } }
-      function changeSize(size) { document.querySelectorAll('.size-btn').forEach(btn => btn.classList.remove('active')); const body = document.body; if(size === 'S') { body.style.fontSize = '80%'; document.getElementById('btnS').classList.add('active'); } if(size === 'M') { body.style.fontSize = '95%'; document.getElementById('btnM').classList.add('active'); } if(size === 'L') { body.style.fontSize = '120%'; document.getElementById('btnL').classList.add('active'); } localStorage.setItem('cal_fontSize', size); }
+      function toggleTheme() { const body = document.body;
+        const themeBtn = document.querySelector('.theme-toggle'); if (isDarkMode) { body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; localStorage.setItem('cal_theme', 'light');
+        } else { body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; localStorage.setItem('cal_theme', 'dark');
+        } }
+      function changeSize(size) { document.querySelectorAll('.size-btn').forEach(btn => btn.classList.remove('active')); const body = document.body;
+        if(size === 'S') { body.style.fontSize = '80%'; document.getElementById('btnS').classList.add('active'); } if(size === 'M') { body.style.fontSize = '95%'; document.getElementById('btnM').classList.add('active');
+        } if(size === 'L') { body.style.fontSize = '120%'; document.getElementById('btnL').classList.add('active'); } localStorage.setItem('cal_fontSize', size);
+      }
 
       // =====================================================
       // 🚀 [스텔스 자동 동기화 엔진] (귀신 데이터 & 가짜 토스트 완벽 차단)
       // =====================================================
       function silentBackgroundSync() {
-        if (isDragging || activeRequests > 0) return; 
-        
+        if (isDragging || activeRequests > 0) return;
         let modal = document.getElementById('modal');
         let addModal = document.getElementById('addModal');
-        let ocrModal = document.getElementById('ocrImageModal'); 
-        if ((modal && modal.style.display === 'flex') || (addModal && addModal.style.display === 'flex') || (ocrModal && ocrModal.style.display === 'flex')) return;
-        
+        let ocrModal = document.getElementById('ocrImageModal');
+        let dashModal = document.getElementById('dashboardModal');
+        if ((modal && modal.style.display === 'flex') || (addModal && addModal.style.display === 'flex') || (ocrModal && ocrModal.style.display === 'flex') || (dashModal && dashModal.style.display === 'flex')) return;
         let fetchStartTime = Date.now();
         
         // 🚨 [핵심 1] 심부름 보내기 직전의 '연/월'과 '달력 번호표'를 박제해둡니다!
@@ -2041,22 +2272,18 @@
               }
               return sigs.sort().join("||");
             };
-
-            
-            
             let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
             
             if (isScheduleChanged) {
-              serverData = res; 
+              serverData = res;
               // 🚨 [핵심 3] 캐시도 박제해둔 연/월(reqYear, reqMonth)에만 안전하게 덮어씁니다.
               localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res)); 
-              renderCalendar(); 
-              
+              renderCalendar();
               if (isScheduleChanged) {
                   showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
               }
             }
-            updateSyncTime(); 
+            updateSyncTime();
           })
           .withFailureHandler(() => {})
           .getCalendarDataAsync(currentType, reqYear, reqMonth);
@@ -2065,6 +2292,523 @@
       setInterval(silentBackgroundSync, 60000);
       document.addEventListener("visibilitychange", () => { if (document.visibilityState === 'visible') silentBackgroundSync(); });
 
+      // =====================================================
+      // 📊 [개발 추가] 입고 통계 대시보드 스크립트 모음
+      // =====================================================
+      window.dashMode = 'month';
+      window.dashYear = new Date().getFullYear();
+      window.dashMonth = new Date().getMonth() + 1;
+      let yearlyCache = {};
+      let mainChartIns = null;
+      let shareChartIns = null;
+      window.dashCurrentData = null; 
+
+      function updateStatsSummary() {
+          let tPal = 0, dPal = 0;
+          const process = (it) => {
+              let rawName = String(it.bl || it.company || "").trim();
+              if (!rawName || rawName === "미정") return;
+              tPal += parseInt(it.pal) || 0;
+              if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
+          };
+          // ✅ [수정 후] (pendingItems 처리 줄 삭제 또는 주석 처리)
+      for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
+      // if (serverData.pendingItems) serverData.pendingItems.forEach(process); 🚨 미정 데이터 제외
+          
+          let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
+          let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
+      }
+
+      
+
+      function setDashMode(mode) {
+          window.dashMode = mode;
+          document.getElementById('btnDashMonth').classList.toggle('active', mode === 'month');
+          document.getElementById('btnDashYear').classList.toggle('active', mode === 'year');
+          if (mode === 'year' && !yearlyCache[window.dashYear]) fetchYearlyAndRender();
+          else renderDashCharts();
+      }
+
+      function navDashDate(offset) {
+          if (window.dashMode === 'month') {
+              window.dashMonth += offset;
+              if (window.dashMonth > 12) { window.dashMonth = 1; window.dashYear++; }
+              else if (window.dashMonth < 1) { window.dashMonth = 12; window.dashYear--; }
+              fetchDashMonthAndRender();
+          } else {
+              window.dashYear += offset;
+              fetchYearlyAndRender();
+          }
+      }
+
+      function fetchDashMonthAndRender() {
+          // 💡 달력 넘기는 부분은 짧게, 서브타이틀은 길게!
+          document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
+          let sub = document.getElementById('dashSubTitleText');
+          if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약 (조회중)`;
+          
+          // ... (아래 캐시 조회 등 기존 코드 유지) ...
+          let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
+          let cached = localStorage.getItem(cacheKey);
+          
+          if (cached) { 
+              try { window.dashCurrentData = JSON.parse(cached); renderDashCharts(); } catch(e) {} 
+          } else {
+              window.dashCurrentData = { monthData: {}, pendingItems: [] };
+              renderDashCharts();
+              document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
+              document.getElementById('dashAvg').innerText = "⏳";
+          }
+          
+          google.script.run
+              .withSuccessHandler(res => {
+                  let finalData = typeof res === 'string' ? JSON.parse(res) : res;
+                  window.dashCurrentData = finalData;
+                  localStorage.setItem(cacheKey, JSON.stringify(finalData));
+                  if (window.dashMode === 'month') renderDashCharts();
+              })
+              .withFailureHandler(err => { if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
+              .getCalendarDataAsync(currentType, window.dashYear, window.dashMonth);
+      }
+
+      function fetchYearlyAndRender() {
+          // 💡 연간은 화살표 사이에 년도만!
+          document.getElementById('dashTitleText').innerText = `${window.dashYear}년`;
+          let sub = document.getElementById('dashSubTitleText');
+          if (sub) sub.innerText = `${window.dashYear}년 연간 요약 (조회중)`;
+          
+          // ... (아래 캐시 조회 등 기존 코드 유지) ...
+          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYear}`;
+          let cached = localStorage.getItem(cacheKey);
+          
+          if (cached) { 
+              try { yearlyCache[window.dashYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {} 
+          } else {
+              let dummyArr = [];
+              for(let i=0; i<12; i++) dummyArr.push({pal:0, box:0, details:{}});
+              yearlyCache[window.dashYear] = { year: window.dashYear, monthly: dummyArr, comp: {} };
+              renderDashCharts();
+              document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
+              document.getElementById('dashAvg').innerText = "⏳";
+          }
+          
+          google.script.run
+              .withSuccessHandler(res => {
+                  yearlyCache[res.year] = res; localStorage.setItem(cacheKey, JSON.stringify(res)); 
+                  if (window.dashMode === 'year' && window.dashYear === res.year) renderDashCharts();
+              })
+              .withFailureHandler(err => { if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
+              .getYearlyStatsAsync(currentType, window.dashYear);
+      }
+
+      function openDashboard() {
+          window.dashYear = serverData.year;
+          window.dashMonth = serverData.month;
+          window.dashCurrentData = serverData; 
+          document.getElementById('dashboardModal').style.display = 'flex';
+          setTimeout(renderDashCharts, 100);
+      }
+
+ // 💡 [추가] 파이 차트 중앙 텍스트 & 하이브리드 지시선 플러그인
+      const pieCenterTextPlugin = {
+          id: 'pieCenterText',
+          beforeDraw(chart) {
+              if (chart.config.type !== 'doughnut') return;
+              const ctx = chart.ctx;
+              const centerX = chart.chartArea.left + chart.chartArea.width / 2;
+              const centerY = chart.chartArea.top + chart.chartArea.height / 2;
+              ctx.save();
+              ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+              if (window.activePieIndex !== null) {
+                  const idx = window.activePieIndex;
+                  const data = chart.data.datasets[0].data;
+                  const colors = chart.data.datasets[0].backgroundColor;
+                  const labels = chart.data.labels;
+                  const totalSum = data.reduce((a, b) => a + b, 0);
+                  const percent = ((data[idx] / totalSum) * 100).toFixed(1);
+                  
+                  ctx.font = "bold 15px -apple-system, sans-serif";
+                  ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff";
+                  ctx.fillText(labels[idx], centerX, centerY - 22);
+
+                  ctx.font = "900 26px -apple-system, sans-serif";
+                  ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
+                  ctx.fillText(`${percent}%`, centerX, centerY + 6);
+
+                  ctx.font = "bold 15px -apple-system, sans-serif";
+                  ctx.fillStyle = "gray";
+                  ctx.fillText(`(${data[idx]}P)`, centerX, centerY + 30);
+              } else {
+                  ctx.font = "bold 14px -apple-system, sans-serif";
+                  ctx.fillStyle = "gray";
+                  ctx.fillText("조각을 터치하세요", centerX, centerY);
+              }
+              ctx.restore();
+          }
+      };
+
+      const pieHybridLabelPlugin = {
+          id: 'pieHybridLabel',
+          afterDraw(chart) {
+              if (chart.config.type !== 'doughnut') return;
+              const ctx = chart.ctx; const meta = chart.getDatasetMeta(0); const data = chart.data.datasets[0].data;
+              const labels = chart.data.labels; const totalSum = data.reduce((a, b) => a + b, 0);
+              const centerX = chart.chartArea.left + chart.chartArea.width / 2; const centerY = chart.chartArea.top + chart.chartArea.height / 2;
+              let rightLabels = []; let leftLabels = []; const isLight = document.body.classList.contains("light-mode");
+              
+              meta.data.forEach((element, index) => {
+                  if (data[index] === 0) return;
+                  const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
+                  const circumference = element.endAngle - element.startAngle;
+                  const radius = element.outerRadius; const isRight = Math.cos(midAngle) > 0;
+                  const percent = ((data[index] / totalSum) * 100).toFixed(1);
+                  const isActive = (window.activePieIndex === null || window.activePieIndex === index);
+
+                  if (circumference > 0.35) {
+                      const r = element.innerRadius + (element.outerRadius - element.innerRadius) * 0.55;
+                      const x = centerX + Math.cos(midAngle) * r; const y = centerY + Math.sin(midAngle) * r;
+                      ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                      ctx.font = isActive ? "bold 13px -apple-system, sans-serif" : "13px -apple-system, sans-serif";
+                      ctx.fillStyle = isActive ? "#111" : "rgba(128,128,128,0.5)"; // 파스텔톤이라 글씨 검정색
+                      ctx.fillText(labels[index], x, y - 6);
+                      ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
+                      ctx.fillText(`${percent}%`, x, y + 8); ctx.restore();
+                  } else {
+                      const startX = centerX + Math.cos(midAngle) * radius; const startY = centerY + Math.sin(midAngle) * radius;
+                      let elbowX = centerX + Math.cos(midAngle) * (radius + 15); let elbowY = centerY + Math.sin(midAngle) * (radius + 15);
+                      const text = `${labels[index]} (${percent}%)`;
+                      ctx.font = "bold 11px -apple-system, sans-serif";
+                      let obj = { index, text, textWidth: ctx.measureText(text).width, startX, startY, elbowX, elbowY, isRight };
+                      if (isRight) rightLabels.push(obj); else leftLabels.push(obj);
+                  }
+              });
+
+              const avoidCollision = (lbls) => {
+                  lbls.sort((a, b) => a.elbowY - b.elbowY); let prevY = -9999;
+                  lbls.forEach(lbl => { if (lbl.elbowY < prevY + 16) lbl.elbowY = prevY + 16; prevY = lbl.elbowY; });
+              };
+              avoidCollision(rightLabels); avoidCollision(leftLabels);
+
+              ctx.save(); ctx.textBaseline = 'middle';
+              const drawLabel = (lbl) => {
+                  let lineEndX, textX;
+                  if (lbl.isRight) { textX = chart.width - 2; ctx.textAlign = 'right'; lineEndX = textX - lbl.textWidth - 5; if (lineEndX < centerX + meta.data[0].outerRadius + 10) lineEndX = centerX + meta.data[0].outerRadius + 10; } 
+                  else { textX = 2; ctx.textAlign = 'left'; lineEndX = textX + lbl.textWidth + 5; if (lineEndX > centerX - meta.data[0].outerRadius - 10) lineEndX = centerX - meta.data[0].outerRadius - 10; }
+                  
+                  let safeElbowX = lbl.elbowX;
+                  if (!lbl.isRight && safeElbowX > centerX - meta.data[0].outerRadius - 10) safeElbowX = centerX - meta.data[0].outerRadius - 10;
+                  if (lbl.isRight && safeElbowX < centerX + meta.data[0].outerRadius + 10) safeElbowX = centerX + meta.data[0].outerRadius + 10;
+                  const isActive = (window.activePieIndex === null || window.activePieIndex === lbl.index);
+                  
+                  ctx.strokeStyle = isActive ? (isLight ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.3)") : "rgba(128,128,128,0.1)";
+                  ctx.beginPath(); ctx.moveTo(lbl.startX, lbl.startY); ctx.lineTo(safeElbowX, lbl.elbowY); ctx.lineTo(lineEndX, lbl.elbowY); ctx.lineWidth = 1; ctx.stroke();
+                  ctx.beginPath(); ctx.arc(lbl.startX, lbl.startY, 3.5, 0, 2 * Math.PI);
+                  ctx.fillStyle = isActive ? (isLight ? "rgba(100,100,100,0.7)" : "rgba(180,180,180,0.7)") : "rgba(128,128,128,0.1)"; ctx.fill();
+                  ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
+                  ctx.fillStyle = isActive ? (isLight ? "#444" : "#ccc") : "rgba(128,128,128,0.3)"; ctx.fillText(lbl.text, textX, lbl.elbowY);
+              };
+              rightLabels.forEach(drawLabel); leftLabels.forEach(drawLabel); ctx.restore();
+          }
+      };
+
+      Chart.unregister(pieCenterTextPlugin, pieHybridLabelPlugin); 
+      Chart.register(pieCenterTextPlugin, pieHybridLabelPlugin);
+
+      // 📊 [입고 전용 파스텔톤 적용] 통계 엔진
+      function renderDashCharts() {
+          Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
+          Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
+          
+          let unitName = "PAL"; 
+          let labels = []; let seaData = []; let airData = []; 
+          let compMap = { '🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0 }; 
+          let barDetails = []; let totalQty = 0; let doneQty = 0;
+          document.getElementById("barDetailBox").style.display = "none";
+          const includePending = document.getElementById('includePendingCheck')?.checked;
+
+          if (window.dashMode === 'month') {
+              // 💡 월별 타이틀 분리
+              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
+              let sub = document.getElementById('dashSubTitleText');
+              if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
+              
+              let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
+              for (let d = 1; d <= days; d++) { labels.push(`${d}일`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
+
+              const process = (it, dIdx) => {
+                  let clean = String(it.bl || "").trim();
+                  if (clean && clean !== "미정") {
+                      let qty = parseInt(it.pal) || 0;
+                      totalQty += qty;
+                      if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
+                      
+                      let isAir = it.sType === 'AIR';
+                      let typeLabel = isAir ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
+
+                      if (dIdx !== null) {
+                          if (isAir) airData[dIdx - 1] += qty; else seaData[dIdx - 1] += qty;
+                          barDetails[dIdx - 1][typeLabel] += qty;
+                      }
+                      if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
+                  }
+              };
+
+              if (window.dashCurrentData) {
+                  for (let d = 1; d <= days; d++) { 
+                      if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d]) window.dashCurrentData.monthData[d].forEach(it => process(it, d));
+                  }
+                  if (includePending && window.dashCurrentData.pendingItems) window.dashCurrentData.pendingItems.forEach(it => process(it, null));
+              }
+          } else {
+              // 💡 연간 타이틀 분리
+              document.getElementById('dashTitleText').innerText = `${window.dashYear}년`;
+              let sub = document.getElementById('dashSubTitleText');
+              if (sub) sub.innerText = `${window.dashYear}년 연간 요약`;
+              for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
+              
+              let yData = yearlyCache[window.dashYear];
+              if (yData) {
+                  for (let i = 0; i < 12; i++) {
+                      let mData = yData.monthly[i] || {};
+                      let details = mData.details || {};
+                      
+                      let mSea = details['🚢 해상 (SEA)'] || 0;
+                      let mAir = details['✈️ 항공 (AIR)'] || 0;
+                      seaData[i] = mSea; airData[i] = mAir; 
+                      totalQty += parseInt(mData.pal) || 0;
+                      
+                      // 💡 [버그 픽스] 연간 모드에서도 barDetails에 값을 넣어줍니다!
+                      barDetails[i]['🚢 해상 (SEA)'] = mSea;
+                      barDetails[i]['✈️ 항공 (AIR)'] = mAir;
+                  }
+                  let ySea = yData.comp['🚢 해상 (SEA)'] ? yData.comp['🚢 해상 (SEA)'].pal : 0;
+                  let yAir = yData.comp['✈️ 항공 (AIR)'] ? yData.comp['✈️ 항공 (AIR)'].pal : 0;
+                  compMap = { '🚢 해상 (SEA)': ySea, '✈️ 항공 (AIR)': yAir };
+              }
+
+              // 💡 연간 모드 미정건 합산
+              if (includePending && window.dashCurrentData && window.dashCurrentData.pendingItems) {
+                  window.dashCurrentData.pendingItems.forEach(it => {
+                      let clean = String(it.bl || "").trim();
+                      if (clean && clean !== "미정") {
+                          let qty = parseInt(it.pal) || 0;
+                          totalQty += qty;
+                          let isAir = it.sType === 'AIR';
+                          let typeLabel = isAir ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
+                          if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
+                      }
+                  });
+              }
+          }
+
+          // 상단 카드 요약 (기존 유지)
+          if (window.dashMode === 'month') {
+              let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
+              let now = new Date(); let isCurrentMonth = (window.dashYear === now.getFullYear() && window.dashMonth === now.getMonth() + 1);
+              let divider = isCurrentMonth ? Math.max(1, now.getDate()) : new Date(window.dashYear, window.dashMonth, 0).getDate();
+              let avgDaily = doneQty > 0 ? (doneQty / divider).toFixed(1) : 0;
+              document.getElementById("dashCardTitle1").innerText = "당월 총 예정 물량";
+              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
+              document.getElementById("dashVolDetail").innerText = `완료: ${doneQty.toLocaleString()} (${rate}%)`;
+              document.getElementById("dashVolDetail").style.color = rate >= 100 ? "#34c759" : (rate > 50 ? "#0a84ff" : "#ff9f0a");
+              document.getElementById("dashCardTitle2").innerText = "일일 평균 처리량";
+              document.getElementById("dashAvg").innerHTML = `${avgDaily} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/일</span>`;
+              document.getElementById("dashDaysDetail").innerText = `(월 누적: ${doneQty.toLocaleString()})`;
+          } else {
+              let avgMonthly = totalQty > 0 ? Math.round(totalQty / 12) : 0;
+              document.getElementById("dashCardTitle1").innerText = "연간 총 누적수량";
+              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
+              document.getElementById("dashVolDetail").innerText = `(1년 전체 합산)`; document.getElementById("dashVolDetail").style.color = "#0a84ff";
+              document.getElementById("dashCardTitle2").innerText = "월간 평균 처리량";
+              document.getElementById("dashAvg").innerHTML = `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/월</span>`;
+              document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${(totalQty / 365).toFixed(1)})`;
+          }
+// 상단 카드 정보 업데이트 (기존 코드와 동일...)
+// 💡 스와이프(Hover) 선택을 위한 전역 공유 변수 할당
+          window.dashSeaData = seaData;
+          window.dashAirData = airData;
+          window.dashBarDetails = barDetails;
+
+         // 💡 1. 막대 색깔 하이라이트 + [빈 데이터 스킵(스냅) 로직]
+          window.lastHoveredBarIndex = -1;
+          window.highlightBarOnly = function(idx) {
+              if (idx === null || idx === undefined || idx < 0) {
+                  window.lastHoveredBarIndex = -1;
+                  mainChartIns.data.datasets[0].backgroundColor = '#99CCFF';
+                  mainChartIns.data.datasets[1].backgroundColor = '#FF99CC';
+                  mainChartIns.update();
+                  // 🚨 [패치 1] 여기서 상세 박스를 숨기지 않습니다! 마우스가 나가도 내역은 유지됨!
+                  return;
+              }
+
+              let validIndices = [];
+              for(let i = 0; i < labels.length; i++) {
+                  if ((window.dashSeaData[i] + window.dashAirData[i]) > 0) validIndices.push(i);
+              }
+              if (validIndices.length === 0) return; 
+
+              let closestIdx = validIndices[0];
+              let minDiff = Math.abs(idx - closestIdx);
+              for(let i = 1; i < validIndices.length; i++) {
+                  let diff = Math.abs(idx - validIndices[i]);
+                  if(diff < minDiff) { minDiff = diff; closestIdx = validIndices[i]; }
+              }
+              idx = closestIdx; 
+
+              if (idx === window.lastHoveredBarIndex) return; 
+              window.lastHoveredBarIndex = idx;
+
+              let dimColor = document.body.classList.contains("light-mode") ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
+              let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#99CCFF';
+              let newAirColors = new Array(labels.length).fill(dimColor); newAirColors[idx] = '#FF99CC';
+              
+              mainChartIns.data.datasets[0].backgroundColor = newSeaColors; 
+              mainChartIns.data.datasets[1].backgroundColor = newAirColors;
+              
+              if (mainChartIns.tooltip) {
+                  mainChartIns.tooltip.setActiveElements([{ datasetIndex: 0, index: idx }, { datasetIndex: 1, index: idx }], { x: 0, y: 0 });
+              }
+              mainChartIns.update();
+          };
+
+          // 💡 2. 손 뗐을 때 상세내역 스르륵 호출
+          window.showDetailBox = function(idx) {
+              let detailBox = document.getElementById("barDetailBox");
+              if (idx === null || idx === undefined || idx < 0) return;
+
+              let details = window.dashBarDetails[idx]; 
+              let total = window.dashSeaData[idx] + window.dashAirData[idx];
+              if (total === 0) { detailBox.style.display = 'none'; return; }
+              
+              let timeLabel = window.dashMode === 'month' ? `${idx+1}일` : `${idx+1}월`;
+              let html = `<div style="font-weight:900; margin-bottom:10px; color:var(--text-main);">📅 ${timeLabel} 입고 내역 <span style="color:#0a84ff; font-size:0.9em;">(총 ${total}P)</span></div>`;
+              html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
+              
+              if (details['🚢 해상 (SEA)'] > 0) {
+                  html += `<div style="display:flex; align-items:center; gap:6px; background:#99CCFF; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(153,204,255,0.4);">
+                      <span style="font-weight:900;">🚢 해상</span><span style="font-weight:800; opacity:0.9;">${details['🚢 해상 (SEA)']}P</span>
+                  </div>`;
+              }
+              if (details['✈️ 항공 (AIR)'] > 0) {
+                  html += `<div style="display:flex; align-items:center; gap:6px; background:#FF99CC; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(255,153,204,0.4);">
+                      <span style="font-weight:900;">✈️ 항공</span><span style="font-weight:800; opacity:0.9;">${details['✈️ 항공 (AIR)']}P</span>
+                  </div>`;
+              }
+              html += `</div>`; 
+              detailBox.innerHTML = html; 
+              detailBox.style.display = 'block';
+              detailBox.animate([{opacity: 0, transform: 'translateY(-5px)'}, {opacity: 1, transform: 'translateY(0)'}], {duration: 250, fill: 'forwards'});
+          };
+
+          if (mainChartIns) mainChartIns.destroy();
+          mainChartIns = new Chart(document.getElementById('mainChart'), {
+              type: 'bar',
+              data: { labels: labels, datasets: [{ label: `🚢 해상`, data: seaData, backgroundColor: '#99CCFF', stack: 'Stack 0', borderRadius: 4 }, { label: `✈️ 항공`, data: airData, backgroundColor: '#FF99CC', stack: 'Stack 0', borderRadius: 4 }] },
+              options: { 
+                  responsive: true, maintainAspectRatio: false, 
+                  interaction: { mode: 'index', intersect: false, axis: 'x' }, 
+                  plugins: { 
+                      legend: { display: false },
+                      tooltip: {
+                          enabled: true, mode: 'index', intersect: false,
+                          callbacks: {
+                              title: (items) => window.dashMode === 'month' ? `${items[0].label} 입고량` : `${items[0].label} 입고량`,
+                              label: () => null, 
+                              footer: (items) => `총 ${items.reduce((a, b) => a + b.parsed.y, 0)}P`
+                          }
+                      }
+                  }, 
+                  scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } },
+                  events: [] 
+              }
+          });
+
+          // 🚨 [커스텀 터치 엔진] 스킵 현상 및 손 뗄 때 튀는 현상 완벽 해결!
+          const mainCanvas = document.getElementById('mainChart');
+          mainCanvas.style.touchAction = 'pan-y'; 
+
+          let lastProcessedX = -999;
+          const triggerChartInteraction = (clientX, isForce = false) => {
+              if (!mainChartIns) return;
+              
+              // 💡 [수정된 핵심 데드존 로직]
+              // 8픽셀 미만의 미세한 떨림은 무시하되, lastProcessedX 기준점은 '갱신하지 않음'!!
+              // 이렇게 해야 천천히 움직여서 누적 거리가 8px을 넘었을 때 정상적으로 옆 칸으로 넘어갑니다 (스킵 버그 해결)
+              if (!isForce && Math.abs(clientX - lastProcessedX) < 8) return; 
+              
+              lastProcessedX = clientX; // 👈 8픽셀 이상 움직였을 때만 비로소 기준점 갱신!
+
+              const rect = mainCanvas.getBoundingClientRect();
+              const chartArea = mainChartIns.chartArea;
+              if (!chartArea) return;
+              
+              let xCoord = clientX - rect.left;
+              let x = Math.max(chartArea.left, Math.min(xCoord, chartArea.right));
+              let width = chartArea.right - chartArea.left;
+              let percent = (x - chartArea.left) / width;
+              
+              let idx = Math.floor(percent * labels.length);
+              idx = Math.min(Math.max(idx, 0), labels.length - 1);
+              window.highlightBarOnly(idx);
+          };
+
+          mainCanvas.ontouchstart = (e) => { triggerChartInteraction(e.touches[0].clientX, true); };
+          mainCanvas.ontouchmove = (e) => { triggerChartInteraction(e.touches[0].clientX, false); };
+          mainCanvas.ontouchend = () => { 
+              if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); 
+              else document.getElementById("barDetailBox").style.display = 'none';
+          };
+          
+          mainCanvas.onmousemove = (e) => { triggerChartInteraction(e.clientX, false); };
+          mainCanvas.onclick = (e) => { 
+              triggerChartInteraction(e.clientX, true); 
+              if (window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); 
+              else document.getElementById("barDetailBox").style.display = 'none';
+          };
+          mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); };
+
+          // (이후 파이 차트 로직 유지)
+
+          // 🍩 파이 차트 
+          window.activePieIndex = null;
+          let sLabels = []; let sData = []; let sColors = [];
+          if (compMap['🚢 해상 (SEA)'] > 0) { sLabels.push('🚢 해상 (SEA)'); sData.push(compMap['🚢 해상 (SEA)']); sColors.push('#99CCFF'); }
+          if (compMap['✈️ 항공 (AIR)'] > 0) { sLabels.push('✈️ 항공 (AIR)'); sData.push(compMap['✈️ 항공 (AIR)']); sColors.push('#FF99CC'); }
+
+          window.highlightPieSlice = function(idx) {
+              if (!shareChartIns) return;
+              const dataset = shareChartIns.data.datasets[0];
+              let slider = document.getElementById('pieSlider');
+              if (idx === null || String(idx) === "-1") {
+                  window.activePieIndex = null; dataset.backgroundColor = [...dataset._originalColors];
+                  if (slider) slider.value = -1;
+              } else {
+                  window.activePieIndex = parseInt(idx, 10);
+                  dataset.backgroundColor = dataset._originalColors.map((color, i) => i === window.activePieIndex ? color : (document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)"));
+                  if (slider) slider.value = window.activePieIndex; 
+              }
+              shareChartIns.update();
+          };
+
+          if (shareChartIns) shareChartIns.destroy();
+          shareChartIns = new Chart(document.getElementById('shareChart'), {
+              type: 'doughnut',
+              data: { labels: sLabels, datasets: [{ data: sData, backgroundColor: [...sColors], _originalColors: [...sColors], borderWidth: 2, borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30" }] },
+              options: {
+                  responsive: true, maintainAspectRatio: false, cutout: '55%', layout: { padding: { left: 50, right: 50, top: 15, bottom: 15 } }, 
+                  // 💡 [디테일 4 수정] datalabels 옵션을 꺼서 조각 안의 하얀 글씨(퍼센트) 영구 제거
+                  plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
+                  onClick: (e, activeElements) => {
+                      if (!activeElements || activeElements.length === 0) window.highlightPieSlice(-1);
+                      else {
+                          const idx = activeElements[0].index;
+                          if (window.activePieIndex === idx) window.highlightPieSlice(-1); else window.highlightPieSlice(idx);
+                      }
+                  }
+              }
+          });
+      }
       // 🚀 [앱 초기화] 
       window.addEventListener('DOMContentLoaded', () => {
         
@@ -2103,7 +2847,6 @@
         }
         
         renderCalendar();
-
         let fetchStartTime = Date.now();
 
         // 💡 OCR 통신도 백그라운드로 안전하게 요청
