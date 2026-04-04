@@ -1006,12 +1006,22 @@
       .ocr-time-info span, .legend-item {
         font-size: clamp(0.7em, 2.5vw, 0.85em) !important;
       }
-      /* 💡 [3번 패치] 파레트 P 제거 대신 숫자를 더 크고 강렬하게, 짤림 방지 */
+      /* 💡 [수정] 부모 태그(검정/흰색)의 색상을 그대로 상속받도록 inherit 적용 */
       .pal-main {
         font-size: 1.25em !important;
-        /* 숫자 크기 극대화 */
         letter-spacing: -1px !important;
-        /* 자간을 좁혀서 공간 확보 */
+        color: inherit !important; 
+      }
+      .bl-sub {
+        font-size: clamp(0.55em, 2.2vw, 0.75em) !important;
+        letter-spacing: -0.5px !important;
+        white-space: nowrap !important;
+        color: inherit !important; 
+        opacity: 0.9;
+      }
+      /* 완료된 건은 파스텔 배경 위에서 흰색 글씨 + 그림자 유지 */
+      .done-mark {
+        color: #ffffff !important;
       }
       .daily-total {
         font-size: 0.75em !important;
@@ -1027,12 +1037,7 @@
       padding: 20px; }
       #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important;
       }
-    /* 💡 B/L 넘버 및 도장 자동 크기 조절 (박스 밖으로 탈출 방지) */
-      .bl-sub {
-        font-size: clamp(0.55em, 2.2vw, 0.75em) !important;
-        letter-spacing: -0.5px !important;
-        white-space: nowrap !important;
-      }
+    
       .done-icon { font-size: clamp(9px, 2.5vw, 12px) !important;
       }
 
@@ -1496,9 +1501,13 @@
         while(cellCount % 7 !== 0) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
         rowHtml += '</div>'; grid.innerHTML = rowHtml;
         
-        // 💡 [디테일 7 수정] 미정건 전역 상태 유지 로직
-        if (serverData.pendingItems) { window.globalPendingItems = serverData.pendingItems; }
-        let currentPending = window.globalPendingItems || [];
+        // 💡 [수정] 미정건 전역 상태 유지 로직 확실하게 고정
+        if (serverData.pendingItems && serverData.pendingItems.length > 0) { 
+            window.globalPendingItems = serverData.pendingItems; 
+        } else if (window.globalPendingItems && window.globalPendingItems.length > 0) {
+            serverData.pendingItems = window.globalPendingItems;
+        }
+        let currentPending = serverData.pendingItems || [];
 
         if (currentPending.length > 0) {
           document.getElementById('pendingSection').style.display = 'block';
@@ -1572,11 +1581,15 @@
             } catch(e) { }
         } 
         
-        if (!isCacheValid) {
-            let tempFirstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
-            let tempDays = new Date(safeYear, safeMonth, 0).getDate();
-            serverData = { year: safeYear, month: safeMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {}, pendingItems: serverData.pendingItems || [] };
-        }
+        // 💡 [수정] goToAsync 내부의 if (!isCacheValid) 부분을 아래 코드로 교체
+      if (!isCacheValid) {
+          let tempFirstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
+          let tempDays = new Date(safeYear, safeMonth, 0).getDate();
+          
+          // 🚨 [핵심] 전역 변수에 보관된 미정건이 있으면 무조건 1순위로 끌어옵니다.
+          let fallbackPending = window.globalPendingItems && window.globalPendingItems.length > 0 ? window.globalPendingItems : (serverData.pendingItems || []);
+          serverData = { year: safeYear, month: safeMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {}, pendingItems: fallbackPending };
+      }
         
         renderCalendar();
         window.currentNavId = (window.currentNavId || 0) + 1;
@@ -2269,40 +2282,7 @@
           let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
       }
 
-      // 🚨 [개발 추가] 파이 차트 (내부에 글씨 + 퍼센트 박기) 플러그인
-      const pieSliceLabelPlugin = {
-          id: 'pieSliceLabel',
-          afterDraw(chart) {
-              if (chart.config.type !== 'doughnut') return;
-              const ctx = chart.ctx;
-              const meta = chart.getDatasetMeta(0);
-              const data = chart.data.datasets[0].data;
-              const labels = chart.data.labels;
-              const totalSum = data.reduce((a, b) => a + b, 0);
-              if (totalSum === 0) return;
-
-              ctx.save();
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillStyle = '#ffffff';
-              ctx.font = 'bold 14px -apple-system, sans-serif';
-              ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 4;
-              meta.data.forEach((element, index) => {
-                  if (data[index] === 0) return;
-                  const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
-                  const r = element.innerRadius + (element.outerRadius - element.innerRadius) * 0.55;
-                  const x = chart.chartArea.left + chart.chartArea.width / 2 + Math.cos(midAngle) * r;
-                  const y = chart.chartArea.top + chart.chartArea.height / 2 + Math.sin(midAngle) * r;
-                  
-                  const percent = ((data[index] / totalSum) * 100).toFixed(1);
-                  const shortLabel = labels[index].includes('SEA') ? '해상' : '항공';
-                  
-                  ctx.fillText(`${shortLabel} ${percent}%`, x, y);
-              });
-              ctx.restore();
-          }
-      };
-      Chart.register(pieSliceLabelPlugin); 
+      
 
       function setDashMode(mode) {
           window.dashMode = mode;
@@ -2532,12 +2512,7 @@
           } else {
               // 💡 연간 요약 모드
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 연간 요약`;
-              for (let m = 1; m <= 12; m++) { 
-                  labels.push(`${m}월`); 
-                  seaData.push(0); 
-                  airData.push(0); 
-                  barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); 
-              }
+              for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
               
               let yData = yearlyCache[window.dashYear];
               if (yData) {
@@ -2545,19 +2520,17 @@
                       let mData = yData.monthly[i] || {};
                       let details = mData.details || {};
                       
-                      // 💡 [핵심] 회원님의 Code.gs 구조에 맞춰 details 객체에서 값을 꺼냅니다!
                       let mSea = details['🚢 해상 (SEA)'] || 0;
                       let mAir = details['✈️ 항공 (AIR)'] || 0;
-                      
-                      seaData[i] = mSea; 
-                      airData[i] = mAir; 
+                      seaData[i] = mSea; airData[i] = mAir; 
                       totalQty += parseInt(mData.pal) || 0;
+                      
+                      // 💡 [버그 픽스] 연간 모드에서도 barDetails에 값을 넣어줍니다!
+                      barDetails[i]['🚢 해상 (SEA)'] = mSea;
+                      barDetails[i]['✈️ 항공 (AIR)'] = mAir;
                   }
-                  
-                  // 💡 compData에서도 Code.gs 구조에 맞게 pal 수량을 꺼냅니다.
                   let ySea = yData.comp['🚢 해상 (SEA)'] ? yData.comp['🚢 해상 (SEA)'].pal : 0;
                   let yAir = yData.comp['✈️ 항공 (AIR)'] ? yData.comp['✈️ 항공 (AIR)'].pal : 0;
-                  
                   compMap = { '🚢 해상 (SEA)': ySea, '✈️ 항공 (AIR)': yAir };
               }
 
@@ -2600,27 +2573,37 @@
           }
 // ... (renderDashCharts 내부, 상단 카드 요약 로직 바로 밑부터 교체) ...
 
-          // 💡 스와이프(Hover) 선택을 위한 전역 공유 변수 할당
-          window.dashSeaData = seaData;
-          window.dashAirData = airData;
-          window.dashBarDetails = barDetails;
-
-          // 💡 공통 바 선택 함수 (클릭 & 스와이프에서 공통 사용)
-          window.selectBarIndex = function(idx) {
+          // 💡 [핵심] 1. 스와이프 시 "막대 색깔"만 바꾸는 함수
+          window.lastHoveredBarIndex = -1;
+          window.highlightBarOnly = function(idx) {
+              if (idx === window.lastHoveredBarIndex) return; // 중복 실행 방지
+              window.lastHoveredBarIndex = idx;
               let detailBox = document.getElementById("barDetailBox");
+
               if (idx === null || idx === undefined || idx < 0) {
                   mainChartIns.data.datasets[0].backgroundColor = '#99CCFF';
                   mainChartIns.data.datasets[1].backgroundColor = '#FF99CC';
-                  mainChartIns.update(); detailBox.style.display = 'none'; return;
+                  mainChartIns.update();
+                  detailBox.style.display = 'none'; // 차트 밖으로 나가면 숨김
+                  return;
               }
+
               let dimColor = document.body.classList.contains("light-mode") ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
               let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#99CCFF';
               let newAirColors = new Array(labels.length).fill(dimColor); newAirColors[idx] = '#FF99CC';
               
-              mainChartIns.data.datasets[0].backgroundColor = newSeaColors; mainChartIns.data.datasets[1].backgroundColor = newAirColors;
+              mainChartIns.data.datasets[0].backgroundColor = newSeaColors; 
+              mainChartIns.data.datasets[1].backgroundColor = newAirColors;
               mainChartIns.update();
+          };
 
-              let details = window.dashBarDetails[idx]; let total = window.dashSeaData[idx] + window.dashAirData[idx];
+          // 💡 [핵심] 2. 손을 뗐을 때 "상세 내역 박스"를 스르륵 띄우는 함수
+          window.showDetailBox = function(idx) {
+              let detailBox = document.getElementById("barDetailBox");
+              if (idx === null || idx === undefined || idx < 0) return;
+
+              let details = barDetails[idx]; 
+              let total = seaData[idx] + airData[idx];
               if (total === 0) { detailBox.style.display = 'none'; return; }
               
               let timeLabel = window.dashMode === 'month' ? `${idx+1}일` : `${idx+1}월`;
@@ -2637,47 +2620,46 @@
                       <span style="font-weight:900;">✈️ 항공</span><span style="font-weight:800; opacity:0.9;">${details['✈️ 항공 (AIR)']}P</span>
                   </div>`;
               }
-              html += `</div>`; detailBox.innerHTML = html; detailBox.style.display = 'block';
+              html += `</div>`; 
+              detailBox.innerHTML = html; 
+              detailBox.style.display = 'block';
+              // 💫 스르륵 나타나는 애니메이션
+              detailBox.animate([{opacity: 0, transform: 'translateY(-5px)'}, {opacity: 1, transform: 'translateY(0)'}], {duration: 250, fill: 'forwards'});
           };
 
-          // 📊 막대 차트 (모바일 스와이프 기능 + 총합 툴팁 적용)
+          // 📊 막대 차트 생성 
           if (mainChartIns) mainChartIns.destroy();
           mainChartIns = new Chart(document.getElementById('mainChart'), {
               type: 'bar',
-              data: { 
-                  labels: labels, 
-                  datasets: [
-                      { label: `🚢 해상`, data: seaData, backgroundColor: '#99CCFF', stack: 'Stack 0', borderRadius: 4 },
-                      { label: `✈️ 항공`, data: airData, backgroundColor: '#FF99CC', stack: 'Stack 0', borderRadius: 4 }
-                  ] 
-              },
+              data: { labels: labels, datasets: [{ label: `🚢 해상`, data: seaData, backgroundColor: '#99CCFF', stack: 'Stack 0', borderRadius: 4 }, { label: `✈️ 항공`, data: airData, backgroundColor: '#FF99CC', stack: 'Stack 0', borderRadius: 4 }] },
               options: { 
                   responsive: true, maintainAspectRatio: false, 
-                  interaction: { mode: 'index', intersect: false }, // 💡 좌우 스와이프만으로 막대 잡히게 하는 핵심 옵션!
+                  // 🚨 axis: 'x' 를 추가하면 바닥 글씨(날짜)를 문질러도 차트가 반응합니다!
+                  interaction: { mode: 'index', intersect: false, axis: 'x' }, 
                   plugins: { 
                       legend: { display: false },
-                      // 💡 [디테일 5 수정] 터치 시 말풍선에는 '총합'만 깔끔하게 노출
                       tooltip: {
                           enabled: true, mode: 'index', intersect: false,
                           callbacks: {
                               title: (items) => window.dashMode === 'month' ? `${items[0].label} 입고량` : `${items[0].label} 입고량`,
-                              label: () => null, // 개별 내역 숨김 (하단 뱃지로 대체)
-                              footer: (items) => {
-                                  let tSum = items.reduce((a, b) => a + b.parsed.y, 0);
-                                  return `총 ${tSum}P`;
-                              }
+                              label: () => null, // 개별 팝업 숨김
+                              footer: (items) => `총 ${items.reduce((a, b) => a + b.parsed.y, 0)}P`
                           }
                       }
                   }, 
                   scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } },
-                  // 💡 [디테일 6 수정] 손가락으로 문지르거나 터치할 때 즉시 반응
-                  onHover: (e, elements) => { if (elements && elements.length > 0) window.selectBarIndex(elements[0].index); },
-                  onClick: (e, elements) => { 
-                      if (elements && elements.length > 0) window.selectBarIndex(elements[0].index); 
-                      else window.selectBarIndex(-1); 
-                  }
+                  // 🚨 문지를 땐 색깔만 하이라이트!
+                  onHover: (e, elements) => { 
+                      if (elements && elements.length > 0) window.highlightBarOnly(elements[0].index); 
+                  },
               }
           });
+
+          // 🚨 손가락을 뗄 때, 마우스를 클릭/뗄 때 비로소 상세내역 박스 호출
+          const mainCanvas = document.getElementById('mainChart');
+          mainCanvas.ontouchend = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
+          mainCanvas.onmouseup = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
+          mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); };
 
           // 🍩 파이 차트 
           window.activePieIndex = null;
