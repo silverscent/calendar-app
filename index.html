@@ -1536,15 +1536,6 @@
           <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
           <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
         </div>
-
-          <div class="dash-toggles">
-            <button id="btnDashPal" class="active" onclick="setDashUnit('pal')">P</button>
-            <button id="btnDashBox" onclick="setDashUnit('box')">B</button>
-            <span style="color:var(--border-color);">|</span>
-            <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월</button>
-            <button id="btnDashYear" onclick="setDashMode('year')">년</button>
-          </div>
-        </div>
         
         <div class="dashboard-grid">
           <div class="dash-card">
@@ -4449,7 +4440,7 @@
           mainCanvas.onmousemove = (e) => { triggerChartInteraction(e.clientX, false); };
           mainCanvas.onmouseup = () => { if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); };
           mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); };
-          
+
           // 🍩 2. 파이 차트 (하이브리드 엔진 & 다이얼 슬라이더 연동!) ... (이하 기존 코드 유지)
 
           // 🍩 2. 파이 차트 (하이브리드 엔진 & 다이얼 슬라이더 연동!)
