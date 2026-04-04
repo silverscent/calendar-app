@@ -409,8 +409,9 @@
         justify-content: center;
       }
 
+      /* 완료된 건은 파스텔 배경 위에서 흰색 글씨 + 그림자 유지 (가독성 향상) */
       .done-mark {
-        opacity: 0.6;
+        opacity: 0.85; /* 0.6에서 0.85로 진하게 변경 */
         border-left: none !important;
       }
       .done-mark .pal-main,
@@ -471,15 +472,21 @@
       .pending-item:active {
         transform: scale(0.98);
       }
+      /* 💡 [패치] 미정건 텍스트 말줄임표 제거 및 자동 두 줄 바꿈 적용 */
       .pending-comp {
         font-weight: 800;
         font-size: 0.95em;
-        width: 90px;
+        flex: 1;                   /* 남은 공간을 모두 차지하되 */
+        white-space: normal;       /* 🚨 강제로 한 줄로 만드는 옵션을 끄고 줄바꿈 허용 */
+        word-break: keep-all;      /* 단어 단위로 예쁘게 줄바꿈 */
+        overflow-wrap: break-word; /* 띄어쓰기 없는 긴 B/L 넘버 등도 강제로 끊어서 줄바꿈 */
+        line-height: 1.3;
+        margin-right: 8px;
       }
       .pending-vol {
         color: var(--text-sub);
         font-size: 0.85em;
-        flex: 1;
+        flex-shrink: 0;            /* 🚨 수량 텍스트는 겹치거나 찌그러지지 않고 무조건 자기 영역 유지 */
         font-weight: 600;
       }
       .pending-etc {
@@ -489,6 +496,8 @@
         padding: 3px 8px;
         border-radius: 6px;
         font-weight: bold;
+        flex-shrink: 0;            /* 🚨 비고(태그) 역시 찌그러지지 않고 영역 무조건 사수 */
+        margin-left: 6px;
       }
 
       .info-footer {
@@ -2034,7 +2043,7 @@
           // 💡 [핵심] 해상/항공에 맞춰 파스텔 배경색 지정
           let isAir = item.sType === 'AIR';
           let pastelBg = isAir ? '#FF99CC' : '#99CCFF';
-          let iconOpacity = isItemDone ? '0.4' : '1'; // 완료된 건은 흐리게
+          let iconOpacity = isItemDone ? '0.8' : '1'; // 완료된 건은 흐리게
 
           let actionBtns = '';
           if (isAdmin) {
@@ -2703,7 +2712,7 @@
               }
           });
 
-          // 🚨 [커스텀 터치 엔진] 입고
+          // 🚨 [커스텀 터치 엔진] 스킵 현상 및 손 뗄 때 튀는 현상 완벽 해결!
           const mainCanvas = document.getElementById('mainChart');
           mainCanvas.style.touchAction = 'pan-y'; 
 
@@ -2711,9 +2720,12 @@
           const triggerChartInteraction = (clientX, isForce = false) => {
               if (!mainChartIns) return;
               
-              // 🚨 [패치 2] 15px 이하의 미세한 움직임(손가락 뗄 때 롤링 현상) 완벽 무시!
-              if (!isForce && Math.abs(clientX - lastProcessedX) < 15) return; 
-              lastProcessedX = clientX;
+              // 💡 [수정된 핵심 데드존 로직]
+              // 8픽셀 미만의 미세한 떨림은 무시하되, lastProcessedX 기준점은 '갱신하지 않음'!!
+              // 이렇게 해야 천천히 움직여서 누적 거리가 8px을 넘었을 때 정상적으로 옆 칸으로 넘어갑니다 (스킵 버그 해결)
+              if (!isForce && Math.abs(clientX - lastProcessedX) < 8) return; 
+              
+              lastProcessedX = clientX; // 👈 8픽셀 이상 움직였을 때만 비로소 기준점 갱신!
 
               const rect = mainCanvas.getBoundingClientRect();
               const chartArea = mainChartIns.chartArea;
@@ -2733,17 +2745,16 @@
           mainCanvas.ontouchmove = (e) => { triggerChartInteraction(e.touches[0].clientX, false); };
           mainCanvas.ontouchend = () => { 
               if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); 
-              else document.getElementById("barDetailBox").style.display = 'none'; // 빈 공간 탭하면 닫힘
+              else document.getElementById("barDetailBox").style.display = 'none';
           };
           
           mainCanvas.onmousemove = (e) => { triggerChartInteraction(e.clientX, false); };
           mainCanvas.onclick = (e) => { 
               triggerChartInteraction(e.clientX, true); 
               if (window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); 
-              else document.getElementById("barDetailBox").style.display = 'none'; // 빈 공간 클릭하면 닫힘
+              else document.getElementById("barDetailBox").style.display = 'none';
           };
-          // 마우스가 차트 밖으로 나가도 상세 내역은 유지됩니다.
-          mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); }; 
+          mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); };
 
           // (이후 파이 차트 로직 유지)
 
