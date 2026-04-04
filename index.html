@@ -2308,6 +2308,11 @@
             ).getDate();
 
             if (!isNaN(serverData.year)) isCacheValid = true;
+
+            // 🚨 [핵심 패치 4] 앱을 켤 때 캐시에서 꺼낸 데이터도 무조건 순서표대로 정렬!
+            if (typeof preserveCustomOrder === "function") {
+                serverData = preserveCustomOrder(serverData);
+            }
           } catch (e) {
             console.error("캐시 파싱 에러", e);
           }
@@ -2818,6 +2823,11 @@
                 serverData.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
                 serverData.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
                 if (!isNaN(serverData.year)) isCacheValid = true;
+
+                // 🚨 [핵심 패치 3] 달력을 넘길 때 꺼내오는 캐시 데이터도 순서표대로 정렬!
+                if (typeof preserveCustomOrder === "function") {
+                    serverData = preserveCustomOrder(serverData);
+                }
             } catch(e) { }
         } 
         
@@ -3344,6 +3354,9 @@
                   orderPayload.dailyOrders[dStr] = {};
                   
                   serverData.monthData[dragData.day].forEach((it, i) => {
+                      // 🚨 [핵심 패치 1] 내 폰 로컬 데이터에 새로운 순서 번호를 부여합니다!
+                      it.sortIdx = i;
+
                       let p = (it.pal === "0" || !it.pal) ? "" : String(it.pal).trim();
                       let b = (it.box === "0" || !it.box) ? "" : String(it.box).trim();
                       let clean = it.company.replace(/\[TASK\]/gi, "").trim();
@@ -3351,6 +3364,9 @@
                       let key = (isT ? "T_" : "O_") + getFullName(clean) + "_" + p + "_" + b;
                       orderPayload.dailyOrders[dStr][key] = i; // 0번부터 순서대로 번호표 부여
                   });
+                  
+                  // 🚨 [핵심 패치 2] 순서표를 각인시킨 직후 로컬 캐시에 즉시 저장! (새로고침 대비)
+                  localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
 
                   google.script.run.manageWebOutboundData("UPDATE_ORDER", orderPayload, adminToken);
                   return;
