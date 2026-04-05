@@ -1146,8 +1146,8 @@
         <span id="ocrTimeText" style="color: var(--text-main)">불러오는 중...</span>
       </div>
       <div class="legend-bar">
-        <div class="legend-item"><div class="legend-color" style="background:#01DDFB; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">🚢 해상</span></div>
-        <div class="legend-item"><div class="legend-color" style="background:#FF66FF; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">✈️ 항공</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:#6EDEF4; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">🚢 해상</span></div>
+        <div class="legend-item"><div class="legend-color" style="background:#DC92F5; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">✈️ 항공</span></div>
       </div>
     </div>
 
@@ -1498,7 +1498,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
             dayData.forEach((item, idx) => {
               let isItemDone = item.isDone === true || String(item.isDone) === "true";
               let isAir = item.sType === 'AIR';
-              let pastelBg = isAir ? '#FF66FF' : '#01DDFB';
+              let pastelBg = isAir ? '#DC92F5' : '#6EDEF4';
               
               let tagClass = `item-tag`;
               if (isItemDone) tagClass += " done-mark";
@@ -1546,7 +1546,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
             let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : '';
             
             let isPendingAir = item.sType === 'AIR';
-            let pendingPastelBg = isPendingAir ? '#FF66FF' : '#01DDFB';
+            let pendingPastelBg = isPendingAir ? '#DC92F5' : '#6EDEF4';
             let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${pendingPastelBg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
 
             pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${item.bl}</div><div class="pending-vol">📦 ${item.pal}P (${item.sType})</div>${etcTag}</div></div>`;
@@ -2054,7 +2054,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           
           // 💡 [핵심] 해상/항공에 맞춰 파스텔 배경색 지정
           let isAir = item.sType === 'AIR';
-          let pastelBg = isAir ? '#FF66FF' : '#01DDFB';
+          let pastelBg = isAir ? '#DC92F5' : '#6EDEF4';
           let iconOpacity = isItemDone ? '0.8' : '1'; // 완료된 건은 흐리게
 
           let actionBtns = '';
@@ -2658,8 +2658,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           window.highlightBarOnly = function(idx) {
               if (idx === null || idx === undefined || idx < 0) {
                   window.lastHoveredBarIndex = -1;
-                  mainChartIns.data.datasets[0].backgroundColor = '#01DDFB';
-                  mainChartIns.data.datasets[1].backgroundColor = '#FF66FF';
+                  mainChartIns.data.datasets[0].backgroundColor = '#6EDEF4';
+                  mainChartIns.data.datasets[1].backgroundColor = '#DC92F5';
                   mainChartIns.update();
                   // 🚨 [패치 1] 여기서 상세 박스를 숨기지 않습니다! 마우스가 나가도 내역은 유지됨!
                   return;
@@ -2683,8 +2683,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               window.lastHoveredBarIndex = idx;
 
               let dimColor = document.body.classList.contains("light-mode") ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
-              let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#01DDFB';
-              let newAirColors = new Array(labels.length).fill(dimColor); newAirColors[idx] = '#FF66FF';
+              let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#6EDEF4';
+              let newAirColors = new Array(labels.length).fill(dimColor); newAirColors[idx] = '#DC92F5';
               
               mainChartIns.data.datasets[0].backgroundColor = newSeaColors; 
               mainChartIns.data.datasets[1].backgroundColor = newAirColors;
@@ -2709,12 +2709,12 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
               
               if (details['🚢 해상 (SEA)'] > 0) {
-                  html += `<div style="display:flex; align-items:center; gap:6px; background:#01DDFB; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(1,221,251,0.4);">
+                  html += `<div style="display:flex; align-items:center; gap:6px; background:#6EDEF4; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(1,221,251,0.4);">
                       <span style="font-weight:900;">🚢 해상</span><span style="font-weight:800; opacity:0.9;">${details['🚢 해상 (SEA)']}P</span>
                   </div>`;
               }
               if (details['✈️ 항공 (AIR)'] > 0) {
-                  html += `<div style="display:flex; align-items:center; gap:6px; background:#FF66FF; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(255,107,159,0.4);">
+                  html += `<div style="display:flex; align-items:center; gap:6px; background:#DC92F5; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(255,107,159,0.4);">
                       <span style="font-weight:900;">✈️ 항공</span><span style="font-weight:800; opacity:0.9;">${details['✈️ 항공 (AIR)']}P</span>
                   </div>`;
               }
@@ -2727,7 +2727,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           if (mainChartIns) mainChartIns.destroy();
           mainChartIns = new Chart(document.getElementById('mainChart'), {
               type: 'bar',
-              data: { labels: labels, datasets: [{ label: `🚢 해상`, data: seaData, backgroundColor: '#01DDFB', stack: 'Stack 0', borderRadius: 4 }, { label: `✈️ 항공`, data: airData, backgroundColor: '#FF66FF', stack: 'Stack 0', borderRadius: 4 }] },
+              data: { labels: labels, datasets: [{ label: `🚢 해상`, data: seaData, backgroundColor: '#6EDEF4', stack: 'Stack 0', borderRadius: 4 }, { label: `✈️ 항공`, data: airData, backgroundColor: '#DC92F5', stack: 'Stack 0', borderRadius: 4 }] },
               options: { 
                   responsive: true, maintainAspectRatio: false, 
                   interaction: { mode: 'index', intersect: false, axis: 'x' }, 
@@ -2796,8 +2796,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           // 🍩 파이 차트 
           window.activePieIndex = null;
           let sLabels = []; let sData = []; let sColors = [];
-          if (compMap['🚢 해상 (SEA)'] > 0) { sLabels.push('🚢 해상 (SEA)'); sData.push(compMap['🚢 해상 (SEA)']); sColors.push('#01DDFB'); }
-          if (compMap['✈️ 항공 (AIR)'] > 0) { sLabels.push('✈️ 항공 (AIR)'); sData.push(compMap['✈️ 항공 (AIR)']); sColors.push('#FF66FF'); }
+          if (compMap['🚢 해상 (SEA)'] > 0) { sLabels.push('🚢 해상 (SEA)'); sData.push(compMap['🚢 해상 (SEA)']); sColors.push('#6EDEF4'); }
+          if (compMap['✈️ 항공 (AIR)'] > 0) { sLabels.push('✈️ 항공 (AIR)'); sData.push(compMap['✈️ 항공 (AIR)']); sColors.push('#DC92F5'); }
 
           window.highlightPieSlice = function(idx) {
               if (!shareChartIns) return;
