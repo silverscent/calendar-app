@@ -4115,11 +4115,15 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   }
               });
 
-              // 겹침 방지 정렬
+              // 겹침 방지 정렬 (천장 뚫림 방지 추가!)
               const avoidCollision = (lbls) => {
                   lbls.sort((a, b) => a.elbowY - b.elbowY); 
                   let prevY = -9999;
-                  lbls.forEach(lbl => { if (lbl.elbowY < prevY + 16) lbl.elbowY = prevY + 16; prevY = lbl.elbowY; });
+                  lbls.forEach(lbl => { 
+                      if (lbl.elbowY < 16) lbl.elbowY = 16; // 🚨 맨 위쪽 글씨가 천장 밖으로 나가지 않게 최저 한계선 고정!
+                      if (lbl.elbowY < prevY + 16) lbl.elbowY = prevY + 16; 
+                      prevY = lbl.elbowY; 
+                  });
               };
               avoidCollision(rightLabels); avoidCollision(leftLabels);
 
@@ -4602,7 +4606,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               options: {
                   responsive: true, maintainAspectRatio: false, 
                   cutout: '55%', 
-                  layout: { padding: { left: 50, right: 50, top: 15, bottom: 15 } }, 
+                  layout: { padding: { left: 50, right: 50, top: 30, bottom: 25 } },
                   plugins: { legend: { display: false }, tooltip: { enabled: false } },
                   onClick: (e, activeElements) => {
                       // 도넛을 직접 터치했을 때도 마스터 컨트롤러 호출!
