@@ -2433,7 +2433,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   
                   const totalSum = data.reduce((a, b) => a + b, 0);
                   const percent = ((data[idx] / totalSum) * 100).toFixed(1);
-                  const unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
+                  // 💡 입고는 기본적으로 팔레트(P) 단위이므로 P로 고정!
+                  const unitStr = 'P';
 
                   // 1️⃣ 업체명 (폰트 사이즈 플렉서블 + 장평 강제 조절)
                   ctx.font = "bold 15px -apple-system, sans-serif";
