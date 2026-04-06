@@ -1356,21 +1356,18 @@
         gap: 12px;
         margin-bottom: 20px;
       }
+      /* 💡 [패치] Chart.js와 충돌 없는 안전한 카드 확장 CSS */
       .dash-card {
-        /* 🎨 기존 디자인 유지 영역 */
         background: var(--card-bg);
         border: 1px solid var(--border-color);
         border-radius: 14px;
-        padding: 16px 16px 24px 16px; /* 🚨 아래쪽 여백(24px)을 조금 더 줘서 스와이프 글씨가 절대 안 짤리게 보호 */
+        /* 위, 아래 여백을 넉넉하게 줘서 글씨가 삐져나가지 않게 보호 */
+        padding: 24px 16px 28px 16px !important; 
         text-align: center;
         box-shadow: 0 4px 10px rgba(0,0,0,0.02);
-        
-        /* 🛡️ [패치] 초기 로딩 시 내용물 튀어나감 방어 영역 */
-        height: auto;
-        min-height: min-content;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
+        display: block !important; /* flex 강제 해제 (Chart.js 붕괴 방지) */
+        height: auto !important;   /* 내용물에 맞춰 자연스럽게 늘어남 */
+        box-sizing: border-box;
       }
       .dash-card-title {
         font-size: 0.85em;
