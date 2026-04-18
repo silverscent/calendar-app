@@ -4635,10 +4635,23 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           }
       } // renderDashCharts 종료
 
-      // 🚨 [수정] 바탕화면 클릭 시 슬라이더를 터치한 경우는 무시하도록 예외 처리 추가!
+      // =====================================================
+      // 🚨 [패치] 바탕화면(빈 공간) 클릭 시 막대/파이차트 하이라이트 동시 해제
+      // =====================================================
       document.getElementById("dashboardModal").addEventListener("click", function(e) {
-          if (window.activePieIndex !== null && shareChartIns) {
-              // 클릭한 곳이 캔버스도 아니고, 슬라이더 부품도 아닐 때만 차트 리셋!
+          // 모달 배경(검은 여백)을 눌러서 창을 닫는 동작은 방해하지 않음
+          if (e.target === this) return; 
+
+          // 1. 막대차트 리셋 (막대나 상세정보 박스가 아닌 빈 곳을 터치했을 때)
+          if (window.lastHoveredBarIndex !== -1 && typeof window.highlightBarOnly === 'function') {
+              if (e.target.tagName !== "CANVAS" && !e.target.closest("#barDetailBox")) {
+                  window.highlightBarOnly(-1);
+                  document.getElementById("barDetailBox").style.display = 'none';
+              }
+          }
+          
+          // 2. 파이차트 리셋 (파이나 슬라이더가 아닌 빈 곳을 터치했을 때)
+          if (window.activePieIndex !== null && typeof window.highlightPieSlice === 'function') {
               if (e.target.tagName !== "CANVAS" && e.target.id !== "pieSlider" && !e.target.closest("#pieSliderWrapper")) {
                   window.highlightPieSlice(-1);
               }
