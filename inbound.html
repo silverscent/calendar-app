@@ -2658,12 +2658,20 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           window.highlightBarOnly = function(idx) {
               if (idx === null || idx === undefined || idx < 0) {
                   window.lastHoveredBarIndex = -1;
-                  mainChartIns.data.datasets[0].backgroundColor = '#26e2fd';
-                  mainChartIns.data.datasets[1].backgroundColor = '#ff7eff';
+                  
+                  // 🚨 [버그 수정 2] 리셋할 때도 배열(Array) 형태로 원래 색을 꽉 채워줘야 Chart.js가 꼬이지 않습니다!
+                  mainChartIns.data.datasets[0].backgroundColor = new Array(labels.length).fill('#26e2fd');
+                  mainChartIns.data.datasets[1].backgroundColor = new Array(labels.length).fill('#ff7eff');
+                  
+                  // 🚨 추가: 툴팁(말풍선) 잔상도 확실하게 지워버립니다.
+                  if (mainChartIns.tooltip) {
+                      mainChartIns.tooltip.setActiveElements([], { x: 0, y: 0 });
+                  }
+                  
                   mainChartIns.update();
-                  // 🚨 [패치 1] 여기서 상세 박스를 숨기지 않습니다! 마우스가 나가도 내역은 유지됨!
                   return;
               }
+              // ... (이하 기존 코드 유지) ...
 
               let validIndices = [];
               for(let i = 0; i < labels.length; i++) {
@@ -2725,10 +2733,17 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           };
 
           if (mainChartIns) mainChartIns.destroy();
+          
+          // 🚨 [버그 수정 1] 차트 생성 시점부터 단일 색상(String)이 아닌 배열(Array)로 꽉 채워줍니다.
+          let seaBgColors = new Array(labels.length).fill('#26e2fd');
+          let airBgColors = new Array(labels.length).fill('#ff7eff');
+
           mainChartIns = new Chart(document.getElementById('mainChart'), {
               type: 'bar',
-              data: { labels: labels, datasets: [{ label: `🚢 해상`, data: seaData, backgroundColor: '#26e2fd', stack: 'Stack 0', borderRadius: 4 }, { label: `✈️ 항공`, data: airData, backgroundColor: '#ff7eff', stack: 'Stack 0', borderRadius: 4 }] },
+              // 아래 backgroundColor를 배열 변수로 교체했습니다.
+              data: { labels: labels, datasets: [{ label: `🚢 해상`, data: seaData, backgroundColor: seaBgColors, stack: 'Stack 0', borderRadius: 4 }, { label: `✈️ 항공`, data: airData, backgroundColor: airBgColors, stack: 'Stack 0', borderRadius: 4 }] },
               options: { 
+                  /* ... 기존 옵션 그대로 유지 ... */
                   responsive: true, maintainAspectRatio: false, 
                   interaction: { mode: 'index', intersect: false, axis: 'x' }, 
                   plugins: { 
@@ -2855,7 +2870,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               }
           }
       });
-      
+
       // 🚀 [앱 초기화] 
       window.addEventListener('DOMContentLoaded', () => {
         
