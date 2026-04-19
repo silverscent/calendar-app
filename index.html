@@ -1434,6 +1434,8 @@
         border-collapse: collapse;
         table-layout: fixed; /* 반응형 너비 분할을 위해 필수 */
       }
+      /* ... 기존 V3 CSS 유지 ... */
+
       .compare-th {
         padding: 12px 6px;
         text-align: center;
@@ -1445,22 +1447,28 @@
         color: var(--text-sub);
         white-space: nowrap;
         cursor: pointer;
-        /* 🚨 [추가] 꾹 눌렀을 때 텍스트 선택(파란 블록) 완벽 방지 */
+        /* 🚨 텍스트 선택 방지 */
         user-select: none;
         -webkit-user-select: none;
         touch-action: none; 
-        transition: background 0.2s;
+        transition: background 0.2s, opacity 0.2s; /* 부드러운 투명도 전환 */
         position: relative;
       }
       .compare-th:last-child { border-right: none; }
       .compare-th:active { background: rgba(10, 132, 255, 0.1); }
       .compare-th.active-sort { color: #0a84ff; }
       
-      /* 🚨 [추가] 드래그 중인 원본 헤더의 시각적 피드백 (투명해짐) */
-      .compare-th.dragging {
-        opacity: 0.3;
-        background: var(--border-color);
-        box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+      /* 🚨 [V3.2 신규] 드래그 중인 원본의 시각적 피드백 (완전 투명화) */
+      .compare-th.dragging-source {
+        opacity: 0 !important; /* 집어든 자리는 아예 안 보이게 */
+      }
+
+      /* 🚨 [V3.2 신규] 타겟 열 전체에 파란 점선 표시 */
+      .compare-td.drag-over, .compare-th.drag-over {
+        background: rgba(10, 132, 255, 0.1) !important;
+        outline: 2px dashed #0a84ff !important;
+        outline-offset: -2px;
+        z-index: 5;
       }
       
       .compare-td {
@@ -5122,8 +5130,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           renderCompareGridV3(); 
       }
 
-      // 🚀 [신규] 헤더 꾹 누르기 드래그 앤 드롭 엔진 (모바일 최적화)
-      window.colDragVars = { active: false, startIdx: -1, ghost: null, timer: null, wasDragged: false, sourceTh: null };
+      // 🚀 [V3.2 신규] 헤더 꾹 누르기 드래그 앤 드롭 엔진 (달력 스타일 타겟팅)
+      window.colDragVars = { active: false, startIdx: -1, ghost: null, timer: null, wasDragged: false, sourceTh: null, lastDropTargetIdx: -1 };
 
       function startColDrag(e, idx) {
           colDragVars.wasDragged = false;
@@ -5133,11 +5141,11 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               if(navigator.vibrate) navigator.vibrate(50);
               
               let th = e.currentTarget;
-              th.classList.add('dragging'); // 💡 시각적 피드백 (원본 투명화)
               colDragVars.sourceTh = th;
-
+              
+              // 1. 고스트(유령) 생성 (파란색으로 눈에 띄게)
               let ghost = th.cloneNode(true);
-              ghost.classList.remove('dragging');
+              ghost.classList.remove('dragging-source');
               ghost.style.position = 'fixed';
               ghost.style.zIndex = '99999';
               ghost.style.opacity = '0.95';
@@ -5147,13 +5155,17 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               ghost.style.borderRadius = '8px';
               ghost.style.width = th.offsetWidth + 'px';
               ghost.style.border = '2px solid #fff';
-              ghost.style.boxShadow = '0 15px 30px rgba(0,0,0,0.4)'; // 💡 공중에 뜬 느낌 팍팍!
-              ghost.style.transform = 'scale(1.08)'; // 살짝 커짐
+              ghost.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)'; 
+              ghost.style.transform = 'scale(1.05)';
               
               document.body.appendChild(ghost);
               colDragVars.ghost = ghost;
+              
+              // 2. 원본 투명화 (집어든 느낌)
+              th.classList.add('dragging-source');
+
               moveColGhost(e);
-          }, 400); // 0.4초 꾹 누르면 발동
+          }, 400); // 0.4초 꾹
       }
 
       function moveColGhost(e) {
@@ -5161,11 +5173,46 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               if (colDragVars.timer) { clearTimeout(colDragVars.timer); colDragVars.timer = null; }
               return;
           }
+          
           let clientX = e.touches ? e.touches[0].clientX : e.clientX;
           let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          
+          // 손가락 따라다니기
           colDragVars.ghost.style.left = (clientX - (colDragVars.ghost.offsetWidth / 2)) + 'px';
-          colDragVars.ghost.style.top = (clientY - 25) + 'px'; // 손가락 살짝 위로
-          if (e.cancelable) e.preventDefault();
+          colDragVars.ghost.style.top = (clientY - 25) + 'px';
+          
+          if (e.cancelable) e.preventDefault(); // 스크롤 방지
+
+          // 🎯 타겟 열(Column) 하이라이트 (파란 점선)
+          // 1. 기존 파란 점선 모두 제거
+          document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+          colDragVars.lastDropTargetIdx = -1;
+
+          // 2. 현재 손가락 밑에 있는 요소 찾기 (유령은 포인터 이벤트가 꺼져있으므로 그 아래가 잡힘)
+          let dropTarget = document.elementFromPoint(clientX, clientY);
+          if (!dropTarget) return;
+
+          // TH(헤더)나 TD(본문 셀) 위를 지나고 있는지 확인
+          let targetTh = dropTarget.closest('.compare-th');
+          let targetTd = dropTarget.closest('.compare-td');
+          
+          let hoverColIdx = -1;
+          if (targetTh && targetTh.dataset.colidx !== undefined) hoverColIdx = parseInt(targetTh.dataset.colidx, 10);
+          else if (targetTd && targetTd.dataset.colidx !== undefined) hoverColIdx = parseInt(targetTd.dataset.colidx, 10);
+
+          // 3. 손가락 아래 열이 원본 열이 아니면, 해당 열(TH, TD 전체)에 파란 점선 추가
+          if (hoverColIdx !== -1 && hoverColIdx !== colDragVars.startIdx) {
+              colDragVars.lastDropTargetIdx = hoverColIdx;
+              
+              // 해당 열의 TH에 점선
+              let thToHighlight = document.querySelector(`.compare-th[data-colidx="${hoverColIdx}"]`);
+              if (thToHighlight) thToHighlight.classList.add('drag-over');
+              
+              // 해당 열의 모든 TD에 점선
+              document.querySelectorAll(`.compare-td[data-colidx="${hoverColIdx}"]`).forEach(td => {
+                  td.classList.add('drag-over');
+              });
+          }
       }
 
       function endColDrag(e) {
@@ -5175,31 +5222,31 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           colDragVars.wasDragged = true;
           colDragVars.active = false;
           
+          // 원본 투명화 원상복구
           if (colDragVars.sourceTh) {
-              colDragVars.sourceTh.classList.remove('dragging');
+              colDragVars.sourceTh.classList.remove('dragging-source');
               colDragVars.sourceTh = null;
           }
           
-          let clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
-          let clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
-          
+          // 유령 제거
           if (colDragVars.ghost) { colDragVars.ghost.remove(); colDragVars.ghost = null; }
 
-          let dropTarget = document.elementFromPoint(clientX, clientY);
-          let th = dropTarget ? dropTarget.closest('th') : null;
-          
-          if (th && th.dataset.colidx !== undefined) {
-              let dropIdx = parseInt(th.dataset.colidx, 10);
-              if (colDragVars.startIdx !== -1 && colDragVars.startIdx !== dropIdx) {
-                  let item = compareMonthsList.splice(colDragVars.startIdx, 1)[0];
-                  compareMonthsList.splice(dropIdx, 0, item);
-                  renderCompareGridV3();
-              }
+          // 파란 점선 지우기
+          document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+
+          // 자리 바꾸기 실행
+          let dropIdx = colDragVars.lastDropTargetIdx;
+          if (dropIdx !== -1 && colDragVars.startIdx !== -1 && colDragVars.startIdx !== dropIdx) {
+              let item = compareMonthsList.splice(colDragVars.startIdx, 1)[0];
+              compareMonthsList.splice(dropIdx, 0, item);
+              renderCompareGridV3(); // 표 다시 그리기
           }
+          
           colDragVars.startIdx = -1;
+          colDragVars.lastDropTargetIdx = -1;
       }
 
-      // 📊 V3.1 그리드 렌더링 코어 (기준월 증감률 탑재)
+      // 📊 V3.1 그리드 렌더링 코어 (기준월 증감률 탑재 & 드래그 꼬리표 추가 완결판)
       function renderCompareGridV3() {
           document.getElementById('compareGridArea').style.display = 'block';
           
@@ -5214,7 +5261,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let theadHtml = '<tr>';
           let unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
 
-          // 1. 헤더 렌더링
+          // 1. 헤더 렌더링 (드래그 지원 & colidx 꼬리표 추가)
           compareMonthsList.forEach((item, index) => {
               let key = `${item.y}-${item.m}`;
               let sortClass = (compareSortTargetKey === key) ? 'active-sort' : '';
@@ -5262,7 +5309,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
           let tbodyHtml = '';
           
-          // 🚀 상태 A: 기본 정렬 (리더보드)
+          // 🚀 상태 A: 기본 정렬 (리더보드 모드 - 월별 독립 정렬)
           if (compareSortTargetKey === null) {
               let sortedLists = {}; let maxRows = 0;
               compareMonthsList.forEach(item => {
@@ -5280,27 +5327,51 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
                       if (dataItem) {
                           let cObj = getCompanyColor(dataItem.name);
-                          let percent = maxVolPerCol[key] > 0 ? (dataItem.vol / maxVolPerCol[key]) * 100 : 0;
+                          let vol = dataItem.vol;
+                          let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
+                          
+                          // 💡 막대그래프를 셀 내부 DIV가 아닌 TD 자체에 적용 (빈틈 제거)
                           let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
                           
+                          // 💡 상태 A에서도 기본적으로 바로 왼쪽 열의 동일 업체 대비 증감률을 보여줌
+                          let rateHtml = '';
+                          if (index > 0) {
+                              let prevKey = `${compareMonthsList[index - 1].y}-${compareMonthsList[index - 1].m}`;
+                              let prevVol = compStats[dataItem.name]?.vols[prevKey] || 0;
+                              if (prevVol > 0) {
+                                  let diff = vol - prevVol;
+                                  let rate = Math.round((diff / prevVol) * 100);
+                                  let diffStr = diff > 0 ? `+${diff}` : `${diff}`;
+                                  if (rate > 0) rateHtml = `<span class="rate-txt rate-up">▲${diffStr} (${rate}%)</span>`;
+                                  else if (rate < 0) rateHtml = `<span class="rate-txt rate-down">▼${Math.abs(diff)} (${Math.abs(rate)}%)</span>`;
+                                  else rateHtml = `<span class="rate-txt rate-zero">-</span>`;
+                              } else if (vol > 0) {
+                                  rateHtml = `<span class="rate-txt rate-up">NEW</span>`;
+                              }
+                          }
+                          
+                          // 🚨 [수정] data-colidx 추가!
                           tbodyHtml += `
-                            <td class="compare-td" style="${bgCss}">
+                            <td class="compare-td" style="${bgCss}" data-colidx="${index}">
                                <div class="compare-cell">
                                   <div class="comp-info"><span class="comp-name-txt">${getShortName(dataItem.name)}</span></div>
-                                  <div class="vol-info"><span class="vol-txt">${dataItem.vol}${unitStr}</span></div>
+                                  <div class="vol-info"><span class="vol-txt">${vol}${unitStr}</span>${rateHtml}</div>
                                </div>
                             </td>`;
-                      } else { tbodyHtml += `<td class="compare-td"></td>`; }
+                      } else { 
+                          // 🚨 [수정] 빈 셀에도 data-colidx 추가 (그래야 빈 공간에 드래그 드롭 가능)
+                          tbodyHtml += `<td class="compare-td" data-colidx="${index}"></td>`; 
+                      }
                   });
                   tbodyHtml += '</tr>';
               }
           } 
-          // 🚀 상태 B: 특정 연/월 기준 행 맞춤 정렬 (관리자님 기획의 핵심!)
+          // 🚀 상태 B: 특정 연/월 기준 행 맞춤 정렬 (정밀 비교 모드)
           else {
               let sortedComps = Object.values(compStats).filter(c => Object.values(c.vols).some(v => v > 0)).sort((a, b) => {
                   let volA = a.vols[compareSortTargetKey] || 0;
                   let volB = b.vols[compareSortTargetKey] || 0;
-                  return compareSortOrder === 'desc' ? (volB - volA) : (volA - volB);
+                  return compareSortOrder === 'desc' ? (volB - volA) : (volA - volB); // 💡 오름/내림 적용
               });
 
               sortedComps.forEach(comp => {
@@ -5311,9 +5382,11 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       let key = `${item.y}-${item.m}`;
                       let vol = comp.vols[key] || 0;
                       let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
+                      
+                      // 💡 막대그래프를 TD 자체에 적용
                       let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
                       
-                      // 💡 100% 동기화: 터치(클릭)한 달을 기준으로 증감률 계산!
+                      // 💡 100% 동기화: 터치(클릭)한 기준월과 비교하여 증감률 계산!
                       let rateHtml = '';
                       if (key !== compareSortTargetKey) {
                           let baseVol = comp.vols[compareSortTargetKey] || 0;
@@ -5328,13 +5401,14 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                               rateHtml = `<span class="rate-txt rate-up">NEW</span>`;
                           }
                       } else {
-                          // 터치한 해당 월은 명시적으로 '기준' 이라고 표시
                           rateHtml = `<span class="rate-txt rate-zero" style="opacity:0.6;">기준</span>`;
                       }
-
+                      
                       let opClass = vol === 0 ? 'style="opacity: 0.4;"' : '';
+                      
+                      // 🚨 [수정] data-colidx 추가!
                       tbodyHtml += `
-                        <td class="compare-td" style="${bgCss}">
+                        <td class="compare-td" style="${bgCss}" data-colidx="${index}">
                            <div class="compare-cell" ${opClass}>
                               <div class="comp-info"><span class="comp-name-txt">${getShortName(comp.name)}</span></div>
                               <div class="vol-info"><span class="vol-txt">${vol}${unitStr}</span>${rateHtml}</div>
