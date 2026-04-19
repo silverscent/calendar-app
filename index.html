@@ -1418,6 +1418,142 @@
       .pie-slider::-webkit-slider-thumb:active {
         transform: scale(1.15);
       }
+
+      /* ===================================================== */
+      /* 📊 [신규] 월별 정밀 비교 그리드 전용 CSS */
+      /* ===================================================== */
+      .compare-grid-wrapper {
+        overflow-x: auto;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: var(--card-bg);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+      }
+      .compare-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 500px; /* 가로 스크롤 확보 */
+      }
+      .compare-th {
+        padding: 12px;
+        text-align: right;
+        background: var(--header-bg);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 0.85em;
+        font-weight: 900;
+        color: var(--text-sub);
+        white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.2s;
+      }
+      .compare-th:active { background: rgba(10, 132, 255, 0.1); }
+      .compare-th.active-sort { color: #0a84ff; }
+      
+      /* 🚨 핵심: 업체명이 들어가는 첫 번째 열(셀)의 틀 고정 설정 */
+      .compare-td {
+        padding: 0; /* 내부 셀 디자인을 위해 패딩 0 */
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+      }
+      .compare-cell {
+        position: relative;
+        padding: 12px 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        height: 100%;
+        box-sizing: border-box;
+      }
+      
+      .comp-info {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        z-index: 2; /* 배경 막대 위로 올라오게 */
+      }
+      .comp-name-txt {
+        font-weight: 900;
+        font-size: 1em;
+        color: var(--text-main);
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5); /* 가독성 향상 */
+      }
+      
+      .vol-info {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        z-index: 2;
+      }
+      .vol-txt {
+        font-weight: 900;
+        font-size: 1.1em;
+        color: var(--text-main);
+      }
+      .rate-txt {
+        font-size: 0.75em;
+        font-weight: 800;
+      }
+      .rate-up { color: #ff3b30; }
+      .rate-down { color: #0a84ff; }
+      .rate-zero { color: var(--text-sub); }
+
+      /* 탭 메뉴 디자인 */
+      .dash-tab-row {
+        display: flex;
+        background: var(--bg-color);
+        padding: 4px;
+        border-radius: 12px;
+        margin-bottom: 15px;
+      }
+      .dash-tab-btn {
+        flex: 1;
+        padding: 10px;
+        text-align: center;
+        border: none;
+        background: transparent;
+        color: var(--text-sub);
+        font-weight: 800;
+        font-size: 0.95em;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .dash-tab-btn.active {
+        background: var(--card-bg);
+        color: var(--text-main);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+
+      /* 월 선택 컨트롤 (정밀 비교용) */
+      .compare-controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .compare-month-chk {
+        display: none;
+      }
+      .compare-month-lbl {
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid var(--border-color);
+        background: var(--card-bg);
+        color: var(--text-sub);
+        font-size: 0.85em;
+        font-weight: 800;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .compare-month-chk:checked + .compare-month-lbl {
+        background: rgba(10, 132, 255, 0.1);
+        border-color: #0a84ff;
+        color: #0a84ff;
+      }
+
     </style>
   </head>
   <body>
@@ -1532,57 +1668,83 @@
           <button class="close-btn" onclick="document.getElementById('dashboardModal').style.display = 'none'">✕</button>
         </div>
 
-        <div class="dash-control-row">
-          <div class="dash-nav">
-            <button onclick="navDashDate(-1)">◀</button><span id="dashTitleText">조회중...</span><button onclick="navDashDate(1)">▶</button>
-          </div>
-          <div class="dash-toggles">
-             <button id="btnDashPal" class="active" onclick="setDashUnit('pal')">P</button>
-             <button id="btnDashBox" onclick="setDashUnit('box')">B</button>
-             <div style="width:1px; background:var(--border-color); margin:0 2px;"></div>
-             <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월별</button>
-             <button id="btnDashYear" onclick="setDashMode('year')">연간</button>
-          </div>
-        </div>
-        
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 4px;">
-          <span id="dashSubTitleText" style="font-weight: 900; color: var(--text-main); font-size: 1.05em;">조회중...</span>
-          <div style="display: flex; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub);">
-            <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
-            <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
-          </div>
-        </div>
-        
-        <div class="dashboard-grid">
-          <div class="dash-card">
-            <div class="dash-card-title" id="dashCardTitle1">당월 총 예정 물량</div>
-            <div class="dash-card-value" id="dashTotal" style="color:var(--text-main);">0</div>
-            <div id="dashVolDetail" style="font-size:0.9em; color:#0a84ff; margin-top:6px; font-weight:900;">완료: 0 (0%)</div>
-          </div>
-          <div class="dash-card">
-            <div class="dash-card-title" id="dashCardTitle2">일일 평균 처리량</div>
-            <div class="dash-card-value" id="dashAvg">0</div>
-            <div id="dashDaysDetail" style="font-size:0.85em; color:var(--text-sub); margin-top:6px; font-weight:800;">(월간 총합: 0)</div>
-          </div>
+        <div class="dash-tab-row">
+          <button class="dash-tab-btn active" id="tabSummary" onclick="switchDashTab('summary')">📊 요약 차트</button>
+          <button class="dash-tab-btn" id="tabCompare" onclick="switchDashTab('compare')">📈 정밀 비교</button>
         </div>
 
-        <div class="chart-container" style="height: 220px; display:block; margin-bottom: 8px;">
-          <canvas id="mainChart"></canvas>
-        </div>
-        
-        <div id="barDetailBox" style="display: none; background: var(--card-bg); border: 1px solid #0a84ff; border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 0.9em; box-shadow: 0 2px 10px rgba(10, 132, 255, 0.1);"></div>
+        <div id="dashSummaryView" style="display: block;">
 
-        <div class="chart-container" style="height: auto; min-height: 380px; padding-bottom: 25px; display:flex; flex-direction:column; align-items:center; box-sizing: border-box;">
-          <div style="font-weight:900; color:var(--text-main); margin-bottom: 10px; line-height: 1.3; word-break: keep-all;">🏢 업체별 점유율 <span style="font-size:0.75em; color:var(--text-sub); display:inline-block;">(조각을 터치해 보세요)</span></div>
-          
-          <div style="position: relative; width: 100%; height: 280px;">
-            <canvas id="shareChart"></canvas>
+          <div class="dash-control-row">
+            <div class="dash-nav">
+              <button onclick="navDashDate(-1)">◀</button><span id="dashTitleText">조회중...</span><button onclick="navDashDate(1)">▶</button>
+            </div>
+            <div class="dash-toggles">
+               <button id="btnDashPal" class="active" onclick="setDashUnit('pal')">P</button>
+               <button id="btnDashBox" onclick="setDashUnit('box')">B</button>
+               <div style="width:1px; background:var(--border-color); margin:0 2px;"></div>
+               <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월별</button>
+               <button id="btnDashYear" onclick="setDashMode('year')">연간</button>
+            </div>
           </div>
           
-          <div id="pieSliderWrapper" style="width: 60%; align-self: flex-start; margin-left: 5%; margin-top: 15px; display:none;">
-            <input type="range" id="pieSlider" class="pie-slider" min="-1" max="0" value="-1">
-            <div style="text-align:left; padding-left:5px; font-size:0.75em; color:var(--text-sub); margin-top:8px; font-weight:800; word-break: keep-all;">👈 스와이프하여 탐색 👉</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 4px;">
+            <span id="dashSubTitleText" style="font-weight: 900; color: var(--text-main); font-size: 1.05em;">조회중...</span>
+            <div style="display: flex; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub);">
+              <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
+              <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
+            </div>
           </div>
+          
+          <div class="dashboard-grid">
+            <div class="dash-card">
+              <div class="dash-card-title" id="dashCardTitle1">당월 총 예정 물량</div>
+              <div class="dash-card-value" id="dashTotal" style="color:var(--text-main);">0</div>
+              <div id="dashVolDetail" style="font-size:0.9em; color:#0a84ff; margin-top:6px; font-weight:900;">완료: 0 (0%)</div>
+            </div>
+            <div class="dash-card">
+              <div class="dash-card-title" id="dashCardTitle2">일일 평균 처리량</div>
+              <div class="dash-card-value" id="dashAvg">0</div>
+              <div id="dashDaysDetail" style="font-size:0.85em; color:var(--text-sub); margin-top:6px; font-weight:800;">(월간 총합: 0)</div>
+            </div>
+          </div>
+
+          <div class="chart-container" style="height: 220px; display:block; margin-bottom: 8px;">
+            <canvas id="mainChart"></canvas>
+          </div>
+          
+          <div id="barDetailBox" style="display: none; background: var(--card-bg); border: 1px solid #0a84ff; border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 0.9em; box-shadow: 0 2px 10px rgba(10, 132, 255, 0.1);"></div>
+
+          <div class="chart-container" style="height: auto; min-height: 380px; padding-bottom: 25px; display:flex; flex-direction:column; align-items:center; box-sizing: border-box;">
+            <div style="font-weight:900; color:var(--text-main); margin-bottom: 10px; line-height: 1.3; word-break: keep-all;">🏢 업체별 점유율 <span style="font-size:0.75em; color:var(--text-sub); display:inline-block;">(조각을 터치해 보세요)</span></div>
+            
+            <div style="position: relative; width: 100%; height: 280px;">
+              <canvas id="shareChart"></canvas>
+            </div>
+            
+            <div id="pieSliderWrapper" style="width: 60%; align-self: flex-start; margin-left: 5%; margin-top: 15px; display:none;">
+              <input type="range" id="pieSlider" class="pie-slider" min="-1" max="0" value="-1">
+              <div style="text-align:left; padding-left:5px; font-size:0.75em; color:var(--text-sub); margin-top:8px; font-weight:800; word-break: keep-all;">👈 스와이프하여 탐색 👉</div>
+            </div>
+          </div>
+          </div> <div id="dashCompareView" style="display: none; padding-bottom: 20px;">
+           <div style="font-weight:900; color:var(--text-main); margin-bottom: 10px; font-size:1.05em;">
+              📅 비교할 월 선택 <span style="font-size:0.75em; color:var(--text-sub);">(2~3개 권장)</span>
+           </div>
+           
+           <div class="compare-controls" id="compareMonthControls"></div>
+           
+           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+               <div style="font-size:0.8em; color:var(--text-sub); font-weight:bold;">※ 표 제목(월)을 터치하면 정렬 기준이 바뀝니다.</div>
+               <button onclick="resetCompareSort()" style="background:var(--btn-bg); border:none; padding:4px 10px; border-radius:6px; font-size:0.8em; font-weight:bold; color:var(--text-main); cursor:pointer;">🔄 기본 정렬</button>
+           </div>
+           
+           <div class="compare-grid-wrapper">
+              <table class="compare-table" id="compareTable">
+                 <thead id="compareThead"></thead>
+                 <tbody id="compareTbody"></tbody>
+              </table>
+           </div>
         </div>
       </div>
     </div>
@@ -4819,6 +4981,234 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               attachEvents(header);
           });
       });
+
+      // =====================================================
+      // 📈 [신규] 월별 정밀 비교 그리드 (출고 전용) 엔진
+      // =====================================================
+      let compareSelectedMonths = []; // 사용자가 선택한 월 배열 [3, 4, 5]
+      let compareSortTarget = null;   // null이면 독립 정렬, 특정 월(숫자)이면 행 맞춤 정렬
+
+      // 탭 전환 함수
+      function switchDashTab(tabName) {
+          document.getElementById('tabSummary').classList.toggle('active', tabName === 'summary');
+          document.getElementById('tabCompare').classList.toggle('active', tabName === 'compare');
+          
+          document.getElementById('dashSummaryView').style.display = tabName === 'summary' ? 'block' : 'none';
+          document.getElementById('dashCompareView').style.display = tabName === 'compare' ? 'block' : 'none';
+          
+          if (tabName === 'compare') {
+              initCompareView();
+          }
+      }
+
+      // 정밀 비교 뷰 초기화
+      function initCompareView() {
+          // 초기에 현재 월과 이전 월 2개를 자동 선택
+          if (compareSelectedMonths.length === 0) {
+              let cur = parseInt(serverData.month, 10);
+              let prev = cur - 1 < 1 ? 12 : cur - 1;
+              compareSelectedMonths = [prev, cur].sort((a,b)=>a-b);
+          }
+          
+          // 1~12월 체크버튼 렌더링
+          let controlsHtml = '';
+          for (let m = 1; m <= 12; m++) {
+              let isChecked = compareSelectedMonths.includes(m) ? 'checked' : '';
+              controlsHtml += `
+                 <label>
+                    <input type="checkbox" class="compare-month-chk" value="${m}" ${isChecked} onchange="handleCompareMonthChange(this)">
+                    <span class="compare-month-lbl">${m}월</span>
+                 </label>
+              `;
+          }
+          document.getElementById('compareMonthControls').innerHTML = controlsHtml;
+          
+          renderCompareGrid();
+      }
+
+      function handleCompareMonthChange(cb) {
+          let m = parseInt(cb.value, 10);
+          if (cb.checked) {
+              if (!compareSelectedMonths.includes(m)) compareSelectedMonths.push(m);
+          } else {
+              compareSelectedMonths = compareSelectedMonths.filter(x => x !== m);
+          }
+          compareSelectedMonths.sort((a, b) => a - b);
+          
+          // 정렬 기준 월을 껐다면 기본 정렬로 초기화
+          if (compareSortTarget !== null && !compareSelectedMonths.includes(compareSortTarget)) {
+              compareSortTarget = null;
+          }
+          renderCompareGrid();
+      }
+
+      function setCompareSort(month) {
+          compareSortTarget = month;
+          renderCompareGrid();
+      }
+
+      function resetCompareSort() {
+          compareSortTarget = null;
+          renderCompareGrid();
+      }
+
+      // 핵심 렌더링 엔진
+      function renderCompareGrid() {
+          if (!yearlyCache[serverData.year]) {
+              document.getElementById('compareTbody').innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px; font-weight:bold; color:var(--text-sub);">⏳ 데이터를 불러오기 위해 [요약 차트] 탭에서 '연간' 버튼을 한 번 눌러주세요.</td></tr>`;
+              return;
+          }
+
+          let yData = yearlyCache[serverData.year];
+          if (!yData || !yData.comp) return;
+
+          let theadHtml = '<tr>';
+          let unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
+
+          // 1. 헤더 그리기
+          compareSelectedMonths.forEach(m => {
+              let sortClass = (compareSortTarget === m) ? 'active-sort' : '';
+              let sortIcon = (compareSortTarget === m) ? ' 🔽' : '';
+              theadHtml += `<th class="compare-th ${sortClass}" onclick="setCompareSort(${m})">${m}월${sortIcon}</th>`;
+          });
+          theadHtml += '</tr>';
+          document.getElementById('compareThead').innerHTML = theadHtml;
+
+          // 2. 데이터 가공 (업체별 월별 데이터 집계)
+          let compStats = {}; 
+          let maxVolPerMonth = {}; // 데이터 막대 계산을 위한 각 월의 최대값
+
+          // 초기화
+          Object.keys(yData.comp).forEach(compName => {
+              let clean = compName.replace(/\[TASK\]/gi, "").trim();
+              if (compName.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean))) return; // TASK 제외
+              
+              let stdName = getFullName(clean);
+              if (!compStats[stdName]) compStats[stdName] = { name: stdName, vols: {} };
+          });
+
+          // 각 월별 데이터 채우기 및 최대값 찾기
+          compareSelectedMonths.forEach(m => {
+              maxVolPerMonth[m] = 0;
+              let mData = yData.monthly[m - 1]; // 배열 인덱스는 0부터
+              if (mData && mData.details) {
+                  Object.keys(mData.details).forEach(cName => {
+                      let stdName = getFullName(cName);
+                      if (compStats[stdName]) {
+                          let vol = mData.details[cName];
+                          compStats[stdName].vols[m] = (compStats[stdName].vols[m] || 0) + vol;
+                          if (compStats[stdName].vols[m] > maxVolPerMonth[m]) {
+                              maxVolPerMonth[m] = compStats[stdName].vols[m];
+                          }
+                      }
+                  });
+              }
+          });
+
+          let tbodyHtml = '';
+          
+          // 🚀 [투 트랙 정렬 시스템 작동]
+          if (compareSortTarget === null) {
+              // 상태 A: 월별 독립 정렬 (리더보드 모드)
+              let sortedLists = {};
+              let maxRows = 0;
+
+              compareSelectedMonths.forEach(m => {
+                  let list = Object.values(compStats)
+                      .map(c => ({ name: c.name, vol: c.vols[m] || 0 }))
+                      .filter(c => c.vol > 0)
+                      .sort((a, b) => b.vol - a.vol); // 수량 내림차순
+                  sortedLists[m] = list;
+                  if (list.length > maxRows) maxRows = list.length;
+              });
+
+              for (let r = 0; r < maxRows; r++) {
+                  tbodyHtml += '<tr>';
+                  compareSelectedMonths.forEach(m => {
+                      let item = sortedLists[m][r];
+                      if (item) {
+                          let cObj = getCompanyColor(item.name);
+                          let percent = maxVolPerMonth[m] > 0 ? (item.vol / maxVolPerMonth[m]) * 100 : 0;
+                          
+                          // 🚨 In-Cell 디자인 (증감률 없음)
+                          let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
+                          tbodyHtml += `
+                            <td class="compare-td">
+                               <div class="compare-cell" style="${bgCss}">
+                                  <div class="comp-info">
+                                     <span class="comp-name-txt">${getShortName(item.name)}</span>
+                                  </div>
+                                  <div class="vol-info">
+                                     <span class="vol-txt">${item.vol}${unitStr}</span>
+                                  </div>
+                               </div>
+                            </td>`;
+                      } else {
+                          tbodyHtml += `<td class="compare-td"></td>`; // 빈 칸
+                      }
+                  });
+                  tbodyHtml += '</tr>';
+              }
+
+          } else {
+              // 상태 B: 특정 월 기준 행 맞춤 정렬 (정밀 비교 모드)
+              let sortedComps = Object.values(compStats)
+                  .filter(c => Object.values(c.vols).some(v => v > 0)) // 0인 업체는 숨김
+                  .sort((a, b) => {
+                      let volA = a.vols[compareSortTarget] || 0;
+                      let volB = b.vols[compareSortTarget] || 0;
+                      return volB - volA;
+                  });
+
+              sortedComps.forEach(comp => {
+                  let cObj = getCompanyColor(comp.name);
+                  tbodyHtml += '<tr>';
+                  
+                  compareSelectedMonths.forEach((m, index) => {
+                      let vol = comp.vols[m] || 0;
+                      let percent = maxVolPerMonth[m] > 0 ? (vol / maxVolPerMonth[m]) * 100 : 0;
+                      let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
+                      
+                      // 📈 증감률 계산 (이전 선택된 월 기준)
+                      let rateHtml = '';
+                      if (index > 0) {
+                          let prevM = compareSelectedMonths[index - 1];
+                          let prevVol = comp.vols[prevM] || 0;
+                          if (prevVol > 0) {
+                              let rate = Math.round(((vol - prevVol) / prevVol) * 100);
+                              if (rate > 0) rateHtml = `<span class="rate-txt rate-up">▲${rate}%</span>`;
+                              else if (rate < 0) rateHtml = `<span class="rate-txt rate-down">▼${Math.abs(rate)}%</span>`;
+                              else rateHtml = `<span class="rate-txt rate-zero">-</span>`;
+                          } else if (vol > 0) {
+                              rateHtml = `<span class="rate-txt rate-up">NEW</span>`;
+                          }
+                      }
+
+                      let opClass = vol === 0 ? 'style="opacity: 0.3;"' : '';
+
+                      tbodyHtml += `
+                        <td class="compare-td">
+                           <div class="compare-cell" style="${bgCss}" ${opClass}>
+                              <div class="comp-info">
+                                 <span class="comp-name-txt">${getShortName(comp.name)}</span>
+                              </div>
+                              <div class="vol-info">
+                                 <span class="vol-txt">${vol}${unitStr}</span>
+                                 ${rateHtml}
+                              </div>
+                           </div>
+                        </td>`;
+                  });
+                  tbodyHtml += '</tr>';
+              });
+          }
+
+          if (tbodyHtml === '') {
+              tbodyHtml = `<tr><td colspan="10" style="text-align:center; padding:20px; font-weight:bold; color:var(--text-sub);">해당 월에 출고 데이터가 없습니다.</td></tr>`;
+          }
+          document.getElementById('compareTbody').innerHTML = tbodyHtml;
+      }
+
     </script>
   </body>
 </html>
