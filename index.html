@@ -1418,8 +1418,7 @@
       .pie-slider::-webkit-slider-thumb:active {
         transform: scale(1.15);
       }
-
-      /* ===================================================== */
+/* ===================================================== */
       /* 📊 [V3 신규] 크로스 연도 정밀 비교 그리드 전용 CSS */
       /* ===================================================== */
       .compare-grid-wrapper {
@@ -1436,11 +1435,11 @@
         table-layout: fixed; /* 반응형 너비 분할을 위해 필수 */
       }
       .compare-th {
-        padding: 12px;
-        text-align: right;
+        padding: 12px 6px;
+        text-align: center;
         background: var(--header-bg);
         border-bottom: 2px solid var(--border-color);
-        border-right: 1px solid var(--border-color); /* 💡 월간 구분선 */
+        border-right: 1px solid var(--border-color);
         font-size: 0.85em;
         font-weight: 900;
         color: var(--text-sub);
@@ -1448,6 +1447,7 @@
         cursor: pointer;
         user-select: none;
         transition: background 0.2s;
+        position: relative;
       }
       .compare-th:last-child { border-right: none; }
       .compare-th:active { background: rgba(10, 132, 255, 0.1); }
@@ -1456,24 +1456,11 @@
       .compare-td {
         padding: 0;
         border-bottom: 1px solid var(--border-color);
-        border-right: 1px solid var(--border-color); /* 💡 월간 구분선 */
-        vertical-align: middle;
+        border-right: 1px solid var(--border-color);
+        vertical-align: top;
+        position: relative;
       }
       .compare-td:last-child { border-right: none; }
-      
-      /* 🚨 틀 고정 (첫 번째 업체명/데이터 셀) */
-      .compare-td-fixed {
-        position: sticky;
-        left: 0;
-        background-color: var(--card-bg);
-        z-index: 10;
-      }
-      .compare-th-fixed {
-        position: sticky;
-        left: 0;
-        background-color: var(--header-bg);
-        z-index: 11;
-      }
 
       .compare-cell {
         position: relative;
@@ -1512,7 +1499,6 @@
       .rate-down { color: #0a84ff; }
       .rate-zero { color: var(--text-sub); }
 
-      /* 💡 알약형 월 선택 태그 */
       .compare-tags-container {
         display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
       }
@@ -1545,7 +1531,6 @@
       }
       .compare-exec-btn:active { transform: scale(0.97); }
 
-      /* 탭 메뉴 디자인 */
       .dash-tab-row {
         display: flex; background: var(--bg-color); padding: 4px; border-radius: 12px; margin-bottom: 15px;
       }
@@ -5005,13 +4990,13 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       });
 
       // =====================================================
-      // 📈 [V3] 크로스 연도 정밀 비교 그리드 엔진
+      // 📈 [V3.1] 크로스 연도 정밀 비교 그리드 엔진 (드래그/정렬 완결판)
       // =====================================================
-      let compareMonthsList = []; // 배열 구조: [{y: 2026, m: 3}, {y: 2026, m: 4}]
-      let compareSortTargetKey = null; // null 이면 독립정렬, "YYYY-MM" 이면 행 맞춤 정렬
+      let compareMonthsList = []; 
+      let compareSortTargetKey = null; 
+      let compareSortOrder = 'desc'; // 💡 신규: 오름/내림차순 토글 변수
       let crossPickerTempYear = new Date().getFullYear();
 
-      // 탭 전환
       function switchDashTab(tabName) {
           document.getElementById('tabSummary').classList.toggle('active', tabName === 'summary');
           document.getElementById('tabCompare').classList.toggle('active', tabName === 'compare');
@@ -5032,7 +5017,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           document.getElementById('compareGridArea').style.display = 'none';
       }
 
-      // 태그(알약) 그리기
       function renderCompareTags() {
           let html = '';
           compareMonthsList.forEach((item, idx) => {
@@ -5042,9 +5026,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                           <div class="compare-tag-remove" onclick="removeCompareMonth(${idx})">✕</div>
                        </div>`;
           });
-          if (compareMonthsList.length < 4) {
-              html += `<button class="compare-add-btn" onclick="openCrossMonthPicker()">+ 월 추가</button>`;
-          }
+          html += `<button class="compare-add-btn" onclick="openCrossMonthPicker()">+ 월 추가</button>`;
           document.getElementById('compareTagsArea').innerHTML = html;
       }
 
@@ -5054,7 +5036,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           renderCompareTags();
       }
 
-      // 전용 연월 선택기 열기
       function openCrossMonthPicker() {
           if (compareMonthsList.length > 0) crossPickerTempYear = compareMonthsList[compareMonthsList.length - 1].y;
           else crossPickerTempYear = parseInt(serverData.year, 10);
@@ -5062,10 +5043,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           document.getElementById('crossMonthPickerModal').style.display = 'flex';
       }
 
-      function changeCrossPickerYear(offset) {
-          crossPickerTempYear += offset;
-          renderCrossPicker();
-      }
+      function changeCrossPickerYear(offset) { crossPickerTempYear += offset; renderCrossPicker(); }
 
       function renderCrossPicker() {
           document.getElementById("crossPickerYearText").innerText = `${crossPickerTempYear}년`;
@@ -5078,89 +5056,161 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       }
 
       function addCompareMonth(y, m) {
-          if (compareMonthsList.some(item => item.y === y && item.m === m)) {
-              showToast("이미 추가된 월입니다.", 1500); return;
-          }
+          if (compareMonthsList.some(item => item.y === y && item.m === m)) { showToast("이미 추가된 월입니다.", 1500); return; }
           compareMonthsList.push({y: y, m: m});
-          compareMonthsList.sort((a, b) => {
-              if (a.y !== b.y) return a.y - b.y;
-              return a.m - b.m;
-          });
           document.getElementById('crossMonthPickerModal').style.display = 'none';
           document.getElementById('compareGridArea').style.display = 'none';
           renderCompareTags();
       }
 
-      // 🚀 데이터 서버 조회 및 비교 실행 (스마트 로딩)
       function executeCompare() {
           if (compareMonthsList.length === 0) { showToast("비교할 월을 추가해주세요.", 1500); return; }
-          
           let yearsToFetch = [...new Set(compareMonthsList.map(item => item.y))];
           let missingYears = yearsToFetch.filter(y => !yearlyCache[y]);
-
           const btn = document.getElementById('compareExecBtn');
 
-          if (missingYears.length === 0) {
-              renderCompareGridV3();
-              return;
-          }
+          if (missingYears.length === 0) { renderCompareGridV3(); return; }
 
-          // 누락된 연도가 있으면 서버에서 긁어옴
           btn.innerText = "⏳ 데이터 불러오는 중...";
-          btn.style.pointerEvents = "none";
-          btn.style.opacity = "0.7";
+          btn.style.pointerEvents = "none"; btn.style.opacity = "0.7";
 
           let fetchPromises = missingYears.map(y => {
               return new Promise((resolve, reject) => {
                   google.script.run.withSuccessHandler(res => {
-                      yearlyCache[y] = res;
-                      localStorage.setItem(`yearly_stats_cache_${currentType}_${y}`, JSON.stringify(res));
-                      resolve();
+                      yearlyCache[y] = res; localStorage.setItem(`yearly_stats_cache_${currentType}_${y}`, JSON.stringify(res)); resolve();
                   }).withFailureHandler(reject).getYearlyStatsAsync(currentType, y);
               });
           });
 
           Promise.all(fetchPromises).then(() => {
-              btn.innerHTML = "📊 데이터 비교하기";
-              btn.style.pointerEvents = "auto";
-              btn.style.opacity = "1";
+              btn.innerHTML = "📊 데이터 비교하기"; btn.style.pointerEvents = "auto"; btn.style.opacity = "1";
               renderCompareGridV3();
           }).catch(e => {
-              btn.innerHTML = "📊 데이터 비교하기";
-              btn.style.pointerEvents = "auto";
-              btn.style.opacity = "1";
+              btn.innerHTML = "📊 데이터 비교하기"; btn.style.pointerEvents = "auto"; btn.style.opacity = "1";
               showToast("데이터를 불러오는데 실패했습니다.", 2500);
           });
       }
 
-      function setCompareSort(key) { compareSortTargetKey = key; renderCompareGridV3(); }
-      function resetCompareSort() { compareSortTargetKey = null; renderCompareGridV3(); }
+      // 💡 오름/내림차순 토글 적용
+      function setCompareSort(key) { 
+          if (window.colDragVars && window.colDragVars.wasDragged) {
+              window.colDragVars.wasDragged = false;
+              return; 
+          }
+          if (compareSortTargetKey === key) {
+              compareSortOrder = compareSortOrder === 'desc' ? 'asc' : 'desc';
+          } else {
+              compareSortTargetKey = key;
+              compareSortOrder = 'desc';
+          }
+          renderCompareGridV3(); 
+      }
+      
+      function resetCompareSort() { 
+          compareSortTargetKey = null; 
+          compareSortOrder = 'desc';
+          renderCompareGridV3(); 
+      }
 
-      // 📊 V3 그리드 렌더링 코어
+      // 🚀 [신규] 헤더 꾹 누르기 드래그 앤 드롭 엔진 (모바일 최적화)
+      window.colDragVars = { active: false, startIdx: -1, ghost: null, timer: null, wasDragged: false };
+
+      function startColDrag(e, idx) {
+          colDragVars.wasDragged = false;
+          colDragVars.timer = setTimeout(() => {
+              colDragVars.active = true;
+              colDragVars.startIdx = idx;
+              if(navigator.vibrate) navigator.vibrate(50);
+              
+              let th = e.currentTarget;
+              let ghost = th.cloneNode(true);
+              ghost.style.position = 'fixed';
+              ghost.style.zIndex = '99999';
+              ghost.style.opacity = '0.9';
+              ghost.style.pointerEvents = 'none';
+              ghost.style.background = '#0a84ff';
+              ghost.style.color = '#fff';
+              ghost.style.borderRadius = '8px';
+              ghost.style.width = th.offsetWidth + 'px';
+              ghost.style.border = 'none';
+              document.body.appendChild(ghost);
+              colDragVars.ghost = ghost;
+              moveColGhost(e);
+          }, 400); // 0.4초 길게 누르면 드래그 시작
+      }
+
+      function moveColGhost(e) {
+          if (!colDragVars.active || !colDragVars.ghost) {
+              if (colDragVars.timer) { clearTimeout(colDragVars.timer); colDragVars.timer = null; }
+              return;
+          }
+          let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          colDragVars.ghost.style.left = (clientX - (colDragVars.ghost.offsetWidth / 2)) + 'px';
+          colDragVars.ghost.style.top = (clientY - 20) + 'px';
+          if (e.cancelable) e.preventDefault();
+      }
+
+      function endColDrag(e) {
+          if (colDragVars.timer) clearTimeout(colDragVars.timer);
+          if (!colDragVars.active) return;
+          
+          colDragVars.wasDragged = true;
+          colDragVars.active = false;
+          
+          let clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+          let clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+          
+          if (colDragVars.ghost) { colDragVars.ghost.remove(); colDragVars.ghost = null; }
+
+          let dropTarget = document.elementFromPoint(clientX, clientY);
+          let th = dropTarget ? dropTarget.closest('th') : null;
+          
+          if (th && th.dataset.colidx !== undefined) {
+              let dropIdx = parseInt(th.dataset.colidx, 10);
+              if (colDragVars.startIdx !== -1 && colDragVars.startIdx !== dropIdx) {
+                  let item = compareMonthsList.splice(colDragVars.startIdx, 1)[0];
+                  compareMonthsList.splice(dropIdx, 0, item);
+                  renderCompareGridV3();
+              }
+          }
+          colDragVars.startIdx = -1;
+      }
+
       function renderCompareGridV3() {
           document.getElementById('compareGridArea').style.display = 'block';
           
-          // 열 너비 계산 (반응형 대응)
+          // 💡 4개 이상일 때 스크롤 동적 너비 계산
           let colCount = compareMonthsList.length;
-          let colWidth = "50%";
-          let tableMinWidth = "100%";
-          
-          if (colCount === 2) { colWidth = "50%"; }
-          else if (colCount === 3) { colWidth = "33.33%"; }
-          else if (colCount >= 4) { colWidth = "150px"; tableMinWidth = "max-content"; }
-
-          document.getElementById('compareTable').style.minWidth = tableMinWidth;
+          let tableWidth = "100%";
+          if (colCount >= 4) {
+              tableWidth = (colCount * 33.333) + "%"; // 화면에 3개만 딱 들어오게 너비 팽창
+          }
+          document.getElementById('compareTable').style.width = tableWidth;
+          document.getElementById('compareTable').style.minWidth = tableWidth;
 
           let theadHtml = '<tr>';
           let unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
 
-          // 1. 헤더 (틀 고정 로직 포함)
+          // 1. 헤더 렌더링 (틀고정 해제, 드래그 이벤트 바인딩)
           compareMonthsList.forEach((item, index) => {
               let key = `${item.y}-${item.m}`;
               let sortClass = (compareSortTargetKey === key) ? 'active-sort' : '';
-              let sortIcon = (compareSortTargetKey === key) ? ' 🔽' : '';
-              let thClass = index === 0 ? "compare-th compare-th-fixed" : "compare-th";
-              theadHtml += `<th class="${thClass} ${sortClass}" style="width: ${colWidth};" onclick="setCompareSort('${key}')">${String(item.y).slice(2)}년 ${item.m}월${sortIcon}</th>`;
+              let sortIconStr = '';
+              if (compareSortTargetKey === key) {
+                  sortIconStr = compareSortOrder === 'desc' ? ' 🔽' : ' 🔼';
+              }
+              
+              theadHtml += `<th class="compare-th ${sortClass}" data-colidx="${index}" 
+                                ontouchstart="startColDrag(event, ${index})" 
+                                ontouchmove="moveColGhost(event)" 
+                                ontouchend="endColDrag(event)"
+                                onmousedown="startColDrag(event, ${index})"
+                                onmousemove="moveColGhost(event)"
+                                onmouseup="endColDrag(event)"
+                                onclick="setCompareSort('${key}')">
+                                ${String(item.y).slice(2)}년 ${item.m}월${sortIconStr}
+                            </th>`;
           });
           theadHtml += '</tr>';
           document.getElementById('compareThead').innerHTML = theadHtml;
@@ -5190,7 +5240,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
           let tbodyHtml = '';
           
-          // 🚀 상태 A: 월별 독립 정렬 (리더보드)
           if (compareSortTargetKey === null) {
               let sortedLists = {}; let maxRows = 0;
               compareMonthsList.forEach(item => {
@@ -5205,29 +5254,31 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   compareMonthsList.forEach((item, index) => {
                       let key = `${item.y}-${item.m}`;
                       let dataItem = sortedLists[key][r];
-                      let tdClass = index === 0 ? "compare-td compare-td-fixed" : "compare-td";
 
                       if (dataItem) {
                           let cObj = getCompanyColor(dataItem.name);
                           let percent = maxVolPerCol[key] > 0 ? (dataItem.vol / maxVolPerCol[key]) * 100 : 0;
+                          
+                          // 💡 막대그래프를 셀 내부 DIV가 아닌 TD 자체에 적용 (빈틈 제거)
                           let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
                           
                           tbodyHtml += `
-                            <td class="${tdClass}">
-                               <div class="compare-cell" style="${bgCss}">
+                            <td class="compare-td" style="${bgCss}">
+                               <div class="compare-cell">
                                   <div class="comp-info"><span class="comp-name-txt">${getShortName(dataItem.name)}</span></div>
                                   <div class="vol-info"><span class="vol-txt">${dataItem.vol}${unitStr}</span></div>
                                </div>
                             </td>`;
-                      } else { tbodyHtml += `<td class="${tdClass}"></td>`; }
+                      } else { tbodyHtml += `<td class="compare-td"></td>`; }
                   });
                   tbodyHtml += '</tr>';
               }
           } 
-          // 🚀 상태 B: 특정 연/월 기준 행 맞춤 정렬 (정밀 비교)
           else {
               let sortedComps = Object.values(compStats).filter(c => Object.values(c.vols).some(v => v > 0)).sort((a, b) => {
-                  return (b.vols[compareSortTargetKey] || 0) - (a.vols[compareSortTargetKey] || 0);
+                  let volA = a.vols[compareSortTargetKey] || 0;
+                  let volB = b.vols[compareSortTargetKey] || 0;
+                  return compareSortOrder === 'desc' ? (volB - volA) : (volA - volB); // 💡 오름/내림 적용
               });
 
               sortedComps.forEach(comp => {
@@ -5238,10 +5289,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       let key = `${item.y}-${item.m}`;
                       let vol = comp.vols[key] || 0;
                       let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
-                      let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
-                      let tdClass = index === 0 ? "compare-td compare-td-fixed" : "compare-td";
                       
-                      // 💡 절대값 및 증감률 동시 표기
+                      // 💡 막대그래프를 TD 자체에 적용
+                      let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
+                      
                       let rateHtml = '';
                       if (index > 0) {
                           let prevKey = `${compareMonthsList[index - 1].y}-${compareMonthsList[index - 1].m}`;
@@ -5250,7 +5301,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                               let diff = vol - prevVol;
                               let rate = Math.round((diff / prevVol) * 100);
                               let diffStr = diff > 0 ? `+${diff}` : `${diff}`;
-                              
                               if (rate > 0) rateHtml = `<span class="rate-txt rate-up">▲${diffStr} (${rate}%)</span>`;
                               else if (rate < 0) rateHtml = `<span class="rate-txt rate-down">▼${Math.abs(diff)} (${Math.abs(rate)}%)</span>`;
                               else rateHtml = `<span class="rate-txt rate-zero">-</span>`;
@@ -5258,10 +5308,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                               rateHtml = `<span class="rate-txt rate-up">NEW</span>`;
                           }
                       }
-                      let opClass = vol === 0 ? 'style="opacity: 0.3;"' : '';
+                      let opClass = vol === 0 ? 'style="opacity: 0.4;"' : '';
                       tbodyHtml += `
-                        <td class="${tdClass}">
-                           <div class="compare-cell" style="${bgCss}" ${opClass}>
+                        <td class="compare-td" style="${bgCss}">
+                           <div class="compare-cell" ${opClass}>
                               <div class="comp-info"><span class="comp-name-txt">${getShortName(comp.name)}</span></div>
                               <div class="vol-info"><span class="vol-txt">${vol}${unitStr}</span>${rateHtml}</div>
                            </div>
