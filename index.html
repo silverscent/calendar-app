@@ -5130,22 +5130,26 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           renderCompareGridV3(); 
       }
 
-      // 🚀 [V3.2 신규] 헤더 꾹 누르기 드래그 앤 드롭 엔진 (달력 스타일 타겟팅)
+      // 🚀 [V3.3 완결판] 헤더 꾹 누르기 드래그 앤 드롭 엔진 (이벤트 충돌 완벽 방지)
       window.colDragVars = { active: false, startIdx: -1, ghost: null, timer: null, wasDragged: false, sourceTh: null, lastDropTargetIdx: -1 };
 
       function startColDrag(e, idx) {
+          // 마우스 우클릭 등 무시
+          if (e.button !== undefined && e.button !== 0) return; 
+          
           colDragVars.wasDragged = false;
+          let th = e.currentTarget;
+
           colDragVars.timer = setTimeout(() => {
               colDragVars.active = true;
               colDragVars.startIdx = idx;
               if(navigator.vibrate) navigator.vibrate(50);
               
-              let th = e.currentTarget;
               colDragVars.sourceTh = th;
               
-              // 1. 고스트(유령) 생성 (파란색으로 눈에 띄게)
+              // 1. 고스트(유령) 생성
               let ghost = th.cloneNode(true);
-              ghost.classList.remove('dragging-source');
+              ghost.classList.remove('dragging-source', 'active-sort'); // 불필요한 클래스 제거
               ghost.style.position = 'fixed';
               ghost.style.zIndex = '99999';
               ghost.style.opacity = '0.95';
@@ -5161,38 +5165,38 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               document.body.appendChild(ghost);
               colDragVars.ghost = ghost;
               
-              // 2. 원본 투명화 (집어든 느낌)
+              // 2. 원본 투명화
               th.classList.add('dragging-source');
 
               moveColGhost(e);
-          }, 400); // 0.4초 꾹
+          }, 350); // 💡 반응 속도를 0.35초로 약간 줄임
       }
 
       function moveColGhost(e) {
           if (!colDragVars.active || !colDragVars.ghost) {
-              if (colDragVars.timer) { clearTimeout(colDragVars.timer); colDragVars.timer = null; }
+              if (colDragVars.timer && e.type.includes('move')) {
+                  // 손가락을 조금이라도 움직이면 타이머 취소 (드래그 취소, 단순 스크롤로 인식)
+                  clearTimeout(colDragVars.timer); 
+                  colDragVars.timer = null; 
+              }
               return;
           }
           
           let clientX = e.touches ? e.touches[0].clientX : e.clientX;
           let clientY = e.touches ? e.touches[0].clientY : e.clientY;
           
-          // 손가락 따라다니기
           colDragVars.ghost.style.left = (clientX - (colDragVars.ghost.offsetWidth / 2)) + 'px';
           colDragVars.ghost.style.top = (clientY - 25) + 'px';
           
-          if (e.cancelable) e.preventDefault(); // 스크롤 방지
+          if (e.cancelable) e.preventDefault(); 
 
           // 🎯 타겟 열(Column) 하이라이트 (파란 점선)
-          // 1. 기존 파란 점선 모두 제거
           document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
           colDragVars.lastDropTargetIdx = -1;
 
-          // 2. 현재 손가락 밑에 있는 요소 찾기 (유령은 포인터 이벤트가 꺼져있으므로 그 아래가 잡힘)
           let dropTarget = document.elementFromPoint(clientX, clientY);
           if (!dropTarget) return;
 
-          // TH(헤더)나 TD(본문 셀) 위를 지나고 있는지 확인
           let targetTh = dropTarget.closest('.compare-th');
           let targetTd = dropTarget.closest('.compare-td');
           
@@ -5200,55 +5204,49 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           if (targetTh && targetTh.dataset.colidx !== undefined) hoverColIdx = parseInt(targetTh.dataset.colidx, 10);
           else if (targetTd && targetTd.dataset.colidx !== undefined) hoverColIdx = parseInt(targetTd.dataset.colidx, 10);
 
-          // 3. 손가락 아래 열이 원본 열이 아니면, 해당 열(TH, TD 전체)에 파란 점선 추가
           if (hoverColIdx !== -1 && hoverColIdx !== colDragVars.startIdx) {
               colDragVars.lastDropTargetIdx = hoverColIdx;
-              
-              // 해당 열의 TH에 점선
               let thToHighlight = document.querySelector(`.compare-th[data-colidx="${hoverColIdx}"]`);
               if (thToHighlight) thToHighlight.classList.add('drag-over');
-              
-              // 해당 열의 모든 TD에 점선
               document.querySelectorAll(`.compare-td[data-colidx="${hoverColIdx}"]`).forEach(td => {
                   td.classList.add('drag-over');
               });
           }
       }
 
-      // 🚨 'key' 파라미터를 추가로 받습니다.
+      // 💡 [핵심] 짧은 터치(클릭)인지 진짜 드래그인지 여기서 완벽하게 판별
       function endColDrag(e, key) {
-          // 1. 만약 0.4초가 되기 전에 손을 뗐다면? (드래그 발동 전 = 짧은 터치/클릭)
+          // 1. 드래그가 발동되기 전에 손을 뗐다면 = 짧은 터치 (정렬 실행)
           if (!colDragVars.active) {
-              if (colDragVars.timer) clearTimeout(colDragVars.timer);
-              // 짧게 톡 쳤으니 정렬(Sort) 기능 실행!
-              setCompareSort(key);
+              if (colDragVars.timer) {
+                  clearTimeout(colDragVars.timer);
+                  colDragVars.timer = null;
+                  
+                  // 💡 e.type을 검사하여 중복 실행 방지
+                  if(e.type === 'touchend' || e.type === 'mouseup') {
+                       setCompareSort(key);
+                  }
+              }
               return;
           }
-
-          // 2. 이미 드래그 중이었다면 아래 로직 (자리 바꾸기) 실행
-          if (colDragVars.timer) clearTimeout(colDragVars.timer);
           
+          // 2. 이미 드래그 중이었다면 (자리 변경 실행)
+          if (colDragVars.timer) clearTimeout(colDragVars.timer);
           colDragVars.wasDragged = true;
           colDragVars.active = false;
           
-          // 원본 투명화 원상복구
           if (colDragVars.sourceTh) {
               colDragVars.sourceTh.classList.remove('dragging-source');
               colDragVars.sourceTh = null;
           }
-          
-          // 유령 제거
           if (colDragVars.ghost) { colDragVars.ghost.remove(); colDragVars.ghost = null; }
-
-          // 파란 점선 지우기
           document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
 
-          // 자리 바꾸기 실행
           let dropIdx = colDragVars.lastDropTargetIdx;
           if (dropIdx !== -1 && colDragVars.startIdx !== -1 && colDragVars.startIdx !== dropIdx) {
               let item = compareMonthsList.splice(colDragVars.startIdx, 1)[0];
               compareMonthsList.splice(dropIdx, 0, item);
-              renderCompareGridV3(); // 표 다시 그리기
+              renderCompareGridV3(); 
           }
           
           colDragVars.startIdx = -1;
@@ -5270,7 +5268,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let theadHtml = '<tr>';
           let unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
 
-          // 1. 헤더 렌더링 (드래그 지원 & colidx 꼬리표 추가)
+          // 1. 헤더 렌더링 (🚨 onclick 제거, touchend/mouseup에 의존)
           compareMonthsList.forEach((item, index) => {
               let key = `${item.y}-${item.m}`;
               let sortClass = (compareSortTargetKey === key) ? 'active-sort' : '';
@@ -5279,11 +5277,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   sortIconStr = compareSortOrder === 'desc' ? ' 🔽' : ' 🔼';
               }
               
-              // 💡 onclick을 완전히 삭제하고, 드래그가 끝날 때(touchend/mouseup) 짧은 클릭이었는지 판단해서 넘김
               theadHtml += `<th class="compare-th ${sortClass}" data-colidx="${index}" 
                                 ontouchstart="startColDrag(event, ${index})" 
                                 ontouchmove="moveColGhost(event)" 
-                                ontouchend="endColDrag(event, '${key}')" 
+                                ontouchend="endColDrag(event, '${key}')"
                                 onmousedown="startColDrag(event, ${index})"
                                 onmousemove="moveColGhost(event)"
                                 onmouseup="endColDrag(event, '${key}')">
@@ -5339,10 +5336,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                           let vol = dataItem.vol;
                           let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
                           
-                          // 💡 막대그래프를 셀 내부 DIV가 아닌 TD 자체에 적용 (빈틈 제거)
                           let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
                           
-                          // 💡 상태 A에서도 기본적으로 바로 왼쪽 열의 동일 업체 대비 증감률을 보여줌
                           let rateHtml = '';
                           if (index > 0) {
                               let prevKey = `${compareMonthsList[index - 1].y}-${compareMonthsList[index - 1].m}`;
@@ -5359,7 +5354,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                               }
                           }
                           
-                          // 🚨 [수정] data-colidx 추가!
                           tbodyHtml += `
                             <td class="compare-td" style="${bgCss}" data-colidx="${index}">
                                <div class="compare-cell">
@@ -5368,7 +5362,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                                </div>
                             </td>`;
                       } else { 
-                          // 🚨 [수정] 빈 셀에도 data-colidx 추가 (그래야 빈 공간에 드래그 드롭 가능)
                           tbodyHtml += `<td class="compare-td" data-colidx="${index}"></td>`; 
                       }
                   });
@@ -5380,7 +5373,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               let sortedComps = Object.values(compStats).filter(c => Object.values(c.vols).some(v => v > 0)).sort((a, b) => {
                   let volA = a.vols[compareSortTargetKey] || 0;
                   let volB = b.vols[compareSortTargetKey] || 0;
-                  return compareSortOrder === 'desc' ? (volB - volA) : (volA - volB); // 💡 오름/내림 적용
+                  return compareSortOrder === 'desc' ? (volB - volA) : (volA - volB);
               });
 
               sortedComps.forEach(comp => {
@@ -5392,10 +5385,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       let vol = comp.vols[key] || 0;
                       let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
                       
-                      // 💡 막대그래프를 TD 자체에 적용
                       let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
                       
-                      // 💡 100% 동기화: 터치(클릭)한 기준월과 비교하여 증감률 계산!
                       let rateHtml = '';
                       if (key !== compareSortTargetKey) {
                           let baseVol = comp.vols[compareSortTargetKey] || 0;
@@ -5415,7 +5406,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       
                       let opClass = vol === 0 ? 'style="opacity: 0.4;"' : '';
                       
-                      // 🚨 [수정] data-colidx 추가!
                       tbodyHtml += `
                         <td class="compare-td" style="${bgCss}" data-colidx="${index}">
                            <div class="compare-cell" ${opClass}>
