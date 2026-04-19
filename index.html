@@ -1736,7 +1736,7 @@
 
         <div id="dashCompareView" style="display: none; padding-bottom: 20px;">
            <div style="font-weight:900; color:var(--text-main); margin-bottom: 10px; font-size:1.05em;">
-              📅 비교할 월 구성 <span style="font-size:0.75em; color:var(--text-sub);">(최대 4개)</span>
+              📅 비교할 월 구성 <span style="font-size:0.75em; color:var(--text-sub);">(여러 달 선택 가능)</span>
            </div>
            
            <div class="compare-tags-container" id="compareTagsArea">
@@ -2051,7 +2051,8 @@
       <div class="modal-box" onclick="event.stopPropagation()">
         <div class="bottom-sheet-handle"></div>
         <div class="modal-header" style="margin-bottom: 15px;">
-           <div class="modal-title" style="font-size:1.1em;">🗓️ 비교할 연/월 추가</div>
+           <div class="modal-title" style="font-size:1.1em;">🗓️ 비교할 연/월 다중 선택</div>
+           <button class="close-btn" onclick="document.getElementById('crossMonthPickerModal').style.display = 'none'">✕</button>
         </div>
         <div class="picker-year-row" style="margin-bottom: 15px;">
           <button class="year-btn" onclick="changeCrossPickerYear(-1)">◀</button>
@@ -2059,6 +2060,8 @@
           <button class="year-btn" onclick="changeCrossPickerYear(1)">▶</button>
         </div>
         <div class="month-grid-ui" id="crossPickerMonthGrid"></div>
+        
+        <button class="save-btn" style="width: 100%; margin-top: 20px;" onclick="confirmCrossPicker()">✅ 선택 완료</button>
       </div>
     </div>
 
@@ -5014,49 +5017,15 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       let compareSortTargetKey = null; 
       let compareSortOrder = 'desc'; // 💡 신규: 오름/내림차순 토글 변수
       let crossPickerTempYear = new Date().getFullYear();
-
-      function switchDashTab(tabName) {
-          document.getElementById('tabSummary').classList.toggle('active', tabName === 'summary');
-          document.getElementById('tabCompare').classList.toggle('active', tabName === 'compare');
-          document.getElementById('dashSummaryView').style.display = tabName === 'summary' ? 'block' : 'none';
-          document.getElementById('dashCompareView').style.display = tabName === 'compare' ? 'block' : 'none';
-          if (tabName === 'compare') initCompareView();
-      }
-
-      function initCompareView() {
-          if (compareMonthsList.length === 0) {
-              let curY = parseInt(serverData.year, 10);
-              let curM = parseInt(serverData.month, 10);
-              let prevY = curM === 1 ? curY - 1 : curY;
-              let prevM = curM === 1 ? 12 : curM - 1;
-              compareMonthsList = [{y: prevY, m: prevM}, {y: curY, m: curM}];
-          }
-          renderCompareTags();
-          document.getElementById('compareGridArea').style.display = 'none';
-      }
-
-      function renderCompareTags() {
-          let html = '';
-          compareMonthsList.forEach((item, idx) => {
-              let tagText = `${String(item.y).slice(2)}년 ${item.m}월`;
-              html += `<div class="compare-tag">
-                          ${tagText}
-                          <div class="compare-tag-remove" onclick="removeCompareMonth(${idx})">✕</div>
-                       </div>`;
-          });
-          html += `<button class="compare-add-btn" onclick="openCrossMonthPicker()">+ 월 추가</button>`;
-          document.getElementById('compareTagsArea').innerHTML = html;
-      }
-
-      function removeCompareMonth(idx) {
-          compareMonthsList.splice(idx, 1);
-          document.getElementById('compareGridArea').style.display = 'none';
-          renderCompareTags();
-      }
+      let tempSelectedMonthsForPicker = []; // 💡 다중 선택을 기억할 임시 바구니
 
       function openCrossMonthPicker() {
+          // 💡 창을 열 때, 현재 선택되어 있던 월들을 임시 바구니에 그대로 복사
+          tempSelectedMonthsForPicker = JSON.parse(JSON.stringify(compareMonthsList));
+          
           if (compareMonthsList.length > 0) crossPickerTempYear = compareMonthsList[compareMonthsList.length - 1].y;
           else crossPickerTempYear = parseInt(serverData.year, 10);
+          
           renderCrossPicker();
           document.getElementById('crossMonthPickerModal').style.display = 'flex';
       }
@@ -5067,20 +5036,46 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           document.getElementById("crossPickerYearText").innerText = `${crossPickerTempYear}년`;
           let gridHtml = "";
           for (let i = 1; i <= 12; i++) {
-              let isSelected = compareMonthsList.some(item => item.y === crossPickerTempYear && item.m === i) ? 'current' : '';
-              gridHtml += `<button class="month-btn ${isSelected}" onclick="addCompareMonth(${crossPickerTempYear}, ${i})">${i}월</button>`;
+              // 💡 임시 바구니를 뒤져서 선택된 달은 파란색(current)으로 칠함
+              let isSelected = tempSelectedMonthsForPicker.some(item => item.y === crossPickerTempYear && item.m === i) ? 'current' : '';
+              
+              // 🚨 onclick 함수가 addCompareMonth -> toggleCompareMonth 로 변경됨
+              gridHtml += `<button class="month-btn ${isSelected}" onclick="toggleCompareMonth(${crossPickerTempYear}, ${i})">${i}월</button>`;
           }
           document.getElementById("crossPickerMonthGrid").innerHTML = gridHtml;
       }
 
-      function addCompareMonth(y, m) {
-          if (compareMonthsList.some(item => item.y === y && item.m === m)) { showToast("이미 추가된 월입니다.", 1500); return; }
-          compareMonthsList.push({y: y, m: m});
-          document.getElementById('crossMonthPickerModal').style.display = 'none';
-          document.getElementById('compareGridArea').style.display = 'none';
-          renderCompareTags();
+      // 💡 [신규] 누를 때마다 창이 안 닫히고 선택/해제만 반복하는 함수
+      function toggleCompareMonth(y, m) {
+          let existingIdx = tempSelectedMonthsForPicker.findIndex(item => item.y === y && item.m === m);
+          
+          if (existingIdx !== -1) {
+              tempSelectedMonthsForPicker.splice(existingIdx, 1); // 이미 있으면 바구니에서 빼기 (해제)
+          } else {
+              tempSelectedMonthsForPicker.push({y: y, m: m}); // 없으면 바구니에 담기 (선택)
+          }
+          
+          renderCrossPicker(); // 버튼 색깔 즉시 새로고침
       }
 
+      // 💡 [신규] '✅ 선택 완료' 버튼을 눌렀을 때 실행되는 함수
+      function confirmCrossPicker() {
+          if (tempSelectedMonthsForPicker.length === 0) {
+              showToast("최소 1개 이상의 월을 선택해주세요.", 1500); return;
+          }
+          
+          // 임시 바구니에 담긴 걸 진짜 목록으로 확정 짓기
+          compareMonthsList = JSON.parse(JSON.stringify(tempSelectedMonthsForPicker));
+          compareMonthsList.sort((a, b) => {
+              if (a.y !== b.y) return a.y - b.y;
+              return a.m - b.m;
+          });
+          
+          document.getElementById('crossMonthPickerModal').style.display = 'none';
+          document.getElementById('compareGridArea').style.display = 'none'; // 표 숨기고 [비교하기] 누르도록 유도
+          renderCompareTags();
+      }
+      
       function executeCompare() {
           if (compareMonthsList.length === 0) { showToast("비교할 월을 추가해주세요.", 1500); return; }
           let yearsToFetch = [...new Set(compareMonthsList.map(item => item.y))];
