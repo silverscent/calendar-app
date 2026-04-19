@@ -5215,9 +5215,18 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           }
       }
 
-      function endColDrag(e) {
+      // 🚨 'key' 파라미터를 추가로 받습니다.
+      function endColDrag(e, key) {
+          // 1. 만약 0.4초가 되기 전에 손을 뗐다면? (드래그 발동 전 = 짧은 터치/클릭)
+          if (!colDragVars.active) {
+              if (colDragVars.timer) clearTimeout(colDragVars.timer);
+              // 짧게 톡 쳤으니 정렬(Sort) 기능 실행!
+              setCompareSort(key);
+              return;
+          }
+
+          // 2. 이미 드래그 중이었다면 아래 로직 (자리 바꾸기) 실행
           if (colDragVars.timer) clearTimeout(colDragVars.timer);
-          if (!colDragVars.active) return;
           
           colDragVars.wasDragged = true;
           colDragVars.active = false;
@@ -5270,14 +5279,14 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   sortIconStr = compareSortOrder === 'desc' ? ' 🔽' : ' 🔼';
               }
               
+              // 💡 onclick을 완전히 삭제하고, 드래그가 끝날 때(touchend/mouseup) 짧은 클릭이었는지 판단해서 넘김
               theadHtml += `<th class="compare-th ${sortClass}" data-colidx="${index}" 
                                 ontouchstart="startColDrag(event, ${index})" 
                                 ontouchmove="moveColGhost(event)" 
-                                ontouchend="endColDrag(event)"
+                                ontouchend="endColDrag(event, '${key}')" 
                                 onmousedown="startColDrag(event, ${index})"
                                 onmousemove="moveColGhost(event)"
-                                onmouseup="endColDrag(event)"
-                                onclick="setCompareSort('${key}')">
+                                onmouseup="endColDrag(event, '${key}')">
                                 ${String(item.y).slice(2)}년 ${item.m}월${sortIconStr}
                             </th>`;
           });
