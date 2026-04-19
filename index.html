@@ -5019,6 +5019,53 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       let crossPickerTempYear = new Date().getFullYear();
       let tempSelectedMonthsForPicker = []; // 💡 다중 선택을 기억할 임시 바구니
 
+      // 💡 [누락 복구 1] 대시보드 탭 전환 함수
+      function switchDashTab(tabName) {
+        const tabSummaryBtn = document.getElementById('tabSummary');
+        const tabCompareBtn = document.getElementById('tabCompare');
+        const summaryView = document.getElementById('dashSummaryView');
+        const compareView = document.getElementById('dashCompareView');
+
+        if (tabName === 'summary') {
+          tabSummaryBtn.classList.add('active');
+          tabCompareBtn.classList.remove('active');
+          summaryView.style.display = 'block';
+          compareView.style.display = 'none';
+        } else if (tabName === 'compare') {
+          tabSummaryBtn.classList.remove('active');
+          tabCompareBtn.classList.add('active');
+          summaryView.style.display = 'none';
+          compareView.style.display = 'block';
+          
+          // 정밀 비교 탭을 열 때 태그 영역 렌더링
+          renderCompareTags(); 
+        }
+      }
+
+      // 💡 [누락 복구 2] 선택된 월(Month) 태그들을 화면에 그려주는 함수
+      function renderCompareTags() {
+        const container = document.getElementById('compareTagsArea');
+        if (!container) return;
+        
+        let html = '';
+        compareMonthsList.forEach((item, idx) => {
+          html += `<div class="compare-tag">
+                     ${String(item.y).slice(2)}년 ${item.m}월
+                     <div class="compare-tag-remove" onclick="removeCompareMonth(${idx})">✕</div>
+                   </div>`;
+        });
+        html += `<button class="compare-add-btn" onclick="openCrossMonthPicker()">+ 연/월 추가</button>`;
+        container.innerHTML = html;
+      }
+
+      // 💡 [누락 복구 3] 추가된 월 태그를 삭제하는 함수
+      function removeCompareMonth(idx) {
+        compareMonthsList.splice(idx, 1);
+        renderCompareTags();
+        // 월 구성이 바뀌었으므로 기존에 띄워둔 표는 숨기고 다시 비교하도록 유도
+        document.getElementById('compareGridArea').style.display = 'none'; 
+      }
+
       function openCrossMonthPicker() {
           // 💡 창을 열 때, 현재 선택되어 있던 월들을 임시 바구니에 그대로 복사
           tempSelectedMonthsForPicker = JSON.parse(JSON.stringify(compareMonthsList));
@@ -5075,7 +5122,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           document.getElementById('compareGridArea').style.display = 'none'; // 표 숨기고 [비교하기] 누르도록 유도
           renderCompareTags();
       }
-      
+
       function executeCompare() {
           if (compareMonthsList.length === 0) { showToast("비교할 월을 추가해주세요.", 1500); return; }
           let yearsToFetch = [...new Set(compareMonthsList.map(item => item.y))];
