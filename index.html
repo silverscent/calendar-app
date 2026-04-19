@@ -1445,13 +1445,23 @@
         color: var(--text-sub);
         white-space: nowrap;
         cursor: pointer;
+        /* 🚨 [추가] 꾹 눌렀을 때 텍스트 선택(파란 블록) 완벽 방지 */
         user-select: none;
+        -webkit-user-select: none;
+        touch-action: none; 
         transition: background 0.2s;
         position: relative;
       }
       .compare-th:last-child { border-right: none; }
       .compare-th:active { background: rgba(10, 132, 255, 0.1); }
       .compare-th.active-sort { color: #0a84ff; }
+      
+      /* 🚨 [추가] 드래그 중인 원본 헤더의 시각적 피드백 (투명해짐) */
+      .compare-th.dragging {
+        opacity: 0.3;
+        background: var(--border-color);
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+      }
       
       .compare-td {
         padding: 0;
@@ -5113,7 +5123,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       }
 
       // 🚀 [신규] 헤더 꾹 누르기 드래그 앤 드롭 엔진 (모바일 최적화)
-      window.colDragVars = { active: false, startIdx: -1, ghost: null, timer: null, wasDragged: false };
+      window.colDragVars = { active: false, startIdx: -1, ghost: null, timer: null, wasDragged: false, sourceTh: null };
 
       function startColDrag(e, idx) {
           colDragVars.wasDragged = false;
@@ -5123,20 +5133,27 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               if(navigator.vibrate) navigator.vibrate(50);
               
               let th = e.currentTarget;
+              th.classList.add('dragging'); // 💡 시각적 피드백 (원본 투명화)
+              colDragVars.sourceTh = th;
+
               let ghost = th.cloneNode(true);
+              ghost.classList.remove('dragging');
               ghost.style.position = 'fixed';
               ghost.style.zIndex = '99999';
-              ghost.style.opacity = '0.9';
+              ghost.style.opacity = '0.95';
               ghost.style.pointerEvents = 'none';
               ghost.style.background = '#0a84ff';
               ghost.style.color = '#fff';
               ghost.style.borderRadius = '8px';
               ghost.style.width = th.offsetWidth + 'px';
-              ghost.style.border = 'none';
+              ghost.style.border = '2px solid #fff';
+              ghost.style.boxShadow = '0 15px 30px rgba(0,0,0,0.4)'; // 💡 공중에 뜬 느낌 팍팍!
+              ghost.style.transform = 'scale(1.08)'; // 살짝 커짐
+              
               document.body.appendChild(ghost);
               colDragVars.ghost = ghost;
               moveColGhost(e);
-          }, 400); // 0.4초 길게 누르면 드래그 시작
+          }, 400); // 0.4초 꾹 누르면 발동
       }
 
       function moveColGhost(e) {
@@ -5147,7 +5164,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let clientX = e.touches ? e.touches[0].clientX : e.clientX;
           let clientY = e.touches ? e.touches[0].clientY : e.clientY;
           colDragVars.ghost.style.left = (clientX - (colDragVars.ghost.offsetWidth / 2)) + 'px';
-          colDragVars.ghost.style.top = (clientY - 20) + 'px';
+          colDragVars.ghost.style.top = (clientY - 25) + 'px'; // 손가락 살짝 위로
           if (e.cancelable) e.preventDefault();
       }
 
@@ -5157,6 +5174,11 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           
           colDragVars.wasDragged = true;
           colDragVars.active = false;
+          
+          if (colDragVars.sourceTh) {
+              colDragVars.sourceTh.classList.remove('dragging');
+              colDragVars.sourceTh = null;
+          }
           
           let clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
           let clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
@@ -5177,14 +5199,14 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           colDragVars.startIdx = -1;
       }
 
+      // 📊 V3.1 그리드 렌더링 코어 (기준월 증감률 탑재)
       function renderCompareGridV3() {
           document.getElementById('compareGridArea').style.display = 'block';
           
-          // 💡 4개 이상일 때 스크롤 동적 너비 계산
           let colCount = compareMonthsList.length;
           let tableWidth = "100%";
           if (colCount >= 4) {
-              tableWidth = (colCount * 33.333) + "%"; // 화면에 3개만 딱 들어오게 너비 팽창
+              tableWidth = (colCount * 33.333) + "%"; 
           }
           document.getElementById('compareTable').style.width = tableWidth;
           document.getElementById('compareTable').style.minWidth = tableWidth;
@@ -5192,7 +5214,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let theadHtml = '<tr>';
           let unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
 
-          // 1. 헤더 렌더링 (틀고정 해제, 드래그 이벤트 바인딩)
+          // 1. 헤더 렌더링
           compareMonthsList.forEach((item, index) => {
               let key = `${item.y}-${item.m}`;
               let sortClass = (compareSortTargetKey === key) ? 'active-sort' : '';
@@ -5240,6 +5262,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
           let tbodyHtml = '';
           
+          // 🚀 상태 A: 기본 정렬 (리더보드)
           if (compareSortTargetKey === null) {
               let sortedLists = {}; let maxRows = 0;
               compareMonthsList.forEach(item => {
@@ -5258,8 +5281,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       if (dataItem) {
                           let cObj = getCompanyColor(dataItem.name);
                           let percent = maxVolPerCol[key] > 0 ? (dataItem.vol / maxVolPerCol[key]) * 100 : 0;
-                          
-                          // 💡 막대그래프를 셀 내부 DIV가 아닌 TD 자체에 적용 (빈틈 제거)
                           let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
                           
                           tbodyHtml += `
@@ -5274,11 +5295,12 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   tbodyHtml += '</tr>';
               }
           } 
+          // 🚀 상태 B: 특정 연/월 기준 행 맞춤 정렬 (관리자님 기획의 핵심!)
           else {
               let sortedComps = Object.values(compStats).filter(c => Object.values(c.vols).some(v => v > 0)).sort((a, b) => {
                   let volA = a.vols[compareSortTargetKey] || 0;
                   let volB = b.vols[compareSortTargetKey] || 0;
-                  return compareSortOrder === 'desc' ? (volB - volA) : (volA - volB); // 💡 오름/내림 적용
+                  return compareSortOrder === 'desc' ? (volB - volA) : (volA - volB);
               });
 
               sortedComps.forEach(comp => {
@@ -5289,17 +5311,15 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       let key = `${item.y}-${item.m}`;
                       let vol = comp.vols[key] || 0;
                       let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
-                      
-                      // 💡 막대그래프를 TD 자체에 적용
                       let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
                       
+                      // 💡 100% 동기화: 터치(클릭)한 달을 기준으로 증감률 계산!
                       let rateHtml = '';
-                      if (index > 0) {
-                          let prevKey = `${compareMonthsList[index - 1].y}-${compareMonthsList[index - 1].m}`;
-                          let prevVol = comp.vols[prevKey] || 0;
-                          if (prevVol > 0) {
-                              let diff = vol - prevVol;
-                              let rate = Math.round((diff / prevVol) * 100);
+                      if (key !== compareSortTargetKey) {
+                          let baseVol = comp.vols[compareSortTargetKey] || 0;
+                          if (baseVol > 0) {
+                              let diff = vol - baseVol;
+                              let rate = Math.round((diff / baseVol) * 100);
                               let diffStr = diff > 0 ? `+${diff}` : `${diff}`;
                               if (rate > 0) rateHtml = `<span class="rate-txt rate-up">▲${diffStr} (${rate}%)</span>`;
                               else if (rate < 0) rateHtml = `<span class="rate-txt rate-down">▼${Math.abs(diff)} (${Math.abs(rate)}%)</span>`;
@@ -5307,7 +5327,11 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                           } else if (vol > 0) {
                               rateHtml = `<span class="rate-txt rate-up">NEW</span>`;
                           }
+                      } else {
+                          // 터치한 해당 월은 명시적으로 '기준' 이라고 표시
+                          rateHtml = `<span class="rate-txt rate-zero" style="opacity:0.6;">기준</span>`;
                       }
+
                       let opClass = vol === 0 ? 'style="opacity: 0.4;"' : '';
                       tbodyHtml += `
                         <td class="compare-td" style="${bgCss}">
@@ -5324,7 +5348,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           if (tbodyHtml === '') tbodyHtml = `<tr><td colspan="10" style="text-align:center; padding:20px; font-weight:bold; color:var(--text-sub);">선택된 월에 출고 데이터가 없습니다.</td></tr>`;
           document.getElementById('compareTbody').innerHTML = tbodyHtml;
       }
-
     </script>
   </body>
 </html>
