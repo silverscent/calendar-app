@@ -1552,15 +1552,37 @@
       }
       .compare-exec-btn:active { transform: scale(0.97); }
 
+      /* 💡 3. 탭 메뉴 세련된 iOS 스타일 스위치로 변경 */
       .dash-tab-row {
-        display: flex; background: var(--bg-color); padding: 4px; border-radius: 12px; margin-bottom: 15px;
+        display: flex; 
+        background: rgba(128, 128, 128, 0.15); /* 부드러운 회색 음영 배경 */
+        padding: 5px; 
+        border-radius: 14px; 
+        margin-bottom: 20px;
       }
       .dash-tab-btn {
-        flex: 1; padding: 10px; text-align: center; border: none; background: transparent;
-        color: var(--text-sub); font-weight: 800; font-size: 0.95em; border-radius: 8px; cursor: pointer; transition: 0.2s;
+        flex: 1; 
+        padding: 12px; 
+        text-align: center; 
+        border: none; 
+        background: transparent;
+        color: var(--text-sub); 
+        font-weight: 800; 
+        font-size: 0.95em; 
+        border-radius: 10px; 
+        cursor: pointer; 
+        transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); /* 쫀득한 애니메이션 */
       }
       .dash-tab-btn.active {
-        background: var(--card-bg); color: var(--text-main); box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        background: var(--card-bg); 
+        color: var(--text-main); 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+        transform: scale(1.02); /* 선택 시 살짝 튀어나오는 입체감 */
+      }
+
+      /* 💡 4. 탭 전환 시 모달창 높이 훅 꺼짐 완벽 방어 (최소 높이 강제 고정) */
+      #dashSummaryView, #dashCompareView {
+        min-height: 65vh; 
       }
       
     </style>
@@ -5303,29 +5325,24 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           colDragVars.lastDropTargetIdx = -1;
       }
 
-      // 📊 V3.1 그리드 렌더링 코어 (기준월 증감률 탑재 & 드래그 꼬리표 추가 완결판)
+      // 📊 V3.1 그리드 렌더링 코어 (조건부 증감표시 & NEW 삭제 반영)
       function renderCompareGridV3() {
           document.getElementById('compareGridArea').style.display = 'block';
           
           let colCount = compareMonthsList.length;
           let tableWidth = "100%";
-          if (colCount >= 4) {
-              tableWidth = (colCount * 33.333) + "%"; 
-          }
+          if (colCount >= 4) tableWidth = (colCount * 33.333) + "%"; 
           document.getElementById('compareTable').style.width = tableWidth;
           document.getElementById('compareTable').style.minWidth = tableWidth;
 
           let theadHtml = '<tr>';
           let unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
 
-          // 1. 헤더 렌더링 (🚨 onclick 제거, touchend/mouseup에 의존)
           compareMonthsList.forEach((item, index) => {
               let key = `${item.y}-${item.m}`;
               let sortClass = (compareSortTargetKey === key) ? 'active-sort' : '';
               let sortIconStr = '';
-              if (compareSortTargetKey === key) {
-                  sortIconStr = compareSortOrder === 'desc' ? ' 🔽' : ' 🔼';
-              }
+              if (compareSortTargetKey === key) sortIconStr = compareSortOrder === 'desc' ? ' 🔽' : ' 🔼';
               
               theadHtml += `<th class="compare-th ${sortClass}" data-colidx="${index}" 
                                 ontouchstart="startColDrag(event, ${index})" 
@@ -5340,7 +5357,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           theadHtml += '</tr>';
           document.getElementById('compareThead').innerHTML = theadHtml;
 
-          // 2. 데이터 가공
           let compStats = {}; 
           let maxVolPerCol = {};
 
@@ -5365,7 +5381,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
           let tbodyHtml = '';
           
-          // 🚀 상태 A: 기본 정렬 (리더보드 모드 - 월별 독립 정렬)
+          // 🚀 상태 A: 기본 정렬 (리더보드 모드 - 💡 아무것도 터치 안 했을 땐 증감률 끔!)
           if (compareSortTargetKey === null) {
               let sortedLists = {}; let maxRows = 0;
               compareMonthsList.forEach(item => {
@@ -5385,24 +5401,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                           let cObj = getCompanyColor(dataItem.name);
                           let vol = dataItem.vol;
                           let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
-                          
                           let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
                           
+                          // 💡 상태 A에서는 옆 열과 비교하는 로직 자체를 삭제하여 깔끔하게 수량만 노출
                           let rateHtml = '';
-                          if (index > 0) {
-                              let prevKey = `${compareMonthsList[index - 1].y}-${compareMonthsList[index - 1].m}`;
-                              let prevVol = compStats[dataItem.name]?.vols[prevKey] || 0;
-                              if (prevVol > 0) {
-                                  let diff = vol - prevVol;
-                                  let rate = Math.round((diff / prevVol) * 100);
-                                  let diffStr = diff > 0 ? `+${diff}` : `${diff}`;
-                                  if (rate > 0) rateHtml = `<span class="rate-txt rate-up">▲${diffStr} (${rate}%)</span>`;
-                                  else if (rate < 0) rateHtml = `<span class="rate-txt rate-down">▼${Math.abs(diff)} (${Math.abs(rate)}%)</span>`;
-                                  else rateHtml = `<span class="rate-txt rate-zero">-</span>`;
-                              } else if (vol > 0) {
-                                  rateHtml = `<span class="rate-txt rate-up">NEW</span>`;
-                              }
-                          }
                           
                           tbodyHtml += `
                             <td class="compare-td" style="${bgCss}" data-colidx="${index}">
@@ -5434,7 +5436,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       let key = `${item.y}-${item.m}`;
                       let vol = comp.vols[key] || 0;
                       let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
-                      
                       let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
                       
                       let rateHtml = '';
@@ -5447,9 +5448,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                               if (rate > 0) rateHtml = `<span class="rate-txt rate-up">▲${diffStr} (${rate}%)</span>`;
                               else if (rate < 0) rateHtml = `<span class="rate-txt rate-down">▼${Math.abs(diff)} (${Math.abs(rate)}%)</span>`;
                               else rateHtml = `<span class="rate-txt rate-zero">-</span>`;
-                          } else if (vol > 0) {
-                              rateHtml = `<span class="rate-txt rate-up">NEW</span>`;
-                          }
+                          } 
+                          // 💡 기준열에 없던 업체가 등장해도 촌스럽게 NEW를 띄우지 않도록 else if 블록 완전히 삭제!
                       } else {
                           rateHtml = `<span class="rate-txt rate-zero" style="opacity:0.6;">기준</span>`;
                       }
