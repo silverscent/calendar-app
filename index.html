@@ -1501,8 +1501,11 @@
         font-weight: 900;
         font-size: 0.95em;
         color: var(--text-main);
-        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        /* text-shadow: 0 1px 2px rgba(0,0,0,0.5); 🚨 그림자 제거하여 선명하게! */
       }
+      
+      /* 👇 🚨 이 한 줄을 .comp-name-txt 바로 밑에 추가해주세요! (월 선택창이 제일 앞으로 오게 함) */
+      #crossMonthPickerModal { z-index: 3500 !important; }
       
       .vol-info {
         display: flex;
@@ -5149,16 +5152,24 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       }
 
       // 💡 오름/내림차순 토글 적용
+      // 💡 [수정] 안드로이드 더블 터치(유령 클릭) 방지용 타이머 추가
+      let lastSortTime = 0; 
+      
       function setCompareSort(key) { 
+          let now = Date.now();
+          // 🚨 안드로이드에서 터치와 마우스이벤트가 동시에 터져서 2번 실행되는 현상 완벽 방어 (0.3초 쿨타임)
+          if (now - lastSortTime < 300) return; 
+          lastSortTime = now;
+
           if (window.colDragVars && window.colDragVars.wasDragged) {
               window.colDragVars.wasDragged = false;
               return; 
           }
           if (compareSortTargetKey === key) {
               compareSortOrder = compareSortOrder === 'desc' ? 'asc' : 'desc';
-          } else {
-              compareSortTargetKey = key;
-              compareSortOrder = 'desc';
+          } else { 
+              compareSortTargetKey = key; 
+              compareSortOrder = 'desc'; 
           }
           renderCompareGridV3(); 
       }
