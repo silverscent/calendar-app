@@ -1760,8 +1760,20 @@
         </div>
 
         <div id="dashCompareView" style="display: none; padding-bottom: 20px;">
-           <div style="font-weight:900; color:var(--text-main); margin-bottom: 10px; font-size:1.05em;">
-              📅 비교할 월 구성 <span style="font-size:0.75em; color:var(--text-sub);">(여러 달 선택 가능)</span>
+           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+              <div style="font-weight:900; color:var(--text-main); font-size:1.05em;">
+                 📅 비교할 월 구성 <span style="font-size:0.75em; color:var(--text-sub);">(여러 달 선택)</span>
+              </div>
+              <div style="display:flex; align-items:center; gap: 12px;">
+                  <div style="display: flex; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub);">
+                    <input type="checkbox" id="compIncludePendingCheck" onchange="renderCompareGridV3()" style="width:16px; height:16px; cursor:pointer;">
+                    <label for="compIncludePendingCheck" style="cursor:pointer;">미정건 포함</label>
+                  </div>
+                  <div class="dash-toggles">
+                    <button id="btnCompPal" class="active" onclick="setCompareUnit('pal')">P</button>
+                    <button id="btnCompBox" onclick="setCompareUnit('box')">B</button>
+                  </div>
+              </div>
            </div>
            
            <div class="compare-tags-container" id="compareTagsArea">
@@ -5033,68 +5045,77 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       });
 
       // =====================================================
-      // 📈 [V3.1] 크로스 연도 정밀 비교 그리드 엔진 (드래그/정렬 완결판)
+      // 📈 [V3.4] 크로스 연도 정밀 비교 그리드 (글로벌 Max, 스르륵 삭제, 독립옵션 적용)
       // =====================================================
       let compareMonthsList = []; 
       let compareSortTargetKey = null; 
-      let compareSortOrder = 'desc'; // 💡 신규: 오름/내림차순 토글 변수
+      let compareSortOrder = 'desc'; 
       let crossPickerTempYear = new Date().getFullYear();
-      let tempSelectedMonthsForPicker = []; // 💡 다중 선택을 기억할 임시 바구니
+      let tempSelectedMonthsForPicker = [];
 
-      // 💡 [누락 복구 1] 대시보드 탭 전환 함수
+      // 💡 [신규] 정밀비교 전용 단위(P/B) 토글
+      window.compareUnit = 'pal';
+      function setCompareUnit(unit) {
+          window.compareUnit = unit;
+          document.getElementById('btnCompPal').classList.toggle('active', unit === 'pal');
+          document.getElementById('btnCompBox').classList.toggle('active', unit === 'box');
+          renderCompareGridV3();
+      }
+
       function switchDashTab(tabName) {
-        const tabSummaryBtn = document.getElementById('tabSummary');
-        const tabCompareBtn = document.getElementById('tabCompare');
-        const summaryView = document.getElementById('dashSummaryView');
-        const compareView = document.getElementById('dashCompareView');
+          const tabSummaryBtn = document.getElementById('tabSummary');
+          const tabCompareBtn = document.getElementById('tabCompare');
+          const summaryView = document.getElementById('dashSummaryView');
+          const compareView = document.getElementById('dashCompareView');
 
-        if (tabName === 'summary') {
-          tabSummaryBtn.classList.add('active');
-          tabCompareBtn.classList.remove('active');
-          summaryView.style.display = 'block';
-          compareView.style.display = 'none';
-        } else if (tabName === 'compare') {
-          tabSummaryBtn.classList.remove('active');
-          tabCompareBtn.classList.add('active');
-          summaryView.style.display = 'none';
-          compareView.style.display = 'block';
-          
-          // 정밀 비교 탭을 열 때 태그 영역 렌더링
-          renderCompareTags(); 
-        }
+          if (tabName === 'summary') {
+              tabSummaryBtn.classList.add('active');
+              tabCompareBtn.classList.remove('active');
+              summaryView.style.display = 'block';
+              compareView.style.display = 'none';
+          } else if (tabName === 'compare') {
+              tabSummaryBtn.classList.remove('active');
+              tabCompareBtn.classList.add('active');
+              summaryView.style.display = 'none';
+              compareView.style.display = 'block';
+              renderCompareTags(); 
+          }
       }
 
-      // 💡 [누락 복구 2] 선택된 월(Month) 태그들을 화면에 그려주는 함수
       function renderCompareTags() {
-        const container = document.getElementById('compareTagsArea');
-        if (!container) return;
-        
-        let html = '';
-        compareMonthsList.forEach((item, idx) => {
-          html += `<div class="compare-tag">
-                     ${String(item.y).slice(2)}년 ${item.m}월
-                     <div class="compare-tag-remove" onclick="removeCompareMonth(${idx})">✕</div>
-                   </div>`;
-        });
-        html += `<button class="compare-add-btn" onclick="openCrossMonthPicker()">+ 연/월 추가</button>`;
-        container.innerHTML = html;
+          const container = document.getElementById('compareTagsArea');
+          if (!container) return;
+          let html = '';
+          compareMonthsList.forEach((item, idx) => {
+              html += `<div class="compare-tag">
+                         ${String(item.y).slice(2)}년 ${item.m}월
+                         <div class="compare-tag-remove" onclick="removeCompareMonth(${idx})">✕</div>
+                       </div>`;
+          });
+          html += `<button class="compare-add-btn" onclick="openCrossMonthPicker()">+ 연/월 추가</button>`;
+          container.innerHTML = html;
       }
 
-      // 💡 [누락 복구 3] 추가된 월 태그를 삭제하는 함수
+      // 💡 [수정] 태그 삭제 시 표가 꺼지지 않고 스르륵 갱신됨
       function removeCompareMonth(idx) {
-        compareMonthsList.splice(idx, 1);
-        renderCompareTags();
-        // 월 구성이 바뀌었으므로 기존에 띄워둔 표는 숨기고 다시 비교하도록 유도
-        document.getElementById('compareGridArea').style.display = 'none'; 
+          let removedItem = compareMonthsList[idx];
+          let removedKey = `${removedItem.y}-${removedItem.m}`;
+          
+          compareMonthsList.splice(idx, 1);
+          renderCompareTags();
+          
+          if (compareMonthsList.length === 0) {
+              document.getElementById('compareGridArea').style.display = 'none';
+          } else if (document.getElementById('compareGridArea').style.display === 'block') {
+              if (compareSortTargetKey === removedKey) compareSortTargetKey = null; // 기준열 삭제되면 기본 정렬로
+              renderCompareGridV3(); 
+          }
       }
 
       function openCrossMonthPicker() {
-          // 💡 창을 열 때, 현재 선택되어 있던 월들을 임시 바구니에 그대로 복사
           tempSelectedMonthsForPicker = JSON.parse(JSON.stringify(compareMonthsList));
-          
           if (compareMonthsList.length > 0) crossPickerTempYear = compareMonthsList[compareMonthsList.length - 1].y;
           else crossPickerTempYear = parseInt(serverData.year, 10);
-          
           renderCrossPicker();
           document.getElementById('crossMonthPickerModal').style.display = 'flex';
       }
@@ -5105,43 +5126,25 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           document.getElementById("crossPickerYearText").innerText = `${crossPickerTempYear}년`;
           let gridHtml = "";
           for (let i = 1; i <= 12; i++) {
-              // 💡 임시 바구니를 뒤져서 선택된 달은 파란색(current)으로 칠함
               let isSelected = tempSelectedMonthsForPicker.some(item => item.y === crossPickerTempYear && item.m === i) ? 'current' : '';
-              
-              // 🚨 onclick 함수가 addCompareMonth -> toggleCompareMonth 로 변경됨
               gridHtml += `<button class="month-btn ${isSelected}" onclick="toggleCompareMonth(${crossPickerTempYear}, ${i})">${i}월</button>`;
           }
           document.getElementById("crossPickerMonthGrid").innerHTML = gridHtml;
       }
 
-      // 💡 [신규] 누를 때마다 창이 안 닫히고 선택/해제만 반복하는 함수
       function toggleCompareMonth(y, m) {
           let existingIdx = tempSelectedMonthsForPicker.findIndex(item => item.y === y && item.m === m);
-          
-          if (existingIdx !== -1) {
-              tempSelectedMonthsForPicker.splice(existingIdx, 1); // 이미 있으면 바구니에서 빼기 (해제)
-          } else {
-              tempSelectedMonthsForPicker.push({y: y, m: m}); // 없으면 바구니에 담기 (선택)
-          }
-          
-          renderCrossPicker(); // 버튼 색깔 즉시 새로고침
+          if (existingIdx !== -1) tempSelectedMonthsForPicker.splice(existingIdx, 1); 
+          else tempSelectedMonthsForPicker.push({y: y, m: m}); 
+          renderCrossPicker(); 
       }
 
-      // 💡 [신규] '✅ 선택 완료' 버튼을 눌렀을 때 실행되는 함수
       function confirmCrossPicker() {
-          if (tempSelectedMonthsForPicker.length === 0) {
-              showToast("최소 1개 이상의 월을 선택해주세요.", 1500); return;
-          }
-          
-          // 임시 바구니에 담긴 걸 진짜 목록으로 확정 짓기
+          if (tempSelectedMonthsForPicker.length === 0) { showToast("최소 1개 이상의 월을 선택해주세요.", 1500); return; }
           compareMonthsList = JSON.parse(JSON.stringify(tempSelectedMonthsForPicker));
-          compareMonthsList.sort((a, b) => {
-              if (a.y !== b.y) return a.y - b.y;
-              return a.m - b.m;
-          });
-          
+          compareMonthsList.sort((a, b) => { if (a.y !== b.y) return a.y - b.y; return a.m - b.m; });
           document.getElementById('crossMonthPickerModal').style.display = 'none';
-          document.getElementById('compareGridArea').style.display = 'none'; // 표 숨기고 [비교하기] 누르도록 유도
+          document.getElementById('compareGridArea').style.display = 'none'; 
           renderCompareTags();
       }
 
@@ -5173,14 +5176,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           });
       }
 
-      // 💡 오름/내림차순 토글 적용
-      // 💡 [수정] 안드로이드 더블 터치(유령 클릭) 방지용 타이머 추가
       let lastSortTime = 0; 
-      
       function setCompareSort(key) { 
           let now = Date.now();
-          // 🚨 안드로이드에서 터치와 마우스이벤트가 동시에 터져서 2번 실행되는 현상 완벽 방어 (0.3초 쿨타임)
-          if (now - lastSortTime < 300) return; 
+          if (now - lastSortTime < 300) return; // 💡 안드로이드 더블 터치 방어
           lastSortTime = now;
 
           if (window.colDragVars && window.colDragVars.wasDragged) {
@@ -5202,26 +5201,24 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           renderCompareGridV3(); 
       }
 
-      // 🚀 [V3.3 완결판] 헤더 꾹 누르기 드래그 앤 드롭 엔진 (이벤트 충돌 완벽 방지)
-      window.colDragVars = { active: false, startIdx: -1, ghost: null, timer: null, wasDragged: false, sourceTh: null, lastDropTargetIdx: -1 };
+      window.colDragVars = { active: false, startIdx: -1, ghost: null, timer: null, wasDragged: false, sourceTh: null, lastDropTargetIdx: -1, startX: 0, startY: 0 };
 
       function startColDrag(e, idx) {
-          // 마우스 우클릭 등 무시
           if (e.button !== undefined && e.button !== 0) return; 
-          
           colDragVars.wasDragged = false;
           let th = e.currentTarget;
+          let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          colDragVars.startX = clientX;
+          colDragVars.startY = clientY;
 
           colDragVars.timer = setTimeout(() => {
               colDragVars.active = true;
               colDragVars.startIdx = idx;
               if(navigator.vibrate) navigator.vibrate(50);
-              
               colDragVars.sourceTh = th;
-              
-              // 1. 고스트(유령) 생성
               let ghost = th.cloneNode(true);
-              ghost.classList.remove('dragging-source', 'active-sort'); // 불필요한 클래스 제거
+              ghost.classList.remove('dragging-source', 'active-sort'); 
               ghost.style.position = 'fixed';
               ghost.style.zIndex = '99999';
               ghost.style.opacity = '0.95';
@@ -5231,38 +5228,33 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               ghost.style.borderRadius = '8px';
               ghost.style.width = th.offsetWidth + 'px';
               ghost.style.border = '2px solid #fff';
-              ghost.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)'; 
+              ghost.style.boxShadow = '0 10px 25px rgba(0,0,0,0.4)'; 
               ghost.style.transform = 'scale(1.05)';
-              
+              ghost.style.left = (clientX - (th.offsetWidth / 2)) + 'px';
+              ghost.style.top = (clientY - 25) + 'px';
               document.body.appendChild(ghost);
               colDragVars.ghost = ghost;
-              
-              // 2. 원본 투명화
               th.classList.add('dragging-source');
-
-              moveColGhost(e);
-          }, 350); // 💡 반응 속도를 0.35초로 약간 줄임
+          }, 350); 
       }
 
       function moveColGhost(e) {
+          let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
           if (!colDragVars.active || !colDragVars.ghost) {
               if (colDragVars.timer && e.type.includes('move')) {
-                  // 손가락을 조금이라도 움직이면 타이머 취소 (드래그 취소, 단순 스크롤로 인식)
-                  clearTimeout(colDragVars.timer); 
-                  colDragVars.timer = null; 
+                  let dx = Math.abs(clientX - colDragVars.startX);
+                  let dy = Math.abs(clientY - colDragVars.startY);
+                  if (dx > 10 || dy > 10) { clearTimeout(colDragVars.timer); colDragVars.timer = null; }
               }
               return;
           }
           
-          let clientX = e.touches ? e.touches[0].clientX : e.clientX;
-          let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-          
           colDragVars.ghost.style.left = (clientX - (colDragVars.ghost.offsetWidth / 2)) + 'px';
           colDragVars.ghost.style.top = (clientY - 25) + 'px';
-          
           if (e.cancelable) e.preventDefault(); 
 
-          // 🎯 타겟 열(Column) 하이라이트 (파란 점선)
           document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
           colDragVars.lastDropTargetIdx = -1;
 
@@ -5271,7 +5263,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
           let targetTh = dropTarget.closest('.compare-th');
           let targetTd = dropTarget.closest('.compare-td');
-          
           let hoverColIdx = -1;
           if (targetTh && targetTh.dataset.colidx !== undefined) hoverColIdx = parseInt(targetTh.dataset.colidx, 10);
           else if (targetTd && targetTd.dataset.colidx !== undefined) hoverColIdx = parseInt(targetTd.dataset.colidx, 10);
@@ -5286,31 +5277,19 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           }
       }
 
-      // 💡 [핵심] 짧은 터치(클릭)인지 진짜 드래그인지 여기서 완벽하게 판별
       function endColDrag(e, key) {
-          // 1. 드래그가 발동되기 전에 손을 뗐다면 = 짧은 터치 (정렬 실행)
           if (!colDragVars.active) {
               if (colDragVars.timer) {
                   clearTimeout(colDragVars.timer);
                   colDragVars.timer = null;
-                  
-                  // 💡 e.type을 검사하여 중복 실행 방지
-                  if(e.type === 'touchend' || e.type === 'mouseup') {
-                       setCompareSort(key);
-                  }
+                  if(e.type === 'touchend' || e.type === 'mouseup') setCompareSort(key);
               }
               return;
           }
-          
-          // 2. 이미 드래그 중이었다면 (자리 변경 실행)
           if (colDragVars.timer) clearTimeout(colDragVars.timer);
-          colDragVars.wasDragged = true;
-          colDragVars.active = false;
+          colDragVars.wasDragged = true; colDragVars.active = false;
           
-          if (colDragVars.sourceTh) {
-              colDragVars.sourceTh.classList.remove('dragging-source');
-              colDragVars.sourceTh = null;
-          }
+          if (colDragVars.sourceTh) { colDragVars.sourceTh.classList.remove('dragging-source'); colDragVars.sourceTh = null; }
           if (colDragVars.ghost) { colDragVars.ghost.remove(); colDragVars.ghost = null; }
           document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
 
@@ -5320,12 +5299,9 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               compareMonthsList.splice(dropIdx, 0, item);
               renderCompareGridV3(); 
           }
-          
-          colDragVars.startIdx = -1;
-          colDragVars.lastDropTargetIdx = -1;
+          colDragVars.startIdx = -1; colDragVars.lastDropTargetIdx = -1;
       }
 
-      // 📊 V3.1 그리드 렌더링 코어 (조건부 증감표시 & NEW 삭제 반영)
       function renderCompareGridV3() {
           document.getElementById('compareGridArea').style.display = 'block';
           
@@ -5336,7 +5312,9 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           document.getElementById('compareTable').style.minWidth = tableWidth;
 
           let theadHtml = '<tr>';
-          let unitStr = window.dashUnit === 'pal' ? 'P' : 'B';
+          let cUnit = window.compareUnit || 'pal';
+          let unitStr = cUnit === 'pal' ? 'P' : 'B';
+          let includePending = document.getElementById('compIncludePendingCheck')?.checked;
 
           compareMonthsList.forEach((item, index) => {
               let key = `${item.y}-${item.m}`;
@@ -5363,6 +5341,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           compareMonthsList.forEach((item) => {
               let key = `${item.y}-${item.m}`;
               maxVolPerCol[key] = 0;
+              
+              // 기존 데이터
               let yData = yearlyCache[item.y];
               if (yData && yData.monthly[item.m - 1]) {
                   let details = yData.monthly[item.m - 1].details || {};
@@ -5372,16 +5352,36 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       let stdName = getFullName(clean);
                       if (!compStats[stdName]) compStats[stdName] = { name: stdName, vols: {} };
                       
-                      let vol = details[cName];
+                      let volObj = details[cName];
+                      let vol = (typeof volObj === 'object' && volObj !== null) ? (parseInt(volObj[cUnit]) || 0) : (parseInt(volObj) || 0);
                       compStats[stdName].vols[key] = (compStats[stdName].vols[key] || 0) + vol;
-                      if (compStats[stdName].vols[key] > maxVolPerCol[key]) maxVolPerCol[key] = compStats[stdName].vols[key];
                   });
               }
+
+              // 미정건 합산
+              if (includePending && item.y === serverData.year && item.m === serverData.month) {
+                  if (serverData.pendingItems) {
+                      serverData.pendingItems.forEach(pItem => {
+                          let clean = String(pItem.company || pItem.bl || "").replace(/\[TASK\]/gi, "").trim();
+                          let isTask = String(pItem.company || pItem.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+                          if (!isTask) {
+                              let stdName = getFullName(clean);
+                              if (!compStats[stdName]) compStats[stdName] = { name: stdName, vols: {} };
+                              let pVol = parseInt(pItem[cUnit]) || 0;
+                              compStats[stdName].vols[key] = (compStats[stdName].vols[key] || 0) + pVol;
+                          }
+                      });
+                  }
+              }
+
+              Object.values(compStats).forEach(c => {
+                  if ((c.vols[key] || 0) > maxVolPerCol[key]) maxVolPerCol[key] = c.vols[key];
+              });
           });
 
           let tbodyHtml = '';
           
-          // 🚀 상태 A: 기본 정렬 (리더보드 모드 - 💡 아무것도 터치 안 했을 땐 증감률 끔!)
+          // 🚀 기본 정렬 (증감 표시 없음, 독립 Max)
           if (compareSortTargetKey === null) {
               let sortedLists = {}; let maxRows = 0;
               compareMonthsList.forEach(item => {
@@ -5403,14 +5403,11 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                           let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
                           let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
                           
-                          // 💡 상태 A에서는 옆 열과 비교하는 로직 자체를 삭제하여 깔끔하게 수량만 노출
-                          let rateHtml = '';
-                          
                           tbodyHtml += `
                             <td class="compare-td" style="${bgCss}" data-colidx="${index}">
                                <div class="compare-cell">
                                   <div class="comp-info"><span class="comp-name-txt">${getShortName(dataItem.name)}</span></div>
-                                  <div class="vol-info"><span class="vol-txt">${vol}${unitStr}</span>${rateHtml}</div>
+                                  <div class="vol-info"><span class="vol-txt">${vol}${unitStr}</span></div>
                                </div>
                             </td>`;
                       } else { 
@@ -5420,12 +5417,20 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   tbodyHtml += '</tr>';
               }
           } 
-          // 🚀 상태 B: 특정 연/월 기준 행 맞춤 정렬 (정밀 비교 모드)
+          // 🚀 행 맞춤 정렬 (증감 표시 O, 글로벌 Max)
           else {
               let sortedComps = Object.values(compStats).filter(c => Object.values(c.vols).some(v => v > 0)).sort((a, b) => {
                   let volA = a.vols[compareSortTargetKey] || 0;
                   let volB = b.vols[compareSortTargetKey] || 0;
                   return compareSortOrder === 'desc' ? (volB - volA) : (volA - volB);
+              });
+
+              let globalMaxVol = 0;
+              sortedComps.forEach(comp => {
+                  compareMonthsList.forEach(item => {
+                      let vol = comp.vols[`${item.y}-${item.m}`] || 0;
+                      if (vol > globalMaxVol) globalMaxVol = vol;
+                  });
               });
 
               sortedComps.forEach(comp => {
@@ -5435,21 +5440,20 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   compareMonthsList.forEach((item, index) => {
                       let key = `${item.y}-${item.m}`;
                       let vol = comp.vols[key] || 0;
-                      let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
+                      let percent = globalMaxVol > 0 ? (vol / globalMaxVol) * 100 : 0;
                       let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
                       
                       let rateHtml = '';
                       if (key !== compareSortTargetKey) {
                           let baseVol = comp.vols[compareSortTargetKey] || 0;
-                          if (baseVol > 0) {
+                          if (baseVol > 0) { 
                               let diff = vol - baseVol;
                               let rate = Math.round((diff / baseVol) * 100);
                               let diffStr = diff > 0 ? `+${diff}` : `${diff}`;
                               if (rate > 0) rateHtml = `<span class="rate-txt rate-up">▲${diffStr} (${rate}%)</span>`;
                               else if (rate < 0) rateHtml = `<span class="rate-txt rate-down">▼${Math.abs(diff)} (${Math.abs(rate)}%)</span>`;
                               else rateHtml = `<span class="rate-txt rate-zero">-</span>`;
-                          } 
-                          // 💡 기준열에 없던 업체가 등장해도 촌스럽게 NEW를 띄우지 않도록 else if 블록 완전히 삭제!
+                          }
                       } else {
                           rateHtml = `<span class="rate-txt rate-zero" style="opacity:0.6;">기준</span>`;
                       }
