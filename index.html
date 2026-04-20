@@ -5310,7 +5310,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           colDragVars.startIdx = -1; colDragVars.lastDropTargetIdx = -1;
       }
 
-      // 📊 V3.5 그리드 렌더링 코어 (P/B 완벽 분리 및 원본 데이터 기반 계산)
+      // 📊 V3.6 그리드 렌더링 코어 (다크모드 그래프 색상 최적화 반영)
       function renderCompareGridV3() {
           document.getElementById('compareGridArea').style.display = 'block';
           
@@ -5324,6 +5324,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let cUnit = window.compareUnit || 'pal';
           let unitStr = cUnit === 'pal' ? 'P' : 'B';
           let includePending = document.getElementById('compIncludePendingCheck')?.checked;
+
+          // 💡 [핵심 패치] 다크모드일 때는 칙칙해지지 않게 투명도를 대폭 올려서 원래 색상을 쨍하게 살림!
+          let isLight = document.body.classList.contains("light-mode");
+          let barAlpha = isLight ? "40" : "85"; // 라이트모드는 은은하게(40), 다크모드는 선명하게(85)
 
           compareMonthsList.forEach((item, index) => {
               let key = `${item.y}-${item.m}`;
@@ -5351,39 +5355,39 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               let key = `${item.y}-${item.m}`;
               maxVolPerCol[key] = 0;
               
-              // 🚨 [핵심] 요약본(yearlyCache)을 버리고, 원본 데이터(cal_cache)를 직접 해부해서 P/B 분리!
-              let cached = localStorage.getItem(`cal_cache_${currentType}_${item.y}_${item.m}`);
-              if (cached) {
-                  try {
-                      let mData = JSON.parse(cached);
-                      let days = mData.daysInMonth || 31;
+              // 1. 기존 데이터 가공
+              let yData = yearlyCache[item.y];
+              if (yData && yData.monthly[item.m - 1]) {
+                  let details = yData.monthly[item.m - 1].details || {};
+                  Object.keys(details).forEach(cName => {
+                      let clean = cName.replace(/\[TASK\]/gi, "").trim();
+                      if (cName.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean))) return;
+                      let stdName = getFullName(clean);
+                      if (!compStats[stdName]) compStats[stdName] = { name: stdName, vols: {} };
                       
-                      const processItem = (it) => {
-                          let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
-                          let isTask = String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+                      let volObj = details[cName];
+                      let vol = (typeof volObj === 'object' && volObj !== null) ? (parseInt(volObj[cUnit]) || 0) : (parseInt(volObj) || 0);
+                      compStats[stdName].vols[key] = (compStats[stdName].vols[key] || 0) + vol;
+                  });
+              }
+
+              // 2. 미정건 합산
+              if (includePending && item.y === serverData.year && item.m === serverData.month) {
+                  if (serverData.pendingItems) {
+                      serverData.pendingItems.forEach(pItem => {
+                          let clean = String(pItem.company || pItem.bl || "").replace(/\[TASK\]/gi, "").trim();
+                          let isTask = String(pItem.company || pItem.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
                           if (!isTask) {
                               let stdName = getFullName(clean);
                               if (!compStats[stdName]) compStats[stdName] = { name: stdName, vols: {} };
-                              
-                              // 💡 여기서 cUnit('pal' 또는 'box')에 맞춰서 정확하게 수량을 꺼냄!
-                              let vol = parseInt(it[cUnit]) || 0;
-                              compStats[stdName].vols[key] = (compStats[stdName].vols[key] || 0) + vol;
+                              let pVol = parseInt(pItem[cUnit]) || 0;
+                              compStats[stdName].vols[key] = (compStats[stdName].vols[key] || 0) + pVol;
                           }
-                      };
-
-                      if (mData.monthData) {
-                          for (let d = 1; d <= days; d++) {
-                              if (mData.monthData[d]) mData.monthData[d].forEach(processItem);
-                          }
-                      }
-
-                      // 💡 [개선] 미정건 포함 로직이 이제 '모든 비교월'에 정상 작동합니다!
-                      if (includePending && mData.pendingItems) {
-                          mData.pendingItems.forEach(processItem);
-                      }
-                  } catch(e) {}
+                      });
+                  }
               }
 
+              // 3. 각 열 최대값 갱신
               Object.values(compStats).forEach(c => {
                   if ((c.vols[key] || 0) > maxVolPerCol[key]) maxVolPerCol[key] = c.vols[key];
               });
@@ -5411,7 +5415,9 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                           let cObj = getCompanyColor(dataItem.name);
                           let vol = dataItem.vol;
                           let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
-                          let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
+                          
+                          // 💡 여기에 동적으로 쨍한 투명도(barAlpha)가 적용됩니다!
+                          let bgCss = `background: linear-gradient(to right, ${cObj.bg}${barAlpha} ${percent}%, transparent ${percent}%);`;
                           
                           tbodyHtml += `
                             <td class="compare-td" style="${bgCss}" data-colidx="${index}">
@@ -5451,7 +5457,9 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       let key = `${item.y}-${item.m}`;
                       let vol = comp.vols[key] || 0;
                       let percent = globalMaxVol > 0 ? (vol / globalMaxVol) * 100 : 0;
-                      let bgCss = `background: linear-gradient(to right, ${cObj.bg}40 ${percent}%, transparent ${percent}%);`;
+                      
+                      // 💡 여기도 동일하게 쨍한 다크모드 색상 적용!
+                      let bgCss = `background: linear-gradient(to right, ${cObj.bg}${barAlpha} ${percent}%, transparent ${percent}%);`;
                       
                       let rateHtml = '';
                       if (key !== compareSortTargetKey) {
