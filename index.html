@@ -5019,27 +5019,31 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       let crossPickerTempYear = new Date().getFullYear();
       let tempSelectedMonthsForPicker = []; // 💡 다중 선택을 기억할 임시 바구니
 
-      // 💡 [누락 복구 1] 대시보드 탭 전환 함수
+      // 💡 [핵심 복구] 탭 전환 함수 정상화 (이벤트 충돌 및 렌더링 타이밍 완벽 픽스)
       function switchDashTab(tabName) {
-        const tabSummaryBtn = document.getElementById('tabSummary');
-        const tabCompareBtn = document.getElementById('tabCompare');
-        const summaryView = document.getElementById('dashSummaryView');
-        const compareView = document.getElementById('dashCompareView');
+          const tabSummaryBtn = document.getElementById('tabSummary');
+          const tabCompareBtn = document.getElementById('tabCompare');
+          const summaryView = document.getElementById('dashSummaryView');
+          const compareView = document.getElementById('dashCompareView');
 
-        if (tabName === 'summary') {
-          tabSummaryBtn.classList.add('active');
-          tabCompareBtn.classList.remove('active');
-          summaryView.style.display = 'block';
-          compareView.style.display = 'none';
-        } else if (tabName === 'compare') {
-          tabSummaryBtn.classList.remove('active');
-          tabCompareBtn.classList.add('active');
-          summaryView.style.display = 'none';
-          compareView.style.display = 'block';
-          
-          // 정밀 비교 탭을 열 때 태그 영역 렌더링
-          renderCompareTags(); 
-        }
+          if (tabName === 'summary') {
+              tabSummaryBtn.classList.add('active');
+              tabCompareBtn.classList.remove('active');
+              summaryView.style.display = 'block';
+              compareView.style.display = 'none';
+          } else if (tabName === 'compare') {
+              tabSummaryBtn.classList.remove('active');
+              tabCompareBtn.classList.add('active');
+              summaryView.style.display = 'none';
+              
+              // 🚨 핵심: 화면을 블록으로 먼저 전환한 직후에 차트를 그려야 렌더링 오류(가로 폭 0px)가 생기지 않음!
+              compareView.style.display = 'block'; 
+              
+              // 💡 setTimeout을 줘서 브라우저가 화면을 그릴 시간을 0.05초 벌어줌 (먹통 방지)
+              setTimeout(() => {
+                  initCompareView();
+              }, 50);
+          }
       }
 
       // 💡 [누락 복구 2] 선택된 월(Month) 태그들을 화면에 그려주는 함수
