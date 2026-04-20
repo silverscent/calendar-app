@@ -5148,6 +5148,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           renderCompareTags();
       }
 
+      // 🚀 데이터 비교 실행 (연간 요약본 버림! 원본 캘린더 데이터를 직접 긁어옴)
       function executeCompare() {
           if (compareMonthsList.length === 0) { showToast("비교할 월을 추가해주세요.", 1500); return; }
           
@@ -5155,14 +5156,15 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           btn.innerText = "⏳ 데이터 불러오는 중...";
           btn.style.pointerEvents = "none"; btn.style.opacity = "0.7";
 
-          // 🚨 [핵심 변경] 연간 요약본이 아니라, 해당 월의 "원본 캘린더 데이터"를 통째로 가져옴!
+          // 🚨 [핵심 픽스] 선택한 월들의 원본 캘린더 데이터(cal_cache)가 내 폰에 있는지 검사하고 없으면 서버에서 즉시 가져옴!
           let fetchPromises = [];
           compareMonthsList.forEach(item => {
               let cacheKey = `cal_cache_${currentType}_${item.y}_${item.m}`;
               if (!localStorage.getItem(cacheKey)) {
                   fetchPromises.push(new Promise((resolve, reject) => {
                       google.script.run.withSuccessHandler(res => {
-                          localStorage.setItem(cacheKey, JSON.stringify(res)); 
+                          let finalData = typeof res === 'string' ? JSON.parse(res) : res;
+                          localStorage.setItem(cacheKey, JSON.stringify(finalData)); 
                           resolve();
                       }).withFailureHandler(reject).getCalendarDataAsync(currentType, item.y, item.m);
                   }));
@@ -5310,7 +5312,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           colDragVars.startIdx = -1; colDragVars.lastDropTargetIdx = -1;
       }
 
-      // 📊 V3.6 그리드 렌더링 코어 (다크모드 그래프 색상 최적화 반영)
+      // 📊 V3.7 그리드 렌더링 (원시 데이터 추출 기반 + P/B 완벽 분리 + 다크모드 색상 최적화)
       function renderCompareGridV3() {
           document.getElementById('compareGridArea').style.display = 'block';
           
@@ -5325,9 +5327,9 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let unitStr = cUnit === 'pal' ? 'P' : 'B';
           let includePending = document.getElementById('compIncludePendingCheck')?.checked;
 
-          // 💡 [핵심 패치] 다크모드일 때는 칙칙해지지 않게 투명도를 대폭 올려서 원래 색상을 쨍하게 살림!
+          // 🚨 [다크모드 패치] 투명도 조절로 칙칙함 해결!
           let isLight = document.body.classList.contains("light-mode");
-          let barAlpha = isLight ? "40" : "85"; // 라이트모드는 은은하게(40), 다크모드는 선명하게(85)
+          let barAlpha = isLight ? "40" : "85"; 
 
           compareMonthsList.forEach((item, index) => {
               let key = `${item.y}-${item.m}`;
@@ -5355,39 +5357,39 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               let key = `${item.y}-${item.m}`;
               maxVolPerCol[key] = 0;
               
-              // 1. 기존 데이터 가공
-              let yData = yearlyCache[item.y];
-              if (yData && yData.monthly[item.m - 1]) {
-                  let details = yData.monthly[item.m - 1].details || {};
-                  Object.keys(details).forEach(cName => {
-                      let clean = cName.replace(/\[TASK\]/gi, "").trim();
-                      if (cName.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean))) return;
-                      let stdName = getFullName(clean);
-                      if (!compStats[stdName]) compStats[stdName] = { name: stdName, vols: {} };
+              // 🚨 [핵심] 요약본 말고, 진짜 "원본 달력"을 직접 뜯어서 P/B를 완벽하게 꺼냄!
+              let cached = localStorage.getItem(`cal_cache_${currentType}_${item.y}_${item.m}`);
+              if (cached) {
+                  try {
+                      let mData = JSON.parse(cached);
+                      let days = mData.daysInMonth || 31;
                       
-                      let volObj = details[cName];
-                      let vol = (typeof volObj === 'object' && volObj !== null) ? (parseInt(volObj[cUnit]) || 0) : (parseInt(volObj) || 0);
-                      compStats[stdName].vols[key] = (compStats[stdName].vols[key] || 0) + vol;
-                  });
-              }
-
-              // 2. 미정건 합산
-              if (includePending && item.y === serverData.year && item.m === serverData.month) {
-                  if (serverData.pendingItems) {
-                      serverData.pendingItems.forEach(pItem => {
-                          let clean = String(pItem.company || pItem.bl || "").replace(/\[TASK\]/gi, "").trim();
-                          let isTask = String(pItem.company || pItem.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+                      const processItem = (it) => {
+                          let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
+                          let isTask = String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
                           if (!isTask) {
                               let stdName = getFullName(clean);
                               if (!compStats[stdName]) compStats[stdName] = { name: stdName, vols: {} };
-                              let pVol = parseInt(pItem[cUnit]) || 0;
-                              compStats[stdName].vols[key] = (compStats[stdName].vols[key] || 0) + pVol;
+                              
+                              // cUnit('pal' / 'box')에 맞춰 수량을 콕 집어옴
+                              let vol = parseInt(it[cUnit]) || 0;
+                              compStats[stdName].vols[key] = (compStats[stdName].vols[key] || 0) + vol;
                           }
-                      });
-                  }
+                      };
+
+                      if (mData.monthData) {
+                          for (let d = 1; d <= days; d++) {
+                              if (mData.monthData[d]) mData.monthData[d].forEach(processItem);
+                          }
+                      }
+
+                      // 미정건 합산
+                      if (includePending && mData.pendingItems) {
+                          mData.pendingItems.forEach(processItem);
+                      }
+                  } catch(e) {}
               }
 
-              // 3. 각 열 최대값 갱신
               Object.values(compStats).forEach(c => {
                   if ((c.vols[key] || 0) > maxVolPerCol[key]) maxVolPerCol[key] = c.vols[key];
               });
@@ -5416,7 +5418,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                           let vol = dataItem.vol;
                           let percent = maxVolPerCol[key] > 0 ? (vol / maxVolPerCol[key]) * 100 : 0;
                           
-                          // 💡 여기에 동적으로 쨍한 투명도(barAlpha)가 적용됩니다!
+                          // 💡 다크모드 색상 최적화 반영
                           let bgCss = `background: linear-gradient(to right, ${cObj.bg}${barAlpha} ${percent}%, transparent ${percent}%);`;
                           
                           tbodyHtml += `
@@ -5433,7 +5435,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   tbodyHtml += '</tr>';
               }
           } 
-          // 🚀 상태 B: 특정 연/월 기준 행 맞춤 정렬 (증감 표시 O, 글로벌 Max)
+          // 🚀 상태 B: 행 맞춤 정렬 (글로벌 Max 적용, 증감 표시 O)
           else {
               let sortedComps = Object.values(compStats).filter(c => Object.values(c.vols).some(v => v > 0)).sort((a, b) => {
                   let volA = a.vols[compareSortTargetKey] || 0;
@@ -5458,7 +5460,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       let vol = comp.vols[key] || 0;
                       let percent = globalMaxVol > 0 ? (vol / globalMaxVol) * 100 : 0;
                       
-                      // 💡 여기도 동일하게 쨍한 다크모드 색상 적용!
+                      // 💡 다크모드 색상 최적화 반영
                       let bgCss = `background: linear-gradient(to right, ${cObj.bg}${barAlpha} ${percent}%, transparent ${percent}%);`;
                       
                       let rateHtml = '';
