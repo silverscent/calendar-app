@@ -5150,22 +5150,30 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
       function executeCompare() {
           if (compareMonthsList.length === 0) { showToast("비교할 월을 추가해주세요.", 1500); return; }
-          let yearsToFetch = [...new Set(compareMonthsList.map(item => item.y))];
-          let missingYears = yearsToFetch.filter(y => !yearlyCache[y]);
+          
           const btn = document.getElementById('compareExecBtn');
-
-          if (missingYears.length === 0) { renderCompareGridV3(); return; }
-
           btn.innerText = "⏳ 데이터 불러오는 중...";
           btn.style.pointerEvents = "none"; btn.style.opacity = "0.7";
 
-          let fetchPromises = missingYears.map(y => {
-              return new Promise((resolve, reject) => {
-                  google.script.run.withSuccessHandler(res => {
-                      yearlyCache[y] = res; localStorage.setItem(`yearly_stats_cache_${currentType}_${y}`, JSON.stringify(res)); resolve();
-                  }).withFailureHandler(reject).getYearlyStatsAsync(currentType, y);
-              });
+          // 🚨 [핵심 변경] 연간 요약본이 아니라, 해당 월의 "원본 캘린더 데이터"를 통째로 가져옴!
+          let fetchPromises = [];
+          compareMonthsList.forEach(item => {
+              let cacheKey = `cal_cache_${currentType}_${item.y}_${item.m}`;
+              if (!localStorage.getItem(cacheKey)) {
+                  fetchPromises.push(new Promise((resolve, reject) => {
+                      google.script.run.withSuccessHandler(res => {
+                          localStorage.setItem(cacheKey, JSON.stringify(res)); 
+                          resolve();
+                      }).withFailureHandler(reject).getCalendarDataAsync(currentType, item.y, item.m);
+                  }));
+              }
           });
+
+          if (fetchPromises.length === 0) {
+              btn.innerHTML = "📊 데이터 비교하기"; btn.style.pointerEvents = "auto"; btn.style.opacity = "1";
+              renderCompareGridV3(); 
+              return; 
+          }
 
           Promise.all(fetchPromises).then(() => {
               btn.innerHTML = "📊 데이터 비교하기"; btn.style.pointerEvents = "auto"; btn.style.opacity = "1";
@@ -5302,6 +5310,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           colDragVars.startIdx = -1; colDragVars.lastDropTargetIdx = -1;
       }
 
+      // 📊 V3.5 그리드 렌더링 코어 (P/B 완벽 분리 및 원본 데이터 기반 계산)
       function renderCompareGridV3() {
           document.getElementById('compareGridArea').style.display = 'block';
           
@@ -5342,36 +5351,37 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               let key = `${item.y}-${item.m}`;
               maxVolPerCol[key] = 0;
               
-              // 기존 데이터
-              let yData = yearlyCache[item.y];
-              if (yData && yData.monthly[item.m - 1]) {
-                  let details = yData.monthly[item.m - 1].details || {};
-                  Object.keys(details).forEach(cName => {
-                      let clean = cName.replace(/\[TASK\]/gi, "").trim();
-                      if (cName.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean))) return;
-                      let stdName = getFullName(clean);
-                      if (!compStats[stdName]) compStats[stdName] = { name: stdName, vols: {} };
+              // 🚨 [핵심] 요약본(yearlyCache)을 버리고, 원본 데이터(cal_cache)를 직접 해부해서 P/B 분리!
+              let cached = localStorage.getItem(`cal_cache_${currentType}_${item.y}_${item.m}`);
+              if (cached) {
+                  try {
+                      let mData = JSON.parse(cached);
+                      let days = mData.daysInMonth || 31;
                       
-                      let volObj = details[cName];
-                      let vol = (typeof volObj === 'object' && volObj !== null) ? (parseInt(volObj[cUnit]) || 0) : (parseInt(volObj) || 0);
-                      compStats[stdName].vols[key] = (compStats[stdName].vols[key] || 0) + vol;
-                  });
-              }
-
-              // 미정건 합산
-              if (includePending && item.y === serverData.year && item.m === serverData.month) {
-                  if (serverData.pendingItems) {
-                      serverData.pendingItems.forEach(pItem => {
-                          let clean = String(pItem.company || pItem.bl || "").replace(/\[TASK\]/gi, "").trim();
-                          let isTask = String(pItem.company || pItem.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+                      const processItem = (it) => {
+                          let clean = String(it.company || it.bl || "").replace(/\[TASK\]/gi, "").trim();
+                          let isTask = String(it.company || it.bl || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
                           if (!isTask) {
                               let stdName = getFullName(clean);
                               if (!compStats[stdName]) compStats[stdName] = { name: stdName, vols: {} };
-                              let pVol = parseInt(pItem[cUnit]) || 0;
-                              compStats[stdName].vols[key] = (compStats[stdName].vols[key] || 0) + pVol;
+                              
+                              // 💡 여기서 cUnit('pal' 또는 'box')에 맞춰서 정확하게 수량을 꺼냄!
+                              let vol = parseInt(it[cUnit]) || 0;
+                              compStats[stdName].vols[key] = (compStats[stdName].vols[key] || 0) + vol;
                           }
-                      });
-                  }
+                      };
+
+                      if (mData.monthData) {
+                          for (let d = 1; d <= days; d++) {
+                              if (mData.monthData[d]) mData.monthData[d].forEach(processItem);
+                          }
+                      }
+
+                      // 💡 [개선] 미정건 포함 로직이 이제 '모든 비교월'에 정상 작동합니다!
+                      if (includePending && mData.pendingItems) {
+                          mData.pendingItems.forEach(processItem);
+                      }
+                  } catch(e) {}
               }
 
               Object.values(compStats).forEach(c => {
@@ -5381,7 +5391,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
           let tbodyHtml = '';
           
-          // 🚀 기본 정렬 (증감 표시 없음, 독립 Max)
+          // 🚀 상태 A: 기본 정렬 (증감 표시 없음, 독립 Max)
           if (compareSortTargetKey === null) {
               let sortedLists = {}; let maxRows = 0;
               compareMonthsList.forEach(item => {
@@ -5417,7 +5427,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   tbodyHtml += '</tr>';
               }
           } 
-          // 🚀 행 맞춤 정렬 (증감 표시 O, 글로벌 Max)
+          // 🚀 상태 B: 특정 연/월 기준 행 맞춤 정렬 (증감 표시 O, 글로벌 Max)
           else {
               let sortedComps = Object.values(compStats).filter(c => Object.values(c.vols).some(v => v > 0)).sort((a, b) => {
                   let volA = a.vols[compareSortTargetKey] || 0;
