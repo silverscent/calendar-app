@@ -4088,16 +4088,17 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let iconHtml = isItemDone
             ? `<span class="done-icon" style="font-size: 13px !important; margin-right: 4px;">✅</span>`
             : "";
-          /*let pCount = parseInt(item.pal) || 0;
+          let pCount = parseInt(item.pal) || 0;
           let bCount = parseInt(item.box) || 0;
           let volStr = "";
-          if (pCount > 0) volStr += `${pCount}P `;
-          if (bCount > 0) volStr += `(${bCount}B)`;
+          if (pCount > 0) volStr += `${pCount}PLT `;
+          if (bCount > 0) volStr += `(${bCount}BOX)`;
           if (volStr === "") volStr = "수량 없음";
 
           let badgeText = isTaskMode ? "작업 완료" : "출고 완료";
-          */
-         let pCount = parseInt(item.pal) || 0;
+          
+         /*
+          let pCount = parseInt(item.pal) || 0;
           let bCount = parseInt(item.box) || 0;
           let volStr = "";
 
@@ -4117,7 +4118,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           }
 
           let badgeText = isTaskMode ? "작업 완료" : "출고 완료";
-          // ... (기존 코드 유지)
+          // ... (기존 코드 유지)*/
           let stampHtml = isItemDone
             ? `<div class="status-badge"><span style="font-size: 1.1em; line-height: 1;">✔️</span> ${badgeText}</div>`
             : "";
