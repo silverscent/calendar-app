@@ -4088,7 +4088,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let iconHtml = isItemDone
             ? `<span class="done-icon" style="font-size: 13px !important; margin-right: 4px;">✅</span>`
             : "";
-          let pCount = parseInt(item.pal) || 0;
+          /*let pCount = parseInt(item.pal) || 0;
           let bCount = parseInt(item.box) || 0;
           let volStr = "";
           if (pCount > 0) volStr += `${pCount}P `;
@@ -4096,6 +4096,28 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           if (volStr === "") volStr = "수량 없음";
 
           let badgeText = isTaskMode ? "작업 완료" : "출고 완료";
+          */
+         let pCount = parseInt(item.pal) || 0;
+          let bCount = parseInt(item.box) || 0;
+          let volStr = "";
+
+          // 💡 버셀에 올리신 이미지 경로 (pallet.png, box.png)
+          let imgPal = `<img src="/pallet.png" style="width:16px; height:16px; vertical-align:middle; margin-right:4px; margin-top:-3px;">`;
+          let imgBox = `<img src="/box.png" style="width:16px; height:16px; vertical-align:middle; margin-right:4px; margin-top:-3px;">`;
+
+          // 💡 관리자님이 요청하신 완벽한 포맷 적용
+          if (pCount > 0 && bCount > 0) {
+              volStr = `${imgPal}${pCount} <span style="font-size:0.9em; color:var(--text-sub); margin-left:4px;">(${imgBox}${bCount})</span>`;
+          } else if (pCount > 0) {
+              volStr = `${imgPal}${pCount}`;
+          } else if (bCount > 0) {
+              volStr = `${imgBox}${bCount}`;
+          } else {
+              volStr = "수량 없음";
+          }
+
+          let badgeText = isTaskMode ? "작업 완료" : "출고 완료";
+          // ... (기존 코드 유지)
           let stampHtml = isItemDone
             ? `<div class="status-badge"><span style="font-size: 1.1em; line-height: 1;">✔️</span> ${badgeText}</div>`
             : "";
@@ -4124,7 +4146,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                             <div class="modal-icon ${isDoneClass}" style="${bgStyle}"></div>
                             <div class="modal-info">
                                 <div class="modal-comp-row"><span class="modal-comp" style="font-size:1.05em; font-weight:800;">${getFullName(cleanComp)}</span>${actionBtns}</div>
-                                <div class="modal-vol" style="display:flex; align-items:center;">${iconHtml}📦 ${volStr} ${addQtyBtn}</div>
+                                <div class="modal-vol" style="display:flex; align-items:center;">${iconHtml}${volStr} ${addQtyBtn}</div>
                                 ${etcHtml}
                             </div>
                             ${addQtyForm}
