@@ -4102,9 +4102,9 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let volStr = "";
 
           // 💡 버셀에 올리신 이미지 경로 (pallet.png, box.png)
-          let imgPal = `<img src="/pallet.png" style="width:16px; height:16px; vertical-align:middle; margin-right:4px; margin-top:-3px;">`;
-          let imgBox = `<img src="/box.png" style="width:16px; height:16px; vertical-align:middle; margin-right:4px; margin-top:-3px;">`;
-
+          // 💡 크기를 16px -> 24px로 1.5배 키우고, 높낮이를 맞추기 위해 margin-top을 살짝(-4px) 내렸습니다.
+          let imgPal = `<img src="/pallet.png" style="width:24px; height:24px; vertical-align:middle; margin-right:4px; margin-top:-4px;">`;
+          let imgBox = `<img src="/box.png" style="width:24px; height:24px; vertical-align:middle; margin-right:4px; margin-top:-4px;">`;
           // 💡 관리자님이 요청하신 완벽한 포맷 적용
           if (pCount > 0 && bCount > 0) {
               volStr = `${imgPal}${pCount} <span style="font-size:0.9em; color:var(--text-sub); margin-left:4px;">(${imgBox}${bCount})</span>`;
