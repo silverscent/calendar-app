@@ -542,8 +542,14 @@
         padding: 3px 8px;
         border-radius: 6px;
         font-weight: bold;
-        flex-shrink: 0;            /* 🚨 비고(태그) 역시 찌그러지지 않고 영역 무조건 사수 */
         margin-left: 6px;
+        
+        /* 👇 🚨 신규 추가: 프레임 넘침 방지 & 말줄임표(...) 처리 */
+        max-width: 25vw; /* 모바일 화면 고려하여 최대 너비 강제 고정 */
+        white-space: nowrap; /* 무조건 한 줄로 표시 */
+        overflow: hidden; /* 넘치는 글자 숨김 */
+        text-overflow: ellipsis; /* 잘린 부분에 ... 표시 */
+        flex-shrink: 1; /* 공간 부족 시 찌그러짐 허용 */
       }
 
       .info-footer {
@@ -5384,7 +5390,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       }
 
                       // 미정건 합산
-                      if (includePending && mData.pendingItems) {
+                      // 🚨 버그 수정: 미정건은 모든 달에 더하지 않고, 오직 '당월(현재 띄워진 달력)' 칸에만 더함!
+                      if (includePending && mData.pendingItems && item.y === serverData.year && item.m === serverData.month) {
                           mData.pendingItems.forEach(processItem);
                       }
                   } catch(e) {}
