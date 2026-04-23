@@ -4091,8 +4091,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let pCount = parseInt(item.pal) || 0;
           let bCount = parseInt(item.box) || 0;
           let volStr = "";
-          if (pCount > 0) volStr += `${pCount}PLT `;
-          if (bCount > 0) volStr += `(${bCount}BOX)`;
+          if (pCount > 0) volStr += `${pCount} PLT `;
+          if (bCount > 0) volStr += `(${bCount} BOX)`;
           if (volStr === "") volStr = "수량 없음";
 
           let badgeText = isTaskMode ? "작업 완료" : "출고 완료";
