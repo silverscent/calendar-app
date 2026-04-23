@@ -352,17 +352,18 @@
         filter: brightness(1.2);
       }
 
+      /* 💡 작업(TASK) 간트차트: 소프트 미드나잇 테마 적용 */
       .item-tag-task {
-        background: #222222 !important;
-        border: 1px solid #444444 !important;
+        background: rgba(33, 37, 41, 0.3) !important; 
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
         border-left: 4px solid #ffd60a !important;
         position: relative;
         overflow: visible !important;
         z-index: 1;
       }
       body:not(.light-mode) .item-tag-task {
-        background: #111111 !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        background: rgba(33, 37, 41, 0.4) !important; /* 다크모드에선 가독성을 위해 살짝 더 진하게 */
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
         border-left: 4px solid #ffd60a !important;
       }
       .item-tag-task .comp-name,
@@ -2949,9 +2950,16 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                 } else { innerHtml = `<span style="opacity:0;">-</span>${taskDoneHtml}`; }
               } else {
                 if (isTaskMode) tagClass += " item-tag-task";
-                bgStyle = `background: ${isTaskMode ? "#222222" : colorObj.bg}; height:${sHeight}px; min-height:${sHeight}px; box-sizing:border-box;`;
-                if (isTaskMode && !document.body.classList.contains("light-mode")) bgStyle += ` border: 1px solid rgba(255,255,255,0.2) !important; border-left: 4px solid #FFD60A !important;`;
-                else if (isTaskMode) bgStyle += ` border: 1px solid #444444 !important; border-left: 4px solid #FFD60A !important;`;
+                
+                // 💡 1. #222222 대신 '소프트 미드나잇' 반투명 컬러 적용!
+                bgStyle = `background: ${isTaskMode ? "rgba(33, 37, 41, 0.3)" : colorObj.bg}; height:${sHeight}px; min-height:${sHeight}px; box-sizing:border-box;`;
+                
+                // 💡 2. 겉 테두리(border)도 너무 튀지 않게 투명하게 힘을 뺌
+                if (isTaskMode && !document.body.classList.contains("light-mode")) {
+                    bgStyle += ` border: 1px solid rgba(255,255,255,0.15) !important; border-left: 4px solid #FFD60A !important;`;
+                } else if (isTaskMode) {
+                    bgStyle += ` border: 1px solid rgba(0,0,0,0.1) !important; border-left: 4px solid #FFD60A !important;`;
+                }
 
                 let txtStyle = `color: ${isTaskMode ? "#fff" : colorObj.cMain} !important; text-shadow: ${isTaskMode ? "none" : colorObj.txtShadow} !important;`;
                 let subStyle = `color: ${isTaskMode ? "#fff" : colorObj.cSub} !important;`;
@@ -4011,10 +4019,12 @@ if (!localStorage.getItem('cache_wiped_v3')) {
             isExplicitTask ||
             /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(cleanComp));
 
+          // 💡 showModal 함수 내 수정
           let colorObj = getCompanyColor(cleanComp);
           let bgStyle = `background: ${colorObj.bg};`;
           if (isTaskMode) {
-            bgStyle = `background: #222222; border: 2px solid #FFD60A;`;
+            // 기존 #222222를 소프트 미드나잇으로 변경
+            bgStyle = `background: rgba(33, 37, 41, 0.4); border: 2px solid #FFD60A;`;
           }
 
           let actionBtns = "";
