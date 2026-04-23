@@ -4091,9 +4091,17 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let pCount = parseInt(item.pal) || 0;
           let bCount = parseInt(item.box) || 0;
           let volStr = "";
-          if (pCount > 0) volStr += `${pCount} PLT `;
-          if (bCount > 0) volStr += `(${bCount} BOX)`;
-          if (volStr === "") volStr = "수량 없음";
+
+          // 💡 파레트와 박스가 둘 다 있을 때는 중간에 ' / ' 를 넣음
+          if (pCount > 0 && bCount > 0) {
+              volStr = `${pCount} PLT / ${bCount} BOX`;
+          } else if (pCount > 0) {
+              volStr = `${pCount} PLT`;
+          } else if (bCount > 0) {
+              volStr = `${bCount} BOX`;
+          } else {
+              volStr = "수량 없음";
+          }
 
           let badgeText = isTaskMode ? "작업 완료" : "출고 완료";
           
