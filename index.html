@@ -2431,21 +2431,28 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         하메: "하이메드",
         하이: "하이메드",
       };
+      // 💡 [데이터 정규화] 약어를 넣으면 풀네임을 뱉어내는 튼튼한 자판기
       function getFullName(name) {
         if (!name) return "";
-        let input = name.trim();
+        let input = String(name).trim();
 
         // 1. 하드코딩된 풀네임 맵에서 먼저 찾기 (서호 -> 서호메디코)
-        if (compFullMap[input]) return compFullMap[input];
-
-        // 2. CRM DB를 뒤져서 약어(shortName)와 일치하는 풀네임 찾기
-        for (let fullName in compInfoDB) {
-          if (compInfoDB[fullName].shortName === input) {
-            return fullName;
-          }
+        if (typeof compFullMap !== "undefined" && compFullMap[input]) {
+          return compFullMap[input];
         }
 
-        // 3. 못 찾으면 입력값 그대로 반환
+        // 2. CRM DB를 뒤져서 약어(shortName)와 일치하는 풀네임 찾기
+        try {
+          if (typeof compInfoDB === "object" && compInfoDB !== null) {
+            for (let key in compInfoDB) {
+              if (compInfoDB[key] && compInfoDB[key].shortName === input) {
+                return key;
+              }
+            }
+          }
+        } catch (e) { console.log("CRM DB 검색 에러 방어:", e); }
+
+        // 3. 🚨 끝까지 못 찾으면 입력값 그대로 반환! (이 줄이 없으면 신규 업체 등록이 안 됩니다!)
         return input;
       }
 
@@ -3946,6 +3953,18 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         oldBlockStart = null,
         oldBlockEnd = null,
       ) {
+      // 🚨 [핵심 패치] 저장 프로세스 시작 직전, 입력칸의 글씨를 멱살 잡고 풀네임으로 강제 변환!
+        try {
+          if (action === "ADD") {
+            let addInput = document.getElementById("add-comp");
+            if (addInput && addInput.value) addInput.value = getFullName(addInput.value);
+          } else if (action === "EDIT" && idx !== null) {
+            let editInput = document.getElementById(`edit-comp-${idx}`);
+            if (editInput && editInput.value) editInput.value = getFullName(editInput.value);
+          }
+        } catch (e) { console.log("이름 변환 가로채기 방어:", e); }
+
+        // --- 여기서부터는 관리자님의 기존 코드 100% 동일 ---
         let oldPal = "", oldBox = "";
         const safeStr = (val) => val === "" || val == null ? "" : String(val).trim();
         let currentIsDone = isDone === true || String(isDone) === "true";
