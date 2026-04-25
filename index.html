@@ -5833,6 +5833,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                             <button class="save-btn" style="flex:2; padding:10px; font-size:0.9em;" onclick="saveCompEdit('${comp}', ${i})">💾 저장</button>
                             <button class="cancel-btn" style="flex:1; padding:10px; font-size:0.9em;" onclick="cancelEditMode(${i})">취소</button>
                         </div>
+                        <button class="delete-btn" style="width:100%; margin-top:8px; padding:10px; font-size:0.9em;" onclick="deleteCompInfo('${comp}')">🗑️ 이 업체 정보 삭제</button>
                     </div>
                  </div>
               </div>
@@ -5878,6 +5879,24 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           showToast("💾 수정되었습니다.");
           renderCompList();
           renderCalendar(); // 달력 약어 및 알약 갱신
+      }
+
+      // 💡 7. [신규 추가] 업체 정보 완전 삭제 (또는 기존업체 초기화)
+      function deleteCompInfo(compName) {
+          if (!confirm(`⚠️ 정말 [${compName}] 업체의 CRM 정보를 삭제하시겠습니까?\n\n※ 주의: 하드코딩된 기본 업체라면 정보만 '초기화'되며 리스트에서 사라지지 않습니다.`)) return;
+          
+          // DB에서 해당 업체 데이터 완전히 삭제!
+          delete compInfoDB[compName];
+          
+          // 로컬과 서버에 삭제된 상태로 덮어쓰기
+          localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
+          google.script.run.saveCompInfoDB(compInfoDB);
+          
+          showToast(`🗑️ [${compName}] 정보가 삭제되었습니다.`);
+          
+          // 리스트와 달력(알약 등) 즉시 새로고침
+          renderCompList();
+          renderCalendar();
       }
 
       // 신규 등록
