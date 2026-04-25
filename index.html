@@ -2432,7 +2432,21 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         하이: "하이메드",
       };
       function getFullName(name) {
-        return compFullMap[name] || name;
+        if (!name) return "";
+        let input = name.trim();
+
+        // 1. 하드코딩된 풀네임 맵에서 먼저 찾기 (서호 -> 서호메디코)
+        if (compFullMap[input]) return compFullMap[input];
+
+        // 2. CRM DB를 뒤져서 약어(shortName)와 일치하는 풀네임 찾기
+        for (let fullName in compInfoDB) {
+          if (compInfoDB[fullName].shortName === input) {
+            return fullName;
+          }
+        }
+
+        // 3. 못 찾으면 입력값 그대로 반환
+        return input;
       }
 
      
@@ -3953,10 +3967,15 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         }
 
         let isTask = false; let rawComp = ""; let startDateStr = ""; let endDateStr = "";
+        
         if (action === "ADD") {
           isTask = document.getElementById("type-task-add").checked;
           rawComp = document.getElementById("add-comp").value.trim();
-          payload.newComp = isTask ? `[TASK]${rawComp}` : rawComp;
+          
+          // 🚨 [핵심 패치] 입력값이 약어든 뭐든 무조건 풀네임으로 강제 변환!
+          let finalComp = getFullName(rawComp); 
+          payload.newComp = isTask ? `[TASK]${finalComp}` : finalComp;
+          
           payload.newPal = document.getElementById("add-pal").value;
           payload.newBox = document.getElementById("add-box").value;
           startDateStr = document.getElementById("add-date").value || "미정";
@@ -3964,10 +3983,15 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           endDateStr = endNode ? endNode.value : "";
           payload.newDate = startDateStr;
           payload.newEtc = document.getElementById("add-etc").value;
+          
         } else if (action === "EDIT") {
           isTask = document.getElementById(`edit-type-task-${idx}`).checked;
           rawComp = document.getElementById(`edit-comp-${idx}`).value.trim();
-          payload.newComp = isTask ? `[TASK]${rawComp}` : rawComp;
+          
+          // 🚨 [핵심 패치] 수정할 때도 무조건 풀네임으로 강제 변환!
+          let finalComp = getFullName(rawComp); 
+          payload.newComp = isTask ? `[TASK]${finalComp}` : finalComp;
+          
           payload.newPal = document.getElementById(`edit-pal-${idx}`).value;
           payload.newBox = document.getElementById(`edit-box-${idx}`).value;
           payload.newDate = document.getElementById(`edit-date-${idx}`).value || "미정";
