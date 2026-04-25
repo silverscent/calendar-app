@@ -3408,8 +3408,19 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
         lastLocalUpdateTime = Date.now();
         localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
-     // 👇👇 [여기에 1줄 추가!] 일정을 건드리면 '연간 통계' 캐시도 즉시 폭파시켜서 새로 가져오게 만듦!
-         Object.keys(localStorage).forEach(k => { if (k.startsWith(`yearly_stats_cache_${currentType}_`)) localStorage.removeItem(k); });
+        
+        // 🚀 [스텔스 연간 동기화] 지우지 말고 뒤에서 몰래 최신본으로 갈아 끼웁니다!
+        google.script.run.withSuccessHandler(res => {
+            if (res && res.year) {
+                yearlyCache[res.year] = res; // 단기 기억 갱신
+                localStorage.setItem(`yearly_stats_cache_${currentType}_${res.year}`, JSON.stringify(res)); // 창고 갱신
+                
+                // 사용자가 대시보드 연간 탭을 보고 있다면 화면도 즉시 스르륵 갱신!
+                if (document.getElementById('dashboardModal').style.display === 'flex' && window.dashMode === 'year') {
+                    renderDashCharts();
+                }
+            }
+        }).getYearlyStatsAsync(currentType, serverData.year);
       }
 
       function updateMultiLocalState(action, items) {
@@ -3449,10 +3460,20 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         lastLocalUpdateTime = Date.now();
         localStorage.setItem(
           `cal_cache_${currentType}_${serverData.year}_${serverData.month}`,
-          JSON.stringify(serverData),
+          JSON.stringify(serverData)
         );
-      // 👇👇 [여기에 1줄 추가!] 다중 작업 시에도 '연간 통계' 캐시 즉시 폭파!
-         Object.keys(localStorage).forEach(k => { if (k.startsWith(`yearly_stats_cache_${currentType}_`)) localStorage.removeItem(k); });
+        
+        // 🚀 [스텔스 연간 동기화] 다중 작업 시에도 몰래 연간 통계 최신화!
+        google.script.run.withSuccessHandler(res => {
+            if (res && res.year) {
+                yearlyCache[res.year] = res;
+                localStorage.setItem(`yearly_stats_cache_${currentType}_${res.year}`, JSON.stringify(res));
+                
+                if (document.getElementById('dashboardModal').style.display === 'flex' && window.dashMode === 'year') {
+                    renderDashCharts();
+                }
+            }
+        }).getYearlyStatsAsync(currentType, serverData.year);
       }
 
       function attachAutocomplete(inputId) {
