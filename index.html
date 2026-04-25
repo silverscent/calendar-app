@@ -3373,7 +3373,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         input.parentNode.insertBefore(drop, input.nextSibling);
         const cleanStr = (s) => s.replace(/[\(\)주]/g, "");
         function renderList(filterText) {
-          let filtered = [...fixedCompanies];
+          // 💡 기존 fixedCompanies에 CRM에서 새로 추가된 업체들까지 영혼까지 끌어모음
+          let combinedComps = Array.from(new Set([...fixedCompanies, ...Object.keys(compInfoDB)]));
+          let filtered = [...combinedComps];
+          
           if (filterText) {
             filtered = filtered.filter((c) => c.includes(filterText));
             filtered.sort((a, b) => {
@@ -4222,6 +4225,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
             ? `<div class="status-badge"><span style="font-size: 1.1em; line-height: 1;">✔️</span> ${badgeText}</div>`
             : "";
 
+          // 💡 [CRM 패치] 우측 완료 도장 맞은편(좌측)에 알약 뱃지 장착!
+          let pillStr = getPillHtml(getFullName(cleanComp));
+          let pillContainer = pillStr ? `<div class="modal-left-pills">${pillStr}</div>` : "";
+
           // 💡 [패치] 수량 추가 UI는 "출고" 항목이면서 "완료되지 않은 상태"일 때만 노출!
           let addQtyBtn =
             isAdmin && !isTaskMode && !isItemDone
@@ -4243,7 +4250,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               : "";
 
           contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
-                            <div class="modal-icon ${isDoneClass}" style="${bgStyle}"></div>
+                            ${pillContainer} <div class="modal-icon ${isDoneClass}" style="${bgStyle}"></div>
                             <div class="modal-info">
                                 <div class="modal-comp-row">
     <span class="modal-comp" style="font-size:1.05em; font-weight:900; cursor:pointer; text-decoration: underline; text-decoration-color: rgba(128,128,128,0.3); text-underline-offset: 4px;" onclick="event.stopPropagation(); openReadCompPopup('${cleanComp}')">
@@ -5629,6 +5636,153 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           if (tbodyHtml === '') tbodyHtml = `<tr><td colspan="10" style="text-align:center; padding:20px; font-weight:bold; color:var(--text-sub);">선택된 월에 출고 데이터가 없습니다.</td></tr>`;
           document.getElementById('compareTbody').innerHTML = tbodyHtml;
       }
+
+
+      // =====================================================
+      // 🏢 [미니 CRM] 업체 정보 관리 시스템 엔진
+      // =====================================================
+      let compInfoDB = JSON.parse(localStorage.getItem('COMP_INFO_DB') || '{}');
+
+      // 💡 알약 HTML 뱃지 생성기
+      function getPillHtml(compName) {
+          let info = compInfoDB[compName];
+          if (!info) return '';
+          
+          if (info.ic && info.oc && info.wc) {
+              return `<span class="type-pill pill-all">ALL</span>`;
+          }
+          
+          let html = '';
+          if (info.ic) html += `<span class="type-pill pill-ic">IC</span>`;
+          if (info.oc) html += `<span class="type-pill pill-oc">OC</span>`;
+          if (info.wc) html += `<span class="type-pill pill-wc">WC</span>`;
+          return html;
+      }
+
+      // 💡 1. 업체 리스트(아코디언) 모달창 열기
+      function openCompListModal() {
+          renderCompList();
+          document.getElementById('compListModal').style.display = 'flex';
+      }
+
+      // 💡 2. 업체 리스트 렌더링 (관리자/일반 권한 분리)
+      function renderCompList() {
+          // 기존 fixedCompanies와 새로 추가된 업체를 모두 합침
+          let allComps = Array.from(new Set([...fixedCompanies, ...Object.keys(compInfoDB)])).sort();
+          
+          let html = '';
+          allComps.forEach((comp, i) => {
+              let info = compInfoDB[comp] || {ic:false, oc:false, wc:false, etc:'', addr:'', phone:'', time:''};
+              let pillStr = getPillHtml(comp);
+              
+              html += `
+              <div class="comp-acc-item">
+                 <div class="comp-acc-header" onclick="toggleCompAcc('acc-body-${i}')">
+                     <span>${comp}</span>
+                     <div style="display:flex; gap:5px; align-items:center;">
+                         ${pillStr} <span style="font-size:0.8em; color:var(--text-sub);">▼</span>
+                     </div>
+                 </div>
+                 <div class="comp-acc-body" id="acc-body-${i}">
+              `;
+              
+              if (isAdmin) {
+                  // 🛠️ 관리자: 수정 폼
+                  html += `
+                     <div style="display:flex; gap:10px; margin-bottom:5px;">
+                        <label style="font-weight:bold;"><input type="checkbox" id="ic-${i}" ${info.ic?'checked':''}> IC</label>
+                        <label style="font-weight:bold;"><input type="checkbox" id="oc-${i}" ${info.oc?'checked':''}> OC</label>
+                        <label style="font-weight:bold;"><input type="checkbox" id="wc-${i}" ${info.wc?'checked':''}> WC</label>
+                     </div>
+                     <div class="info-row"><span class="info-label">특이사항</span><input type="text" id="crm-etc-${i}" class="edit-input" value="${info.etc||''}"></div>
+                     <div class="info-row"><span class="info-label">주소</span><input type="text" id="crm-addr-${i}" class="edit-input" value="${info.addr||''}"></div>
+                     <div class="info-row"><span class="info-label">연락처</span><input type="text" id="crm-phone-${i}" class="edit-input" value="${info.phone||''}"></div>
+                     <div class="info-row"><span class="info-label">배송시간</span><input type="text" id="crm-time-${i}" class="edit-input" value="${info.time||''}"></div>
+                     <button class="save-btn" style="padding:10px; font-size:0.9em; margin-top:5px;" onclick="saveCompInfo('${comp}', ${i})">저장</button>
+                  `;
+              } else {
+                  // 👀 일반 사용자: 읽기 전용
+                  html += `
+                     <div class="info-row"><span class="info-label">특이사항</span><span class="info-value">${info.etc||'-'}</span></div>
+                     <div class="info-row"><span class="info-label">주소</span><span class="info-value">${info.addr||'-'}</span></div>
+                     <div class="info-row"><span class="info-label">연락처</span><span class="info-value">${info.phone||'-'}</span></div>
+                     <div class="info-row"><span class="info-label">배송시간</span><span class="info-value">${info.time||'-'}</span></div>
+                  `;
+              }
+              html += `</div></div>`;
+          });
+          document.getElementById('compListContainer').innerHTML = html;
+
+          // 관리자 신규 추가 영역 표시
+          let addArea = document.getElementById('compAdminAddArea');
+          if (isAdmin) {
+               addArea.style.display = 'block';
+               addArea.innerHTML = `
+                   <div style="display:flex; gap:8px;">
+                       <input type="text" id="newCompNameInput" class="edit-input" placeholder="새 업체명(풀네임) 입력">
+                       <button class="save-btn" style="flex:0.4; padding:10px; font-size:0.9em;" onclick="addNewComp()">추가</button>
+                   </div>
+               `;
+          } else { addArea.style.display = 'none'; }
+      }
+
+      // 💡 3. 아코디언 열고 닫기
+      function toggleCompAcc(id) {
+          const el = document.getElementById(id);
+          if (el.classList.contains('open')) el.classList.remove('open');
+          else {
+              document.querySelectorAll('.comp-acc-body').forEach(b => b.classList.remove('open'));
+              el.classList.add('open');
+          }
+      }
+
+      // 💡 4. 관리자 - 업체 정보 저장
+      function saveCompInfo(compName, i) {
+          compInfoDB[compName] = {
+              ic: document.getElementById(`ic-${i}`).checked,
+              oc: document.getElementById(`oc-${i}`).checked,
+              wc: document.getElementById(`wc-${i}`).checked,
+              etc: document.getElementById(`crm-etc-${i}`).value,
+              addr: document.getElementById(`crm-addr-${i}`).value,
+              phone: document.getElementById(`crm-phone-${i}`).value,
+              time: document.getElementById(`crm-time-${i}`).value
+          };
+          localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
+          showToast("💾 업체 정보가 저장되었습니다.");
+          renderCompList(); // 새로고침
+          renderCalendar(); // 달력 모달창 뱃지 업데이트용
+      }
+
+      // 💡 5. 관리자 - 신규 업체 추가
+      function addNewComp() {
+          let newName = document.getElementById('newCompNameInput').value.trim();
+          if (!newName) { alert("업체명을 입력하세요."); return; }
+          if (compInfoDB[newName] || fixedCompanies.includes(newName)) { alert("이미 존재하는 업체입니다."); return; }
+          
+          compInfoDB[newName] = { ic:false, oc:false, wc:false, etc:'', addr:'', phone:'', time:'' };
+          localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
+          showToast(`✅ [${newName}] 업체가 추가되었습니다.`);
+          renderCompList();
+      }
+
+      // 💡 6. 상세창에서 업체명 눌렀을 때 뜨는 정보 팝업
+      function openReadCompPopup(compName) {
+          let fullName = getFullName(compName);
+          let info = compInfoDB[fullName] || {};
+          
+          document.getElementById('readCompTitle').innerText = fullName;
+          document.getElementById('readCompPills').innerHTML = getPillHtml(fullName) || `<span class="type-pill pill-none">지정됨 없음</span>`;
+          
+          let html = `
+              <div class="info-row"><span class="info-label">특이사항</span><span class="info-value">${info.etc||'-'}</span></div>
+              <div class="info-row"><span class="info-label">주소</span><span class="info-value">${info.addr||'-'}</span></div>
+              <div class="info-row"><span class="info-label">연락처</span><span class="info-value">${info.phone||'-'}</span></div>
+              <div class="info-row"><span class="info-label">배송시간</span><span class="info-value">${info.time||'-'}</span></div>
+          `;
+          document.getElementById('readCompContent').innerHTML = html;
+          document.getElementById('compReadPopup').style.display = 'flex';
+      }
+
     </script>
   </body>
 </html>
