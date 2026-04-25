@@ -1592,6 +1592,61 @@
         min-height: 65vh; 
       }
       
+      /* ===================================================== */
+      /* 🏢 [미니 CRM] 업체 정보 관리 & 알약(Pill) UI 전용 CSS */
+      /* ===================================================== */
+      .info-btn {
+        background: var(--btn-bg); color: #0a84ff; border: none; width: 32px; height: 32px;
+        border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: bold; transition: 0.2s;
+        display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      }
+      .info-btn:active { transform: scale(0.9); }
+
+      /* 알약(Pill) 뱃지 디자인 */
+      .pill-group { display: flex; gap: 5px; flex-wrap: wrap; }
+      .type-pill {
+        padding: 3px 8px; border-radius: 12px; font-size: 0.75em; font-weight: 900;
+        letter-spacing: -0.3px; display: inline-flex; align-items: center; justify-content: center;
+      }
+      .pill-ic { background: rgba(52, 199, 89, 0.15); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.3); }
+      .pill-oc { background: rgba(255, 59, 48, 0.15); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); }
+      .pill-wc { background: rgba(10, 132, 255, 0.15); color: #0a84ff; border: 1px solid rgba(10, 132, 255, 0.3); }
+      .pill-all { background: rgba(175, 82, 222, 0.15); color: #af52de; border: 1px solid rgba(175, 82, 222, 0.3); }
+      .pill-none { background: var(--btn-bg); color: var(--text-sub); border: 1px solid var(--border-color); }
+
+      /* 상세창 좌측 하단 알약 컨테이너 */
+      .modal-left-pills {
+        position: absolute; bottom: 14px; left: 16px; z-index: 10; display: flex; gap: 4px;
+      }
+
+      /* 아코디언 리스트 디자인 */
+      .comp-list-container {
+        display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; padding-right: 5px;
+      }
+      .comp-acc-item {
+        background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden;
+      }
+      .comp-acc-header {
+        padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;
+        font-weight: 900; font-size: 1.05em; cursor: pointer; transition: background 0.2s;
+      }
+      .comp-acc-header:active { background: rgba(10, 132, 255, 0.05); }
+      .comp-acc-body {
+        display: none; /* 기본은 접혀있음 */
+        padding: 16px; border-top: 1px dashed var(--border-color); background: var(--bg-color);
+        font-size: 0.9em; flex-direction: column; gap: 10px;
+      }
+      .comp-acc-body.open { display: flex; animation: fadeIn 0.2s ease-out; }
+      
+      .info-row { display: flex; flex-direction: column; gap: 4px; }
+      .info-label { font-size: 0.8em; font-weight: 800; color: var(--text-sub); }
+      .info-value { font-weight: bold; color: var(--text-main); line-height: 1.4; word-break: keep-all; }
+
+      /* 읽기 전용 팝업 (가운데 정렬) */
+      #compReadPopup .modal-box {
+        border-radius: 24px; padding: 25px; margin: auto 20px; max-height: 80vh;
+      }
+
     </style>
   </head>
   <body>
@@ -1655,6 +1710,8 @@
         </div>
 
         <div class="action-row-right">
+          <button class="info-btn" id="compInfoBtn" onclick="openCompListModal()">ℹ️</button>
+          
           <div class="sync-area" id="syncArea" style="display: flex">
             <span class="sync-time" id="lastSyncTime"></span>
             <button class="sync-btn" onclick="navMonth(0)" title="수동 동기화">
@@ -2103,6 +2160,30 @@
         <div class="month-grid-ui" id="crossPickerMonthGrid"></div>
         
         <button class="save-btn" style="width: 100%; margin-top: 20px;" onclick="confirmCrossPicker()">✅ 선택 완료</button>
+      </div>
+    </div>
+
+    <div id="compListModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title" style="color:#0a84ff;">🏢 거래처 정보 관리</div>
+          <button class="close-btn" onclick="document.getElementById('compListModal').style.display='none'">✕</button>
+        </div>
+        <div id="compAdminAddArea" style="display:none; margin-bottom: 12px;"></div>
+        <div class="comp-list-container" id="compListContainer"></div>
+      </div>
+    </div>
+
+    <div id="compReadPopup" class="overlay-modal" style="align-items: center;" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="modal-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0;">
+          <div class="modal-title" id="readCompTitle" style="font-size: 1.4em;">업체명</div>
+          <button class="close-btn" onclick="document.getElementById('compReadPopup').style.display='none'">✕</button>
+        </div>
+        <div id="readCompPills" class="pill-group" style="margin-top: 10px; margin-bottom: 15px;"></div>
+        <div class="comp-acc-body" id="readCompContent" style="display: flex; border:none; padding:0; background:transparent;">
+          </div>
       </div>
     </div>
 
@@ -4164,7 +4245,12 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
                             <div class="modal-icon ${isDoneClass}" style="${bgStyle}"></div>
                             <div class="modal-info">
-                                <div class="modal-comp-row"><span class="modal-comp" style="font-size:1.05em; font-weight:800;">${getFullName(cleanComp)}</span>${actionBtns}</div>
+                                <div class="modal-comp-row">
+    <span class="modal-comp" style="font-size:1.05em; font-weight:900; cursor:pointer; text-decoration: underline; text-decoration-color: rgba(128,128,128,0.3); text-underline-offset: 4px;" onclick="event.stopPropagation(); openReadCompPopup('${cleanComp}')">
+        ${getFullName(cleanComp)}
+    </span>
+    ${actionBtns}
+</div>
                                 <div class="modal-vol" style="display:flex; align-items:center;">${iconHtml}${volStr} ${addQtyBtn}</div>
                                 ${etcHtml}
                             </div>
