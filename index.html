@@ -5721,19 +5721,28 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           return html;
       }
 
-      // 💡 1. 업체 리스트 모달창 열기 (열 때마다 서버 최신 데이터 땡겨오기)
+      // 💡 1. 업체 리스트 모달창 열기 (딜레이 없이 즉시 열기!)
       function openCompListModal() {
+          // 1. 딜레이 방지: 일단 내 폰에 있는 로컬 데이터로 창부터 0.1초 만에 즉시 엽니다.
           document.getElementById('btnAddNewComp').style.display = isAdmin ? 'block' : 'none';
-          
-          // 창 띄우기 직전에 서버에서 최신 DB 한번 훑어오기
+          renderCompList(); 
+          document.getElementById('compListModal').style.display = 'flex';
+
+          // 2. 창을 띄워놓고, 백그라운드에서 조용히 서버 최신 DB를 가져옵니다.
           google.script.run
               .withSuccessHandler(function (dbData) {
                   if (dbData) {
-                      compInfoDB = dbData;
-                      localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
+                      // 기존 데이터와 서버 데이터가 다를 때만 화면을 스르륵 새로고침합니다.
+                      let oldStr = JSON.stringify(compInfoDB);
+                      let newStr = JSON.stringify(dbData);
+                      
+                      if (oldStr !== newStr) {
+                          compInfoDB = dbData;
+                          localStorage.setItem('COMP_INFO_DB', newStr);
+                          renderCompList(); // 리스트 갱신
+                          renderCalendar(); // 달력도 갱신
+                      }
                   }
-                  renderCompList(); // 최신 데이터로 리스트 그리기
-                  document.getElementById('compListModal').style.display = 'flex';
               })
               .getCompInfoDB();
       }
