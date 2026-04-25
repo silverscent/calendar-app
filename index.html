@@ -1593,25 +1593,40 @@
       }
       
       /* ===================================================== */
-      /* 🏢 [미니 CRM V4] 프리미엄 디자인 & 레이아웃 최적화 */
+      /* 🏢 [미니 CRM] 공통 알약 뱃지 & 아이콘 버튼 (복구 완료!) */
       /* ===================================================== */
-      
-      /* 모달 높이 확장 (시원시원하게) */
-      #compListModal .modal-box {
-        max-height: 92vh !important;
-        padding-top: 10px;
+      .info-btn {
+        background: var(--btn-bg); color: #0a84ff; border: none; width: 32px; height: 32px;
+        border-radius: 8px; cursor: pointer; font-size: 1.1em; font-weight: bold; transition: 0.2s;
+        display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
       }
+      .info-btn:active { transform: scale(0.9); }
 
-      /* 업체 태그 구름 (잘림 방지 및 세련된 레이아웃) */
+      .pill-group { display: flex; gap: 5px; flex-wrap: wrap; }
+      .type-pill {
+        padding: 3px 8px; border-radius: 12px; font-size: 0.75em; font-weight: 900;
+        letter-spacing: -0.3px; display: inline-flex; align-items: center; justify-content: center;
+      }
+      .pill-ic { background: rgba(52, 199, 89, 0.15); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.3); }
+      .pill-oc { background: rgba(255, 59, 48, 0.15); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); }
+      .pill-wc { background: rgba(10, 132, 255, 0.15); color: #0a84ff; border: 1px solid rgba(10, 132, 255, 0.3); }
+      .pill-all { background: rgba(175, 82, 222, 0.15); color: #af52de; border: 1px solid rgba(175, 82, 222, 0.3); }
+      .pill-none { background: var(--btn-bg); color: var(--text-sub); border: 1px solid var(--border-color); }
+      .modal-left-pills { position: absolute; bottom: 14px; left: 16px; z-index: 10; display: flex; gap: 4px; }
+
+      /* ===================================================== */
+      /* 🏢 [미니 CRM] 업체 정보 태그 클라우드 레이아웃 */
+      /* ===================================================== */
+      #compListModal .modal-box { max-height: 92vh !important; padding-top: 10px; }
+      #compReadPopup .modal-box, #newCompModal .modal-box { border-radius: 24px; padding: 25px; margin: auto 20px; max-height: 80vh; overflow-y: auto; }
+
       .comp-tags-wrapper {
         display: flex; flex-wrap: wrap; gap: 10px; 
         max-height: 35vh; overflow-y: auto;
-        padding: 8px 4px 15px 4px; /* 🚨 좌우 패딩 확보로 잘림 방지 */
+        padding: 8px 4px 15px 4px;
         margin-bottom: 15px;
         border-bottom: 1px solid var(--border-color);
       }
-      
-      /* 업체명 태그 디자인 */
       .comp-tag-btn {
         padding: 10px 16px; border-radius: 14px; font-weight: 900; font-size: 0.92em;
         border: 2px solid transparent; cursor: pointer; transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -1619,42 +1634,29 @@
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         display: inline-flex; align-items: center; justify-content: center;
       }
-      
-      /* 선택된 태그: 쨍하게 살아나는 효과 */
       .comp-tag-btn.active {
         opacity: 1; filter: grayscale(0%);
         border-color: #0a84ff; transform: translateY(-3px) scale(1.05); 
         box-shadow: 0 8px 20px rgba(10, 132, 255, 0.25); z-index: 2;
       }
-
-      /* 하단 상세 정보 카드 디자인 */
       .comp-detail-wrapper {
-        background: var(--bg-color);
-        border: 1px solid var(--border-color);
-        border-radius: 20px;
-        padding: 20px;
-        margin-top: 5px;
+        background: var(--bg-color); border: 1px solid var(--border-color);
+        border-radius: 20px; padding: 20px; margin-top: 5px;
         box-shadow: inset 0 2px 10px rgba(0,0,0,0.05);
         display: flex; flex-direction: column; gap: 15px;
         animation: slideUpFade 0.4s ease-out;
       }
-
-      /* 상세 항목 가독성 향상 */
-      .info-row { display: flex; flex-direction: column; gap: 6px; }
-      .info-label { font-size: 0.78em; font-weight: 800; color: var(--text-sub); letter-spacing: 0.5px; text-transform: uppercase; }
-      .info-value { font-weight: 700; color: var(--text-main); font-size: 1.05em; line-height: 1.5; }
-
-      /* 수정 모드 전용 입력폼 배경 */
+      
+      /* 원래의 예쁜 정보 텍스트 간격 복구 */
+      .info-row { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+      .info-label { font-size: 0.8em; font-weight: 800; color: var(--text-sub); }
+      .info-value { font-weight: bold; color: var(--text-main); line-height: 1.4; word-break: keep-all; }
+      
       #crm-edit-mode {
-        background: var(--card-bg);
-        padding: 18px; border-radius: 18px; border: 2px solid #0a84ff;
+        background: var(--card-bg); padding: 18px; border-radius: 18px; border: 2px solid #0a84ff;
         box-shadow: 0 10px 30px rgba(10, 132, 255, 0.15);
       }
-
-      @keyframes slideUpFade {
-        from { opacity: 0; transform: translateY(15px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
+      @keyframes slideUpFade { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
       /*미니CRM*/
 
     </style>
