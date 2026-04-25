@@ -2362,7 +2362,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                                   clearTimeout(timeoutId); 
                                   if(this._err) this._err(e); 
                               }).finally(() => setLoadingState(false)); 
-                      }
+                      },
+                      // 👇 💡 그리고 그 밑에 이 2줄을 추가합니다.
+                      getCompInfoDB: function() { this._call({ source: 'vercel', action: 'GET_COMP_INFO_DB' }); },
+                      saveCompInfoDB: function(dbData) { this._call({ source: 'vercel', action: 'SAVE_COMP_INFO_DB', data: dbData }); }
                   };
               }
           }
@@ -2718,37 +2721,49 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         let fetchStartTime = Date.now();
         showToast("🔄 백그라운드 동기화 중...", 0);
 
-        // ... (기존 코드) ...
+
+        // 💡 [추가] CRM 데이터 가져오기 (가장 바깥 껍질)
         google.script.run
-          .withSuccessHandler(function (colors) {
-            customColors = colors;
-            localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(colors));
+          .withSuccessHandler(function (dbData) {
+              if (dbData) {
+                  compInfoDB = dbData;
+                  localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
+              }
+              
+              // [기존 코드 시작점] 색상 가져오기
+              google.script.run
+                .withSuccessHandler(function (colors) {
+                  customColors = colors;
+                  localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(colors));
 
-            google.script.run
-              .withSuccessHandler(function (newData) {
-                if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
+                  // 달력 데이터 가져오기
+                  google.script.run
+                    .withSuccessHandler(function (newData) {
+                      if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
 
-                newData.year = currentYear;
-                newData.month = currentMonth;
-                newData.firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
-                newData.daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+                      newData.year = currentYear;
+                      newData.month = currentMonth;
+                      newData.firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
+                      newData.daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
 
-                // 🚨 [핵심 패치 1] 서버 데이터를 메모리에 덮어쓰기 직전! 관리자님의 순서를 강제로 주입!
-                if (typeof preserveCustomOrder === "function") {
-                    newData = preserveCustomOrder(newData);
-                }
+                      // 🚨 [핵심 패치 1] 서버 데이터를 메모리에 덮어쓰기 직전! 관리자님의 순서를 강제로 주입!
+                      if (typeof preserveCustomOrder === "function") {
+                          newData = preserveCustomOrder(newData);
+                      }
 
-                localStorage.setItem(cacheKey, JSON.stringify(newData));
+                      localStorage.setItem(cacheKey, JSON.stringify(newData));
 
-                if (serverData.year === currentYear && serverData.month === currentMonth) {
-                  serverData = newData;
-                  renderCalendar();
-                  showToast("✅ 최신화 완료!", 1000);
-                }
-              })
-              .getCalendarDataAsync(currentType, currentYear, currentMonth);
-          })
-          .getGlobalColors();
+                      if (serverData.year === currentYear && serverData.month === currentMonth) {
+                        serverData = newData;
+                        renderCalendar();
+                        showToast("✅ 최신화 완료!", 1000);
+                      }
+                    })
+                    .getCalendarDataAsync(currentType, currentYear, currentMonth);
+                })
+                .getGlobalColors();
+          }) // 👈 💡 [추가] CRM 성공 핸들러 닫기
+          .getCompInfoDB(); // 👈 💡 [추가] CRM 함수 실행 명령
       });
 
       // 💡 [새로 추가됨] 네온 로딩 & 게이지 스위치
@@ -5781,6 +5796,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               time: document.getElementById(`edit-time-${i}`).value
           };
           localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
+          google.script.run.saveCompInfoDB(compInfoDB); // 💡 추가: 구글 DB로 전송!
           showToast("💾 수정되었습니다.");
           renderCompList();
           renderCalendar(); // 달력 약어 및 알약 갱신
@@ -5810,6 +5826,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               time: document.getElementById('nc-time').value
           };
           localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
+          google.script.run.saveCompInfoDB(compInfoDB); // 💡 추가: 구글 DB로 전송!
           showToast(`✅ [${full}] 등록 완료!`);
           document.getElementById('newCompModal').style.display = 'none';
           renderCompList();
