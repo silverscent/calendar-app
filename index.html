@@ -3139,6 +3139,19 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         updateStatsSummary();
       }
 
+      // 💡 [미니 CRM] 데이터 조용히 백그라운드 동기화하는 함수
+      function syncCrmDataBackground() {
+          google.script.run
+              .withSuccessHandler(function(dbData) {
+                  if (dbData) {
+                      compInfoDB = dbData;
+                      localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
+                      renderCalendar(); // 💡 데이터를 다 받았으면 화면(달력 약어 등) 즉시 새로고침!
+                  }
+              })
+              .getCompInfoDB();
+      }
+
       // 🚀 [달력 이동 로직] 문자열 결합 버그 차단 & 순수 숫자 계산 강제
       function navMonth(offset) {
         let currentY = parseInt(serverData.year, 10);
@@ -3198,6 +3211,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       }
 
       function goToAsync(year, month) {
+        // 💡 [미니 CRM 패치] 달력을 이동하거나 새로고침(0)할 때 CRM 최신 데이터도 몰래 가져옵니다!
+        syncCrmDataBackground();
         const toastEl = document.getElementById("toast");
         if(toastEl) toastEl.classList.remove("show");
         if(window.toastTimer) clearTimeout(window.toastTimer);
@@ -5706,10 +5721,21 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           return html;
       }
 
+      // 💡 1. 업체 리스트 모달창 열기 (열 때마다 서버 최신 데이터 땡겨오기)
       function openCompListModal() {
           document.getElementById('btnAddNewComp').style.display = isAdmin ? 'block' : 'none';
-          renderCompList();
-          document.getElementById('compListModal').style.display = 'flex';
+          
+          // 창 띄우기 직전에 서버에서 최신 DB 한번 훑어오기
+          google.script.run
+              .withSuccessHandler(function (dbData) {
+                  if (dbData) {
+                      compInfoDB = dbData;
+                      localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
+                  }
+                  renderCompList(); // 최신 데이터로 리스트 그리기
+                  document.getElementById('compListModal').style.display = 'flex';
+              })
+              .getCompInfoDB();
       }
 
       function renderCompList() {
@@ -5848,6 +5874,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           document.getElementById('compReadPopup').style.display = 'flex';
       }
 
+      
     </script>
   </body>
 </html>
