@@ -1615,36 +1615,43 @@
       .pill-none { background: var(--btn-bg); color: var(--text-sub); border: 1px solid var(--border-color); }
 
       /* 상세창 좌측 하단 알약 컨테이너 */
-      .modal-left-pills {
-        position: absolute; bottom: 14px; left: 16px; z-index: 10; display: flex; gap: 4px;
+      .modal-left-pills { position: absolute; bottom: 14px; left: 16px; z-index: 10; display: flex; gap: 4px; }
+
+      /* 💡 세련된 아코디언 리스트 디자인 & 잘림 방지 로직 */
+      .comp-list-container {
+        display: flex; flex-direction: column; gap: 10px; 
+        max-height: calc(85vh - 90px); /* 🚨 화면 밖으로 밀려나지 않게 높이 강제 계산 */
+        overflow-y: auto; padding-right: 5px; padding-bottom: 20px;
+      }
+      .comp-acc-item { display: flex; flex-direction: column; }
+      .comp-acc-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 8px 12px; border-radius: 14px; background: var(--card-bg);
+        border: 1px solid var(--border-color); cursor: pointer; transition: 0.2s;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+      }
+      .comp-acc-header:active { transform: scale(0.98); }
+      
+      /* 업체 고유색 알약 이름표 */
+      .comp-name-pill {
+        padding: 6px 12px; border-radius: 10px; font-weight: 900; font-size: 0.95em;
+        letter-spacing: -0.5px;
       }
 
-      /* 아코디언 리스트 디자인 */
-      .comp-list-container {
-        display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; padding-right: 5px;
-      }
-      .comp-acc-item {
-        background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden;
-      }
-      .comp-acc-header {
-        padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;
-        font-weight: 900; font-size: 1.05em; cursor: pointer; transition: background 0.2s;
-      }
-      .comp-acc-header:active { background: rgba(10, 132, 255, 0.05); }
       .comp-acc-body {
-        display: none; /* 기본은 접혀있음 */
-        padding: 16px; border-top: 1px dashed var(--border-color); background: var(--bg-color);
-        font-size: 0.9em; flex-direction: column; gap: 10px;
+        display: none; padding: 14px 12px; background: var(--bg-color); border-radius: 0 0 12px 12px;
+        margin-top: -5px; border: 1px solid var(--border-color); border-top: none;
+        flex-direction: column; gap: 10px;
       }
       .comp-acc-body.open { display: flex; animation: fadeIn 0.2s ease-out; }
       
-      .info-row { display: flex; flex-direction: column; gap: 4px; }
+      /* 🚨 텍스트 잘림 현상 방어: flex-shrink: 0 으로 찌그러짐 원천 차단 */
+      .info-row { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
       .info-label { font-size: 0.8em; font-weight: 800; color: var(--text-sub); }
       .info-value { font-weight: bold; color: var(--text-main); line-height: 1.4; word-break: keep-all; }
 
-      /* 읽기 전용 팝업 (가운데 정렬) */
-      #compReadPopup .modal-box {
-        border-radius: 24px; padding: 25px; margin: auto 20px; max-height: 80vh;
+      #compReadPopup .modal-box, #newCompModal .modal-box {
+        border-radius: 24px; padding: 25px; margin: auto 20px; max-height: 80vh; overflow-y: auto;
       }
 
     </style>
@@ -2166,24 +2173,51 @@
     <div id="compListModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
       <div class="modal-box" onclick="event.stopPropagation()">
         <div class="bottom-sheet-handle"></div>
-        <div class="modal-header">
-          <div class="modal-title" style="color:#0a84ff;">🏢 거래처 정보 관리</div>
-          <button class="close-btn" onclick="document.getElementById('compListModal').style.display='none'">✕</button>
+        <div class="modal-header" style="margin-bottom: 15px;">
+          <div class="modal-title" style="color:#0a84ff;">🏢 거래처 정보</div>
+          <div style="display:flex; gap:8px;">
+            <button id="btnAddNewComp" class="save-btn" style="display:none; padding:6px 12px; margin:0; font-size:0.85em; border-radius:8px; box-shadow:none;" onclick="openNewCompModal()">+ 신규</button>
+            <button class="close-btn" onclick="document.getElementById('compListModal').style.display='none'">✕</button>
+          </div>
         </div>
-        <div id="compAdminAddArea" style="display:none; margin-bottom: 12px;"></div>
         <div class="comp-list-container" id="compListContainer"></div>
       </div>
     </div>
 
-    <div id="compReadPopup" class="overlay-modal" style="align-items: center;" onclick="if (event.target === this) this.style.display = 'none';">
+    <div id="newCompModal" class="overlay-modal" style="align-items: center; z-index: 3000;" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="modal-header" style="margin-bottom: 15px;">
+          <div class="modal-title" style="font-size: 1.2em;">✨ 신규 거래처 등록</div>
+          <button class="close-btn" onclick="document.getElementById('newCompModal').style.display='none'">✕</button>
+        </div>
+        <div class="edit-form">
+           <div class="info-row"><span class="info-label">업체명 (풀네임) *</span><input type="text" id="nc-full" class="edit-input" placeholder="예: (주)메디뱅크"></div>
+           <div class="info-row"><span class="info-label">달력 표시 약어 (2~3자) *</span><input type="text" id="nc-short" class="edit-input" placeholder="예: 메뱅"></div>
+           <div class="info-row" style="margin-top:5px;">
+              <span class="info-label">취급 품목 (중복 선택)</span>
+              <div style="display:flex; gap:12px; margin-top:5px; margin-bottom:5px;">
+                 <label style="font-weight:900;"><input type="checkbox" id="nc-ic" style="transform:scale(1.2);"> IC</label>
+                 <label style="font-weight:900;"><input type="checkbox" id="nc-oc" style="transform:scale(1.2);"> OC</label>
+                 <label style="font-weight:900;"><input type="checkbox" id="nc-wc" style="transform:scale(1.2);"> WC</label>
+              </div>
+           </div>
+           <div class="info-row"><span class="info-label">특이사항</span><input type="text" id="nc-etc" class="edit-input"></div>
+           <div class="info-row"><span class="info-label">주소</span><input type="text" id="nc-addr" class="edit-input"></div>
+           <div class="info-row"><span class="info-label">연락처</span><input type="text" id="nc-phone" class="edit-input"></div>
+           <div class="info-row"><span class="info-label">배송시간</span><input type="text" id="nc-time" class="edit-input"></div>
+           <button class="save-btn" style="width:100%; margin-top:15px;" onclick="saveNewComp()">💾 등록 완료</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="compReadPopup" class="overlay-modal" style="align-items: center; z-index: 3000;" onclick="if (event.target === this) this.style.display = 'none';">
       <div class="modal-box" onclick="event.stopPropagation()">
         <div class="modal-header" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0;">
           <div class="modal-title" id="readCompTitle" style="font-size: 1.4em;">업체명</div>
           <button class="close-btn" onclick="document.getElementById('compReadPopup').style.display='none'">✕</button>
         </div>
         <div id="readCompPills" class="pill-group" style="margin-top: 10px; margin-bottom: 15px;"></div>
-        <div class="comp-acc-body" id="readCompContent" style="display: flex; border:none; padding:0; background:transparent;">
-          </div>
+        <div class="comp-acc-body" id="readCompContent" style="display: flex; border:none; padding:0; background:transparent;"></div>
       </div>
     </div>
 
@@ -2366,6 +2400,9 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         하이메드: "하메",
       };
       function getShortName(name) {
+        // 💡 [CRM 패치] 관리자가 등록한 약어가 있다면 그것부터 1순위로 씁니다!
+        if (compInfoDB[getFullName(name)] && compInfoDB[getFullName(name)].shortName) return compInfoDB[getFullName(name)].shortName;
+
         if (compShortMap[name]) return compShortMap[name];
         if (name === "메디맥2층") return "메2";
         if (name === "메디맥3층") return "메3";
@@ -5639,19 +5676,14 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
 
       // =====================================================
-      // 🏢 [미니 CRM] 업체 정보 관리 시스템 엔진
+      // 🏢 [미니 CRM] 업체 정보 관리 시스템 엔진 V2 (수정/읽기 완벽 분리)
       // =====================================================
       let compInfoDB = JSON.parse(localStorage.getItem('COMP_INFO_DB') || '{}');
 
-      // 💡 알약 HTML 뱃지 생성기
       function getPillHtml(compName) {
           let info = compInfoDB[compName];
           if (!info) return '';
-          
-          if (info.ic && info.oc && info.wc) {
-              return `<span class="type-pill pill-all">ALL</span>`;
-          }
-          
+          if (info.ic && info.oc && info.wc) return `<span class="type-pill pill-all">ALL</span>`;
           let html = '';
           if (info.ic) html += `<span class="type-pill pill-ic">IC</span>`;
           if (info.oc) html += `<span class="type-pill pill-oc">OC</span>`;
@@ -5659,117 +5691,133 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           return html;
       }
 
-      // 💡 1. 업체 리스트(아코디언) 모달창 열기
       function openCompListModal() {
+          document.getElementById('btnAddNewComp').style.display = isAdmin ? 'block' : 'none';
           renderCompList();
           document.getElementById('compListModal').style.display = 'flex';
       }
 
-      // 💡 2. 업체 리스트 렌더링 (관리자/일반 권한 분리)
       function renderCompList() {
-          // 기존 fixedCompanies와 새로 추가된 업체를 모두 합침
           let allComps = Array.from(new Set([...fixedCompanies, ...Object.keys(compInfoDB)])).sort();
-          
           let html = '';
+          
           allComps.forEach((comp, i) => {
-              let info = compInfoDB[comp] || {ic:false, oc:false, wc:false, etc:'', addr:'', phone:'', time:''};
+              let info = compInfoDB[comp] || {shortName:'', ic:false, oc:false, wc:false, etc:'', addr:'', phone:'', time:''};
+              let cObj = getCompanyColor(comp); // 업체 고유 색상 가져오기
               let pillStr = getPillHtml(comp);
               
               html += `
               <div class="comp-acc-item">
                  <div class="comp-acc-header" onclick="toggleCompAcc('acc-body-${i}')">
-                     <span>${comp}</span>
-                     <div style="display:flex; gap:5px; align-items:center;">
-                         ${pillStr} <span style="font-size:0.8em; color:var(--text-sub);">▼</span>
+                     <div class="comp-name-pill" style="background:${cObj.bg}; color:${cObj.cMain};">${comp}</div>
+                     <div style="display:flex; gap:6px; align-items:center;">
+                         ${pillStr} <span style="font-size:0.7em; color:var(--text-sub); opacity:0.6;">▼</span>
                      </div>
                  </div>
+                 
                  <div class="comp-acc-body" id="acc-body-${i}">
+                    <div id="read-mode-${i}" style="display:flex; flex-direction:column; gap:10px;">
+                        <div class="info-row"><span class="info-label">달력 표시 약어</span><span class="info-value">${info.shortName || getShortName(comp)}</span></div>
+                        <div class="info-row"><span class="info-label">특이사항</span><span class="info-value">${info.etc||'-'}</span></div>
+                        <div class="info-row"><span class="info-label">주소</span><span class="info-value">${info.addr||'-'}</span></div>
+                        <div class="info-row"><span class="info-label">연락처</span><span class="info-value">${info.phone||'-'}</span></div>
+                        <div class="info-row"><span class="info-label">배송시간</span><span class="info-value">${info.time||'-'}</span></div>
+                        ${isAdmin ? `<button class="edit-toggle-btn" style="margin-top:5px; align-self:flex-end;" onclick="swapToEditMode('${comp}', ${i})">✏️ 수정하기</button>` : ''}
+                    </div>
+                    
+                    <div id="edit-mode-${i}" style="display:none; flex-direction:column; gap:10px; background:var(--card-bg); padding:10px; border-radius:10px; border:1px solid #0a84ff;">
+                        <div style="display:flex; gap:12px; margin-bottom:5px;">
+                           <label style="font-weight:900;"><input type="checkbox" id="edit-ic-${i}" ${info.ic?'checked':''}> IC</label>
+                           <label style="font-weight:900;"><input type="checkbox" id="edit-oc-${i}" ${info.oc?'checked':''}> OC</label>
+                           <label style="font-weight:900;"><input type="checkbox" id="edit-wc-${i}" ${info.wc?'checked':''}> WC</label>
+                        </div>
+                        <div class="info-row"><span class="info-label">약어</span><input type="text" id="edit-short-${i}" class="edit-input" value="${info.shortName||''}"></div>
+                        <div class="info-row"><span class="info-label">특이사항</span><input type="text" id="edit-etc-${i}" class="edit-input" value="${info.etc||''}"></div>
+                        <div class="info-row"><span class="info-label">주소</span><input type="text" id="edit-addr-${i}" class="edit-input" value="${info.addr||''}"></div>
+                        <div class="info-row"><span class="info-label">연락처</span><input type="text" id="edit-phone-${i}" class="edit-input" value="${info.phone||''}"></div>
+                        <div class="info-row"><span class="info-label">배송시간</span><input type="text" id="edit-time-${i}" class="edit-input" value="${info.time||''}"></div>
+                        <div style="display:flex; gap:8px; margin-top:5px;">
+                            <button class="save-btn" style="flex:2; padding:10px; font-size:0.9em;" onclick="saveCompEdit('${comp}', ${i})">💾 저장</button>
+                            <button class="cancel-btn" style="flex:1; padding:10px; font-size:0.9em;" onclick="cancelEditMode(${i})">취소</button>
+                        </div>
+                    </div>
+                 </div>
+              </div>
               `;
-              
-              if (isAdmin) {
-                  // 🛠️ 관리자: 수정 폼
-                  html += `
-                     <div style="display:flex; gap:10px; margin-bottom:5px;">
-                        <label style="font-weight:bold;"><input type="checkbox" id="ic-${i}" ${info.ic?'checked':''}> IC</label>
-                        <label style="font-weight:bold;"><input type="checkbox" id="oc-${i}" ${info.oc?'checked':''}> OC</label>
-                        <label style="font-weight:bold;"><input type="checkbox" id="wc-${i}" ${info.wc?'checked':''}> WC</label>
-                     </div>
-                     <div class="info-row"><span class="info-label">특이사항</span><input type="text" id="crm-etc-${i}" class="edit-input" value="${info.etc||''}"></div>
-                     <div class="info-row"><span class="info-label">주소</span><input type="text" id="crm-addr-${i}" class="edit-input" value="${info.addr||''}"></div>
-                     <div class="info-row"><span class="info-label">연락처</span><input type="text" id="crm-phone-${i}" class="edit-input" value="${info.phone||''}"></div>
-                     <div class="info-row"><span class="info-label">배송시간</span><input type="text" id="crm-time-${i}" class="edit-input" value="${info.time||''}"></div>
-                     <button class="save-btn" style="padding:10px; font-size:0.9em; margin-top:5px;" onclick="saveCompInfo('${comp}', ${i})">저장</button>
-                  `;
-              } else {
-                  // 👀 일반 사용자: 읽기 전용
-                  html += `
-                     <div class="info-row"><span class="info-label">특이사항</span><span class="info-value">${info.etc||'-'}</span></div>
-                     <div class="info-row"><span class="info-label">주소</span><span class="info-value">${info.addr||'-'}</span></div>
-                     <div class="info-row"><span class="info-label">연락처</span><span class="info-value">${info.phone||'-'}</span></div>
-                     <div class="info-row"><span class="info-label">배송시간</span><span class="info-value">${info.time||'-'}</span></div>
-                  `;
-              }
-              html += `</div></div>`;
           });
           document.getElementById('compListContainer').innerHTML = html;
-
-          // 관리자 신규 추가 영역 표시
-          let addArea = document.getElementById('compAdminAddArea');
-          if (isAdmin) {
-               addArea.style.display = 'block';
-               addArea.innerHTML = `
-                   <div style="display:flex; gap:8px;">
-                       <input type="text" id="newCompNameInput" class="edit-input" placeholder="새 업체명(풀네임) 입력">
-                       <button class="save-btn" style="flex:0.4; padding:10px; font-size:0.9em;" onclick="addNewComp()">추가</button>
-                   </div>
-               `;
-          } else { addArea.style.display = 'none'; }
       }
 
-      // 💡 3. 아코디언 열고 닫기
       function toggleCompAcc(id) {
           const el = document.getElementById(id);
-          if (el.classList.contains('open')) el.classList.remove('open');
+          if (el.classList.contains('open')) { el.classList.remove('open'); }
           else {
               document.querySelectorAll('.comp-acc-body').forEach(b => b.classList.remove('open'));
               el.classList.add('open');
+              setTimeout(() => { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 150);
           }
       }
 
-      // 💡 4. 관리자 - 업체 정보 저장
-      function saveCompInfo(compName, i) {
-          compInfoDB[compName] = {
-              ic: document.getElementById(`ic-${i}`).checked,
-              oc: document.getElementById(`oc-${i}`).checked,
-              wc: document.getElementById(`wc-${i}`).checked,
-              etc: document.getElementById(`crm-etc-${i}`).value,
-              addr: document.getElementById(`crm-addr-${i}`).value,
-              phone: document.getElementById(`crm-phone-${i}`).value,
-              time: document.getElementById(`crm-time-${i}`).value
-          };
-          localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
-          showToast("💾 업체 정보가 저장되었습니다.");
-          renderCompList(); // 새로고침
-          renderCalendar(); // 달력 모달창 뱃지 업데이트용
+      // 모드 전환 함수
+      function swapToEditMode(comp, i) {
+          document.getElementById(`read-mode-${i}`).style.display = 'none';
+          document.getElementById(`edit-mode-${i}`).style.display = 'flex';
+      }
+      function cancelEditMode(i) {
+          document.getElementById(`edit-mode-${i}`).style.display = 'none';
+          document.getElementById(`read-mode-${i}`).style.display = 'flex';
       }
 
-      // 💡 5. 관리자 - 신규 업체 추가
-      function addNewComp() {
-          let newName = document.getElementById('newCompNameInput').value.trim();
-          if (!newName) { alert("업체명을 입력하세요."); return; }
-          if (compInfoDB[newName] || fixedCompanies.includes(newName)) { alert("이미 존재하는 업체입니다."); return; }
-          
-          compInfoDB[newName] = { ic:false, oc:false, wc:false, etc:'', addr:'', phone:'', time:'' };
+      // 정보 수정 저장
+      function saveCompEdit(comp, i) {
+          compInfoDB[comp] = {
+              shortName: document.getElementById(`edit-short-${i}`).value.trim(),
+              ic: document.getElementById(`edit-ic-${i}`).checked,
+              oc: document.getElementById(`edit-oc-${i}`).checked,
+              wc: document.getElementById(`edit-wc-${i}`).checked,
+              etc: document.getElementById(`edit-etc-${i}`).value,
+              addr: document.getElementById(`edit-addr-${i}`).value,
+              phone: document.getElementById(`edit-phone-${i}`).value,
+              time: document.getElementById(`edit-time-${i}`).value
+          };
           localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
-          showToast(`✅ [${newName}] 업체가 추가되었습니다.`);
+          showToast("💾 수정되었습니다.");
+          renderCompList();
+          renderCalendar(); // 달력 약어 및 알약 갱신
+      }
+
+      // 신규 등록
+      function openNewCompModal() {
+          document.getElementById('nc-full').value = ''; document.getElementById('nc-short').value = '';
+          document.getElementById('nc-ic').checked = false; document.getElementById('nc-oc').checked = false; document.getElementById('nc-wc').checked = false;
+          document.getElementById('nc-etc').value = ''; document.getElementById('nc-addr').value = '';
+          document.getElementById('nc-phone').value = ''; document.getElementById('nc-time').value = '';
+          document.getElementById('newCompModal').style.display = 'flex';
+      }
+
+      function saveNewComp() {
+          let full = document.getElementById('nc-full').value.trim();
+          if (!full) { alert("업체명을 입력하세요."); return; }
+          
+          compInfoDB[full] = {
+              shortName: document.getElementById('nc-short').value.trim(),
+              ic: document.getElementById('nc-ic').checked,
+              oc: document.getElementById('nc-oc').checked,
+              wc: document.getElementById('nc-wc').checked,
+              etc: document.getElementById('nc-etc').value,
+              addr: document.getElementById('nc-addr').value,
+              phone: document.getElementById('nc-phone').value,
+              time: document.getElementById('nc-time').value
+          };
+          localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
+          showToast(`✅ [${full}] 등록 완료!`);
+          document.getElementById('newCompModal').style.display = 'none';
           renderCompList();
       }
 
-      // 💡 6. 상세창에서 업체명 눌렀을 때 뜨는 정보 팝업
       function openReadCompPopup(compName) {
           let fullName = getFullName(compName);
           let info = compInfoDB[fullName] || {};
-          
           document.getElementById('readCompTitle').innerText = fullName;
           document.getElementById('readCompPills').innerHTML = getPillHtml(fullName) || `<span class="type-pill pill-none">지정됨 없음</span>`;
           
