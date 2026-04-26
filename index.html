@@ -2377,89 +2377,110 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           }
       };
 
-      // 🏢 업체명 관련 해시 맵 (기존 동일 유지)
+     // 🏢 업체명 관련 해시 맵 (백년가게국제의료기 풀네임 롤백 완료!)
       const fixedCompanies = [
         "(주)메디뱅크",
-        "국제",
-        "드림",
+        "백년가게국제의료기", // 💡 진짜 풀네임으로 복구!
+        "드림케어메디칼",
         "링크더랩",
-        "메디맥 주식회사 2층",
-        "메디맥 주식회사 3층",
+        "(주)메디맥 2층",
+        "(주)메디맥 3층",
         "메디칼써프라이",
         "서호메디코",
-        "세람",
+        "세람메디칼",
         "엠코리아토탈서비스",
         "위드비아",
-        "제니스",
+        "제니스엠지",
         "지엔씨메딕",
         "하이메드",
+        "스마트엠케어",
       ];
+      
       const compShortMap = {
-        "메디맥 주식회사 2층": "메2",
-        "메디맥 주식회사 3층": "메3",
+        "(주)메디맥 2층": "메2",
+        "(주)메디맥 3층": "메3",
         "(주)메디뱅크": "메뱅",
-        메디칼써프라이: "메써",
-        서호메디코: "서호",
-        엠코리아토탈서비스: "엠코",
-        백년가게국제의료기: "국제",
-        드림케어메디칼: "드림",
-        지엔씨메딕: "지엔",
-        링크더랩: "링랩",
-        위드비아: "위비",
-        하이메드: "하메",
+        "메디칼써프라이": "메써",
+        "서호메디코": "서호",
+        "엠코리아토탈서비스": "엠코",
+        "백년가게국제의료기": "국제", // 💡 원래 풀네임으로 매칭
+        "드림케어메디칼": "드림",
+        "지엔씨메딕": "지엔",
+        "링크더랩": "링랩",
+        "위드비아": "위비",
+        "하이메드": "하메",
+        "스마트엠케어": "스엠",
+        "제니스엠지": "제니",
+        "세람메디칼": "세람", 
       };
-      function getShortName(name) {
-        // 💡 [CRM 패치] 관리자가 등록한 약어가 있다면 그것부터 1순위로 씁니다!
-        if (compInfoDB[getFullName(name)] && compInfoDB[getFullName(name)].shortName) return compInfoDB[getFullName(name)].shortName;
 
-        if (compShortMap[name]) return compShortMap[name];
-        if (name === "메디맥2층") return "메2";
-        if (name === "메디맥3층") return "메3";
-        return name.substring(0, 2);
+      // 💡 [지능형 약어 변환기] 1순위: CRM DB -> 2순위: 하드코딩 맵
+      function getShortName(name) {
+        if (!name) return "";
+        let fullName = getFullName(name); 
+
+        // 1. CRM에서 관리자가 정한 약어가 있으면 무조건 충성!
+        if (compInfoDB[fullName] && compInfoDB[fullName].shortName) {
+            return compInfoDB[fullName].shortName;
+        }
+
+        // 2. CRM에 없으면 기존 데이터 보존을 위해 하드코딩 안전망 작동
+        if (compShortMap[fullName]) return compShortMap[fullName];
+        
+        return fullName.substring(0, 2);
       }
+
       const compFullMap = {
-        메2: "메디맥 주식회사 2층",
-        메디맥2층: "메디맥 주식회사 2층",
-        메3: "메디맥 주식회사 3층",
-        메디맥3층: "메디맥 주식회사 3층",
-        메뱅: "(주)메디뱅크",
-        메써: "메디칼써프라이",
-        서호: "서호메디코",
-        엠코: "엠코리아토탈서비스",
-        국제: "백년가게국제의료기",
-        드림: "드림케어메디칼",
-        지엔: "지엔씨메딕",
-        지엔씨: "지엔씨메딕",
-        링랩: "링크더랩",
-        링크: "링크더랩",
-        위비: "위드비아",
-        위드: "위드비아",
-        하메: "하이메드",
-        하이: "하이메드",
+        "메2": "(주)메디맥 2층",
+        "메디맥2층": "(주)메디맥 2층",
+        "메3": "(주)메디맥 3층",
+        "메디맥3층": "(주)메디맥 3층",
+        "메뱅": "(주)메디뱅크",
+        "메써": "메디칼써프라이",
+        "서호": "서호메디코",
+        "엠코": "엠코리아토탈서비스",
+        "국제": "백년가게국제의료기", // 💡 원래 세팅대로 복구
+        "국제의료기": "백년가게국제의료기", // 💡 혹시 달력에 '국제의료기'라고 쳐도 풀네임으로 자동 흡수!
+        "드림": "드림케어메디칼",
+        "지엔": "지엔씨메딕",
+        "지엔씨": "지엔씨메딕",
+        "링랩": "링크더랩",
+        "링크": "링크더랩",
+        "위비": "위드비아",
+        "위드": "위드비아",
+        "하메": "하이메드",
+        "하이": "하이메드",
+        "스엠": "스마트엠케어",
+        "스마": "스마트엠케어",
+        "제니": "제니스엠지",
+        "세람": "세람메디칼",
       };
-      // 💡 [데이터 정규화] 약어를 넣으면 풀네임을 뱉어내는 튼튼한 자판기
+
+      // 💡 [지능형 풀네임 변환기] 어떤 별칭을 써도 마스터 이름을 찾아냄
       function getFullName(name) {
         if (!name) return "";
         let input = String(name).trim();
 
-        // 1. 하드코딩된 풀네임 맵에서 먼저 찾기 (서호 -> 서호메디코)
-        if (typeof compFullMap !== "undefined" && compFullMap[input]) {
-          return compFullMap[input];
-        }
+        // 1순위: CRM 마스터 이름과 일치하는가?
+        if (typeof compInfoDB === "object" && compInfoDB !== null && compInfoDB[input]) return input;
 
-        // 2. CRM DB를 뒤져서 약어(shortName)와 일치하는 풀네임 찾기
+        // 2순위: CRM 약어로 검색했는가?
         try {
           if (typeof compInfoDB === "object" && compInfoDB !== null) {
-            for (let key in compInfoDB) {
-              if (compInfoDB[key] && compInfoDB[key].shortName === input) {
-                return key;
-              }
+            for (let masterName in compInfoDB) {
+              if (compInfoDB[masterName] && compInfoDB[masterName].shortName === input) return masterName;
             }
           }
-        } catch (e) { console.log("CRM DB 검색 에러 방어:", e); }
+        } catch (e) { console.log("CRM DB 에러 방어:", e); }
 
-        // 3. 🚨 끝까지 못 찾으면 입력값 그대로 반환! (이 줄이 없으면 신규 업체 등록이 안 됩니다!)
-        return input;
+        // 3순위: 옛날 하드코딩 안전망 뒤지기
+        if (typeof compFullMap !== "undefined" && compFullMap[input]) {
+          let legacyFullName = compFullMap[input];
+          if (typeof compInfoDB === "object" && compInfoDB !== null && compInfoDB[legacyFullName]) return legacyFullName;
+          return legacyFullName;
+        }
+
+        return input; 
       }
 
      
