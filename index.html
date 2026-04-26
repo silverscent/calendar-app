@@ -5961,6 +5961,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
       // 💡 하단 상세 정보를 그리는 함수 (하나만 그리므로 i 변수가 필요 없음!)
      function renderCompDetail(comp) {
+          // 🚨 수정창 열 때마다 이전에 고르다 만 임시 색상 리셋!
+          tempEditColorObj = null; 
+          tempEditColorIdx = null;
+
           let info = compInfoDB[comp] || {shortName:'', ic:false, oc:false, wc:false, etc:'', addr:'', phone:'', time:''};
           let pillStr = getPillHtml(comp);
           let currentShortName = info.shortName || getShortName(comp);
@@ -5992,8 +5996,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                           <input type="text" id="crm-edit-fullname" class="edit-input" value="${comp}" style="border:2px solid #0a84ff; background:var(--bg-color);">
                       </div>
                       
-                      <button type="button" style="width:100%; padding:12px; border-radius:12px; background:#35383d; color:#fff; border:1px solid #444; font-weight:800; cursor:pointer;" 
-                              onclick="openColorPickerV3('${comp}')">🎨 달력 표시 색상 변경 (좌석 예매식)</button>
+                      <button type="button" style="width:100%; padding:14px; border-radius:12px; background:rgba(10,132,255,0.1); color:#0a84ff; border:1px solid rgba(10,132,255,0.3); font-weight:900; font-size:0.95em; cursor:pointer; transition:0.2s;" 
+                              onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'"
+                              onclick="openColorPickerV3('${comp}')">🎨 달력 표시 색상 변경</button>
+                      
                       <div id="crm-color-picker-area" style="display:none;"></div>
 
                       <div style="display:flex; justify-content:space-around; background:var(--bg-color); padding:12px; border-radius:12px; margin-bottom:5px;">
@@ -6002,10 +6008,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                          <label style="font-weight:900;"><input type="checkbox" id="crm-edit-wc" ${info.wc?'checked':''}> WC</label>
                       </div>
                       <div class="info-row"><span class="info-label">📅 달력 표시 약어</span><input type="text" id="crm-edit-short" class="edit-input" value="${currentShortName}" placeholder="예: 메뱅"></div>
-                      
                       <div class="info-row"><span class="info-label">📝 특이사항</span><textarea id="crm-edit-etc" class="edit-input auto-expand" oninput="autoResizeTextarea(this)" rows="1" placeholder="줄바꿈은 엔터입니다">${info.etc||''}</textarea></div>
                       <div class="info-row"><span class="info-label">📍 주소</span><textarea id="crm-edit-addr" class="edit-input auto-expand" oninput="autoResizeTextarea(this)" rows="1" placeholder="주소를 입력하세요">${info.addr||''}</textarea></div>
-                      
                       <div class="info-row"><span class="info-label">📞 연락처</span><input type="text" id="crm-edit-phone" class="edit-input" value="${info.phone||''}"></div>
                       <div class="info-row"><span class="info-label">🕒 배송시간</span><input type="text" id="crm-edit-time" class="edit-input" value="${info.time||''}"></div>
                       
@@ -6046,24 +6050,44 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               time: document.getElementById('crm-edit-time').value
           };
 
-          // 🚨 업체명이 바뀌었을 때의 처리
+          // 이름이 바뀌었다면 이사 처리
           if (oldCompName !== newCompName) {
-              if (confirm(`업체 명칭을 [${oldCompName}]에서 [${newCompName}]으로 정식 변경하시겠습니까?\n(기존 ${oldCompName} 정보는 삭제되고 새로운 이름으로 저장됩니다.)`)) {
-                  delete compInfoDB[oldCompName]; // 옛날 이름 지우고
-              } else {
-                  return; // 취소하면 저장 중단
-              }
+              if (confirm(`업체 명칭을 [${oldCompName}]에서 [${newCompName}]으로 변경하시겠습니까?`)) {
+                  delete compInfoDB[oldCompName];
+                  
+                  // 기존 색상 정보도 새 이름으로 인계!
+                  if (customColors[oldCompName] !== undefined) {
+                      customColors[newCompName] = customColors[oldCompName];
+                      delete customColors[oldCompName];
+                  }
+              } else return;
           }
           
-          compInfoDB[newCompName] = newInfo; // 새 이름으로 저장
-          selectedCrmComp = newCompName; // 현재 선택 바구니도 새 이름으로 교체
+          compInfoDB[newCompName] = newInfo; 
+          selectedCrmComp = newCompName; 
+
+          // 🚨 [핵심 버그 수정!] 피커에서 색상을 골랐다면 실제 글로벌 컬러 DB에 강제 세이브!!
+          if (tempEditColorObj && tempEditColorIdx !== null) {
+              companyColors[newCompName] = tempEditColorObj; // 메모리 갱신
+              customColors[newCompName] = tempEditColorIdx;  // 로컬 캐시 갱신
+              localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
+              google.script.run.saveGlobalColor(newCompName, tempEditColorIdx); // 구글 시트 저장
+              
+              // 저장했으니 임시 메모리 청소
+              tempEditColorObj = null;
+              tempEditColorIdx = null;
+          } else if (oldCompName !== newCompName) {
+              // 색상은 안 바꿨는데 이름만 바꾼 경우에도 바뀐 이름의 색상을 구글 시트에 업데이트
+              localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
+              google.script.run.saveGlobalColor(newCompName, customColors[newCompName]);
+          }
 
           localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
           google.script.run.saveCompInfoDB(compInfoDB);
           
-          showToast("💾 업체 마스터 정보가 성공적으로 갱신되었습니다.");
-          renderCompList(); // 슬림해진 알약 리스트 새로고침
-          renderCalendar(); // 달력도 바로 반영
+          showToast("💾 업체 정보 및 색상이 저장되었습니다.", 1500);
+          renderCompList(); 
+          renderCalendar(); // 달력 즉시 새로고침 (색상 완벽 반영됨!)
       }
 
       function deleteCompInfo(comp) {
@@ -6148,16 +6172,14 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           const container = document.getElementById('crm-color-picker-area');
           container.style.display = 'block';
 
-          // 1. 누가 이 색상을 쓰고 있는지 수집
           let usedColorMap = {}; 
           let allComps = Array.from(new Set([...fixedCompanies, ...Object.keys(compInfoDB)]));
           
           allComps.forEach(c => {
-              if (c === stdName) return; // 나 자신은 패스
+              if (c === stdName) return; 
               let colorIdx;
-              if (customColors[c] !== undefined) {
-                  colorIdx = Number(customColors[c]);
-              } else {
+              if (customColors[c] !== undefined) colorIdx = Number(customColors[c]);
+              else {
                   let hash = 0;
                   for (let i = 0; i < c.length; i++) hash = c.charCodeAt(i) + ((hash << 5) - hash);
                   colorIdx = Math.abs(hash) % presetPalette.length;
@@ -6165,29 +6187,22 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               usedColorMap[colorIdx] = c; 
           });
 
-          // 💡 현재 보여줄 색상 찾기
           let currentDisplayIdx = tempEditColorIdx !== null ? tempEditColorIdx : 
               (customColors[stdName] !== undefined ? customColors[stdName] : 
               presetPalette.findIndex(p => p.bg === getCompanyColor(stdName).bg));
 
-          // 2. 좌석 그리드 HTML 그리기
-          let html = `<div class="color-picker-title"><span>🎨 색상 선택 (X 표시: 다른 업체 사용 중)</span></div>`;
-          html += `<div class="color-grid">`;
-          
+          let html = `<div class="color-picker-title"><span>🎨 색상 선택 (X 표시: 다른 업체 사용 중)</span></div><div class="color-grid">`;
           presetPalette.forEach((p, idx) => {
-              let usedBy = usedColorMap[idx]; 
+              let usedBy = usedColorMap[idx];
               let isCurrent = (currentDisplayIdx === idx);
-              
               let stateClass = usedBy ? 'reserved' : 'available';
               if (isCurrent) stateClass += ' selected';
-              
-              let clickAction = `onclick="selectPaletteColor('${stdName}', ${idx}, '${usedBy || ''}')"`;
-              html += `<div class="color-seat ${stateClass}" style="background:${p.bg};" ${clickAction}></div>`;
+              html += `<div class="color-seat ${stateClass}" style="background:${p.bg};" onclick="selectPaletteColor('${stdName}', ${idx}, '${usedBy || ''}')"></div>`;
           });
           html += `</div>`;
           
           container.innerHTML = html;
-          setTimeout(() => container.scrollIntoView({ behavior: 'smooth', block: 'end' }), 100);
+          // 🚨 스크롤 튀는 현상 유발 코드 삭제 완료!
       }
 
       // 💡 색상 선택 및 실시간 팝업 로직
