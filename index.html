@@ -1680,6 +1680,47 @@
         box-sizing: border-box;
       }
 
+      /* 🎨 영화관 좌석 스타일 컬러 피커 */
+      .color-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+        margin-top: 15px;
+        background: var(--bg-color);
+        padding: 15px;
+        border-radius: 16px;
+        border: 1px solid var(--border-color);
+      }
+      .color-seat {
+        aspect-ratio: 1/1;
+        border-radius: 8px;
+        border: 2px solid transparent;
+        cursor: pointer;
+        position: relative;
+        transition: 0.2s;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .color-seat.available:active { transform: scale(0.9); }
+      .color-seat.selected { 
+        border-color: #0a84ff; transform: scale(1.1); z-index: 2;
+        box-shadow: 0 0 10px rgba(10, 132, 255, 0.5);
+      }
+      /* 🚫 사용 중(리저브) 상태 - 클릭 가능하도록 유지! */
+      .color-seat.reserved {
+        cursor: pointer;
+        opacity: 0.35;
+        filter: grayscale(70%);
+      }
+      .color-seat.reserved:active { transform: scale(0.9); }
+      .color-seat.reserved::after {
+        content: 'X'; color: #fff; font-size: 14px; font-weight: 900;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      }
+      .color-picker-title {
+        font-size: 0.85em; font-weight: 800; color: var(--text-sub);
+        margin-bottom: 8px; margin-top: 5px;
+      }
+
     </style>
   </head>
   <body>
@@ -5946,8 +5987,15 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   </div>
                   
                   <div id="crm-edit-mode" style="display:none; flex-direction:column; gap:12px;">
-                      <div class="info-row"><span class="info-label">🏢 업체 풀네임 (마스터 명칭)</span><input type="text" id="crm-edit-fullname" class="edit-input" value="${comp}" style="border:2px solid #0a84ff; background:var(--bg-color);"></div>
+                      <div class="info-row">
+                          <span class="info-label">🏢 업체 풀네임 (마스터 명칭)</span>
+                          <input type="text" id="crm-edit-fullname" class="edit-input" value="${comp}" style="border:2px solid #0a84ff; background:var(--bg-color);">
+                      </div>
                       
+                      <button type="button" style="width:100%; padding:12px; border-radius:12px; background:#35383d; color:#fff; border:1px solid #444; font-weight:800; cursor:pointer;" 
+                              onclick="openColorPickerV3('${comp}')">🎨 달력 표시 색상 변경 (좌석 예매식)</button>
+                      <div id="crm-color-picker-area" style="display:none;"></div>
+
                       <div style="display:flex; justify-content:space-around; background:var(--bg-color); padding:12px; border-radius:12px; margin-bottom:5px;">
                          <label style="font-weight:900;"><input type="checkbox" id="crm-edit-ic" ${info.ic?'checked':''}> IC</label>
                          <label style="font-weight:900;"><input type="checkbox" id="crm-edit-oc" ${info.oc?'checked':''}> OC</label>
@@ -6091,6 +6139,71 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       function autoResizeTextarea(obj) {
           obj.style.height = 'auto';
           obj.style.height = (obj.scrollHeight + 2) + 'px';
+      }
+
+
+      // 💡 [컬러 시트 엔진 V4] 누가 사용 중인지 추적하고 강제 적용을 지원함!
+      function openColorPickerV3(compName) {
+          const stdName = getFullName(compName);
+          const container = document.getElementById('crm-color-picker-area');
+          container.style.display = 'block';
+
+          // 1. 누가 이 색상을 쓰고 있는지 수집
+          let usedColorMap = {}; 
+          let allComps = Array.from(new Set([...fixedCompanies, ...Object.keys(compInfoDB)]));
+          
+          allComps.forEach(c => {
+              if (c === stdName) return; // 나 자신은 패스
+              let colorIdx;
+              if (customColors[c] !== undefined) {
+                  colorIdx = Number(customColors[c]);
+              } else {
+                  let hash = 0;
+                  for (let i = 0; i < c.length; i++) hash = c.charCodeAt(i) + ((hash << 5) - hash);
+                  colorIdx = Math.abs(hash) % presetPalette.length;
+              }
+              usedColorMap[colorIdx] = c; 
+          });
+
+          // 💡 현재 보여줄 색상 찾기
+          let currentDisplayIdx = tempEditColorIdx !== null ? tempEditColorIdx : 
+              (customColors[stdName] !== undefined ? customColors[stdName] : 
+              presetPalette.findIndex(p => p.bg === getCompanyColor(stdName).bg));
+
+          // 2. 좌석 그리드 HTML 그리기
+          let html = `<div class="color-picker-title"><span>🎨 색상 선택 (X 표시: 다른 업체 사용 중)</span></div>`;
+          html += `<div class="color-grid">`;
+          
+          presetPalette.forEach((p, idx) => {
+              let usedBy = usedColorMap[idx]; 
+              let isCurrent = (currentDisplayIdx === idx);
+              
+              let stateClass = usedBy ? 'reserved' : 'available';
+              if (isCurrent) stateClass += ' selected';
+              
+              let clickAction = `onclick="selectPaletteColor('${stdName}', ${idx}, '${usedBy || ''}')"`;
+              html += `<div class="color-seat ${stateClass}" style="background:${p.bg};" ${clickAction}></div>`;
+          });
+          html += `</div>`;
+          
+          container.innerHTML = html;
+          setTimeout(() => container.scrollIntoView({ behavior: 'smooth', block: 'end' }), 100);
+      }
+
+      // 💡 색상 선택 및 실시간 팝업 로직
+      function selectPaletteColor(stdName, colorIdx, usedBy) {
+          // 남이 쓰고 있는 색상일 경우 경고!
+          if (usedBy) {
+              let confirmMsg = `⚠️ 이 색상은 현재 [${usedBy}] 업체가 사용 중입니다.\n\n강제로 이 색상을 같이 사용하시겠습니까?\n(달력에서 두 업체의 색상이 같아져 헷갈릴 수 있습니다.)`;
+              if (!confirm(confirmMsg)) return; 
+          }
+          
+          tempEditColorIdx = colorIdx;
+          tempEditColorObj = presetPalette[colorIdx];
+          
+          // 화면 즉시 갱신 (파란 테두리 이동)
+          openColorPickerV3(stdName);
+          showToast("🎨 색상이 임시 적용되었습니다. '저장'을 눌러주세요.", 1500);
       }
 
     </script>
