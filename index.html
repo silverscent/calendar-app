@@ -2060,12 +2060,12 @@
           </div>
           <div style="display: flex; gap: 8px; align-items: center">
             <input
-              type="date"
-              id="add-date"
-              class="edit-input"
-              style="flex: 1"
-              onchange="document.getElementById('add-end-date').min = this.value;"
-            />
+  type="date"
+  id="add-date"
+  class="edit-input"
+  style="flex: 1"
+  onchange="let target = document.getElementById('add-end-date'); target.setAttribute('min', this.value); target.min = this.value;"
+/>
             <div
               id="add-end-date-group"
               style="display: none; flex: 1; gap: 8px; align-items: center"
@@ -4085,8 +4085,18 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         const endDateInput = document.getElementById("add-end-date");
 
         startDateInput.value = dateStr;
-        endDateInput.min = dateStr; // 🚨 달력 시작점 고정
-        endDateInput.value = "";    // 🚨 기존 원칙대로 빈칸 유지
+        
+        // 🚨 아이폰 대응: 속성을 확실히 박아넣고 min 설정
+        endDateInput.setAttribute("min", dateStr);
+        endDateInput.min = dateStr;
+        endDateInput.value = ""; // 하루 일정을 위해 빈칸 유지
+
+        // 💡 [아이폰 전용 팁] 종료일 클릭 시 시작일로 달력을 점프시키는 트릭
+        endDateInput.onfocus = function() {
+            if (!this.value && this.min) {
+                this.value = this.min; // 클릭하는 순간 시작일로 값을 채워 5월 달력을 강제 소환
+            }
+        };
 
         setTimeout(() => document.getElementById("add-comp").focus(), 200);
       }
@@ -4552,14 +4562,21 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         tempEditColorObj = null; // 💡 [핵심 필수 추가] 창을 열 때마다 무조건 이전 셔플 기억을 삭제!
         const card = document.getElementById(`modal-card-${day}-${idx}`);
 
-        let inputDateVal =
-          blockStartDateStr || (dateStr === "미정" ? "" : dateStr);
-        let inputEndDateVal = blockEndDateStr || "";
+        let inputDateVal = blockStartDateStr || (dateStr === "미정" ? "" : dateStr);
+          let inputEndDateVal = blockEndDateStr || "";
 
-        // 🚨 수정창 열릴 때 시작일 기준으로 종료일 달력 위치 고정
+          // 🚨 수정창 오픈 시 아이폰 대응 로직
           setTimeout(() => {
               const editEndInput = document.getElementById(`edit-${idx}-end-date`);
-              if(editEndInput) editEndInput.min = inputDateVal; 
+              if (editEndInput) {
+                  editEndInput.setAttribute("min", inputDateVal);
+                  editEndInput.min = inputDateVal;
+                  
+                  // 클릭 시 달력 위치를 시작일 월로 강제 이동
+                  editEndInput.onfocus = function() {
+                      if (!this.value && this.min) this.value = this.min;
+                  };
+              }
           }, 50);
 
         let isExplicitTask = comp.toUpperCase().startsWith("[TASK]");
