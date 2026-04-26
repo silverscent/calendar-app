@@ -2643,8 +2643,23 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               serverData = res;
               localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res)); 
               renderCalendar(); 
-              
               showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
+              
+              // 👇 💡 [스텔스 연간 동기화] 남이 일정을 바꿨을 때만 몰래 연간 통계도 최신화!
+              google.script.run
+                  .withSuccessHandler(yRes => {
+                      if (yRes && yRes.year) {
+                          yearlyCache[yRes.year] = yRes;
+                          localStorage.setItem(`yearly_stats_cache_${currentType}_${yRes.year}`, JSON.stringify(yRes));
+                          // 혹시 대시보드 창을 열어둔 상태라면 화면도 스르륵 갱신
+                          if (document.getElementById('dashboardModal').style.display === 'flex' && window.dashMode === 'year') {
+                              renderDashCharts();
+                          }
+                      }
+                  })
+                  .withFailureHandler(() => {}) // 🚨 [안전장치] 혹시라도 통신이 끊기면 에러 띄우지 않고 조용히 무시!
+                  .getYearlyStatsAsync(currentType, reqYear);
+              // 👆 💡 여기까지 추가!
             }
             updateSyncTime(); 
           })
