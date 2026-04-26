@@ -1670,6 +1670,16 @@
       @keyframes slideUpFade { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
       /*미니CRM*/
 
+      /* 💡 텍스트 자동 확장 입력창 스타일 */
+      textarea.edit-input {
+        resize: none; /* 사용자 임의 크기조절 금지 */
+        overflow: hidden; /* 스크롤바 숨김 */
+        min-height: 48px; /* 기본 한 줄 높이 */
+        line-height: 1.4;
+        font-family: inherit;
+        box-sizing: border-box;
+      }
+
     </style>
   </head>
   <body>
@@ -5909,12 +5919,9 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       }
 
       // 💡 하단 상세 정보를 그리는 함수 (하나만 그리므로 i 변수가 필요 없음!)
-      function renderCompDetail(comp) {
-          // 💡 현재 저장된 정보 가져오기 (없으면 빈 껍데기)
+     function renderCompDetail(comp) {
           let info = compInfoDB[comp] || {shortName:'', ic:false, oc:false, wc:false, etc:'', addr:'', phone:'', time:''};
           let pillStr = getPillHtml(comp);
-          
-          // 💡 수정창 열릴 때 기존 약어 값을 미리 변수에 담아둠
           let currentShortName = info.shortName || getShortName(comp);
           
           let html = `
@@ -5932,9 +5939,9 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                           <div class="info-row"><span class="info-label">📅 달력 약어</span><span class="info-value" style="color:#0a84ff; font-size:1.1em;">${currentShortName}</span></div>
                           <div class="info-row"><span class="info-label">🕒 배송 시간</span><span class="info-value">${info.time||'-'}</span></div>
                       </div>
-                      <div class="info-row"><span class="info-label">📍 주소</span><span class="info-value">${info.addr||'-'}</span></div>
+                      <div class="info-row"><span class="info-label">📍 주소</span><span class="info-value" style="white-space:pre-wrap; line-height:1.4;">${info.addr||'-'}</span></div>
                       <div class="info-row"><span class="info-label">📞 연락처</span><span class="info-value">${info.phone||'-'}</span></div>
-                      <div class="info-row"><span class="info-label">📝 특이사항</span><span class="info-value" style="background:rgba(255,159,10,0.05); padding:10px; border-radius:10px; border-left:4px solid #ff9f0a;">${info.etc||'-'}</span></div>
+                      <div class="info-row"><span class="info-label">📝 특이사항</span><span class="info-value" style="white-space:pre-wrap; line-height:1.5; background:rgba(255,159,10,0.05); padding:10px; border-radius:10px; border-left:4px solid #ff9f0a;">${info.etc||'-'}</span></div>
                       ${isAdmin ? `<button class="edit-toggle-btn" style="margin-top:10px; width:100%; padding:15px; font-size:1em; border-radius:14px; background:var(--btn-bg); color:var(--text-main); font-weight:900;" onclick="swapToEditMode()">✏️ 업체명 및 정보 수정하기</button>` : ''}
                   </div>
                   
@@ -5947,8 +5954,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                          <label style="font-weight:900;"><input type="checkbox" id="crm-edit-wc" ${info.wc?'checked':''}> WC</label>
                       </div>
                       <div class="info-row"><span class="info-label">📅 달력 표시 약어</span><input type="text" id="crm-edit-short" class="edit-input" value="${currentShortName}" placeholder="예: 메뱅"></div>
-                      <div class="info-row"><span class="info-label">📝 특이사항</span><input type="text" id="crm-edit-etc" class="edit-input" value="${info.etc||''}"></div>
-                      <div class="info-row"><span class="info-label">📍 주소</span><input type="text" id="crm-edit-addr" class="edit-input" value="${info.addr||''}"></div>
+                      
+                      <div class="info-row"><span class="info-label">📝 특이사항</span><textarea id="crm-edit-etc" class="edit-input auto-expand" oninput="autoResizeTextarea(this)" rows="1" placeholder="줄바꿈은 엔터입니다">${info.etc||''}</textarea></div>
+                      <div class="info-row"><span class="info-label">📍 주소</span><textarea id="crm-edit-addr" class="edit-input auto-expand" oninput="autoResizeTextarea(this)" rows="1" placeholder="주소를 입력하세요">${info.addr||''}</textarea></div>
+                      
                       <div class="info-row"><span class="info-label">📞 연락처</span><input type="text" id="crm-edit-phone" class="edit-input" value="${info.phone||''}"></div>
                       <div class="info-row"><span class="info-label">🕒 배송시간</span><input type="text" id="crm-edit-time" class="edit-input" value="${info.time||''}"></div>
                       
@@ -5966,6 +5975,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       function swapToEditMode() {
           document.getElementById('crm-read-mode').style.display = 'none';
           document.getElementById('crm-edit-mode').style.display = 'flex';
+          // 💡 수정창 열릴 때 텍스트 박스들 크기 딱 맞게 자동 세팅!
+          document.querySelectorAll('textarea.auto-expand').forEach(el => autoResizeTextarea(el));
       }
       function cancelEditMode() {
           document.getElementById('crm-edit-mode').style.display = 'none';
@@ -6076,6 +6087,12 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           document.getElementById('compReadPopup').style.display = 'flex';
       }
       
+      // 💡 [자동 크기 조절 엔진] 글을 길게 쓰거나 엔터를 치면 칸이 자동으로 늘어남
+      function autoResizeTextarea(obj) {
+          obj.style.height = 'auto';
+          obj.style.height = (obj.scrollHeight + 2) + 'px';
+      }
+
     </script>
   </body>
 </html>
