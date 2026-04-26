@@ -2663,13 +2663,21 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               document.getElementById("dashAvg").innerHTML = `${avgDaily} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/일</span>`;
               document.getElementById("dashDaysDetail").innerText = `(월 누적: ${doneQty.toLocaleString()})`;
           } else {
-              let avgMonthly = totalQty > 0 ? Math.round(totalQty / 12) : 0;
+              // 🚨 [핵심 패치] 해상/항공 물량이 1이라도 존재하는 월의 개수만 추출!
+              let activeMonths = 0;
+              for(let i=0; i<12; i++) {
+                  if((seaData[i] + airData[i]) > 0) activeMonths++;
+              }
+              let divider = activeMonths > 0 ? activeMonths : 1; // 0으로 나누기 방지
+              let avgMonthly = totalQty > 0 ? Math.round(totalQty / divider) : 0;
+              let avgDaily = totalQty > 0 ? (totalQty / 365).toFixed(1) : 0;
+
               document.getElementById("dashCardTitle1").innerText = "연간 총 누적수량";
               document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
               document.getElementById("dashVolDetail").innerText = `(1년 전체 합산)`; document.getElementById("dashVolDetail").style.color = "#0a84ff";
               document.getElementById("dashCardTitle2").innerText = "월간 평균 처리량";
               document.getElementById("dashAvg").innerHTML = `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/월</span>`;
-              document.getElementById("dashDaysDetail").innerText = `(일평균: 약 ${(totalQty / 365).toFixed(1)})`;
+              document.getElementById("dashDaysDetail").innerText = `(${divider}개월 평균 / 일평균: 약 ${avgDaily})`;
           }
 // 상단 카드 정보 업데이트 (기존 코드와 동일...)
 // 💡 스와이프(Hover) 선택을 위한 전역 공유 변수 할당
