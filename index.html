@@ -6045,7 +6045,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       }
 
       // 💡 하단 상세 정보를 그리는 함수 (하나만 그리므로 i 변수가 필요 없음!)
-     function renderCompDetail(comp) {
+      function renderCompDetail(comp) {
           // 🚨 수정창 열 때마다 이전에 고르다 만 임시 색상 리셋!
           tempEditColorObj = null; 
           tempEditColorIdx = null;
@@ -6065,12 +6065,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               
               <div class="comp-detail-wrapper">
                   <div id="crm-read-mode" style="display:flex; flex-direction:column; gap:18px;">
-                      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
-                          <div class="info-row"><span class="info-label">📅 달력 약어</span><span class="info-value" style="color:#0a84ff; font-size:1.1em;">${currentShortName}</span></div>
-                          <div class="info-row"><span class="info-label">🕒 배송 시간</span><span class="info-value">${info.time||'-'}</span></div>
-                      </div>
+                      <div class="info-row"><span class="info-label">📅 달력 약어</span><span class="info-value" style="color:#0a84ff; font-size:1.1em;">${currentShortName}</span></div>
                       <div class="info-row"><span class="info-label">📍 주소</span><span class="info-value" style="white-space:pre-wrap; line-height:1.4;">${info.addr||'-'}</span></div>
                       <div class="info-row"><span class="info-label">📞 연락처</span><span class="info-value">${info.phone||'-'}</span></div>
+                      <div class="info-row"><span class="info-label">🕒 배송 시간</span><span class="info-value">${info.time||'-'}</span></div>
                       <div class="info-row"><span class="info-label">📝 특이사항</span><span class="info-value" style="white-space:pre-wrap; line-height:1.5; background:rgba(255,159,10,0.05); padding:10px; border-radius:10px; border-left:4px solid #ff9f0a;">${info.etc||'-'}</span></div>
                       ${isAdmin ? `<button class="edit-toggle-btn" style="margin-top:10px; width:100%; padding:15px; font-size:1em; border-radius:14px; background:var(--btn-bg); color:var(--text-main); font-weight:900;" onclick="swapToEditMode()">✏️ 업체명 및 정보 수정하기</button>` : ''}
                   </div>
@@ -6092,11 +6090,12 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                          <label style="font-weight:900;"><input type="checkbox" id="crm-edit-oc" ${info.oc?'checked':''}> OC</label>
                          <label style="font-weight:900;"><input type="checkbox" id="crm-edit-wc" ${info.wc?'checked':''}> WC</label>
                       </div>
+                      
                       <div class="info-row"><span class="info-label">📅 달력 표시 약어</span><input type="text" id="crm-edit-short" class="edit-input" value="${currentShortName}" placeholder="예: 메뱅"></div>
-                      <div class="info-row"><span class="info-label">📝 특이사항</span><textarea id="crm-edit-etc" class="edit-input auto-expand" oninput="autoResizeTextarea(this)" rows="1" placeholder="줄바꿈은 엔터입니다">${info.etc||''}</textarea></div>
                       <div class="info-row"><span class="info-label">📍 주소</span><textarea id="crm-edit-addr" class="edit-input auto-expand" oninput="autoResizeTextarea(this)" rows="1" placeholder="주소를 입력하세요">${info.addr||''}</textarea></div>
                       <div class="info-row"><span class="info-label">📞 연락처</span><input type="text" id="crm-edit-phone" class="edit-input" value="${info.phone||''}"></div>
                       <div class="info-row"><span class="info-label">🕒 배송시간</span><input type="text" id="crm-edit-time" class="edit-input" value="${info.time||''}"></div>
+                      <div class="info-row"><span class="info-label">📝 특이사항</span><textarea id="crm-edit-etc" class="edit-input auto-expand" oninput="autoResizeTextarea(this)" rows="1" placeholder="줄바꿈은 엔터입니다">${info.etc||''}</textarea></div>
                       
                       <div style="display:flex; gap:10px; margin-top:10px;">
                           <button class="save-btn" style="flex:2; padding:15px; font-weight:900;" onclick="saveCompEdit('${comp}')">💾 변경사항 저장</button>
