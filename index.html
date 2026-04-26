@@ -2264,7 +2264,7 @@
         <div class="bottom-sheet-handle"></div>
         <div class="modal-header" style="margin-bottom: 12px;">
           <div class="modal-title" style="color:#0a84ff; display:flex; align-items:center; gap:8px;">
-            🏢 거래처 정보 <span id="compTotalCount" style="font-size:0.65em; font-weight:800; color:var(--text-sub); background:var(--btn-bg); padding:2px 8px; border-radius:10px;">0개</span>
+            🏢 거래처 정보 <span id="compTotalCount" style="font-size:0.65em; font-weight:800; color:var(--text-sub); background:var(--btn-bg); padding:2px 8px; border-radius:10px;">0업체</span>
           </div>
           <div style="display:flex; gap:16px;">
             <button id="btnAddNewComp" class="save-btn" style="display:none; padding:6px 12px; margin:0; font-size:0.85em; border-radius:8px; box-shadow:none;" onclick="openNewCompModal()">+ 신규</button>
@@ -6015,7 +6015,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           
           // 🚨 총 업체 수 실시간 갱신 로직 추가
           let countEl = document.getElementById('compTotalCount');
-          if (countEl) countEl.innerText = `${allComps.length}개`;
+          if (countEl) countEl.innerText = `${allComps.length}업체`;
 
           let html = '';
           allComps.forEach((comp) => {
