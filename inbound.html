@@ -1658,6 +1658,28 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         }).getCalendarDataAsync(currentType, safeYear, safeMonth);
       }
 
+      // 🚀 [스텔스 연간 동기화 매니저] (연속 클릭 시 서버 과부하/멈춤 완벽 방어)
+      let stealthYearlyTimer = null;
+      function triggerStealthYearlySync(targetYear) {
+          if (stealthYearlyTimer) clearTimeout(stealthYearlyTimer);
+          
+          stealthYearlyTimer = setTimeout(() => {
+              google.script.run.withSuccessHandler(res => {
+                  if (res && res.year) {
+                      yearlyCache[res.year] = res; // 단기 기억 갱신
+                      localStorage.setItem(`yearly_stats_cache_${currentType}_${res.year}`, JSON.stringify(res)); // 창고 갱신
+                      
+                      // 대시보드 연간 탭을 보고 있다면 화면 스르륵 갱신
+                      if (document.getElementById('dashboardModal').style.display === 'flex' && 
+                          window.dashMode === 'year' && 
+                          window.dashYear === res.year) {
+                          renderDashCharts();
+                      }
+                  }
+              }).withFailureHandler(() => {}).getYearlyStatsAsync(currentType, targetYear);
+          }, 1500); 
+      }
+
       function updateLocalState(action, payload, idx) {
         let oldDay = (payload.oldDate && payload.oldDate !== '미정') ? parseInt(payload.oldDate.split('-')[2], 10) : 'pending';
         let newDay = (payload.newDate && payload.newDate !== '미정') ? parseInt(payload.newDate.split('-')[2], 10) : 'pending';
@@ -1674,12 +1696,13 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         } else if (action === 'UNDO_DONE') { arr[idx].isDone = false;
         }
         
-        // 💡 updateLocalState 함수의 맨 마지막 부분
+        // ... 기존 코드 유지
         lastLocalUpdateTime = Date.now();
         localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
-        // 👇👇 이 1줄을 반드시 추가하세요! 👇👇
-        Object.keys(localStorage).forEach(k => { if (k.startsWith(`yearly_stats_cache_${currentType}_`)) localStorage.removeItem(k); });
-      }
+        
+        // 👇 💡 옛날 폭파 코드 지우고 매니저 딱 1줄 호출!
+        triggerStealthYearlySync(serverData.year);
+      } // <-- 함수 끝
 
       function updateMultiLocalState(action, items) {
         const norm = (v) => { let s = String(v != null ? v : "").trim(); return (s === "0" || s === "") ? "" : s; };
@@ -1694,12 +1717,13 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                else if (action === 'MULTI_UNDO_DONE') arr[idx].isDone = false;
             }
         });
-        // 💡 updateMultiLocalState 함수의 맨 마지막 부분
+        // ... 기존 코드 유지
         lastLocalUpdateTime = Date.now(); 
         localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
-        // 👇👇 이 1줄을 반드시 추가하세요! 👇👇
-        Object.keys(localStorage).forEach(k => { if (k.startsWith(`yearly_stats_cache_${currentType}_`)) localStorage.removeItem(k); });
-      }
+        
+        // 👇 💡 여기도 매니저 딱 1줄 호출!
+        triggerStealthYearlySync(serverData.year);
+      } // <-- 함수 끝
 
       if (isAdmin) {
         const btn = document.getElementById('adminBtn');
