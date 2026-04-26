@@ -2064,6 +2064,7 @@
               id="add-date"
               class="edit-input"
               style="flex: 1"
+              onchange="document.getElementById('add-end-date').min = this.value;"
             />
             <div
               id="add-end-date-group"
@@ -4079,7 +4080,14 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       function openAddFormWithDate(day) {
         openAddForm();
         let dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        document.getElementById("add-date").value = dateStr;
+        
+        const startDateInput = document.getElementById("add-date");
+        const endDateInput = document.getElementById("add-end-date");
+
+        startDateInput.value = dateStr;
+        endDateInput.min = dateStr; // 🚨 달력 시작점 고정
+        endDateInput.value = "";    // 🚨 기존 원칙대로 빈칸 유지
+
         setTimeout(() => document.getElementById("add-comp").focus(), 200);
       }
 
@@ -4547,6 +4555,12 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         let inputDateVal =
           blockStartDateStr || (dateStr === "미정" ? "" : dateStr);
         let inputEndDateVal = blockEndDateStr || "";
+
+        // 🚨 수정창 열릴 때 시작일 기준으로 종료일 달력 위치 고정
+          setTimeout(() => {
+              const editEndInput = document.getElementById(`edit-${idx}-end-date`);
+              if(editEndInput) editEndInput.min = inputDateVal; 
+          }, 50);
 
         let isExplicitTask = comp.toUpperCase().startsWith("[TASK]");
         let cleanComp = comp.replace(/\[TASK\]/gi, "").trim();
