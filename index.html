@@ -2060,12 +2060,18 @@
           </div>
           <div style="display: flex; gap: 8px; align-items: center">
             <input
-  type="date"
-  id="add-date"
-  class="edit-input"
-  style="flex: 1"
-  onchange="let target = document.getElementById('add-end-date'); target.setAttribute('min', this.value); target.min = this.value;"
-/>
+                type="date"
+               id="add-date"
+              class="edit-input"
+              style="flex: 1"
+               onchange="
+                let target = document.getElementById('add-end-date'); 
+                target.setAttribute('min', this.value); 
+                target.min = this.value;
+                /* 🚨 시작일을 뒤로 미뤘는데, 종료일이 과거가 되어버리면 자동 수정 */
+              if(target.value && target.value < this.value) target.value = this.value;
+            "
+          />
             <div
               id="add-end-date-group"
               style="display: none; flex: 1; gap: 8px; align-items: center"
@@ -4077,6 +4083,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         }
         showModal(day);
       }
+
       function openAddFormWithDate(day) {
         openAddForm();
         let dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -4086,15 +4093,19 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
         startDateInput.value = dateStr;
         
-        // 🚨 아이폰 대응: 속성을 확실히 박아넣고 min 설정
         endDateInput.setAttribute("min", dateStr);
         endDateInput.min = dateStr;
-        endDateInput.value = ""; // 하루 일정을 위해 빈칸 유지
+        endDateInput.value = ""; 
 
-        // 💡 [아이폰 전용 팁] 종료일 클릭 시 시작일로 달력을 점프시키는 트릭
         endDateInput.onfocus = function() {
-            if (!this.value && this.min) {
-                this.value = this.min; // 클릭하는 순간 시작일로 값을 채워 5월 달력을 강제 소환
+            if (!this.value && this.min) this.value = this.min;
+        };
+
+        // 🚨 [아이폰 철통 방어벽 추가] 실수로 이전 날짜를 골랐을 때 강제 복구!
+        endDateInput.onchange = function() {
+            if (this.value && this.min && this.value < this.min) {
+                alert("⚠️ 종료일은 시작일보다 빠를 수 없습니다.");
+                this.value = this.min; // 즉시 시작일로 덮어씌움
             }
         };
 
@@ -4565,16 +4576,22 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         let inputDateVal = blockStartDateStr || (dateStr === "미정" ? "" : dateStr);
           let inputEndDateVal = blockEndDateStr || "";
 
-          // 🚨 수정창 오픈 시 아이폰 대응 로직
           setTimeout(() => {
               const editEndInput = document.getElementById(`edit-${idx}-end-date`);
               if (editEndInput) {
                   editEndInput.setAttribute("min", inputDateVal);
                   editEndInput.min = inputDateVal;
                   
-                  // 클릭 시 달력 위치를 시작일 월로 강제 이동
                   editEndInput.onfocus = function() {
                       if (!this.value && this.min) this.value = this.min;
+                  };
+
+                  // 🚨 [아이폰 철통 방어벽 추가]
+                  editEndInput.onchange = function() {
+                      if (this.value && this.min && this.value < this.min) {
+                          alert("⚠️ 종료일은 시작일보다 빠를 수 없습니다.");
+                          this.value = this.min; // 즉시 시작일로 덮어씌움
+                      }
                   };
               }
           }, 50);
