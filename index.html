@@ -4498,15 +4498,26 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         `
               : "";
 
+          // 🚨 [새로 추가된 핵심 로직] 마스터 이름 추출 및 CRM 등록 여부 확인
+          let fullName = getFullName(cleanComp);
+          let isRegistered = compInfoDB[fullName] !== undefined;
+          let compNameHtml = "";
+          
+          if (isRegistered && !isTaskMode) {
+              // CRM에 등록되어 있고 TASK가 아닐 때만 터치 가능 (밑줄 쫙!)
+              compNameHtml = `<span class="modal-comp" style="font-size:1.05em; font-weight:900; cursor:pointer; text-decoration: underline; text-decoration-color: rgba(128,128,128,0.3); text-underline-offset: 4px;" onclick="event.stopPropagation(); openReadCompPopup('${cleanComp}')">${fullName}</span>`;
+          } else {
+              // 미등록 업체이거나 TASK일 경우 그냥 평범한 텍스트로 출력 (터치 안됨)
+              compNameHtml = `<span class="modal-comp" style="font-size:1.05em; font-weight:900;">${fullName}</span>`;
+          }
+
           contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
                             ${pillContainer} <div class="modal-icon ${isDoneClass}" style="${bgStyle}"></div>
                             <div class="modal-info">
                                 <div class="modal-comp-row">
-    <span class="modal-comp" style="font-size:1.05em; font-weight:900; cursor:pointer; text-decoration: underline; text-decoration-color: rgba(128,128,128,0.3); text-underline-offset: 4px;" onclick="event.stopPropagation(); openReadCompPopup('${cleanComp}')">
-        ${getFullName(cleanComp)}
-    </span>
-    ${actionBtns}
-</div>
+                                    ${compNameHtml}
+                                    ${actionBtns}
+                                </div>
                                 <div class="modal-vol" style="display:flex; align-items:center;">${iconHtml}${volStr} ${addQtyBtn}</div>
                                 ${etcHtml}
                             </div>
