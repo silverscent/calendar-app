@@ -2377,10 +2377,10 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           }
       };
 
-     // 🏢 업체명 관련 해시 맵 (백년가게국제의료기 풀네임 롤백 완료!)
+     // 🏢 업체명 관련 해시 맵 (관리자님의 '새로운 마스터 명칭' 기준!)
       const fixedCompanies = [
         "(주)메디뱅크",
-        "백년가게국제의료기", // 💡 진짜 풀네임으로 복구!
+        "백년가게국제의료기", // (이전 대화에서 이게 찐 풀네임이라고 하셔서 유지했습니다!)
         "드림케어메디칼",
         "링크더랩",
         "(주)메디맥 2층",
@@ -2403,7 +2403,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         "메디칼써프라이": "메써",
         "서호메디코": "서호",
         "엠코리아토탈서비스": "엠코",
-        "백년가게국제의료기": "국제", // 💡 원래 풀네임으로 매칭
+        "백년가게국제의료기": "국제",
         "드림케어메디칼": "드림",
         "지엔씨메딕": "지엔",
         "링크더랩": "링랩",
@@ -2411,26 +2411,11 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         "하이메드": "하메",
         "스마트엠케어": "스엠",
         "제니스엠지": "제니",
-        "세람메디칼": "세람", 
+        "세람메디칼": "세람",
       };
-
-      // 💡 [지능형 약어 변환기] 1순위: CRM DB -> 2순위: 하드코딩 맵
-      function getShortName(name) {
-        if (!name) return "";
-        let fullName = getFullName(name); 
-
-        // 1. CRM에서 관리자가 정한 약어가 있으면 무조건 충성!
-        if (compInfoDB[fullName] && compInfoDB[fullName].shortName) {
-            return compInfoDB[fullName].shortName;
-        }
-
-        // 2. CRM에 없으면 기존 데이터 보존을 위해 하드코딩 안전망 작동
-        if (compShortMap[fullName]) return compShortMap[fullName];
-        
-        return fullName.substring(0, 2);
-      }
-
+      
       const compFullMap = {
+        // 💡 1. 약어를 새 이름으로 연결
         "메2": "(주)메디맥 2층",
         "메디맥2층": "(주)메디맥 2층",
         "메3": "(주)메디맥 3층",
@@ -2439,8 +2424,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         "메써": "메디칼써프라이",
         "서호": "서호메디코",
         "엠코": "엠코리아토탈서비스",
-        "국제": "백년가게국제의료기", // 💡 원래 세팅대로 복구
-        "국제의료기": "백년가게국제의료기", // 💡 혹시 달력에 '국제의료기'라고 쳐도 풀네임으로 자동 흡수!
+        "국제": "백년가게국제의료기",
         "드림": "드림케어메디칼",
         "지엔": "지엔씨메딕",
         "지엔씨": "지엔씨메딕",
@@ -2454,26 +2438,47 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         "스마": "스마트엠케어",
         "제니": "제니스엠지",
         "세람": "세람메디칼",
+
+        // 🚨 2. [가장 중요!] 과거 DB에 박혀있는 옛날 이름을 -> '새 이름'으로 강제 세탁!!
+        "메디맥 주식회사 2층": "(주)메디맥 2층",
+        "메디맥 주식회사 3층": "(주)메디맥 3층",
+        "메디멕 주식회사 2층": "(주)메디맥 2층", // 멕/맥 오타까지 방어
+        "메디멕 주식회사 3층": "(주)메디맥 3층",
+        "제니스": "제니스엠지",
+        "세람": "세람메디칼",
+        "국제의료기": "백년가게국제의료기"
       };
 
-      // 💡 [지능형 풀네임 변환기] 어떤 별칭을 써도 마스터 이름을 찾아냄
+      // 💡 [지능형 약어 변환기]
+      function getShortName(name) {
+        if (!name) return "";
+        let fullName = getFullName(name); // 무조건 새 이름으로 세탁한 뒤 시작
+
+        // 1. CRM에 등록된 약어가 있다면 최우선
+        if (compInfoDB[fullName] && compInfoDB[fullName].shortName) return compInfoDB[fullName].shortName;
+        // 2. 하드코딩 맵 사용
+        if (compShortMap[fullName]) return compShortMap[fullName];
+        return fullName.substring(0, 2);
+      }
+
+      // 💡 [지능형 마스터 이름 추출기]
       function getFullName(name) {
         if (!name) return "";
         let input = String(name).trim();
 
-        // 1순위: CRM 마스터 이름과 일치하는가?
+        // 1순위: CRM DB 검색
         if (typeof compInfoDB === "object" && compInfoDB !== null && compInfoDB[input]) return input;
 
-        // 2순위: CRM 약어로 검색했는가?
+        // 2순위: CRM 약어 검색
         try {
           if (typeof compInfoDB === "object" && compInfoDB !== null) {
             for (let masterName in compInfoDB) {
               if (compInfoDB[masterName] && compInfoDB[masterName].shortName === input) return masterName;
             }
           }
-        } catch (e) { console.log("CRM DB 에러 방어:", e); }
+        } catch (e) {}
 
-        // 3순위: 옛날 하드코딩 안전망 뒤지기
+        // 3순위: 하드코딩 맵 검색 (🌟 여기서 과거 DB의 "제니스"가 "제니스엠지"로 바뀜!)
         if (typeof compFullMap !== "undefined" && compFullMap[input]) {
           let legacyFullName = compFullMap[input];
           if (typeof compInfoDB === "object" && compInfoDB !== null && compInfoDB[legacyFullName]) return legacyFullName;
