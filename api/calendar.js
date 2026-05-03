@@ -1,7 +1,8 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
-export default async function handler(req, res) {
+module.exports = async function(req, res) {
+    // 🚨 CORS 방어벽 해제
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -72,7 +73,6 @@ export default async function handler(req, res) {
             }
             if (action === 'GET_YEARLY_HOLIDAYS') {
                 const y = year || new Date().getFullYear();
-                // 💡 임시 고정 빨간날 (나중에 외부 API로 연결 가능!)
                 const holidays = [`${y}-01-01`, `${y}-03-01`, `${y}-05-05`, `${y}-06-06`, `${y}-08-15`, `${y}-10-03`, `${y}-10-09`, `${y}-12-25`];
                 return res.status(200).json(holidays);
             }
@@ -115,4 +115,4 @@ export default async function handler(req, res) {
         console.error("🔥 API 에러:", error);
         res.status(500).json({ success: false, error: error.message });
     }
-}
+};
