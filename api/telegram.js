@@ -162,23 +162,33 @@ export default async function handler(req, res) {
         let resultMsg = `✨ V2 엔진 자동 파싱 완료 (${parsedRows.length}행)\n`;
         
         for (const r of parsedRows) {
-            let remarksStr = `[Type: ${r.sType||'-'}] [FWD: ${r.fwd||'-'}] [Inv: ${r.invoice||'-'}] [ETA: ${r.eta||'-'}] ${r.etc}`.trim();
-            let dbDate = r.inDate ? r.inDate : null;
+            // 🚨 [발행전 버그 픽스] B/L이 '발행전'일 경우, 덮어쓰기 증발을 막기 위해 인보이스를 붙여서 고유하게 만듦
+            let finalBL = r.bl;
+            if (finalBL === '발행전') {
+                finalBL = r.invoice ? `발행전_${r.invoice}` : `발행전_${Date.now()}`;
+            }
 
-            // 🔥 핵심 패치: 데이터가 없으면 넣고, 이미 있으면 덮어쓰는(UPSERT) 스마트 쿼리!
+            let dbDate = r.inDate ? r.inDate : null;
+            let dbEta = r.eta ? r.eta : null;
+
+            // 쪼개진 컬럼(s_type, fwd, invoice, eta)에 데이터를 각각 예쁘게 꽂아 넣습니다.
             await pool.query(
-                `INSERT INTO inbound (bl_number, pallets, receive_date, status, remarks) 
-                 VALUES (?, ?, ?, '입고대기', ?)
+                `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks) 
+                 VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE 
                  pallets = VALUES(pallets), 
                  receive_date = VALUES(receive_date), 
+                 s_type = VALUES(s_type),
+                 fwd = VALUES(fwd),
+                 invoice = VALUES(invoice),
+                 eta = VALUES(eta),
                  remarks = VALUES(remarks)`,
-                [r.bl, r.pal, dbDate, remarksStr]
+                [finalBL, r.pal, dbDate, r.sType, r.fwd, r.invoice, dbEta, r.etc]
             );
             
-            resultMsg += `• ${r.bl} | ${r.pal}PAL | ${r.inDate||'미정'}\n`;
+            resultMsg += `• ${finalBL} | ${r.pal}PAL | ${r.inDate||'미정'}\n`;
         }
-
+        
         console.log(`✅ [5/5] TiDB 저장 완료! 텔레그램 알림 전송`);
 
         // 5. 완료 알림
