@@ -109,20 +109,30 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
     try {
-        const body = req.body;
-        if (!body?.message?.photo) return res.status(200).send('OK'); 
+        const body = req.body;
+        const message = body?.message;
+        if (!message) return res.status(200).send('OK'); 
 
-        const chatId = body.message.chat.id;
-        const photo = body.message.photo[body.message.photo.length - 1];
+        const chatId = message.chat.id;
         
-        const botToken = process.env.TELEGRAM_BOT_TOKEN;
-        const visionApiKey = process.env.GOOGLE_VISION_API_KEY;
+        // 🔥 [패치] 일반 사진(photo)과 고해상도 원본 파일(document) 모두 낚아채기
+        let fileId = null;
+        if (message.photo && message.photo.length > 0) {
+            fileId = message.photo[message.photo.length - 1].file_id;
+        } else if (message.document && message.document.mime_type && message.document.mime_type.startsWith('image/')) {
+            fileId = message.document.file_id;
+        }
 
-        console.log(`\n📸 [1/5] 사진 수신 완료`);
+        // 사진이나 이미지 파일이 아니면 쿨하게 무시
+        if (!fileId) return res.status(200).send('OK'); 
 
-        // 1. 텔레그램 사진 다운로드 & Base64 인코딩
-        const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${photo.file_id}`);
-        const fileData = await fileRes.json();
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        const visionApiKey = process.env.GOOGLE_VISION_API_KEY;
+
+        console.log(`\n📸 [1/5] 사진 수신 완료`);
+
+        // 1. 텔레그램 사진 다운로드 & Base64 인코딩
+        const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`); fileData = await fileRes.json();
         const imgRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`);
         const imgBuffer = await imgRes.arrayBuffer();
         const base64Image = Buffer.from(imgBuffer).toString('base64');
@@ -188,7 +198,7 @@ export default async function handler(req, res) {
             
             resultMsg += `• ${finalBL} | ${r.pal}PAL | ${r.inDate||'미정'}\n`;
         }
-        
+
         console.log(`✅ [5/5] TiDB 저장 완료! 텔레그램 알림 전송`);
 
         // 5. 완료 알림
