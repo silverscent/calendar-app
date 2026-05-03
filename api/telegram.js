@@ -162,12 +162,17 @@ export default async function handler(req, res) {
         let resultMsg = `✨ V2 엔진 자동 파싱 완료 (${parsedRows.length}행)\n`;
         
         for (const r of parsedRows) {
-            // TiDB 구조에 맞게 기타 정보(Type, FWD, Invoice 등)를 예쁘게 압축
             let remarksStr = `[Type: ${r.sType||'-'}] [FWD: ${r.fwd||'-'}] [Inv: ${r.invoice||'-'}] [ETA: ${r.eta||'-'}] ${r.etc}`.trim();
             let dbDate = r.inDate ? r.inDate : null;
 
+            // 🔥 핵심 패치: 데이터가 없으면 넣고, 이미 있으면 덮어쓰는(UPSERT) 스마트 쿼리!
             await pool.query(
-                `INSERT INTO inbound (bl_number, pallets, receive_date, status, remarks) VALUES (?, ?, ?, '입고대기', ?)`,
+                `INSERT INTO inbound (bl_number, pallets, receive_date, status, remarks) 
+                 VALUES (?, ?, ?, '입고대기', ?)
+                 ON DUPLICATE KEY UPDATE 
+                 pallets = VALUES(pallets), 
+                 receive_date = VALUES(receive_date), 
+                 remarks = VALUES(remarks)`,
                 [r.bl, r.pal, dbDate, remarksStr]
             );
             
