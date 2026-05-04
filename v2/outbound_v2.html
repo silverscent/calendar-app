@@ -3621,8 +3621,8 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
       }
 
       // 💡 [수정] 앱을 꺼도 관리자 로그인 유지
-      let adminToken = localStorage.getItem("admin_token");
-      let isAdmin = adminToken ? true : false;
+      adminToken = localStorage.getItem("admin_token");
+      isAdmin = adminToken ? true : false;
       if (isAdmin) {
         const btn = document.getElementById("adminBtn");
         btn.innerHTML = "🔓 관리자";
