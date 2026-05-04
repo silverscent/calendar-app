@@ -1281,7 +1281,40 @@
       </div>
     </div>
 
+    
     <script>
+      // ====================================================================
+      // 🚀 [Vercel 독립 생명유지장치] 구글 서버가 몰래 주던 변수들을 직접 생성!
+      // ====================================================================
+      let currentType = 'in'; // 🟢 입고 달력 (출고는 'out'으로 변경)
+      let isAdmin = false;
+      let adminToken = null;
+      let todayDateObj = new Date();
+      let lastLocalUpdateTime = 0;
+      let isDarkMode = false; // 다크모드 충돌 방지
+      
+      // 텅 빈 달력 뼈대를 미리 만들어줍니다.
+      let serverData = {
+          year: todayDateObj.getFullYear(),
+          month: todayDateObj.getMonth() + 1,
+          firstDay: new Date(todayDateObj.getFullYear(), todayDateObj.getMonth(), 1).getDay(),
+          daysInMonth: new Date(todayDateObj.getFullYear(), todayDateObj.getMonth() + 1, 0).getDate(),
+          monthData: {},
+          pendingItems: []
+      };
+      window.yearlyHolidays = {};
+      
+      // 누락되었던 공휴일 통신 함수 복구
+      function checkAndFetchHolidays(year) {
+          if (!google || !google.script) return;
+          google.script.run.withSuccessHandler(res => {
+              if (res && Array.isArray(res)) {
+                  res.forEach(d => window.yearlyHolidays[d] = true);
+                  if (typeof renderCalendar === 'function') renderCalendar();
+              }
+          }).getYearlyHolidays(year);
+      }
+
     // 🚀 구글 의존성 100% 삭제 + [모바일 에러 추적기 탑재!]
       const VERCEL_API_URL = "/api/calendar";
 
