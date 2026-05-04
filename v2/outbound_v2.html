@@ -2324,6 +2324,10 @@
       let lastLocalUpdateTime = 0;
       let isDarkMode = false; 
       
+      // 🚨 [추가된 변수] 색상 관리용 빈 상자들!
+      let companyColors = {}; 
+      let customColors = {};
+
       let serverData = {
           year: todayDateObj.getFullYear(),
           month: todayDateObj.getMonth() + 1,
