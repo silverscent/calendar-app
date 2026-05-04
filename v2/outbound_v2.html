@@ -2314,6 +2314,35 @@
     </div>
 
     <script>
+      // ====================================================================
+      // 🚀 [Vercel 독립 생명유지장치] 구글 서버가 몰래 주던 변수들을 직접 생성!
+      // ====================================================================
+      let currentType = 'out'; // 🔵 출고 달력이므로 무조건 'out'
+      let isAdmin = false;
+      let adminToken = null;
+      let todayDateObj = new Date();
+      let lastLocalUpdateTime = 0;
+      let isDarkMode = false; 
+      
+      let serverData = {
+          year: todayDateObj.getFullYear(),
+          month: todayDateObj.getMonth() + 1,
+          firstDay: new Date(todayDateObj.getFullYear(), todayDateObj.getMonth(), 1).getDay(),
+          daysInMonth: new Date(todayDateObj.getFullYear(), todayDateObj.getMonth() + 1, 0).getDate(),
+          monthData: {},
+          pendingItems: []
+      };
+      window.yearlyHolidays = {};
+      
+      function checkAndFetchHolidays(year) {
+          if (!google || !google.script) return;
+          google.script.run.withSuccessHandler(res => {
+              if (res && Array.isArray(res)) {
+                  res.forEach(d => window.yearlyHolidays[d] = true);
+                  if (typeof renderCalendar === 'function') renderCalendar();
+              }
+          }).getYearlyHolidays(year);
+      }
       // 🚀 구글 의존성 100% 삭제 + [모바일 에러 추적기 탑재!]
       const VERCEL_API_URL = "/api/calendar";
 
@@ -2332,7 +2361,8 @@
                           fetch(VERCEL_API_URL, { method: 'POST', body: JSON.stringify(payload), signal: controller.signal })
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId);
-                                  let finalData = typeof d === 'string' ? JSON.parse(d) : d;
+                                  let finalData = d;
+try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
                                   
                                   // 🚨 [핵심 패치] 서버가 에러를 뱉으면 폰 화면에 팝업을 띄웁니다!
                                   if (finalData && finalData.error) {
