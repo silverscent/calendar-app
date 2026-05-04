@@ -2208,7 +2208,7 @@
         if(e.target === document.getElementById('dashboardModal')) document.getElementById('dashboardModal').style.display = 'none';
       }
 
-      let isDarkMode = false;
+      
       function toggleTheme() { const body = document.body;
         const themeBtn = document.querySelector('.theme-toggle'); if (isDarkMode) { body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; localStorage.setItem('cal_theme', 'light');
         } else { body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; localStorage.setItem('cal_theme', 'dark');
