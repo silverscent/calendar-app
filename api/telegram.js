@@ -171,10 +171,10 @@ export default async function handler(req, res) {
         const pool = mysql.createPool(process.env.DATABASE_URL);
         
         try {
+            await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
             const imageUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
             const currentTime = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
             
-            await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
             await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [imageUrl, imageUrl]);
             await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [currentTime, currentTime]);
         } catch (dbErr) {
@@ -184,44 +184,30 @@ export default async function handler(req, res) {
         let resultMsg = `✨ V2 엔진 자동 파싱 완료 (${parsedRows.length}행)\n`;
         
         for (const r of parsedRows) {
-            let finalBL = r.bl;
-            let isPreIssue = (finalBL === '발행전');
-            
-            // 발행전일 경우, 덮어쓰기 증발을 막기 위해 인보이스를 붙임
-            if (isPreIssue) {
-                finalBL = r.invoice ? `발행전_${r.invoice}` : `발행전_${Date.now()}`;
-            }
-
+            let finalBL = r.bl; // 🚨 이름 지저분하게 안 합침! '발행전'은 그냥 '발행전'으로 깔끔하게 유지!
             let dbDate = r.inDate ? r.inDate : null;
             let dbEta = r.eta ? r.eta : null;
 
             let exist = [];
             
-            // 🚨 [추적 1순위] 인보이스 + 날짜로 찾기 (가장 정확함)
+            // 🚨 [추적 1순위] 인보이스 + 날짜로 찾기 ('발행전'이 찐 B/L로 바뀔 때 완벽하게 추적해서 덮어씀)
             if (r.invoice) {
                 [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? AND receive_date <=> ? LIMIT 1`, [r.invoice, dbDate]);
             }
             
-            // 🚨 [추적 2순위] B/L번호 + 날짜로 찾기
-            if (exist.length === 0) {
+            // 🚨 [추적 2순위] B/L번호 + 날짜로 찾기 (인보이스가 없을 경우 대비)
+            if (exist.length === 0 && finalBL) {
                 [exist] = await pool.query(`SELECT id FROM inbound WHERE bl_number = ? AND receive_date <=> ? LIMIT 1`, [finalBL, dbDate]);
-            }
-            
-            // 🚨 [추적 3순위: 구버전 호환] 지금 들어온 게 '발행전'인데 못 찾았다면?
-            // -> 과거에 이름표 없이 덜렁 '발행전'으로만 등록된 고아 데이터를 찾아냅니다!
-            if (exist.length === 0 && isPreIssue) {
-                [exist] = await pool.query(`SELECT id FROM inbound WHERE bl_number = '발행전' AND receive_date <=> ? LIMIT 1`, [dbDate]);
             }
 
             if (exist.length > 0) {
-                // 🎯 덮어쓰기 (거슬리던 AI 뱃지 로직 완벽 삭제!)
-                // 기존에 '발행전'이었던 이름도 '발행전_INV123'으로 깔끔하게 업데이트 됩니다.
+                // 🎯 찾았으면 기존 내용(발행전)을 새로운 B/L번호로 스무스하게 덮어쓰기!
                 await pool.query(
                     `UPDATE inbound SET bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=? WHERE id=?`,
                     [finalBL, r.pal, r.etc, r.sType, r.fwd, r.invoice, dbEta, exist[0].id]
                 );
             } else {
-                // 🎯 신규 생성 (여기서도 AI 뱃지 삭제!)
+                // 🎯 못 찾았으면 신규 생성!
                 await pool.query(
                     `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks) 
                      VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?)`,
@@ -243,14 +229,14 @@ export default async function handler(req, res) {
         res.status(200).send('OK');
 
     } catch (error) {
-        console.error("❌ 시스템 처리 중 치명적 에러:", error);
+        console.error("❌ 시스템 처리 중 에러:", error);
         
         try {
             if (req.body?.message?.chat?.id) {
                 await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: req.body.message.chat.id, text: `🔥 서버 에러 발생! 원인:\n${error.message}` })
+                    body: JSON.stringify({ chat_id: req.body.message.chat.id, text: `🔥 서버 에러 발생!\n${error.message}` })
                 });
             }
         } catch(e) {} 
