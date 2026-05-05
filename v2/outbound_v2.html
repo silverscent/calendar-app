@@ -2939,12 +2939,28 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
 
  // 🚀 [순서 동기화 완결판] 과거의 고집(로컬 캐시)을 버리고, 무조건 서버가 내려준 '순서표(sortIdx)'에 절대 복종!
       function preserveCustomOrder(newData) {
+          // 🚨 [DB 매칭 패치] TiDB에서 온 데이터(sort_idx, isDone(0/1))를 프론트엔드 규격에 맞게 1초 만에 자동 변환!
+          const normalizeData = (it) => {
+              if (it.sort_idx !== undefined) it.sortIdx = Number(it.sort_idx);
+              if (String(it.isDone) === "1" || String(it.isDone).toLowerCase() === "true") it.isDone = true;
+              else if (String(it.isDone) === "0" || String(it.isDone).toLowerCase() === "false" || it.isDone === null) it.isDone = false;
+          };
+
+          // 미정(대기) 리스트 뼈대 맞춤
+          if (newData.pendingItems) {
+              newData.pendingItems.forEach(normalizeData);
+          }
+
           for (let d = 1; d <= newData.daysInMonth; d++) {
               if (newData.monthData[d]) {
+                  // 각 날짜별 일정 뼈대 맞춤
+                  newData.monthData[d].forEach(normalizeData); 
+                  
                   newData.monthData[d].sort((a, b) => {
                       // 서버가 부여한 순서표(sortIdx)를 읽어서 정렬
                       let aIdx = (a.sortIdx !== undefined && a.sortIdx !== null) ? Number(a.sortIdx) : 999;
                       let bIdx = (b.sortIdx !== undefined && b.sortIdx !== null) ? Number(b.sortIdx) : 999;
+                      
                       if (aIdx !== bIdx) return aIdx - bIdx;
                       
                       // 방금 추가되어 순서표가 없는(999) 신규 일정은 뚱뚱한 애(출고)를 위로
