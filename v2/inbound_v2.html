@@ -1472,7 +1472,10 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
               let shortName = item.bl.length > 4 ? item.bl.slice(-4) : item.bl;
               if (item.bl.startsWith('발행전')) shortName = '발행전';
               
-              let innerHtml = `<span class="pal-main">${item.pal}</span><span class="bl-sub">${iconHtml}${shortName}</span>`;
+              // 🚨 [패치 1] AI 자동수정 건 뱃지 추가!
+              let aiBadge = item.isAi ? `<span style="color: #0a84ff; font-weight: 900; margin-right: 3px; font-size: 0.9em;">[AI]</span>` : '';
+              
+              let innerHtml = `<span class="pal-main">${item.pal}P</span><span class="bl-sub">${aiBadge}${iconHtml}${shortName}</span>`;
               let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
               let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.bl}', ${isItemDone})"`;
 
@@ -1910,6 +1913,7 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
         if (targetCell && !targetCell.classList.contains("empty")) {
           let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
           // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
+          // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
           if (newDay === dragData.day && currentDropTarget && currentDropTarget.classList.contains('item-tag')) {
               let targetIdx = parseInt(currentDropTarget.getAttribute('data-raw-idx'));
               if (!isNaN(targetIdx)) {
@@ -1926,8 +1930,19 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
                   serverData.customOrderFlags = serverData.customOrderFlags || {};
                   serverData.customOrderFlags[dragData.day] = true;
 
+                  // 🚨 [패치 4] Vercel 서버로 순서표 전송! (이게 빠져서 새로고침 시 튕겼음!)
+                  let orderPayload = { dailyOrders: {} };
+                  let dStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+                  orderPayload.dailyOrders[dStr] = [];
+                  arr.forEach((it, i) => {
+                      it.sortIdx = i; // 로컬 반영
+                      orderPayload.dailyOrders[dStr].push({ id: it.id || null, company: it.bl, pal: String(it.pal || "").trim(), sortIdx: i });
+                  });
+
                   localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
                   renderCalendar();
+                  
+                  google.script.run.manageWebInboundData("UPDATE_ORDER", orderPayload, adminToken);
                   return;
               }
           }
@@ -1950,7 +1965,11 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
       }
 
       function executeMove(item, oldDateStr, newDateStr, idx) {
-        let payload = { action: 'EDIT', oldBL: item.bl, oldDate: oldDateStr, oldDone: item.isDone, oldPal: String(item.pal||""), newDate: newDateStr, newEtc: item.etc };
+        let payload = { 
+            action: 'EDIT', id: item.id, 
+            oldBL: item.bl, oldDate: oldDateStr, oldDone: item.isDone, oldPal: String(item.pal||""), 
+            newDate: newDateStr, newBL: item.bl, newPal: item.pal, newSType: item.sType, newFwd: item.fwd, newInvoice: item.invoice, newEtc: item.etc 
+        };
         updateLocalState('EDIT', payload, idx); renderCalendar(); 
         google.script.run.withSuccessHandler(res => {
           if(!res.success) { showToast('❌ 서버 저장 실패! 데이터를 다시 불러옵니다.', 2000); goToAsync(serverData.year, serverData.month); }
@@ -1969,7 +1988,8 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
           const safeStr = (val) => (val === "" || val == null) ? "" : String(val).trim();
           let existingIdx = selectedItems.findIndex(i => i.key === itemKey);
           if (existingIdx > -1) { selectedItems.splice(existingIdx, 1); el.classList.remove('multi-selected'); }
-          else { selectedItems.push({ key: itemKey, bl: bl, dateStr: dateStr, isDone: isItemDone, pal: safeStr(item.pal) });
+          // 기존 코드 덮어쓰기
+          else { selectedItems.push({ key: itemKey, id: item.id, bl: bl, dateStr: dateStr, isDone: isItemDone, pal: safeStr(item.pal) });
           el.classList.add('multi-selected'); }
           document.getElementById('selCount').innerText = selectedItems.length; return;
         }
@@ -1981,18 +2001,29 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
 
       function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = false) {
         let oldPal = "";
+        let itemId = null; // 🚨 ID 변수 추가
         const safeStr = (val) => (val === "" || val == null) ? "" : String(val).trim();
         let currentIsDone = isDone === true || String(isDone) === "true";
         if (idx !== null) {
           let day = oldDate === '미정' ? 'pending' : parseInt(oldDate.split('-')[2], 10);
           let item = day === 'pending' ? serverData.pendingItems[idx] : (serverData.monthData[day] ? serverData.monthData[day][idx] : null);
-          if (item) { oldPal = safeStr(item.pal); currentIsDone = item.isDone === true || String(item.isDone) === "true"; }
+          if (item) { 
+              oldPal = safeStr(item.pal); 
+              currentIsDone = item.isDone === true || String(item.isDone) === "true"; 
+              itemId = item.id; // 🚨 ID 획득!
+          }
         }
-        let payload = { action: action, oldBL: oldBL, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal };
+        
+        let payload = { action: action, id: itemId, oldBL: oldBL, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal };
         if (action === 'DONE') { if (!confirm(`✅ [${oldBL}] 입고를 완료 처리하시겠습니까?`)) return; }
         else if (action === 'UNDO_DONE') { if (!confirm(`⏪ [${oldBL}] 입고 완료 상태를 취소하시겠습니까?`)) return; }
         else if (action === 'DELETE') { if (!confirm(`⚠️ 정말 [${oldBL}] 입고 스케줄을 영구 삭제하시겠습니까?`)) return; }
         else if (action === 'EDIT') {
+            payload.newBL = document.getElementById(`edit-bl-${idx}`).value;
+            payload.newPal = document.getElementById(`edit-pal-${idx}`).value;
+            payload.newSType = document.getElementById(`edit-stype-${idx}`).value;
+            payload.newFwd = document.getElementById(`edit-fwd-${idx}`).value;
+            payload.newInvoice = document.getElementById(`edit-invoice-${idx}`).value;
             payload.newDate = document.getElementById(`edit-date-${idx}`).value || "미정";
             payload.newEtc = document.getElementById(`edit-etc-${idx}`).value;
         }
@@ -2071,19 +2102,47 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
       function openEditForm(day, idx, bl, dateStr, pal, etc) {
         const card = document.getElementById(`modal-card-${day}-${idx}`);
         let inputDateVal = dateStr === '미정' ? '' : dateStr;
+        let item = day === 'pending' ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
+        
+        // 🚨 [패치 2] 입고 전용 데이터 추출
+        let sType = item.sType || '';
+        let fwd = item.fwd || '';
+        let invoice = item.invoice || '';
+
         card.style.flexDirection = ''; card.style.alignItems = '';
         card.innerHTML = `
           <div class="edit-form" style="width: 100%; padding:0; border:none; margin-top:0;">
-            <div class="form-label" style="font-size:1em; color:#0a84ff; margin-bottom:5px;">📦 B/L: ${bl}</div>
+            <div class="form-label" style="margin-top:5px;">📦 B/L 번호</div>
+            <input type="text" id="edit-bl-${idx}" class="edit-input" value="${bl}">
             
-            <div class="type-toggle-wrapper" style="display:none; margin-bottom: 12px; margin-top: 0;">
-              <input type="radio" id="edit-type-in-${idx}" name="edit-job-type-${idx}" value="IN" checked hidden>
-              <label for="edit-type-in-${idx}" class="type-label">입고</label>
+            <div style="display:flex; gap:10px;">
+              <div style="flex:1;">
+                <div class="form-label">수량 (PAL)</div>
+                <input type="number" id="edit-pal-${idx}" class="edit-input" value="${pal}">
+              </div>
+              <div style="flex:1;">
+                <div class="form-label">운송 타입</div>
+                <select id="edit-stype-${idx}" class="edit-input" style="padding:13px 12px; height: 100%;">
+                  <option value="SEA" ${sType === 'SEA' ? 'selected' : ''}>🚢 해상 (SEA)</option>
+                  <option value="AIR" ${sType === 'AIR' ? 'selected' : ''}>✈️ 항공 (AIR)</option>
+                </select>
+              </div>
             </div>
 
-            <div class="form-label" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
-              <span>날짜</span>
-              <span style="color:#ff3b30; cursor:pointer; font-weight:800; font-size:0.85em; padding:4px 8px; background:rgba(255,59,48,0.1); border-radius:6px; transition:0.2s;" onclick="document.getElementById('edit-date-${idx}').value='';" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'">✕ 지우기 (대기열 이동)</span>
+            <div style="display:flex; gap:10px;">
+              <div style="flex:1;">
+                <div class="form-label">포워더 (FWD)</div>
+                <input type="text" id="edit-fwd-${idx}" class="edit-input" value="${fwd}">
+              </div>
+              <div style="flex:1;">
+                <div class="form-label">인보이스</div>
+                <input type="text" id="edit-invoice-${idx}" class="edit-input" value="${invoice}">
+              </div>
+            </div>
+
+            <div class="form-label" style="margin-top:5px; display:flex; justify-content:space-between; align-items:center;">
+              <span>입고일 (날짜)</span>
+              <span style="color:#ff3b30; cursor:pointer; font-weight:800; font-size:0.85em; padding:4px 8px; background:rgba(255,59,48,0.1); border-radius:6px; transition:0.2s;" onclick="document.getElementById('edit-date-${idx}').value='';" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'">✕ 미정(대기)으로 변경</span>
             </div>
             <input type="date" id="edit-date-${idx}" class="edit-input" value="${inputDateVal}">
 

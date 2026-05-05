@@ -18,7 +18,8 @@ module.exports = async function(req, res) {
                 if (type === 'out') {
                     [rows] = await pool.query(`SELECT outbound_date, pal, box, etc, company, isDone FROM outbound WHERE YEAR(outbound_date) = ?`, [year]);
                 } else {
-                    [rows] = await pool.query(`SELECT receive_date, pallets, box, s_type, remarks, bl_number FROM inbound WHERE YEAR(receive_date) = ?`, [year]);
+                    // 🚨 [입고 패치] box 제거, pallets만 집계
+                    [rows] = await pool.query(`SELECT receive_date, pallets, s_type, remarks, bl_number FROM inbound WHERE YEAR(receive_date) = ?`, [year]);
                 }
 
                 let monthly = Array.from({length: 12}, () => ({ pal: 0, box: 0, details: {} }));
@@ -36,7 +37,8 @@ module.exports = async function(req, res) {
                     
                     if (!isTask) {
                         let p = parseInt(type === 'out' ? r.pal : r.pallets) || 0;
-                        let b = parseInt(r.box) || 0;
+                        let b = type === 'out' ? (parseInt(r.box) || 0) : 0; // 입고는 box 없음
+                        
                         monthly[mIdx].pal += p;
                         monthly[mIdx].box += b;
                         if (!monthly[mIdx].details[cleanName]) monthly[mIdx].details[cleanName] = { pal: 0, box: 0 };
@@ -47,7 +49,6 @@ module.exports = async function(req, res) {
                         compStats[cleanName].box += b;
                     }
                 });
-
                 return res.status(200).json({ success: true, year: parseInt(year), monthly: monthly, comp: compStats });
             }
 
@@ -66,19 +67,29 @@ module.exports = async function(req, res) {
                     formattedData.pendingItems.push({ id: row.id, company: row.company, pal: row.pal, box: row.box, etc: row.etc, isDone: row.isDone === 1, sortIdx: row.sort_idx !== null ? row.sort_idx : 999 });
                 });
             } else {
+                // 🚢 [입고 전용 조회 패치] DB 컬럼 완벽 매칭 (box 삭제, isAi 추가)
                 const [monthRows] = await pool.query(`SELECT * FROM inbound WHERE YEAR(receive_date) = ? AND MONTH(receive_date) = ? ORDER BY sort_idx ASC, id ASC`, [year, month]);
                 const [pendingRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`);
 
                 monthRows.forEach(row => {
                     const day = new Date(row.receive_date).getDate();
                     if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
-                    formattedData.monthData[day].push({ id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, etc: row.remarks, sType: row.s_type, fwd: row.fwd, invoice: row.invoice, isDone: row.status === '완료', sortIdx: row.sort_idx !== null ? row.sort_idx : 999 });
+                    formattedData.monthData[day].push({ 
+                        id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, 
+                        etc: row.remarks, sType: row.s_type, fwd: row.fwd, invoice: row.invoice, 
+                        isDone: row.status === '완료', isAi: row.is_ai_modified === 1, 
+                        sortIdx: row.sort_idx !== null ? row.sort_idx : 999 
+                    });
                 });
                 pendingRows.forEach(row => {
-                    formattedData.pendingItems.push({ id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, etc: row.remarks, sType: row.s_type, isDone: row.status === '완료', sortIdx: row.sort_idx !== null ? row.sort_idx : 999 });
+                    formattedData.pendingItems.push({ 
+                        id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, 
+                        etc: row.remarks, sType: row.s_type, fwd: row.fwd, invoice: row.invoice, 
+                        isDone: row.status === '완료', isAi: row.is_ai_modified === 1, 
+                        sortIdx: row.sort_idx !== null ? row.sort_idx : 999 
+                    });
                 });
             }
-
             return res.status(200).json(formattedData);
         }
 
@@ -130,16 +141,14 @@ module.exports = async function(req, res) {
                             });
                             return res.status(200).json(holidays);
                         }
-                    } catch (e) { console.error("🔥 공휴일 API 통신 에러:", e); }
+                    } catch (e) { console.error("🔥 공휴일 API 에러:", e); }
                 }
                 const fallbackHolidays = [`${y}-01-01`, `${y}-03-01`, `${y}-05-05`, `${y}-06-06`, `${y}-08-15`, `${y}-10-03`, `${y}-10-09`, `${y}-12-25`];
                 return res.status(200).json(fallbackHolidays);
             }
 
-            if (action === 'GET_LAST_OCR_IMAGE') return res.status(200).json(""); 
-            if (action === 'GET_OCR_LAST_TIME') return res.status(200).json("최근 처리내역 없음");
-
             if (domain === 'out') {
+                // (출고 로직 원본 유지 생략... 기존과 동일하므로 건드리지 않음!)
                 const targetName = data?.oldComp;
                 const newName = data?.newComp || targetName;
                 const targetDate = data?.oldDate === '미정' ? null : data?.oldDate;
@@ -163,9 +172,7 @@ module.exports = async function(req, res) {
                             else await pool.query(`UPDATE outbound SET sort_idx = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [item.sortIdx, item.company, tDate, item.pal, item.box]);
                         }
                     }
-                } 
-                // 🚨 [수정 1] 다중 선택 삭제/완료 완벽 반영
-                else if (action === 'MULTI_DELETE' && data?.items) {
+                } else if (action === 'MULTI_DELETE' && data?.items) {
                     for (const it of data.items) {
                         const tDate = it.dateStr === '미정' ? null : it.dateStr;
                         await pool.query(`DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [it.comp, tDate, it.pal, it.box]);
@@ -179,30 +186,38 @@ module.exports = async function(req, res) {
                 }
             } 
             else {
-                const targetName = data?.oldComp || data?.oldBL;
-                const newName = data?.newComp || data?.newBL || targetName;
-                const targetDate = data?.oldDate === '미정' ? null : data?.oldDate;
+                // 🚢 [입고 전용 데이터 조작 로직 패치] 무조건 ID 우선 처리, sType/Fwd 등 DB 컬럼 반영
+                const newName = data?.newComp || data?.newBL;
                 const newDate = data?.newDate === '미정' ? null : data?.newDate;
 
                 if (action === 'DONE' || action === 'UNDO_DONE') {
-                    await pool.query(`UPDATE inbound SET status = ? WHERE bl_number = ? AND receive_date <=> ?`, [action === 'DONE' ? '완료' : '입고대기', targetName, targetDate]);
+                    const statusVal = action === 'DONE' ? '완료' : '입고대기';
+                    if (data?.id) await pool.query(`UPDATE inbound SET status = ? WHERE id = ?`, [statusVal, data.id]);
+                    else await pool.query(`UPDATE inbound SET status = ? WHERE bl_number = ? AND receive_date <=> ?`, [statusVal, data?.oldBL, data?.oldDate === '미정' ? null : data?.oldDate]);
                 } else if (action === 'DELETE') {
-                    await pool.query(`DELETE FROM inbound WHERE bl_number = ? AND receive_date <=> ?`, [targetName, targetDate]);
+                    if (data?.id) await pool.query(`DELETE FROM inbound WHERE id = ?`, [data.id]);
+                    else await pool.query(`DELETE FROM inbound WHERE bl_number = ? AND receive_date <=> ?`, [data?.oldBL, data?.oldDate === '미정' ? null : data?.oldDate]);
                 } else if (action === 'EDIT') {
-                    await pool.query(`UPDATE inbound SET receive_date = ?, bl_number = ?, pallets = ?, box = ?, remarks = ? WHERE bl_number = ? AND receive_date <=> ?`, [newDate, newName, data?.newPal || 0, data?.newBox || 0, data?.newEtc || '', targetName, targetDate]);
+                    if (data?.id) {
+                        await pool.query(`UPDATE inbound SET receive_date=?, bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=? WHERE id=?`, 
+                            [newDate, newName, data?.newPal||'', data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'', data.id]);
+                    } else {
+                        await pool.query(`UPDATE inbound SET receive_date=?, bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=? WHERE bl_number=? AND receive_date<=>?`, 
+                            [newDate, newName, data?.newPal||'', data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'', data?.oldBL, data?.oldDate === '미정' ? null : data?.oldDate]);
+                    }
                 } else if (action === 'ADD') {
-                    await pool.query(`INSERT INTO inbound (bl_number, pallets, box, receive_date, status, remarks) VALUES (?, ?, ?, ?, '입고대기', ?)`, [newName, data?.newPal || 0, data?.newBox || 0, newDate, data?.newEtc || '']);
+                    await pool.query(`INSERT INTO inbound (bl_number, pallets, receive_date, status, remarks, s_type, fwd, invoice) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?)`, 
+                        [newName, data?.newPal||'', newDate, data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'']);
                 } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
                     for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
                         let tDate = dateStr === '미정' ? null : dateStr;
                         for (const item of orderList) {
                             if (item.id) await pool.query(`UPDATE inbound SET sort_idx = ? WHERE id = ?`, [item.sortIdx, item.id]);
-                            else await pool.query(`UPDATE inbound SET sort_idx = ? WHERE bl_number = ? AND receive_date <=> ? AND pallets = ? AND box = ?`, [item.sortIdx, item.company, tDate, item.pal, item.box]);
+                            else await pool.query(`UPDATE inbound SET sort_idx = ? WHERE bl_number = ? AND receive_date <=> ? AND pallets = ?`, [item.sortIdx, item.company, tDate, item.pal]);
                         }
                     }
                 }
             }
-
             return res.status(200).json({ success: true, msg: '작업 완료' });
         }
     } catch (error) {
