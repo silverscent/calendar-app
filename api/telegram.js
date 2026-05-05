@@ -1,8 +1,231 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
-// 🧠 [관리자님의 '스마트 적출 & 다이나믹 포커스 엔진' 100% 이식]
-function parseOcrLines(text) { 
+// 텔레그램 메시지 전송 헬퍼 함수
+async function sendTgMsg(chatId, text) {
+    try {
+        await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text: text })
+        });
+    } catch(e) { console.error("텔레그램 전송 에러:", e); }
+}
+
+export default async function handler(req, res) {
+    if (req.method !== 'POST' || !req.body.message) {
+        return res.status(200).send('OK');
+    }
+
+    const message = req.body.message;
+    const chatId = message.chat.id;
+    const text = message.text || '';
+    const pool = mysql.createPool(process.env.DATABASE_URL);
+
+    try {
+        // 시스템 설정 테이블 안전 보장
+        await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
+
+        // =================================================================
+        // 1. 관리자 헬프 및 상태 명령어 (/? , /help, /status)
+        // =================================================================
+        if (text.startsWith('/?') || text.startsWith('/help') || text.startsWith('/도움')) {
+            const helpMsg = `📘 [3PL 시스템 봇 매뉴얼]\n\n📸 이미지 처리\n[사진 전송] : OCR 대기열에 등록\n/ocr : 대기열 사진 DB 자동 등록\n/test : AI 교정 결과 텍스트 확인\n/cancel : 대기열 사진 취소\n\n⚙️ 시스템 관리\n/? : 도움말\n/status : 봇 & DB 상태 확인\n\n※ 입출고 수동 처리는 [웹앱 달력]을 이용해 주세요.`;
+            await sendTgMsg(chatId, helpMsg);
+            return res.status(200).send('OK');
+        }
+
+        if (text.startsWith('/status')) {
+            let dbStatus = "🔴 연결 실패";
+            try { await pool.query('SELECT 1'); dbStatus = "🟢 정상 연결됨"; } catch(e) {}
+            const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_ID'`);
+            let queueStatus = rows.length > 0 ? "🟡 1장 대기 중" : "⚪ 대기열 비어있음";
+            await sendTgMsg(chatId, `📊 [시스템 상태 보고]\n\nTiDB 데이터: ${dbStatus}\nOCR 대기열: ${queueStatus}\nAI 엔진: Gemini 2.5 Flash 🟢`);
+            return res.status(200).send('OK');
+        }
+
+        // =================================================================
+        // 2. 이미지 수신 -> 대기열(Queue) 등록
+        // =================================================================
+        let fileId = null;
+        if (message.photo && message.photo.length > 0) {
+            fileId = message.photo[message.photo.length - 1].file_id;
+        } else if (message.document && message.document.mime_type && message.document.mime_type.startsWith('image/')) {
+            fileId = message.document.file_id;
+        }
+
+        if (fileId) {
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('PENDING_IMAGE_ID', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [fileId, fileId]);
+            await sendTgMsg(chatId, `📥 [이미지 대기열 등록 완료]\n\n▶️ DB에 즉시 반영: /ocr\n🧪 AI 결과 미리보기: /test\n❌ 처리 취소: /cancel`);
+            return res.status(200).send('OK');
+        }
+
+        // =================================================================
+        // 3. 대기열 취소 (/cancel)
+        // =================================================================
+        if (text.startsWith('/cancel')) {
+            await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_ID'`);
+            await sendTgMsg(chatId, `🗑️ 대기열 이미지가 취소되었습니다.`);
+            return res.status(200).send('OK');
+        }
+
+        // =================================================================
+        // 4. 핵심 OCR + Gemini AI 파이프라인 실행 (/ocr 또는 /test)
+        // =================================================================
+        if (text.startsWith('/ocr') || text.startsWith('/test')) {
+            const isTest = text.startsWith('/test');
+            
+            // 1) 대기열에서 파일 가져오기
+            const [pendingRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_ID'`);
+            if (pendingRows.length === 0 || !pendingRows[0].setting_value) {
+                await sendTgMsg(chatId, `⚠️ 대기 중인 이미지가 없습니다. 사진을 먼저 올려주세요.`);
+                return res.status(200).send('OK');
+            }
+            const targetFileId = pendingRows[0].setting_value;
+
+            // 실행 시 대기열 즉시 비우기 (연타 방지)
+            if (!isTest) await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_ID'`);
+            await sendTgMsg(chatId, `🔄 이미지 다운로드 및 판독을 시작합니다...`);
+
+            // 2) 텔레그램에서 사진 다운로드 & Base64 인코딩
+            const botToken = process.env.TELEGRAM_BOT_TOKEN;
+            const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${targetFileId}`);
+            const fileData = await fileRes.json();
+            const fullUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
+
+            const imgRes = await fetch(fullUrl);
+            const imgBuffer = await imgRes.arrayBuffer();
+            const base64Image = Buffer.from(imgBuffer).toString('base64');
+
+            // 3) 구글 Vision API 호출 (🚨 관리자님 기존 변수명 GOOGLE_VISION_API_KEY 로 복구 완료!)
+            const visionApiKey = process.env.GOOGLE_VISION_API_KEY;
+            const visionRes = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${visionApiKey}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'TEXT_DETECTION' }] }] })
+            });
+            const visionData = await visionRes.json();
+            const extractedText = visionData.responses[0]?.fullTextAnnotation?.text || "";
+
+            if (!extractedText) {
+                await sendTgMsg(chatId, `⚠ 이미지에서 텍스트를 찾을 수 없습니다.`);
+                return res.status(200).send('OK');
+            }
+
+            // 4) 관리자님의 자체 정규식 파싱 적용
+            const parsedResult = parseOcrLinesLocal(extractedText);
+            if (parsedResult.length === 0) {
+                await sendTgMsg(chatId, `⚠ 인식된 데이터가 없습니다.`);
+                return res.status(200).send('OK');
+            }
+
+            await sendTgMsg(chatId, `🤖 Gemini AI가 데이터의 문맥을 분석하고 교정 중입니다...`);
+
+            // 5) Gemini AI 자동 교정 적용
+            let finalRows = parsedResult;
+            let aiSuccess = false;
+            try {
+                const prompt = `너는 물류 데이터베이스 전문 AI 관리자야.
+[원본 텍스트]
+${extractedText}
+[기존 파싱 결과]
+${JSON.stringify(parsedResult)}
+
+[임무 및 규칙]
+1. 기존 파싱 결과에서 빠진 B/L 항목이 있다면 원본을 보고 채워 넣어.
+2. OCR 오타를 문맥에 맞게 논리적으로 수정해.
+3. 원본에 '발행 전' 또는 '발행전'이라고 적힌 항목은 'B/L번호'를 의미해. 절대 ETC 등 다른 열로 밀어내지 말고, 반드시 첫 번째 열(B/L번호)에 "발행전" 이라고 입력해.
+4. 오직 [bl, pal, eta, inDate, fwd, sType, invoice, etc] 키를 가진 JSON 객체 배열만 출력해. (마크다운 금지)`;
+
+                const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.0, responseMimeType: "application/json" } })
+                });
+                const geminiJson = await geminiRes.json();
+                
+                if (geminiJson.candidates && geminiJson.candidates.length > 0) {
+                    let aiText = geminiJson.candidates[0].content.parts[0].text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                    const aiData = JSON.parse(aiText);
+                    if (Array.isArray(aiData) && aiData.length > 0) {
+                        finalRows = aiData;
+                        aiSuccess = true;
+                    }
+                }
+            } catch (e) { console.error("Gemini 교정 에러:", e); }
+
+            // 6) 결과 메시지 출력
+            let resultMsg = isTest ? `🧪 [테스트 모드 결과] DB 저장 안됨\n` : `✨ [DB 반영 완료]\n`;
+            resultMsg += aiSuccess ? `(AI 스마트 교정 적용 / ${finalRows.length}행)\n` : `(AI 지연: 정규식 기본 파싱 / ${finalRows.length}행)\n`;
+            finalRows.forEach(r => { resultMsg += `• ${r.bl} | ${r.pal}PAL | ${r.inDate || '미정'}\n`; });
+
+            if (isTest) {
+                await sendTgMsg(chatId, resultMsg);
+                return res.status(200).send('OK');
+            }
+
+            // 7) DB에 UPSERT (is_ai_modified 플래그 포함, 검색 로직 100% 유지)
+            let updateCount = 0; let insertCount = 0;
+            for (const r of finalRows) {
+                let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, '');
+                let pal = parseInt(r.pal) || 0;
+                let inDate = r.inDate || null;
+                let fwd = r.fwd || '';
+                let sType = String(r.sType || '').toUpperCase();
+                let invoice = r.invoice || '';
+                let etc = r.etc || '';
+                let eta = r.eta || null;
+                let isAiVal = aiSuccess ? 1 : 0; // AI 교정 여부
+
+                let exist = [];
+                // 인보이스가 있으면 우선 검색
+                if (invoice) {
+                    [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? AND receive_date <=> ? LIMIT 1`, [invoice, inDate]);
+                }
+                // 인보이스가 없고 B/L이 발행전이 아니면 검색
+                if (exist.length === 0 && bl !== '발행전' && bl !== '') {
+                    [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? AND receive_date <=> ? LIMIT 1`, [bl, inDate]);
+                }
+
+                if (exist.length > 0) {
+                    await pool.query(
+                        `UPDATE inbound SET bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`,
+                        [bl, pal, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id]
+                    );
+                    updateCount++;
+                } else {
+                    await pool.query(
+                        `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, ?)`,
+                        [bl, pal, inDate, sType, fwd, invoice, eta, etc, isAiVal]
+                    );
+                    insertCount++;
+                }
+            }
+
+            resultMsg += `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건)`;
+            await sendTgMsg(chatId, resultMsg);
+
+            // 8) 웹 달력용 최신 이미지 주소 저장
+            const currentTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+            const timeStr = `${currentTime.getMonth() + 1}월${currentTime.getDate()}일 ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`;
+            const jsonUrl = JSON.stringify({ url: fullUrl });
+            const jsonTime = JSON.stringify({ time: timeStr });
+            
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonUrl, jsonUrl]);
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
+            
+            return res.status(200).send('OK');
+        }
+
+    } catch (error) {
+        console.error("🔥 시스템 에러:", error);
+        await sendTgMsg(chatId, `🔥 에러 발생: ${error.message}`);
+    }
+
+    return res.status(200).send('OK');
+}
+
+// =================================================================
+// 🧠 관리자님의 로컬 정규식 파싱 엔진 (원본 100% 동일)
+// =================================================================
+function parseOcrLinesLocal(text) {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     const cleanBL = v => String(v).replace(/[\s•·\-\*]/g, '');
     const isBL = v => /^(DSV|BUD|S)\d{6,8}$/i.test(cleanBL(v)) || cleanBL(v) === '발행전'; 
@@ -13,22 +236,17 @@ function parseOcrLines(text) {
     const isInvoice = v => /^\d{7,8}$/.test(v); 
 
     const rows = []; 
-    let orphanInvoices = [];
-    let orphanEtc = [];
+    let orphanInvoices = []; let orphanEtc = [];
     let activeRowIndex = 0; 
 
     const tokens = [];
     for (let i = 0; i < lines.length; i++) {
         let raw = lines[i];
         if (/^(안녕하세요|B\/?L|PAL|ETA|3PL\s*입고|Fwd|S\.?Type|Invoice|ETC|Free time)/i.test(raw)) continue;
-        
         if (!isBL(raw) && raw.includes(' ')) {
             const parts = raw.split(/\s+/);
             const strongTokens = parts.filter(p => isDate(p) || isSType(p) || isInvoice(p) || isBL(p));
-            if (strongTokens.length > 0 && parts.length <= 5) { 
-                tokens.push(...parts); 
-                continue; 
-            }
+            if (strongTokens.length > 0 && parts.length <= 5) { tokens.push(...parts); continue; }
         }
         tokens.push(raw);
     }
@@ -65,23 +283,19 @@ function parseOcrLines(text) {
         let curr = activeRowIndex;
         
         while (curr < rows.length) {
-            if (isPal(raw)) {
-                if (!rows[curr].pal) { rows[curr].pal = raw; activeRowIndex = curr; assigned = true; break; }
-            } else if (isDate(raw)) {
+            if (isPal(raw)) { if (!rows[curr].pal) { rows[curr].pal = raw; activeRowIndex = curr; assigned = true; break; } } 
+            else if (isDate(raw)) {
                 if (!rows[curr].eta) { rows[curr].eta = raw; activeRowIndex = curr; assigned = true; break; }
                 else if (!rows[curr].inDate) { rows[curr].inDate = raw; activeRowIndex = curr; assigned = true; break; }
-            } else if (isSType(raw)) {
-                if (!rows[curr].sType) { rows[curr].sType = raw.toUpperCase(); activeRowIndex = curr; assigned = true; break; }
-            } else if (isFwd(raw)) {
-                if (!rows[curr].fwd) { rows[curr].fwd = raw; activeRowIndex = curr; assigned = true; break; }
-            } else { break; }
+            } else if (isSType(raw)) { if (!rows[curr].sType) { rows[curr].sType = raw.toUpperCase(); activeRowIndex = curr; assigned = true; break; } } 
+            else if (isFwd(raw)) { if (!rows[curr].fwd) { rows[curr].fwd = raw; activeRowIndex = curr; assigned = true; break; } } 
+            else { break; }
             curr++;
         }
 
         if (!assigned) {
-            if (isInvoice(raw)) {
-                rows[activeRowIndex].invoices.push(raw);
-            } else if (!isPal(raw) && !isDate(raw) && !isSType(raw) && !isFwd(raw)) {
+            if (isInvoice(raw)) { rows[activeRowIndex].invoices.push(raw); } 
+            else if (!isPal(raw) && !isDate(raw) && !isSType(raw) && !isFwd(raw)) {
                 let invMatch = raw.match(/\b\d{7,8}\b/g);
                 if (invMatch) {
                     invMatch.forEach(inv => rows[activeRowIndex].invoices.push(inv));
@@ -102,163 +316,4 @@ function parseOcrLines(text) {
         invoice: r.invoices.join(', '), 
         etc: r.etc.join(' ')
     }));
-}
-
-// 🚀 [Vercel 메인 API 라우터]
-export default async function handler(req, res) {
-    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
-
-    try {
-        const body = req.body;
-        const message = body?.message;
-        if (!message) return res.status(200).send('OK'); 
-
-        const chatId = message.chat.id;
-        
-        // 🔥 [패치] 일반 사진(photo)과 고해상도 원본 파일(document) 모두 낚아채기
-        let fileId = null;
-        if (message.photo && message.photo.length > 0) {
-            fileId = message.photo[message.photo.length - 1].file_id;
-        } else if (message.document && message.document.mime_type && message.document.mime_type.startsWith('image/')) {
-            fileId = message.document.file_id;
-        }
-
-        // 사진이나 이미지 파일이 아니면 쿨하게 무시
-        if (!fileId) return res.status(200).send('OK'); 
-
-        const botToken = process.env.TELEGRAM_BOT_TOKEN;
-        const visionApiKey = process.env.GOOGLE_VISION_API_KEY;
-
-        console.log(`\n📸 [1/5] 사진 수신 완료`);
-
-        // 1. 텔레그램 사진 다운로드 & Base64 인코딩
-        const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
-        const fileData = await fileRes.json();
-        const imgRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`);
-        const imgBuffer = await imgRes.arrayBuffer();
-        const base64Image = Buffer.from(imgBuffer).toString('base64');
-
-        console.log(`🔍 [2/5] Google Vision API 판독 중...`);
-
-        // 2. 구글 비전 API 호출 (단순 API KEY 방식)
-        const visionRes = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${visionApiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                requests: [{ image: { content: base64Image }, features: [{ type: 'TEXT_DETECTION' }] }]
-            })
-        });
-        const visionData = await visionRes.json();
-        const extractedText = visionData.responses[0]?.fullTextAnnotation?.text || "";
-
-        if (!extractedText) {
-            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: chatId, text: "⚠ 이미지에서 텍스트를 찾을 수 없습니다." })
-            });
-            return res.status(200).send('OK');
-        }
-
-        console.log(`📄 [3/5] OCR 완료. 관리자 파싱 엔진 가동!`);
-
-        // 3. 관리자님의 파싱 엔진 적용
-        const parsedRows = parseOcrLines(extractedText);
-        if (parsedRows.length === 0) return res.status(200).send('OK');
-
-        console.log(`💾 [4/5] 파싱 성공 (${parsedRows.length}행). TiDB 저장 시도...`);
-
-       // 4. TiDB 저장 (DB 연결 및 쿼리 실행)
-        const pool = mysql.createPool(process.env.DATABASE_URL);
-        
-        // 🚨 [에러 원인 해결!] 생짜 텍스트가 아닌 JSON 포맷으로 예쁘게 포장해서 DB에 넣습니다!
-        try {
-            await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
-            
-            const imageUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`;
-            const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
-const currentTime = `${now.getMonth() + 1}월${now.getDate()}일 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-            
-            // JSON 포장 작업
-            const jsonImage = JSON.stringify({ url: imageUrl });
-            const jsonTime = JSON.stringify({ time: currentTime });
-
-            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonImage, jsonImage]);
-            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
-
-            // 성공하면 텔레그램으로 기분 좋게 알림 쏘기!
-            await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: chatId, text: `✅ [시스템] OCR 이미지 DB 저장 완벽 성공!` })
-            });
-
-        } catch (dbErr) {
-            console.error("🔥 OCR 이미지/시간 DB 저장 실패:", dbErr);
-            await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: chatId, text: `🔥 [시스템] 저장 실패!\n원인: ${dbErr.message}` })
-            });
-        }
-
-        let resultMsg = `✨ V2 엔진 자동 파싱 완료 (${parsedRows.length}행)\n`;
-        
-        for (const r of parsedRows) {
-            let finalBL = r.bl; // 🚨 이름 지저분하게 안 합침! '발행전'은 그냥 '발행전'으로 깔끔하게 유지!
-            let dbDate = r.inDate ? r.inDate : null;
-            let dbEta = r.eta ? r.eta : null;
-
-            let exist = [];
-            
-            // 🚨 [추적 1순위] 인보이스 + 날짜로 찾기 ('발행전'이 찐 B/L로 바뀔 때 완벽하게 추적해서 덮어씀)
-            if (r.invoice) {
-                [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? AND receive_date <=> ? LIMIT 1`, [r.invoice, dbDate]);
-            }
-            
-            // 🚨 [추적 2순위] B/L번호 + 날짜로 찾기 (인보이스가 없을 경우 대비)
-            if (exist.length === 0 && finalBL) {
-                [exist] = await pool.query(`SELECT id FROM inbound WHERE bl_number = ? AND receive_date <=> ? LIMIT 1`, [finalBL, dbDate]);
-            }
-
-            if (exist.length > 0) {
-                // 🎯 찾았으면 기존 내용(발행전)을 새로운 B/L번호로 스무스하게 덮어쓰기!
-                await pool.query(
-                    `UPDATE inbound SET bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=? WHERE id=?`,
-                    [finalBL, r.pal, r.etc, r.sType, r.fwd, r.invoice, dbEta, exist[0].id]
-                );
-            } else {
-                // 🎯 못 찾았으면 신규 생성!
-                await pool.query(
-                    `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks) 
-                     VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?)`,
-                    [finalBL, r.pal, dbDate, r.sType, r.fwd, r.invoice, dbEta, r.etc]
-                );
-            }
-            
-            resultMsg += `• ${finalBL} | ${r.pal}PAL | ${r.inDate||'미정'}\n`;
-        }
-
-        console.log(`✅ [5/5] TiDB 저장 완료! 텔레그램 알림 전송`);
-
-        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, text: resultMsg })
-        });
-
-        res.status(200).send('OK');
-
-    } catch (error) {
-        console.error("❌ 시스템 처리 중 에러:", error);
-        
-        try {
-            if (req.body?.message?.chat?.id) {
-                await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: req.body.message.chat.id, text: `🔥 서버 에러 발생!\n${error.message}` })
-                });
-            }
-        } catch(e) {} 
-
-        res.status(500).send('Server Error');
-    }
 }
