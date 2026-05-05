@@ -90,29 +90,53 @@ module.exports = async function(req, res) {
             if (action === 'PING') return res.status(200).json({ msg: token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
             const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
 
-           // 🚨 [최종 해결] 프론트/백엔드 함수명(camelCase) 완벽 호환 하이패스!
-            if (action === 'getLastOcrImageUrl' || action === 'GET_LAST_OCR_IMAGE') {
-                try {
-                    await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
-                    const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
-                    let val = rows.length > 0 ? rows[0].setting_value : "";
-                    try { let parsed = JSON.parse(val); if(parsed.url) val = parsed.url; } catch(e) {}
-                    return res.status(200).json({ url: val, success: true });
-                } catch(e) {
-                    return res.status(200).json({ url: "", success: false });
+          // ====================================================================
+        // 🚨 [OCR 전용 하이패스] 프론트엔드 함수명 완벽 호환 & 이중 포장(Object) 방지 엔진
+        // ====================================================================
+        if (action === 'getLastOcrImageUrl' || action === 'GET_LAST_OCR_IMAGE') {
+            try {
+                await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
+                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
+                let finalUrl = "";
+                if (rows.length > 0) {
+                    let val = rows[0].setting_value;
+                    // DB가 생짜 글씨로 줬을 때
+                    if (typeof val === 'string') {
+                        try { let parsed = JSON.parse(val); finalUrl = parsed.url || val; } catch(e) { finalUrl = val; }
+                    } 
+                    // DB가 이미 포장을 까서(Object) 줬을 때
+                    else if (typeof val === 'object' && val !== null) {
+                        finalUrl = val.url || "";
+                    }
                 }
+                return res.status(200).json({ url: finalUrl, success: true });
+            } catch(e) {
+                return res.status(200).json({ url: "", success: false });
             }
-            if (action === 'getOcrLastTimeStr' || action === 'GET_OCR_LAST_TIME') {
-                try {
-                    await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
-                    const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_time'`);
-                    let val = rows.length > 0 ? rows[0].setting_value : "최근 처리내역 없음";
-                    try { let parsed = JSON.parse(val); if(parsed.time) val = parsed.time; } catch(e) {}
-                    return res.status(200).json({ time: val, success: true });
-                } catch(e) {
-                    return res.status(200).json({ time: "최근 처리내역 없음", success: false });
+        }
+
+        if (action === 'getOcrLastTimeStr' || action === 'GET_OCR_LAST_TIME') {
+            try {
+                await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
+                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_time'`);
+                let finalTime = "최근 처리내역 없음";
+                if (rows.length > 0) {
+                    let val = rows[0].setting_value;
+                    // DB가 생짜 글씨로 줬을 때
+                    if (typeof val === 'string') {
+                        try { let parsed = JSON.parse(val); finalTime = parsed.time || val; } catch(e) { finalTime = val; }
+                    } 
+                    // DB가 이미 포장을 까서(Object) 줬을 때
+                    else if (typeof val === 'object' && val !== null) {
+                        finalTime = val.time || "최근 처리내역 없음";
+                    }
                 }
+                return res.status(200).json({ time: finalTime, success: true });
+            } catch(e) {
+                return res.status(200).json({ time: "최근 처리내역 없음", success: false });
             }
+        }
+        // ====================================================================
 
             // 🚨 [여기에 추가!] 텔레그램 봇이 던져주는 OCR 이미지와 시간을 DB에 저장하는 통로!
             if (action === 'SAVE_OCR_INFO') {
