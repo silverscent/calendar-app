@@ -175,7 +175,8 @@ export default async function handler(req, res) {
             await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
             
             const imageUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`;
-            const currentTime = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+            const currentTime = `${now.getMonth() + 1}월${now.getDate()}일 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
             
             // JSON 포장 작업
             const jsonImage = JSON.stringify({ url: imageUrl });
