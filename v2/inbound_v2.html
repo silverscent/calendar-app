@@ -2199,25 +2199,21 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
           const wrapper = document.getElementById('ocrImageWrapper');
           if (!wrapper) return;
 
-          // 💡 중복 등록 방지 (전역 변수로 1번만 세팅)
           if (_ocrGesturesInitialized) return;
           _ocrGesturesInitialized = true;
 
           let isDragging = false;
-          let startX = 0, startY = 0;
+          let lastX = 0, lastY = 0; // 🚨 기준점이 아니라 '마지막 위치' 추적으로 변경!
           let initialPinchDist = 0;
-          let ocrStartTransform = { scale: 1, x: 0, y: 0 };
+          let ocrStartScale = 1;
           
-          // 💡 매 프레임마다 '현재 살아있는' 이미지를 동적으로 찾아서 움직임
           const updateTransform = () => {
               const currentImg = document.getElementById('ocrImgElement');
-              // translate3d를 유지해야 스마트폰에서 버벅임(GPU 가속)이 없습니다.
               if(currentImg) currentImg.style.transform = `translate3d(${ocrTransform.x}px, ${ocrTransform.y}px, 0) scale(${ocrTransform.scale})`;
           };
 
-          const getPinchDistance = (touches) => {
-              return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
-          };
+          const getPinchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+          const getMidpoint = (touches) => ({ x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 });
 
           wrapper.addEventListener('touchstart', (e) => {
               if (e.target.closest('.close-btn')) return;
@@ -2225,72 +2221,72 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
               
               if (e.touches.length === 1) {
                   isDragging = true;
-                  startX = e.touches[0].clientX - ocrTransform.x;
-                  startY = e.touches[0].clientY - ocrTransform.y;
+                  lastX = e.touches[0].clientX;
+                  lastY = e.touches[0].clientY;
               } else if (e.touches.length === 2) {
                   isDragging = false;
                   initialPinchDist = getPinchDistance(e.touches);
-                  ocrStartTransform = { ...ocrTransform };
-                  
-                  // 🚨 [핵심 패치 1] 두 손가락의 '중심점(Midpoint)'을 이동 기준점으로 잡습니다.
-                  const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                  const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                  startX = midX - ocrTransform.x;
-                  startY = midY - ocrTransform.y;
+                  ocrStartScale = ocrTransform.scale;
+                  const mid = getMidpoint(e.touches);
+                  lastX = mid.x;
+                  lastY = mid.y;
               }
           }, { passive: false });
 
           wrapper.addEventListener('touchmove', (e) => {
               e.preventDefault();
               if (e.touches.length === 1 && isDragging) {
-                  ocrTransform.x = e.touches[0].clientX - startX;
-                  ocrTransform.y = e.touches[0].clientY - startY;
+                  // ☝️ 한 손가락 이동: 움직인 만큼만 더해줌
+                  ocrTransform.x += e.touches[0].clientX - lastX;
+                  ocrTransform.y += e.touches[0].clientY - lastY;
+                  lastX = e.touches[0].clientX;
+                  lastY = e.touches[0].clientY;
                   requestAnimationFrame(updateTransform);
               } else if (e.touches.length === 2) {
+                  // ✌️ 두 손가락 줌(Zoom) + 이동(Pan) 완벽 동시 적용!
                   const currentDist = getPinchDistance(e.touches);
-                  const scaleDiff = currentDist / initialPinchDist;
-                  ocrTransform.scale = Math.max(1, Math.min(ocrStartTransform.scale * scaleDiff, 6)); 
+                  ocrTransform.scale = Math.max(1, Math.min(ocrStartScale * (currentDist / initialPinchDist), 6)); 
                   
-                  // 🚨 [핵심 패치 2] 줌(Zoom) 중에도 중심점의 변화량을 추적해 화면을 같이 이동(Pan)시킵니다!
-                  const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                  const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                  ocrTransform.x = midX - startX;
-                  ocrTransform.y = midY - startY;
+                  const mid = getMidpoint(e.touches);
+                  // 🚨 확대 중에도 두 손가락 중심점이 움직인 만큼만 화면 좌표에 더해줍니다 (헛돌기 버그 해결)
+                  ocrTransform.x += mid.x - lastX;
+                  ocrTransform.y += mid.y - lastY;
+                  lastX = mid.x;
+                  lastY = mid.y;
                   
                   requestAnimationFrame(updateTransform);
               }
           }, { passive: false });
 
           wrapper.addEventListener('touchend', (e) => {
-              if (e.touches.length < 2) initialPinchDist = 0;
-              
-              // 🚨 [핵심 패치 3] 두 손가락으로 줌 하다가 한 손가락을 먼저 뗐을 때 이미지가 튀는 현상 방지
               if (e.touches.length === 1) {
                   isDragging = true;
-                  startX = e.touches[0].clientX - ocrTransform.x;
-                  startY = e.touches[0].clientY - ocrTransform.y;
+                  lastX = e.touches[0].clientX;
+                  lastY = e.touches[0].clientY;
               } else if (e.touches.length === 0) {
                   isDragging = false;
-              }
-              
-              // 축소 시 부드러운 원상복구
-              if (ocrTransform.scale <= 1) {
-                  ocrTransform = { scale: 1, x: 0, y: 0 };
-                  const currentImg = document.getElementById('ocrImgElement');
-                  if (currentImg) {
-                      currentImg.style.transition = 'transform 0.2s ease-out';
-                      updateTransform();
-                      setTimeout(() => { if(currentImg) currentImg.style.transition = 'none'; }, 200);
+                  if (ocrTransform.scale <= 1) {
+                      ocrTransform = { scale: 1, x: 0, y: 0 };
+                      const currentImg = document.getElementById('ocrImgElement');
+                      if (currentImg) {
+                          currentImg.style.transition = 'transform 0.2s ease-out';
+                          updateTransform();
+                          setTimeout(() => { if(currentImg) currentImg.style.transition = 'none'; }, 200);
+                      }
                   }
               }
           });
 
-          // (PC 마우스 휠 및 드래그 이벤트는 기존과 동일 유지)
+          // PC 마우스용
           wrapper.addEventListener('mousedown', (e) => {
-              isDragging = true; startX = e.clientX - ocrTransform.x; startY = e.clientY - ocrTransform.y;
+              isDragging = true; lastX = e.clientX; lastY = e.clientY;
           });
           wrapper.addEventListener('mousemove', (e) => {
-              if (!isDragging) return; ocrTransform.x = e.clientX - startX; ocrTransform.y = e.clientY - startY; requestAnimationFrame(updateTransform);
+              if (!isDragging) return; 
+              ocrTransform.x += e.clientX - lastX; 
+              ocrTransform.y += e.clientY - lastY; 
+              lastX = e.clientX; lastY = e.clientY; 
+              requestAnimationFrame(updateTransform);
           });
           window.addEventListener('mouseup', () => { isDragging = false; });
           wrapper.addEventListener('wheel', (e) => {

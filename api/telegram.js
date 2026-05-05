@@ -176,7 +176,7 @@ export default async function handler(req, res) {
             
             const imageUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`;
             const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
-            const currentTime = `${now.getMonth() + 1}월${now.getDate()}일 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+const currentTime = `${now.getMonth() + 1}월${now.getDate()}일 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
             
             // JSON 포장 작업
             const jsonImage = JSON.stringify({ url: imageUrl });
