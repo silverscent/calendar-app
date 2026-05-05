@@ -12,20 +12,53 @@ module.exports = async function(req, res) {
         const pool = mysql.createPool(process.env.DATABASE_URL);
 
         // ==========================================================
-        // 📥 [GET 요청] 달력 초기 로딩 (입고/출고 완벽 분기)
+        // 📥 [GET 요청] 달력 초기 로딩 및 연간 통계
         // ==========================================================
         if (req.method === 'GET') {
             const { type, year, month, action } = req.query;
 
-            // 📊 연간 통계 로딩
+            // 📊 [수정 1] 연간 통계 로딩 (서버에서 1~12월 데이터를 직접 합산해서 던져줌!)
             if (action === 'yearlyStats') {
+                let rows = [];
                 if (type === 'out') {
-                    const [rows] = await pool.query(`SELECT outbound_date, pal, box, etc, company, isDone FROM outbound WHERE YEAR(outbound_date) = ?`, [year]);
-                    return res.status(200).json({ success: true, year, data: rows });
+                    [rows] = await pool.query(`SELECT outbound_date, pal, box, etc, company, isDone FROM outbound WHERE YEAR(outbound_date) = ?`, [year]);
                 } else {
-                    const [rows] = await pool.query(`SELECT receive_date, pallets, box, s_type, remarks, bl_number FROM inbound WHERE YEAR(receive_date) = ?`, [year]);
-                    return res.status(200).json({ success: true, year, data: rows });
+                    [rows] = await pool.query(`SELECT receive_date, pallets, box, s_type, remarks, bl_number FROM inbound WHERE YEAR(receive_date) = ?`, [year]);
                 }
+
+                let monthly = Array.from({length: 12}, () => ({ pal: 0, box: 0, details: {} }));
+                let compStats = {};
+
+                rows.forEach(r => {
+                    let dateVal = type === 'out' ? r.outbound_date : r.receive_date;
+                    if (!dateVal) return;
+                    
+                    let d = new Date(dateVal);
+                    let mIdx = d.getMonth(); // 0~11 (1월~12월)
+                    
+                    let name = type === 'out' ? r.company : r.bl_number;
+                    let cleanName = (name || "").replace(/\[TASK\]/gi, "").trim();
+                    let isTask = (name || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(cleanName);
+                    
+                    // TASK(작업)가 아닌 진짜 화물만 1년 치 합산 계산
+                    if (!isTask) {
+                        let p = parseInt(type === 'out' ? r.pal : r.pallets) || 0;
+                        let b = parseInt(r.box) || 0;
+                        
+                        monthly[mIdx].pal += p;
+                        monthly[mIdx].box += b;
+                        
+                        if (!monthly[mIdx].details[cleanName]) monthly[mIdx].details[cleanName] = { pal: 0, box: 0 };
+                        monthly[mIdx].details[cleanName].pal += p;
+                        monthly[mIdx].details[cleanName].box += b;
+                        
+                        if (!compStats[cleanName]) compStats[cleanName] = { pal: 0, box: 0 };
+                        compStats[cleanName].pal += p;
+                        compStats[cleanName].box += b;
+                    }
+                });
+
+                return res.status(200).json({ success: true, year: parseInt(year), monthly: monthly, comp: compStats });
             }
 
             let formattedData = { year: parseInt(year), month: parseInt(month), monthData: {}, pendingItems: [] };
@@ -50,7 +83,7 @@ module.exports = async function(req, res) {
                     });
                 });
             } 
-            // 🚢 [입고 전용 조회 로직] (기존 완벽 복구)
+            // 🚢 [입고 전용 조회 로직]
             else {
                 const [monthRows] = await pool.query(`SELECT * FROM inbound WHERE YEAR(receive_date) = ? AND MONTH(receive_date) = ? ORDER BY sort_idx ASC, id ASC`, [year, month]);
                 const [pendingRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`);
@@ -85,10 +118,16 @@ module.exports = async function(req, res) {
             
             if (action === 'PING') return res.status(200).json({ msg: token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
 
-            // 🎯 공통 시스템 로직 (CRM, 테마색, 휴일, OCR 등)
+            // 💡 [수정 2] DB의 텍스트(String)를 다시 JSON 객체로 예쁘게 파싱해주는 헬퍼
+            const parseJSON = (val) => {
+                try { return typeof val === 'string' ? JSON.parse(val) : val; } 
+                catch(e) { return val; }
+            };
+
+            // 🎯 공통 시스템 로직 (CRM, 테마색)
             if (action === 'GET_COMP_INFO_DB') {
                 const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'crm_comp_info'`);
-                return res.status(200).json(rows.length > 0 ? rows[0].setting_value : {});
+                return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {});
             }
             if (action === 'SAVE_COMP_INFO_DB') {
                 const jsonStr = JSON.stringify(data);
@@ -97,11 +136,11 @@ module.exports = async function(req, res) {
             }
             if (action === 'GET_GLOBAL_COLORS') {
                 const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'global_colors'`);
-                return res.status(200).json(rows.length > 0 ? rows[0].setting_value : {});
+                return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {});
             }
             if (action === 'SAVE_GLOBAL_COLOR') {
                 const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'global_colors'`);
-                let colors = rows.length > 0 ? rows[0].setting_value : {};
+                let colors = rows.length > 0 ? parseJSON(rows[0].setting_value) : {};
                 colors[compName] = colorIdx;
                 const jsonStr = JSON.stringify(colors);
                 await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('global_colors', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]);
@@ -145,7 +184,7 @@ module.exports = async function(req, res) {
                     }
                 }
             } 
-            // 🚢 [입고 전용 데이터 조작 로직] (기존 완벽 복구)
+            // 🚢 [입고 전용 데이터 조작 로직]
             else {
                 const targetName = data?.oldComp || data?.oldBL;
                 const newName = data?.newComp || data?.newBL || targetName;
