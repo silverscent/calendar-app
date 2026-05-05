@@ -90,27 +90,27 @@ module.exports = async function(req, res) {
             if (action === 'PING') return res.status(200).json({ msg: token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
             const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
 
-            // 🚨 [6번 해결] OCR 시스템 엑박/로딩 오류 원천 차단 (강력 방어막 장착)
-            if (action === 'GET_LAST_OCR_IMAGE') {
+           // 🚨 [최종 해결] 프론트/백엔드 함수명(camelCase) 완벽 호환 하이패스!
+            if (action === 'getLastOcrImageUrl' || action === 'GET_LAST_OCR_IMAGE') {
                 try {
                     await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
                     const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
                     let val = rows.length > 0 ? rows[0].setting_value : "";
                     try { let parsed = JSON.parse(val); if(parsed.url) val = parsed.url; } catch(e) {}
-                    return res.status(200).json({ url: val });
+                    return res.status(200).json({ url: val, success: true });
                 } catch(e) {
-                    return res.status(200).json({ url: "" });
+                    return res.status(200).json({ url: "", success: false });
                 }
             }
-            if (action === 'GET_OCR_LAST_TIME') {
+            if (action === 'getOcrLastTimeStr' || action === 'GET_OCR_LAST_TIME') {
                 try {
                     await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
                     const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_time'`);
                     let val = rows.length > 0 ? rows[0].setting_value : "최근 처리내역 없음";
                     try { let parsed = JSON.parse(val); if(parsed.time) val = parsed.time; } catch(e) {}
-                    return res.status(200).json({ time: val });
+                    return res.status(200).json({ time: val, success: true });
                 } catch(e) {
-                    return res.status(200).json({ time: "최근 처리내역 없음" });
+                    return res.status(200).json({ time: "최근 처리내역 없음", success: false });
                 }
             }
 
