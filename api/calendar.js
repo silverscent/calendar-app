@@ -2,7 +2,6 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 
 module.exports = async function(req, res) {
-    // 🚨 CORS 방어벽 해제
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -11,13 +10,9 @@ module.exports = async function(req, res) {
     try {
         const pool = mysql.createPool(process.env.DATABASE_URL);
 
-        // ==========================================================
-        // 📥 [GET 요청] 달력 초기 로딩 및 연간 통계
-        // ==========================================================
         if (req.method === 'GET') {
             const { type, year, month, action } = req.query;
 
-            // 📊 연간 통계 로딩
             if (action === 'yearlyStats') {
                 let rows = [];
                 if (type === 'out') {
@@ -32,7 +27,6 @@ module.exports = async function(req, res) {
                 rows.forEach(r => {
                     let dateVal = type === 'out' ? r.outbound_date : r.receive_date;
                     if (!dateVal) return;
-                    
                     let d = new Date(dateVal);
                     let mIdx = d.getMonth(); 
                     
@@ -43,14 +37,11 @@ module.exports = async function(req, res) {
                     if (!isTask) {
                         let p = parseInt(type === 'out' ? r.pal : r.pallets) || 0;
                         let b = parseInt(r.box) || 0;
-                        
                         monthly[mIdx].pal += p;
                         monthly[mIdx].box += b;
-                        
                         if (!monthly[mIdx].details[cleanName]) monthly[mIdx].details[cleanName] = { pal: 0, box: 0 };
                         monthly[mIdx].details[cleanName].pal += p;
                         monthly[mIdx].details[cleanName].box += b;
-                        
                         if (!compStats[cleanName]) compStats[cleanName] = { pal: 0, box: 0 };
                         compStats[cleanName].pal += p;
                         compStats[cleanName].box += b;
@@ -62,7 +53,6 @@ module.exports = async function(req, res) {
 
             let formattedData = { year: parseInt(year), month: parseInt(month), monthData: {}, pendingItems: [] };
 
-            // 🚚 [출고 전용 조회 로직]
             if (type === 'out') {
                 const [monthRows] = await pool.query(`SELECT * FROM outbound WHERE YEAR(outbound_date) = ? AND MONTH(outbound_date) = ? ORDER BY sort_idx ASC, id ASC`, [year, month]);
                 const [pendingRows] = await pool.query(`SELECT * FROM outbound WHERE outbound_date IS NULL ORDER BY sort_idx ASC, id ASC`);
@@ -70,51 +60,28 @@ module.exports = async function(req, res) {
                 monthRows.forEach(row => {
                     const day = new Date(row.outbound_date).getDate();
                     if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
-                    formattedData.monthData[day].push({ 
-                        id: row.id, company: row.company, pal: row.pal, box: row.box, 
-                        etc: row.etc, isDone: row.isDone === 1, 
-                        // 🚨 [핵심 패치] 0번 순서 증발 버그 완벽 방어!
-                        sortIdx: row.sort_idx !== null ? row.sort_idx : 999 
-                    });
+                    formattedData.monthData[day].push({ id: row.id, company: row.company, pal: row.pal, box: row.box, etc: row.etc, isDone: row.isDone === 1, sortIdx: row.sort_idx !== null ? row.sort_idx : 999 });
                 });
                 pendingRows.forEach(row => {
-                    formattedData.pendingItems.push({ 
-                        id: row.id, company: row.company, pal: row.pal, box: row.box, 
-                        etc: row.etc, isDone: row.isDone === 1, 
-                        sortIdx: row.sort_idx !== null ? row.sort_idx : 999 
-                    });
+                    formattedData.pendingItems.push({ id: row.id, company: row.company, pal: row.pal, box: row.box, etc: row.etc, isDone: row.isDone === 1, sortIdx: row.sort_idx !== null ? row.sort_idx : 999 });
                 });
-            } 
-            // 🚢 [입고 전용 조회 로직]
-            else {
+            } else {
                 const [monthRows] = await pool.query(`SELECT * FROM inbound WHERE YEAR(receive_date) = ? AND MONTH(receive_date) = ? ORDER BY sort_idx ASC, id ASC`, [year, month]);
                 const [pendingRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`);
 
                 monthRows.forEach(row => {
                     const day = new Date(row.receive_date).getDate();
                     if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
-                    formattedData.monthData[day].push({ 
-                        id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, 
-                        etc: row.remarks, sType: row.s_type, fwd: row.fwd, invoice: row.invoice, 
-                        isDone: row.status === '완료', 
-                        sortIdx: row.sort_idx !== null ? row.sort_idx : 999 
-                    });
+                    formattedData.monthData[day].push({ id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, etc: row.remarks, sType: row.s_type, fwd: row.fwd, invoice: row.invoice, isDone: row.status === '완료', sortIdx: row.sort_idx !== null ? row.sort_idx : 999 });
                 });
                 pendingRows.forEach(row => {
-                    formattedData.pendingItems.push({ 
-                        id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, 
-                        etc: row.remarks, sType: row.s_type, isDone: row.status === '완료', 
-                        sortIdx: row.sort_idx !== null ? row.sort_idx : 999 
-                    });
+                    formattedData.pendingItems.push({ id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, etc: row.remarks, sType: row.s_type, isDone: row.status === '완료', sortIdx: row.sort_idx !== null ? row.sort_idx : 999 });
                 });
             }
 
             return res.status(200).json(formattedData);
         }
 
-        // ==========================================================
-        // 📤 [POST 요청] 스케줄 및 시스템 설정 조작
-        // ==========================================================
         if (req.method === 'POST') {
             const body = req.body;
             const payload = typeof body === 'string' ? JSON.parse(body) : body; 
@@ -122,12 +89,8 @@ module.exports = async function(req, res) {
             
             if (action === 'PING') return res.status(200).json({ msg: token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
 
-            const parseJSON = (val) => {
-                try { return typeof val === 'string' ? JSON.parse(val) : val; } 
-                catch(e) { return val; }
-            };
+            const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
 
-            // 🎯 공통 시스템 로직 (CRM, 테마색)
             if (action === 'GET_COMP_INFO_DB') {
                 const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`);
                 return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {});
@@ -150,17 +113,14 @@ module.exports = async function(req, res) {
                 return res.status(200).json({ success: true });
             }
             
-            // 🎯 [핵심 패치 2] 공공데이터포털 공휴일 API 완벽 연동
             if (action === 'GET_YEARLY_HOLIDAYS') {
                 const y = year || new Date().getFullYear();
-                const apiKey = process.env.HOLIDAY_API_KEY; // 🚨 Vercel 환경변수에 추가 필요!
-                
+                const apiKey = process.env.HOLIDAY_API_KEY; 
                 if (apiKey) {
                     try {
                         const url = `http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?solYear=${y}&ServiceKey=${apiKey}&_type=json&numOfRows=100`;
                         const response = await fetch(url);
                         const json = await response.json();
-                        
                         if (json?.response?.body?.items?.item) {
                             const items = json.response.body.items.item;
                             const arr = Array.isArray(items) ? items : [items];
@@ -170,12 +130,8 @@ module.exports = async function(req, res) {
                             });
                             return res.status(200).json(holidays);
                         }
-                    } catch (e) {
-                        console.error("🔥 공휴일 API 통신 에러:", e);
-                    }
+                    } catch (e) { console.error("🔥 공휴일 API 통신 에러:", e); }
                 }
-                
-                // API 키가 없거나 통신 에러 시, 달력이 터지지 않도록 기본 공휴일 방어막 작동
                 const fallbackHolidays = [`${y}-01-01`, `${y}-03-01`, `${y}-05-05`, `${y}-06-06`, `${y}-08-15`, `${y}-10-03`, `${y}-10-09`, `${y}-12-25`];
                 return res.status(200).json(fallbackHolidays);
             }
@@ -183,7 +139,6 @@ module.exports = async function(req, res) {
             if (action === 'GET_LAST_OCR_IMAGE') return res.status(200).json(""); 
             if (action === 'GET_OCR_LAST_TIME') return res.status(200).json("최근 처리내역 없음");
 
-            // 🚚 [출고 전용 데이터 조작 로직]
             if (domain === 'out') {
                 const targetName = data?.oldComp;
                 const newName = data?.newComp || targetName;
@@ -202,18 +157,27 @@ module.exports = async function(req, res) {
                     await pool.query(`INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`, [newName, data?.newPal || '', data?.newBox || '', newDate, data?.newEtc || '']);
                 } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
                     for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
-                        let targetDate = dateStr === '미정' ? null : dateStr;
+                        let tDate = dateStr === '미정' ? null : dateStr;
                         for (const item of orderList) {
-                            if (item.id) {
-                                await pool.query(`UPDATE outbound SET sort_idx = ? WHERE id = ?`, [item.sortIdx, item.id]);
-                            } else {
-                                await pool.query(`UPDATE outbound SET sort_idx = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [item.sortIdx, item.company, targetDate, item.pal, item.box]);
-                            }
+                            if (item.id) await pool.query(`UPDATE outbound SET sort_idx = ? WHERE id = ?`, [item.sortIdx, item.id]);
+                            else await pool.query(`UPDATE outbound SET sort_idx = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [item.sortIdx, item.company, tDate, item.pal, item.box]);
                         }
+                    }
+                } 
+                // 🚨 [수정 1] 다중 선택 삭제/완료 완벽 반영
+                else if (action === 'MULTI_DELETE' && data?.items) {
+                    for (const it of data.items) {
+                        const tDate = it.dateStr === '미정' ? null : it.dateStr;
+                        await pool.query(`DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [it.comp, tDate, it.pal, it.box]);
+                    }
+                } else if ((action === 'MULTI_DONE' || action === 'MULTI_UNDO_DONE') && data?.items) {
+                    const isDoneVal = action === 'MULTI_DONE' ? 1 : 0;
+                    for (const it of data.items) {
+                        const tDate = it.dateStr === '미정' ? null : it.dateStr;
+                        await pool.query(`UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [isDoneVal, it.comp, tDate, it.pal, it.box]);
                     }
                 }
             } 
-            // 🚢 [입고 전용 데이터 조작 로직]
             else {
                 const targetName = data?.oldComp || data?.oldBL;
                 const newName = data?.newComp || data?.newBL || targetName;
@@ -230,13 +194,10 @@ module.exports = async function(req, res) {
                     await pool.query(`INSERT INTO inbound (bl_number, pallets, box, receive_date, status, remarks) VALUES (?, ?, ?, ?, '입고대기', ?)`, [newName, data?.newPal || 0, data?.newBox || 0, newDate, data?.newEtc || '']);
                 } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
                     for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
-                        let targetDate = dateStr === '미정' ? null : dateStr;
+                        let tDate = dateStr === '미정' ? null : dateStr;
                         for (const item of orderList) {
-                            if (item.id) {
-                                await pool.query(`UPDATE inbound SET sort_idx = ? WHERE id = ?`, [item.sortIdx, item.id]);
-                            } else {
-                                await pool.query(`UPDATE inbound SET sort_idx = ? WHERE bl_number = ? AND receive_date <=> ? AND pallets = ? AND box = ?`, [item.sortIdx, item.company, targetDate, item.pal, item.box]);
-                            }
+                            if (item.id) await pool.query(`UPDATE inbound SET sort_idx = ? WHERE id = ?`, [item.sortIdx, item.id]);
+                            else await pool.query(`UPDATE inbound SET sort_idx = ? WHERE bl_number = ? AND receive_date <=> ? AND pallets = ? AND box = ?`, [item.sortIdx, item.company, tDate, item.pal, item.box]);
                         }
                     }
                 }

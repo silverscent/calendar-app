@@ -2755,6 +2755,11 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
 
       // 🚀 [앱 초기화] 오염된 캐시 무시 + 강제 뼈대 교정 완결판
       window.addEventListener("DOMContentLoaded", () => {
+        // 🚨 [버그 3 수정] 앱 켜자마자 내 폰(로컬)에 저장된 색상을 먼저 장전해서 번쩍임(Flash) 방지!
+        try {
+            let savedColors = localStorage.getItem("GLOBAL_COMPANY_COLORS");
+            if (savedColors) customColors = JSON.parse(savedColors);
+        } catch(e) {}
         
         const savedTheme = localStorage.getItem("cal_theme") || "light";
         const themeBtn = document.querySelector(".theme-toggle");
@@ -3733,6 +3738,7 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
 
       function startPress(e, type, day, idx = null) {
         if (!isAdmin || isMultiMode) return;
+        if (isDragging) return; // 🚨 [추가] 중복 터치로 인한 유령 생성 방지
         cancelPress();
         isLongPress = false;
         hasMovedDuringDrag = false;
@@ -3747,6 +3753,9 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
           if (pressTarget) pressTarget.classList.remove("cell-pressing");
           if (navigator.vibrate) navigator.vibrate(50);
 
+          // 🚨 [추가] 드래그 시작 전, 화면 구석에 숨어있을지 모를 모든 유령(Ghost) 삭제
+          document.querySelectorAll('.ghost-clone-element').forEach(el => el.remove());
+
           if (type === "cell") {
             openAddFormWithDate(day);
           } else if (type === "item") {
@@ -3757,12 +3766,11 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
             dragOffsetY = clientY - rect.top;
 
             dragGhost = pressTarget.cloneNode(true);
+            dragGhost.classList.add('ghost-clone-element'); // 식별표 부착
             pressTarget.style.opacity = "0.3"; 
 
             if (day === "pending") {
-              dragGhost.className = "item-tag";
-              
-              // 🚨 [입고 찌꺼기 제거] 출고 전용이므로 sType, B/L 무시하고 무조건 업체명으로 고스트 생성!
+              dragGhost.className = "item-tag ghost-clone-element";
               let cleanComp = String(serverData.pendingItems[idx].company || "").replace(/\[TASK\]/gi, "").trim();
               let shortName = getShortName(cleanComp);
               let colorObj = getCompanyColor(cleanComp);
@@ -3770,7 +3778,7 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
               dragGhost.style.color = colorObj.cMain;
               dragGhost.innerHTML = shortName;
               
-              dragGhost.style.width = "60px"; dragGhost.style.height = "35px";
+              dragGhost.style.width = "60px"; dragGhost.style.height = "35px"; 
               dragGhost.style.justifyContent = "center"; dragGhost.style.alignItems = "center"; dragGhost.style.display = "flex"; dragGhost.style.borderRadius = "6px"; dragGhost.style.fontSize = "0.85em"; dragGhost.style.fontWeight = "900";
               dragOffsetX = 30; dragOffsetY = 17;
             } else {
@@ -3785,8 +3793,6 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
             dragGhost.style.position = "fixed"; dragGhost.style.left = "0px"; dragGhost.style.top = "0px"; dragGhost.style.margin = "0px"; dragGhost.style.zIndex = "999999"; dragGhost.style.opacity = "0.95"; dragGhost.style.pointerEvents = "none"; dragGhost.style.willChange = "transform"; dragGhost.style.boxShadow = "0 15px 35px rgba(0,0,0,0.3)"; dragGhost.style.transition = "none";
             
             document.body.appendChild(dragGhost);
-            
-            // 🚨 화면에 박자마자 즉시 좌표 적용! (입고 버그 픽스)
             dragGhost.style.transform = `translate3d(${clientX - dragOffsetX}px, ${clientY - dragOffsetY}px, 0) scale(1.05)`;
           }
         }, 400); 
@@ -3852,7 +3858,9 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
         let x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
         let y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
         
-        if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+        // 🚨 [버그 2 수정] 손을 뗄 때 무조건 모든 유령(Ghost) 요소 완전 파괴!
+        document.querySelectorAll('.ghost-clone-element').forEach(el => el.remove());
+        if (dragGhost) { dragGhost = null; }
         if (pressTarget) { pressTarget.style.opacity = "1"; }
 
         let currentDropTarget = lastDropTarget;
@@ -3864,6 +3872,7 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
         }
 
         if (!hasMovedDuringDrag) return;
+        // (이후 아래 로직은 기존과 동일합니다)
 
         let dropElement = document.elementFromPoint(x, y);
         let targetCell = dropElement ? dropElement.closest(".day-cell") : null;
