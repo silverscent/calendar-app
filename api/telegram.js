@@ -167,20 +167,24 @@ export default async function handler(req, res) {
 
         console.log(`💾 [4/5] 파싱 성공 (${parsedRows.length}행). TiDB 저장 시도...`);
 
-        // 4. TiDB 저장 (DB 연결 및 쿼리 실행)
+       // 4. TiDB 저장 (DB 연결 및 쿼리 실행)
         const pool = mysql.createPool(process.env.DATABASE_URL);
         
-        // 🚨 [여기에 추가!] 파싱 성공했으니 OCR 이미지랑 시간을 DB에 고이 모셔둡니다.
-        const imageUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
-        const currentTime = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-        await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
-        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [imageUrl, imageUrl]);
-        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [currentTime, currentTime]);
+        // 🚨 [안전장치 1] OCR 저장 중 에러가 나도 봇이 죽지 않게 캡슐화 (try-catch)
+        try {
+            const imageUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
+            const currentTime = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            
+            await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [imageUrl, imageUrl]);
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [currentTime, currentTime]);
+        } catch (dbErr) {
+            console.error("🔥 OCR 이미지/시간 DB 저장 실패 (스킵됨):", dbErr);
+        }
 
         let resultMsg = `✨ V2 엔진 자동 파싱 완료 (${parsedRows.length}행)\n`;
         
         for (const r of parsedRows) {
-            // 🚨 [발행전 버그 픽스] B/L이 '발행전'일 경우, 덮어쓰기 증발을 막기 위해 인보이스를 붙여서 고유하게 만듦
             let finalBL = r.bl;
             if (finalBL === '발행전') {
                 finalBL = r.invoice ? `발행전_${r.invoice}` : `발행전_${Date.now()}`;
@@ -189,21 +193,23 @@ export default async function handler(req, res) {
             let dbDate = r.inDate ? r.inDate : null;
             let dbEta = r.eta ? r.eta : null;
 
-            // 쪼개진 컬럼(s_type, fwd, invoice, eta)에 데이터를 각각 예쁘게 꽂아 넣습니다.
-            await pool.query(
-                `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) 
-                 VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, 1)
-                 ON DUPLICATE KEY UPDATE 
-                 pallets = VALUES(pallets), 
-                 receive_date = VALUES(receive_date), 
-                 s_type = VALUES(s_type),
-                 fwd = VALUES(fwd),
-                 invoice = VALUES(invoice),
-                 eta = VALUES(eta),
-                 remarks = VALUES(remarks),
-                 is_ai_modified = 1`,
-                [finalBL, r.pal, dbDate, r.sType, r.fwd, r.invoice, dbEta, r.etc]
-            );
+            // 🚨 [안전장치 2] DB 자물쇠를 믿지 않고, 직접 SELECT로 확인한 뒤 UPDATE/INSERT 실행! (중복 100% 차단)
+            const [exist] = await pool.query(`SELECT id FROM inbound WHERE bl_number = ? AND receive_date <=> ?`, [finalBL, dbDate]);
+
+            if (exist.length > 0) {
+                // 중복이면 기존 스케줄 내용만 최신화! (+ AI 뱃지 ON)
+                await pool.query(
+                    `UPDATE inbound SET pallets=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=1 WHERE id=?`,
+                    [r.pal, r.etc, r.sType, r.fwd, r.invoice, dbEta, exist[0].id]
+                );
+            } else {
+                // 없으면 신규 생성
+                await pool.query(
+                    `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) 
+                     VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, 1)`,
+                    [finalBL, r.pal, dbDate, r.sType, r.fwd, r.invoice, dbEta, r.etc]
+                );
+            }
             
             resultMsg += `• ${finalBL} | ${r.pal}PAL | ${r.inDate||'미정'}\n`;
         }
@@ -221,6 +227,18 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error("❌ 시스템 처리 중 치명적 에러:", error);
+        
+        // 🚨 [핵심 패치] 에러가 나서 봇이 뻗으면, 관리자 텔레그램으로 바로 에러 원인을 쏴줍니다!
+        try {
+            if (req.body?.message?.chat?.id) {
+                await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: req.body.message.chat.id, text: `🔥 서버 에러 발생! 원인:\n${error.message}` })
+                });
+            }
+        } catch(e) {} // 에러 메시지 전송마저 실패하면 조용히 종료
+
         res.status(500).send('Server Error');
     }
 }
