@@ -170,6 +170,13 @@ export default async function handler(req, res) {
         // 4. TiDB 저장 (DB 연결 및 쿼리 실행)
         const pool = mysql.createPool(process.env.DATABASE_URL);
         
+        // 🚨 [여기에 추가!] 파싱 성공했으니 OCR 이미지랑 시간을 DB에 고이 모셔둡니다.
+        const imageUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
+        const currentTime = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
+        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [imageUrl, imageUrl]);
+        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [currentTime, currentTime]);
+
         let resultMsg = `✨ V2 엔진 자동 파싱 완료 (${parsedRows.length}행)\n`;
         
         for (const r of parsedRows) {
@@ -184,8 +191,8 @@ export default async function handler(req, res) {
 
             // 쪼개진 컬럼(s_type, fwd, invoice, eta)에 데이터를 각각 예쁘게 꽂아 넣습니다.
             await pool.query(
-                `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks) 
-                 VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?)
+                `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) 
+                 VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, 1)
                  ON DUPLICATE KEY UPDATE 
                  pallets = VALUES(pallets), 
                  receive_date = VALUES(receive_date), 
@@ -193,7 +200,8 @@ export default async function handler(req, res) {
                  fwd = VALUES(fwd),
                  invoice = VALUES(invoice),
                  eta = VALUES(eta),
-                 remarks = VALUES(remarks)`,
+                 remarks = VALUES(remarks),
+                 is_ai_modified = 1`,
                 [finalBL, r.pal, dbDate, r.sType, r.fwd, r.invoice, dbEta, r.etc]
             );
             
