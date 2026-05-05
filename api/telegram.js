@@ -44,7 +44,7 @@ export default async function handler(req, res) {
         }
 
         // =================================================================
-        // 2. 이미지 수신 -> 대기열(Queue) 등록
+        // 2. 이미지 수신 -> 대기열(Queue) 등록 (🚨 JSON 포장 버그 완벽 해결!)
         // =================================================================
         let fileId = null;
         if (message.photo && message.photo.length > 0) {
@@ -54,7 +54,9 @@ export default async function handler(req, res) {
         }
 
         if (fileId) {
-            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('PENDING_IMAGE_ID', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [fileId, fileId]);
+            // 🚨 TiDB 에러 방지를 위해 JSON 형태로 예쁘게 포장해서 넣습니다!
+            const jsonFileId = JSON.stringify({ id: fileId });
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('PENDING_IMAGE_ID', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonFileId, jsonFileId]);
             await sendTgMsg(chatId, `📥 [이미지 대기열 등록 완료]\n\n▶️ DB에 즉시 반영: /ocr\n🧪 AI 결과 미리보기: /test\n❌ 처리 취소: /cancel`);
             return res.status(200).send('OK');
         }
@@ -74,13 +76,18 @@ export default async function handler(req, res) {
         if (text.startsWith('/ocr') || text.startsWith('/test')) {
             const isTest = text.startsWith('/test');
             
-            // 1) 대기열에서 파일 가져오기
+            // 1) 대기열에서 파일 가져오기 (🚨 JSON 포장 뜯기 적용)
             const [pendingRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_ID'`);
             if (pendingRows.length === 0 || !pendingRows[0].setting_value) {
                 await sendTgMsg(chatId, `⚠️ 대기 중인 이미지가 없습니다. 사진을 먼저 올려주세요.`);
                 return res.status(200).send('OK');
             }
-            const targetFileId = pendingRows[0].setting_value;
+            
+            let targetFileId = pendingRows[0].setting_value;
+            try {
+                let parsed = typeof targetFileId === 'string' ? JSON.parse(targetFileId) : targetFileId;
+                targetFileId = parsed.id || targetFileId; // 포장지 뜯고 알맹이(id)만 쏙!
+            } catch (e) {}
 
             // 실행 시 대기열 즉시 비우기 (연타 방지)
             if (!isTest) await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_ID'`);
@@ -96,7 +103,7 @@ export default async function handler(req, res) {
             const imgBuffer = await imgRes.arrayBuffer();
             const base64Image = Buffer.from(imgBuffer).toString('base64');
 
-            // 3) 구글 Vision API 호출 (🚨 관리자님 기존 변수명 GOOGLE_VISION_API_KEY 로 복구 완료!)
+            // 3) 구글 Vision API 호출
             const visionApiKey = process.env.GOOGLE_VISION_API_KEY;
             const visionRes = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${visionApiKey}`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -161,7 +168,7 @@ ${JSON.stringify(parsedResult)}
                 return res.status(200).send('OK');
             }
 
-            // 7) DB에 UPSERT (is_ai_modified 플래그 포함, 검색 로직 100% 유지)
+            // 7) DB에 UPSERT (is_ai_modified 플래그 포함)
             let updateCount = 0; let insertCount = 0;
             for (const r of finalRows) {
                 let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, '');
