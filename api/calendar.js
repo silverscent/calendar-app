@@ -12,29 +12,65 @@ module.exports = async function(req, res) {
         const pool = mysql.createPool(process.env.DATABASE_URL);
 
         // ==========================================================
-        // 📥 [GET 요청] 달력 초기 로딩
+        // 📥 [GET 요청] 달력 초기 로딩 (입고/출고 완벽 분기)
         // ==========================================================
         if (req.method === 'GET') {
             const { type, year, month, action } = req.query;
-            const tableName = type === 'out' ? 'outbound' : 'inbound';
 
+            // 📊 연간 통계 로딩
             if (action === 'yearlyStats') {
-                const [rows] = await pool.query(`SELECT receive_date, pallets, box, s_type, remarks, bl_number FROM ${tableName} WHERE YEAR(receive_date) = ?`, [year]);
-                return res.status(200).json({ success: true, year, data: rows });
+                if (type === 'out') {
+                    const [rows] = await pool.query(`SELECT outbound_date, pal, box, etc, company, isDone FROM outbound WHERE YEAR(outbound_date) = ?`, [year]);
+                    return res.status(200).json({ success: true, year, data: rows });
+                } else {
+                    const [rows] = await pool.query(`SELECT receive_date, pallets, box, s_type, remarks, bl_number FROM inbound WHERE YEAR(receive_date) = ?`, [year]);
+                    return res.status(200).json({ success: true, year, data: rows });
+                }
             }
 
-            const [monthRows] = await pool.query(`SELECT * FROM ${tableName} WHERE YEAR(receive_date) = ? AND MONTH(receive_date) = ? ORDER BY sort_idx ASC, id ASC`, [year, month]);
-            const [pendingRows] = await pool.query(`SELECT * FROM ${tableName} WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`);
-
             let formattedData = { year: parseInt(year), month: parseInt(month), monthData: {}, pendingItems: [] };
-            monthRows.forEach(row => {
-                const day = new Date(row.receive_date).getDate();
-                if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
-                formattedData.monthData[day].push({ id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, etc: row.remarks, sType: row.s_type, fwd: row.fwd, invoice: row.invoice, isDone: row.status === '완료', sortIdx: row.sort_idx || 999 });
-            });
-            pendingRows.forEach(row => {
-                formattedData.pendingItems.push({ id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, etc: row.remarks, sType: row.s_type, isDone: row.status === '완료', sortIdx: row.sort_idx || 999 });
-            });
+
+            // 🚚 [출고 전용 조회 로직]
+            if (type === 'out') {
+                const [monthRows] = await pool.query(`SELECT * FROM outbound WHERE YEAR(outbound_date) = ? AND MONTH(outbound_date) = ? ORDER BY sort_idx ASC, id ASC`, [year, month]);
+                const [pendingRows] = await pool.query(`SELECT * FROM outbound WHERE outbound_date IS NULL ORDER BY sort_idx ASC, id ASC`);
+
+                monthRows.forEach(row => {
+                    const day = new Date(row.outbound_date).getDate();
+                    if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
+                    formattedData.monthData[day].push({ 
+                        id: row.id, company: row.company, pal: row.pal, box: row.box, 
+                        etc: row.etc, isDone: row.isDone === 1, sortIdx: row.sort_idx || 999 
+                    });
+                });
+                pendingRows.forEach(row => {
+                    formattedData.pendingItems.push({ 
+                        id: row.id, company: row.company, pal: row.pal, box: row.box, 
+                        etc: row.etc, isDone: row.isDone === 1, sortIdx: row.sort_idx || 999 
+                    });
+                });
+            } 
+            // 🚢 [입고 전용 조회 로직] (기존 완벽 복구)
+            else {
+                const [monthRows] = await pool.query(`SELECT * FROM inbound WHERE YEAR(receive_date) = ? AND MONTH(receive_date) = ? ORDER BY sort_idx ASC, id ASC`, [year, month]);
+                const [pendingRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`);
+
+                monthRows.forEach(row => {
+                    const day = new Date(row.receive_date).getDate();
+                    if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
+                    formattedData.monthData[day].push({ 
+                        id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, 
+                        etc: row.remarks, sType: row.s_type, fwd: row.fwd, invoice: row.invoice, 
+                        isDone: row.status === '완료', sortIdx: row.sort_idx || 999 
+                    });
+                });
+                pendingRows.forEach(row => {
+                    formattedData.pendingItems.push({ 
+                        id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, 
+                        etc: row.remarks, sType: row.s_type, isDone: row.status === '완료', sortIdx: row.sort_idx || 999 
+                    });
+                });
+            }
 
             return res.status(200).json(formattedData);
         }
@@ -49,7 +85,7 @@ module.exports = async function(req, res) {
             
             if (action === 'PING') return res.status(200).json({ msg: token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
 
-            // 🎯 [100% 완전 독립] 시스템 설정 및 CRM 관리 (TiDB JSON 저장)
+            // 🎯 공통 시스템 로직 (CRM, 테마색, 휴일, OCR 등)
             if (action === 'GET_COMP_INFO_DB') {
                 const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'crm_comp_info'`);
                 return res.status(200).json(rows.length > 0 ? rows[0].setting_value : {});
@@ -79,32 +115,61 @@ module.exports = async function(req, res) {
             if (action === 'GET_LAST_OCR_IMAGE') return res.status(200).json(""); 
             if (action === 'GET_OCR_LAST_TIME') return res.status(200).json("최근 처리내역 없음");
 
-            // 🎯 스케줄 처리
-            const tableName = domain === 'out' ? 'outbound' : 'inbound';
-            if (!tableName) return res.status(400).json({ success: false, msg: '잘못된 도메인' });
+            // 🚚 [출고 전용 데이터 조작 로직]
+            if (domain === 'out') {
+                const targetName = data?.oldComp;
+                const newName = data?.newComp || targetName;
+                const targetDate = data?.oldDate === '미정' ? null : data?.oldDate;
+                const newDate = data?.newDate === '미정' ? null : data?.newDate;
+                const targetPal = data?.oldPal || '';
+                const targetBox = data?.oldBox || '';
 
-            const targetName = data?.oldComp || data?.oldBL;
-            const newName = data?.newComp || data?.newBL || targetName;
-            const targetDate = data?.oldDate === '미정' ? null : data?.oldDate;
-            const newDate = data?.newDate === '미정' ? null : data?.newDate;
+                if (action === 'DONE' || action === 'UNDO_DONE') {
+                    await pool.query(`UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [action === 'DONE' ? 1 : 0, targetName, targetDate, targetPal, targetBox]);
+                } else if (action === 'DELETE') {
+                    await pool.query(`DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [targetName, targetDate, targetPal, targetBox]);
+                } else if (action === 'EDIT') {
+                    await pool.query(`UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [newDate, newName, data?.newPal || '', data?.newBox || '', data?.newEtc || '', targetName, targetDate, targetPal, targetBox]);
+                } else if (action === 'ADD') {
+                    await pool.query(`INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`, [newName, data?.newPal || '', data?.newBox || '', newDate, data?.newEtc || '']);
+                } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
+                    for (const [dateStr, orders] of Object.entries(data.dailyOrders)) {
+                        for (const [key, sortIdx] of Object.entries(orders)) {
+                            const parts = key.split('_');
+                            const b = parts.pop();
+                            const p = parts.pop();
+                            const compBase = parts.slice(1).join('_');
+                            const compName = key.startsWith('T_') ? `[TASK]${compBase}` : compBase;
+                            await pool.query(`UPDATE outbound SET sort_idx = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [sortIdx, compName, dateStr, p, b]);
+                        }
+                    }
+                }
+            } 
+            // 🚢 [입고 전용 데이터 조작 로직] (기존 완벽 복구)
+            else {
+                const targetName = data?.oldComp || data?.oldBL;
+                const newName = data?.newComp || data?.newBL || targetName;
+                const targetDate = data?.oldDate === '미정' ? null : data?.oldDate;
+                const newDate = data?.newDate === '미정' ? null : data?.newDate;
 
-            if (action === 'DONE' || action === 'UNDO_DONE') {
-                await pool.query(`UPDATE ${tableName} SET status = ? WHERE bl_number = ? AND receive_date <=> ?`, [action === 'DONE' ? '완료' : '입고대기', targetName, targetDate]);
-            } else if (action === 'DELETE') {
-                await pool.query(`DELETE FROM ${tableName} WHERE bl_number = ? AND receive_date <=> ?`, [targetName, targetDate]);
-            } else if (action === 'EDIT') {
-                await pool.query(`UPDATE ${tableName} SET receive_date = ?, bl_number = ?, pallets = ?, box = ?, remarks = ? WHERE bl_number = ? AND receive_date <=> ?`, [newDate, newName, data?.newPal || 0, data?.newBox || 0, data?.newEtc || '', targetName, targetDate]);
-            } else if (action === 'ADD') {
-                await pool.query(`INSERT INTO ${tableName} (bl_number, pallets, box, receive_date, status, remarks) VALUES (?, ?, ?, ?, '입고대기', ?)`, [newName, data?.newPal || 0, data?.newBox || 0, newDate, data?.newEtc || '']);
-            } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
-                for (const [dateStr, orders] of Object.entries(data.dailyOrders)) {
-                    for (const [key, sortIdx] of Object.entries(orders)) {
-                        const isTask = key.startsWith('T_');
-                        const parts = key.split('_');
-                        const compName = isTask ? `[TASK]${parts[1]}` : parts[1];
-                        const pal = parts[2] === "" ? 0 : parseInt(parts[2]);
-                        const box = parts[3] === "" ? 0 : parseInt(parts[3]);
-                        await pool.query(`UPDATE ${tableName} SET sort_idx = ? WHERE bl_number = ? AND receive_date <=> ? AND pallets = ? AND box = ?`, [sortIdx, compName, dateStr, pal, box]);
+                if (action === 'DONE' || action === 'UNDO_DONE') {
+                    await pool.query(`UPDATE inbound SET status = ? WHERE bl_number = ? AND receive_date <=> ?`, [action === 'DONE' ? '완료' : '입고대기', targetName, targetDate]);
+                } else if (action === 'DELETE') {
+                    await pool.query(`DELETE FROM inbound WHERE bl_number = ? AND receive_date <=> ?`, [targetName, targetDate]);
+                } else if (action === 'EDIT') {
+                    await pool.query(`UPDATE inbound SET receive_date = ?, bl_number = ?, pallets = ?, box = ?, remarks = ? WHERE bl_number = ? AND receive_date <=> ?`, [newDate, newName, data?.newPal || 0, data?.newBox || 0, data?.newEtc || '', targetName, targetDate]);
+                } else if (action === 'ADD') {
+                    await pool.query(`INSERT INTO inbound (bl_number, pallets, box, receive_date, status, remarks) VALUES (?, ?, ?, ?, '입고대기', ?)`, [newName, data?.newPal || 0, data?.newBox || 0, newDate, data?.newEtc || '']);
+                } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
+                    for (const [dateStr, orders] of Object.entries(data.dailyOrders)) {
+                        for (const [key, sortIdx] of Object.entries(orders)) {
+                            const isTask = key.startsWith('T_');
+                            const parts = key.split('_');
+                            const compName = isTask ? `[TASK]${parts[1]}` : parts[1];
+                            const pal = parts[2] === "" ? 0 : parseInt(parts[2]);
+                            const box = parts[3] === "" ? 0 : parseInt(parts[3]);
+                            await pool.query(`UPDATE inbound SET sort_idx = ? WHERE bl_number = ? AND receive_date <=> ? AND pallets = ? AND box = ?`, [sortIdx, compName, dateStr, pal, box]);
+                        }
                     }
                 }
             }
