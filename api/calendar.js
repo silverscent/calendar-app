@@ -171,19 +171,21 @@ module.exports = async function(req, res) {
                     await pool.query(`UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [newDate, newName, data?.newPal || '', data?.newBox || '', data?.newEtc || '', targetName, targetDate, targetPal, targetBox]);
                 } else if (action === 'ADD') {
                     await pool.query(`INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`, [newName, data?.newPal || '', data?.newBox || '', newDate, data?.newEtc || '']);
-                } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
-                    for (const [dateStr, orders] of Object.entries(data.dailyOrders)) {
-                        for (const [key, sortIdx] of Object.entries(orders)) {
-                            const parts = key.split('_');
-                            const b = parts.pop();
-                            const p = parts.pop();
-                            const compBase = parts.slice(1).join('_');
-                            const compName = key.startsWith('T_') ? `[TASK]${compBase}` : compBase;
-                            await pool.query(`UPDATE outbound SET sort_idx = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [sortIdx, compName, dateStr, p, b]);
+                } 
+                // 🚨 [수정됨] 고유 ID를 이용한 무적의 순서 변경 로직!
+                else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
+                    for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
+                        let targetDate = dateStr === '미정' ? null : dateStr;
+                        for (const item of orderList) {
+                            if (item.id) {
+                                await pool.query(`UPDATE outbound SET sort_idx = ? WHERE id = ?`, [item.sortIdx, item.id]);
+                            } else {
+                                await pool.query(`UPDATE outbound SET sort_idx = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [item.sortIdx, item.company, targetDate, item.pal, item.box]);
+                            }
                         }
                     }
                 }
-            } 
+            }
             // 🚢 [입고 전용 데이터 조작 로직]
             else {
                 const targetName = data?.oldComp || data?.oldBL;
