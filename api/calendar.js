@@ -137,14 +137,23 @@ module.exports = async function(req, res) {
             [newDate, newName, data?.newPal || '', data?.newBox || '', data?.newEtc || '', targetName, targetDate, targetPal, targetBox]
         );
     } else if (action === 'ADD') { 
-                    // 🚨 [출고 중복 방지] 같은 날짜에 같은 업체가 있는지 검사
-                    const [exist] = await pool.query(`SELECT id FROM outbound WHERE company = ? AND outbound_date <=> ?`, [newName, newDate]);
+                    // 🚨 [출고 중복 방지] 봇 방언(bl, comp, date) 완벽 호환 엔진
+                    let reqComp = (data?.newComp || data?.company || data?.comp || '').trim();
+                    let reqDateOut = data?.newDate !== undefined ? data?.newDate : (data?.date !== undefined ? data?.date : data?.outbound_date);
+                    if (reqDateOut === '미정' || reqDateOut === '' || !reqDateOut) reqDateOut = null;
+                    else if (typeof reqDateOut === 'string' && reqDateOut.length > 10) reqDateOut = reqDateOut.substring(0, 10);
+                    
+                    let reqPalOut = data?.newPal || data?.pal || '';
+                    let reqBoxOut = data?.newBox || data?.box || '';
+                    let reqEtcOut = data?.newEtc || data?.etc || '';
+
+                    const [exist] = await pool.query(`SELECT id FROM outbound WHERE TRIM(company) = ? AND outbound_date <=> ?`, [reqComp, reqDateOut]);
                     if (exist.length > 0) {
-                        // 있으면 내용만 최신으로 덮어쓰기 (중복 생성 방지)
-                        await pool.query(`UPDATE outbound SET pal = ?, box = ?, etc = ? WHERE id = ?`, [data?.newPal || '', data?.newBox || '', data?.newEtc || '', exist[0].id]);
+                        // 중복이면 무조건 기존 스케줄에 덮어쓰기!
+                        await pool.query(`UPDATE outbound SET pal = ?, box = ?, etc = ? WHERE id = ?`, [reqPalOut, reqBoxOut, reqEtcOut, exist[0].id]);
                     } else {
-                        // 없으면 새로 생성
-                        await pool.query(`INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`, [newName, data?.newPal || '', data?.newBox || '', newDate, data?.newEtc || '']); 
+                        // 없으면 신규 생성
+                        await pool.query(`INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`, [reqComp, reqPalOut, reqBoxOut, reqDateOut, reqEtcOut]); 
                     }
                 }
     else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
@@ -203,30 +212,36 @@ module.exports = async function(req, res) {
                             [newDate, newName, data?.newPal||'', data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'', data?.oldBL, data?.oldDate === '미정' ? null : data?.oldDate]);
                     }
                 } else if (action === 'ADD') {
-                    // 🚨 [입고 중복 방지] 인보이스 매칭 및 '발행전' 덮어쓰기 로직!
-                    const newInvoiceVal = data?.newInvoice || '';
-                    let exist = [];
-
-                    // 1순위 검사: 인보이스 번호가 비어있지 않다면, '인보이스 번호 + 날짜'로 똑같은 녀석을 찾습니다!
-                    // (이래야 B/L번호가 '발행전'에서 '실제 번호'로 바뀌어도 찰떡같이 찾아냄)
-                    if (newInvoiceVal.trim() !== '') {
-                        [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? AND receive_date <=> ?`, [newInvoiceVal, newDate]);
-                    }
+                    // 🚨 [입고 중복 방지] 봇 방언 호환 및 인보이스(발행전) 덮어쓰기 엔진
+                    let reqBl = (data?.newBL || data?.bl || data?.newComp || data?.company || data?.bl_number || '').trim();
+                    let reqDate = data?.newDate !== undefined ? data?.newDate : (data?.date !== undefined ? data?.date : data?.receive_date);
+                    if (reqDate === '미정' || reqDate === '' || !reqDate) reqDate = null;
+                    else if (typeof reqDate === 'string' && reqDate.length > 10) reqDate = reqDate.substring(0, 10);
                     
-                    // 2순위 검사: 인보이스 번호가 없거나 못 찾았다면, 예전처럼 'B/L번호 + 날짜'로 찾습니다.
-                    if (exist.length === 0) {
-                        [exist] = await pool.query(`SELECT id FROM inbound WHERE bl_number = ? AND receive_date <=> ?`, [newName, newDate]);
+                    let reqInvoice = (data?.newInvoice || data?.invoice || '').trim();
+                    let reqPal = data?.newPal || data?.pal || data?.pallets || '';
+                    let reqSType = data?.newSType || data?.sType || data?.s_type || '';
+                    let reqFwd = data?.newFwd || data?.fwd || '';
+                    let reqEtc = data?.newEtc || data?.etc || data?.remarks || '';
+
+                    let exist = [];
+                    // 1순위: 인보이스 번호 + 날짜로 기존 데이터 찾기 (발행전 이름 바뀌는 것 대응)
+                    if (reqInvoice !== '') {
+                        [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? AND receive_date <=> ?`, [reqInvoice, reqDate]);
+                    }
+                    // 2순위: 인보이스가 없으면 B/L 번호 + 날짜로 찾기
+                    if (exist.length === 0 && reqBl !== '') {
+                        [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? AND receive_date <=> ?`, [reqBl, reqDate]);
                     }
 
                     if (exist.length > 0) {
-                        // 🎯 중복 발견! -> 새로 만들지 않고 기존 일정의 내용을 싹 다 최신으로 덮어씁니다!
-                        // (이때 B/L번호인 bl_number도 덮어쓰므로 '발행전' 글자가 지워지고 '찐 B/L번호'가 들어갑니다!)
+                        // 중복이면 무조건 기존 스케줄 최신화 + AI 뱃지 ON!
                         await pool.query(`UPDATE inbound SET bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=?, is_ai_modified=1 WHERE id=?`, 
-                            [newName, data?.newPal||'', data?.newEtc||'', data?.newSType||'', data?.newFwd||'', newInvoiceVal, exist[0].id]);
+                            [reqBl, reqPal, reqEtc, reqSType, reqFwd, reqInvoice, exist[0].id]);
                     } else {
-                        // 1, 2순위 모두 못 찾으면 진짜 완전 쌩판 새로운 스케줄이므로 새로 만듭니다.
+                        // 아예 새로운 데이터면 신규 생성
                         await pool.query(`INSERT INTO inbound (bl_number, pallets, receive_date, status, remarks, s_type, fwd, invoice, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, 1)`, 
-                            [newName, data?.newPal||'', newDate, data?.newEtc||'', data?.newSType||'', data?.newFwd||'', newInvoiceVal]);
+                            [reqBl, reqPal, reqDate, reqEtc, reqSType, reqFwd, reqInvoice]);
                     }
                 } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
                     for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
