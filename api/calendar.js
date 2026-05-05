@@ -203,16 +203,30 @@ module.exports = async function(req, res) {
                             [newDate, newName, data?.newPal||'', data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'', data?.oldBL, data?.oldDate === '미정' ? null : data?.oldDate]);
                     }
                 } else if (action === 'ADD') {
-                    // 🚨 [입고 중복 방지] 같은 날짜에 같은 B/L 번호가 있는지 검사
-                    const [exist] = await pool.query(`SELECT id FROM inbound WHERE bl_number = ? AND receive_date <=> ?`, [newName, newDate]);
+                    // 🚨 [입고 중복 방지] 인보이스 매칭 및 '발행전' 덮어쓰기 로직!
+                    const newInvoiceVal = data?.newInvoice || '';
+                    let exist = [];
+
+                    // 1순위 검사: 인보이스 번호가 비어있지 않다면, '인보이스 번호 + 날짜'로 똑같은 녀석을 찾습니다!
+                    // (이래야 B/L번호가 '발행전'에서 '실제 번호'로 바뀌어도 찰떡같이 찾아냄)
+                    if (newInvoiceVal.trim() !== '') {
+                        [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? AND receive_date <=> ?`, [newInvoiceVal, newDate]);
+                    }
+                    
+                    // 2순위 검사: 인보이스 번호가 없거나 못 찾았다면, 예전처럼 'B/L번호 + 날짜'로 찾습니다.
+                    if (exist.length === 0) {
+                        [exist] = await pool.query(`SELECT id FROM inbound WHERE bl_number = ? AND receive_date <=> ?`, [newName, newDate]);
+                    }
+
                     if (exist.length > 0) {
-                        // 있으면 내용만 최신으로 덮어쓰기 & 봇이 건드렸으니 AI 뱃지 ON!
-                        await pool.query(`UPDATE inbound SET pallets=?, remarks=?, s_type=?, fwd=?, invoice=?, is_ai_modified=1 WHERE id=?`, 
-                            [data?.newPal||'', data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'', exist[0].id]);
+                        // 🎯 중복 발견! -> 새로 만들지 않고 기존 일정의 내용을 싹 다 최신으로 덮어씁니다!
+                        // (이때 B/L번호인 bl_number도 덮어쓰므로 '발행전' 글자가 지워지고 '찐 B/L번호'가 들어갑니다!)
+                        await pool.query(`UPDATE inbound SET bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=?, is_ai_modified=1 WHERE id=?`, 
+                            [newName, data?.newPal||'', data?.newEtc||'', data?.newSType||'', data?.newFwd||'', newInvoiceVal, exist[0].id]);
                     } else {
-                        // 없으면 새로 생성
+                        // 1, 2순위 모두 못 찾으면 진짜 완전 쌩판 새로운 스케줄이므로 새로 만듭니다.
                         await pool.query(`INSERT INTO inbound (bl_number, pallets, receive_date, status, remarks, s_type, fwd, invoice, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, 1)`, 
-                            [newName, data?.newPal||'', newDate, data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'']);
+                            [newName, data?.newPal||'', newDate, data?.newEtc||'', data?.newSType||'', data?.newFwd||'', newInvoiceVal]);
                     }
                 } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
                     for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
