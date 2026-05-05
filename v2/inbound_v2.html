@@ -2344,18 +2344,31 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
       // 📊 [개발 추가] 입고 통계 대시보드 스크립트 모음
       // =====================================================
       window.dashMode = 'month';
-      window.dashMonthViewYear = new Date().getFullYear(); 
-      window.dashMonthViewMonth = new Date().getMonth() + 1;
-      window.dashYearViewYear = new Date().getFullYear();  // 🚨 연간용 년도 분리!
+      window.dashYear = new Date().getFullYear(); // 월간용 년도
+      window.dashMonth = new Date().getMonth() + 1;
+      window.dashYearlyYear = new Date().getFullYear(); // 🚨 연간 전용 년도 (완벽 분리!)
       let yearlyCache = {};
       let mainChartIns = null;
       let shareChartIns = null;
       window.dashCurrentData = null; 
 
+      function updateStatsSummary() {
+          let tPal = 0, dPal = 0;
+          const process = (it) => {
+              let rawName = String(it.bl || it.company || "").trim();
+              if (!rawName || rawName === "미정") return;
+              tPal += parseInt(it.pal) || 0;
+              if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
+          };
+          for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
+          let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
+          let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
+      }
+
       function openDashboard() {
-          window.dashMonthViewYear = serverData.year;
-          window.dashMonthViewMonth = serverData.month;
-          window.dashYearViewYear = serverData.year; 
+          window.dashYear = serverData.year;
+          window.dashMonth = serverData.month;
+          window.dashYearlyYear = serverData.year; 
           window.dashCurrentData = serverData; 
           document.getElementById('dashboardModal').style.display = 'flex';
           setTimeout(renderDashCharts, 100);
@@ -2365,9 +2378,10 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
           window.dashMode = mode;
           document.getElementById('btnDashMonth').classList.toggle('active', mode === 'month');
           document.getElementById('btnDashYear').classList.toggle('active', mode === 'year');
-          // 🚨 넘길 때마다 강제 리프레시!
+          
+          // 🚨 [5번 해결] 탭 바꿀 때마다 각자의 독립된 년도/월 데이터로 강제 리프레시!
           if (mode === 'year') {
-              if (!yearlyCache[window.dashYearViewYear]) fetchYearlyAndRender();
+              if (!yearlyCache[window.dashYearlyYear]) fetchYearlyAndRender();
               else renderDashCharts();
           } else {
               fetchDashMonthAndRender(); 
@@ -2376,22 +2390,22 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
 
       function navDashDate(offset) {
           if (window.dashMode === 'month') {
-              window.dashMonthViewMonth += offset;
-              if (window.dashMonthViewMonth > 12) { window.dashMonthViewMonth = 1; window.dashMonthViewYear++; }
-              else if (window.dashMonthViewMonth < 1) { window.dashMonthViewMonth = 12; window.dashMonthViewYear--; }
+              window.dashMonth += offset;
+              if (window.dashMonth > 12) { window.dashMonth = 1; window.dashYear++; }
+              else if (window.dashMonth < 1) { window.dashMonth = 12; window.dashYear--; }
               fetchDashMonthAndRender();
           } else {
-              window.dashYearViewYear += offset; // 연간은 연간끼리 놂
+              window.dashYearlyYear += offset; // 🚨 연간 모드는 연간용 년도만 움직임
               fetchYearlyAndRender();
           }
       }
 
       function fetchDashMonthAndRender() {
-          document.getElementById('dashTitleText').innerText = `${window.dashMonthViewYear}년 ${window.dashMonthViewMonth}월`;
+          document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
           let sub = document.getElementById('dashSubTitleText');
-          if (sub) sub.innerText = `${window.dashMonthViewYear}년 ${window.dashMonthViewMonth}월 요약 (조회중)`;
+          if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약 (조회중)`;
           
-          let cacheKey = `cal_cache_${currentType}_${window.dashMonthViewYear}_${window.dashMonthViewMonth}`;
+          let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
           let cached = localStorage.getItem(cacheKey);
           if (cached) { try { window.dashCurrentData = JSON.parse(cached); renderDashCharts(); } catch(e) {} } 
           else {
@@ -2405,49 +2419,32 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
               localStorage.setItem(cacheKey, JSON.stringify(finalData));
               if (window.dashMode === 'month') renderDashCharts();
           }).withFailureHandler(err => { if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
-          .getCalendarDataAsync(currentType, window.dashMonthViewYear, window.dashMonthViewMonth);
+          .getCalendarDataAsync(currentType, window.dashYear, window.dashMonth);
       }
 
       function fetchYearlyAndRender() {
-          document.getElementById('dashTitleText').innerText = `${window.dashYearViewYear}년`;
+          document.getElementById('dashTitleText').innerText = `${window.dashYearlyYear}년`;
           let sub = document.getElementById('dashSubTitleText');
-          if (sub) sub.innerText = `${window.dashYearViewYear}년 연간 요약 (조회중)`;
+          if (sub) sub.innerText = `${window.dashYearlyYear}년 연간 요약 (조회중)`;
           
-          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYearViewYear}`;
+          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYearlyYear}`;
           let cached = localStorage.getItem(cacheKey);
-          if (cached) { try { yearlyCache[window.dashYearViewYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {} } 
+          if (cached) { try { yearlyCache[window.dashYearlyYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {} } 
           else {
               let dummyArr = []; for(let i=0; i<12; i++) dummyArr.push({pal:0, box:0, details:{}});
-              yearlyCache[window.dashYearViewYear] = { year: window.dashYearViewYear, monthly: dummyArr, comp: {} };
+              yearlyCache[window.dashYearlyYear] = { year: window.dashYearlyYear, monthly: dummyArr, comp: {} };
               renderDashCharts();
               document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
               document.getElementById('dashAvg').innerText = "⏳";
           }
           google.script.run.withSuccessHandler(res => {
-              yearlyCache[res.year] = res; localStorage.setItem(`yearly_stats_cache_${currentType}_${res.year}`, JSON.stringify(res)); 
-              if (window.dashMode === 'year' && window.dashYearViewYear === res.year) renderDashCharts();
+              yearlyCache[res.year] = res; localStorage.setItem(cacheKey, JSON.stringify(res)); 
+              if (window.dashMode === 'year' && window.dashYearlyYear === res.year) renderDashCharts();
           }).withFailureHandler(err => { if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
-          .getYearlyStatsAsync(currentType, window.dashYearViewYear);
+          .getYearlyStatsAsync(currentType, window.dashYearlyYear);
       }
 
-      function updateStatsSummary() {
-          let tPal = 0, dPal = 0;
-          const process = (it) => {
-              let rawName = String(it.bl || it.company || "").trim();
-              if (!rawName || rawName === "미정") return;
-              tPal += parseInt(it.pal) || 0;
-              if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
-          };
-          // ✅ [수정 후] (pendingItems 처리 줄 삭제 또는 주석 처리)
-      for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
-      // if (serverData.pendingItems) serverData.pendingItems.forEach(process); 🚨 미정 데이터 제외
-          
-          let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
-          let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
-      }
-    
-
- // 1. 도넛 가운데에 정보 띄우기 (풀네임 적용 및 글자 짤림 완벽 방어)
+      // 1. 도넛 가운데에 정보 띄우기 플러그인 유지
       const pieCenterTextPlugin = {
           id: 'pieCenterText',
           beforeDraw(chart) {
@@ -2456,51 +2453,35 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
               const centerX = chart.chartArea.left + chart.chartArea.width / 2;
               const centerY = chart.chartArea.top + chart.chartArea.height / 2;
 
-              ctx.save();
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
+              ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
               if (window.activePieIndex !== null) {
                   const idx = window.activePieIndex;
                   const data = chart.data.datasets[0].data;
                   const colors = chart.data.datasets[0].backgroundColor;
-                  
-                  // 🚨 [핵심] 차트 데이터에서 '풀네임'을 바로 가져옴
                   const fullNames = chart.data.fullNames; 
                   const displayName = fullNames ? fullNames[idx] : chart.data.labels[idx];
-                  
                   const totalSum = data.reduce((a, b) => a + b, 0);
                   const percent = ((data[idx] / totalSum) * 100).toFixed(1);
-                  // 💡 입고는 기본적으로 팔레트(P) 단위이므로 P로 고정!
                   const unitStr = 'P';
 
-                  // 1️⃣ 업체명 (폰트 사이즈 플렉서블 + 장평 강제 조절)
                   ctx.font = "bold 15px -apple-system, sans-serif";
                   ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff";
                   
-                  // 글씨가 너무 길면 폰트 사이즈를 단계별로 줄여서 삐져나가지 않게 방어
                   let textWidth = ctx.measureText(displayName).width;
-                  if (textWidth > 100) {
-                      ctx.font = "bold 11px -apple-system, sans-serif";
-                  } else if (textWidth > 80) {
-                      ctx.font = "bold 13px -apple-system, sans-serif";
-                  }
+                  if (textWidth > 100) ctx.font = "bold 11px -apple-system, sans-serif";
+                  else if (textWidth > 80) ctx.font = "bold 13px -apple-system, sans-serif";
                   
-                  // 🚨 4번째 파라미터(100)를 주면, 너비가 100px을 초과할 경우 브라우저가 글자 폭(장평)을 
-                  // 좁게 압축해서라도 밖으로 튀어나가지 않게 100% 방어해 줍니다.
                   ctx.fillText(displayName, centerX, centerY - 22, 100);
 
-                  // 2️⃣ 퍼센트 (가장 크게!)
                   ctx.font = "900 26px -apple-system, sans-serif";
                   ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
                   ctx.fillText(`${percent}%`, centerX, centerY + 6);
 
-                  // 3️⃣ 수량 (크기 키움)
                   ctx.font = "bold 15px -apple-system, sans-serif";
                   ctx.fillStyle = "gray";
                   ctx.fillText(`(${data[idx]}${unitStr})`, centerX, centerY + 30);
               } else {
-                  // 🚨 [패치] 기본 문구는 작은 폰에서도 안 짤리도록 예쁘게 두 줄로 쪼갬!
                   ctx.font = "bold 14px -apple-system, sans-serif";
                   ctx.fillStyle = "gray";
                   ctx.fillText("👆 조각을", centerX, centerY - 10);
@@ -2532,7 +2513,7 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
                       const x = centerX + Math.cos(midAngle) * r; const y = centerY + Math.sin(midAngle) * r;
                       ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                       ctx.font = isActive ? "bold 13px -apple-system, sans-serif" : "13px -apple-system, sans-serif";
-                      ctx.fillStyle = isActive ? "#111" : "rgba(128,128,128,0.5)"; // 파스텔톤이라 글씨 검정색
+                      ctx.fillStyle = isActive ? "#111" : "rgba(128,128,128,0.5)";
                       ctx.fillText(labels[index], x, y - 6);
                       ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
                       ctx.fillText(`${percent}%`, x, y + 8); ctx.restore();
@@ -2577,7 +2558,6 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
       Chart.unregister(pieCenterTextPlugin, pieHybridLabelPlugin); 
       Chart.register(pieCenterTextPlugin, pieHybridLabelPlugin);
 
-      // 📊 [입고 전용 파스텔톤 적용] 통계 엔진
       function renderDashCharts() {
           Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
           Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
@@ -2590,13 +2570,11 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
           const includePending = document.getElementById('includePendingCheck')?.checked;
 
           if (window.dashMode === 'month') {
-              // 💡 월별 타이틀 분리
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
               let sub = document.getElementById('dashSubTitleText');
               if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
               
-              // 기존 let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
-              let days = new Date(window.dashMonthViewYear, window.dashMonthViewMonth, 0).getDate();
+              let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
               for (let d = 1; d <= days; d++) { labels.push(`${d}일`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
 
               const process = (it, dIdx) => {
@@ -2624,25 +2602,25 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
                   if (includePending && window.dashCurrentData.pendingItems) window.dashCurrentData.pendingItems.forEach(it => process(it, null));
               }
           } else {
-              // 💡 연간 타이틀 분리
-              document.getElementById('dashTitleText').innerText = `${window.dashYear}년`;
+              // 🚨 [연간 차트 뻗음 버그 완벽 해결]
+              document.getElementById('dashTitleText').innerText = `${window.dashYearlyYear}년`;
               let sub = document.getElementById('dashSubTitleText');
-              if (sub) sub.innerText = `${window.dashYear}년 연간 요약`;
+              if (sub) sub.innerText = `${window.dashYearlyYear}년 연간 요약`;
               for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
               
-              // 기존 let yData = yearlyCache[window.dashYear];
-              let yData = yearlyCache[window.dashYearViewYear];
+              let yData = yearlyCache[window.dashYearlyYear];
               if (yData) {
                   for (let i = 0; i < 12; i++) {
                       let mData = yData.monthly[i] || {};
                       let details = mData.details || {};
                       
-                      let mSea = details['🚢 해상 (SEA)'] || 0;
-                      let mAir = details['✈️ 항공 (AIR)'] || 0;
+                      // 객체에서 .pal 수량을 명확하게 꺼내옵니다!
+                      let mSea = details['🚢 해상 (SEA)'] ? details['🚢 해상 (SEA)'].pal : 0;
+                      let mAir = details['✈️ 항공 (AIR)'] ? details['✈️ 항공 (AIR)'].pal : 0;
+                      
                       seaData[i] = mSea; airData[i] = mAir; 
                       totalQty += parseInt(mData.pal) || 0;
                       
-                      // 💡 [버그 픽스] 연간 모드에서도 barDetails에 값을 넣어줍니다!
                       barDetails[i]['🚢 해상 (SEA)'] = mSea;
                       barDetails[i]['✈️ 항공 (AIR)'] = mAir;
                   }
@@ -2651,7 +2629,6 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
                   compMap = { '🚢 해상 (SEA)': ySea, '✈️ 항공 (AIR)': yAir };
               }
 
-              // 💡 연간 모드 미정건 합산
               if (includePending && window.dashCurrentData && window.dashCurrentData.pendingItems) {
                   window.dashCurrentData.pendingItems.forEach(it => {
                       let clean = String(it.bl || "").trim();
@@ -2697,6 +2674,8 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
               document.getElementById("dashDaysDetail").innerText = `(${divider}개월 평균 / 일평균: 약 ${avgDaily})`;
           }
 // 상단 카드 정보 업데이트 (기존 코드와 동일...)
+
+
 // 💡 스와이프(Hover) 선택을 위한 전역 공유 변수 할당
           window.dashSeaData = seaData;
           window.dashAirData = airData;
@@ -2896,6 +2875,24 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
               }
           });
       }
+
+
+      function updateStatsSummary() {
+          let tPal = 0, dPal = 0;
+          const process = (it) => {
+              let rawName = String(it.bl || it.company || "").trim();
+              if (!rawName || rawName === "미정") return;
+              tPal += parseInt(it.pal) || 0;
+              if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
+          };
+          // ✅ [수정 후] (pendingItems 처리 줄 삭제 또는 주석 처리)
+      for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
+      // if (serverData.pendingItems) serverData.pendingItems.forEach(process); 🚨 미정 데이터 제외
+          
+          let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
+          let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
+      }
+    
 
       // =====================================================
       // 🚨 [패치] 바탕화면(빈 공간) 클릭 시 막대/파이차트 하이라이트 동시 해제

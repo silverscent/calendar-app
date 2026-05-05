@@ -44,12 +44,14 @@ module.exports = async function(req, res) {
                             compStats[cleanName].pal += p; compStats[cleanName].box += b;
                         }
                     } else {
-                        // 입고(Inbound)는 해상/항공으로 집계해야 막대/파이 차트가 나옴!
+                        // 🚨 [입고 연간통계 패치] B/L번호가 아니라 '해상/항공' 단위로 묶어줘야 차트가 그려집니다!
                         let p = parseInt(r.pallets) || 0;
                         monthly[mIdx].pal += p;
                         let sLabel = r.s_type === 'AIR' ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
+                        
                         if (!monthly[mIdx].details[sLabel]) monthly[mIdx].details[sLabel] = { pal: 0, box: 0 };
                         monthly[mIdx].details[sLabel].pal += p;
+                        
                         if (!compStats[sLabel]) compStats[sLabel] = { pal: 0, box: 0 };
                         compStats[sLabel].pal += p;
                     }
