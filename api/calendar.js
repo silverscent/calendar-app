@@ -90,8 +90,8 @@ module.exports = async function(req, res) {
             if (action === 'PING') return res.status(200).json({ msg: token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
             const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
 
-          // ====================================================================
-        // 🚨 [OCR 전용 하이패스] 프론트엔드 함수명 완벽 호환 & 이중 포장(Object) 방지 엔진
+         // ====================================================================
+        // 🚨 [OCR 전용 하이패스] 이중 포장(Object) 완벽 파쇄기 엔진!
         // ====================================================================
         if (action === 'getLastOcrImageUrl' || action === 'GET_LAST_OCR_IMAGE') {
             try {
@@ -100,15 +100,14 @@ module.exports = async function(req, res) {
                 let finalUrl = "";
                 if (rows.length > 0) {
                     let val = rows[0].setting_value;
-                    // DB가 생짜 글씨로 줬을 때
-                    if (typeof val === 'string') {
-                        try { let parsed = JSON.parse(val); finalUrl = parsed.url || val; } catch(e) { finalUrl = val; }
-                    } 
-                    // DB가 이미 포장을 까서(Object) 줬을 때
-                    else if (typeof val === 'object' && val !== null) {
-                        finalUrl = val.url || "";
-                    }
+                    // 1단계: 글씨면 일단 JSON 상자인지 확인하고 까버림
+                    if (typeof val === 'string') { try { val = JSON.parse(val); } catch(e) {} }
+                    // 2단계: 까봤더니 상자(Object)면 그 안의 알맹이(.url)만 쏙 빼옴
+                    if (typeof val === 'object' && val !== null) { finalUrl = val.url || ""; }
+                    // 3단계: 애초에 그냥 생짜 글씨였으면 그대로 씀
+                    else if (typeof val === 'string') { finalUrl = val; }
                 }
+                // 프론트엔드가 헷갈리지 않게 깔끔하게 {"url": "https...", "success": true} 로 보냄
                 return res.status(200).json({ url: finalUrl, success: true });
             } catch(e) {
                 return res.status(200).json({ url: "", success: false });
@@ -122,14 +121,10 @@ module.exports = async function(req, res) {
                 let finalTime = "최근 처리내역 없음";
                 if (rows.length > 0) {
                     let val = rows[0].setting_value;
-                    // DB가 생짜 글씨로 줬을 때
-                    if (typeof val === 'string') {
-                        try { let parsed = JSON.parse(val); finalTime = parsed.time || val; } catch(e) { finalTime = val; }
-                    } 
-                    // DB가 이미 포장을 까서(Object) 줬을 때
-                    else if (typeof val === 'object' && val !== null) {
-                        finalTime = val.time || "최근 처리내역 없음";
-                    }
+                    if (typeof val === 'string') { try { val = JSON.parse(val); } catch(e) {} }
+                    
+                    if (typeof val === 'object' && val !== null) { finalTime = val.time || "최근 처리내역 없음"; }
+                    else if (typeof val === 'string') { finalTime = val; }
                 }
                 return res.status(200).json({ time: finalTime, success: true });
             } catch(e) {
