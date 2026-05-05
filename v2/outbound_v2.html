@@ -3424,20 +3424,18 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
       // 🚀 [스텔스 연간 동기화 매니저] (연속 클릭 시 서버 과부하/멈춤 완벽 방어)
       let stealthYearlyTimer = null;
       function triggerStealthYearlySync(targetYear) {
-          // 이전에 예약된 심부름이 있다면 취소 (타다닥 누를 때 중복 실행 방지)
           if (stealthYearlyTimer) clearTimeout(stealthYearlyTimer);
           
-          // 사용자가 터치를 멈추고 1.5초가 지나면, 그때 딱 1번만 조용히 서버에 다녀옵니다.
           stealthYearlyTimer = setTimeout(() => {
               google.script.run.withSuccessHandler(res => {
                   if (res && res.year) {
-                      yearlyCache[res.year] = res; // 단기 기억 갱신
-                      localStorage.setItem(`yearly_stats_cache_${currentType}_${res.year}`, JSON.stringify(res)); // 창고 갱신
+                      yearlyCache[res.year] = res; 
+                      localStorage.setItem(`yearly_stats_cache_${currentType}_${res.year}`, JSON.stringify(res)); 
                       
-                      // 🚨 [안전장치] 대시보드가 열려있고, '지금 내가 보고 있는 연도'일 때만 화면을 갱신!
+                      // 🚨 대시보드가 열려있고, '연간' 모드이며, '연간 전용 년도'와 일치할 때만 갱신!
                       if (document.getElementById('dashboardModal').style.display === 'flex' && 
                           window.dashMode === 'year' && 
-                          window.dashYear === res.year) {
+                          window.dashYearlyYear === res.year) {
                           renderDashCharts();
                       }
                   }
@@ -4852,29 +4850,33 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
           document.getElementById('btnDashBox').classList.toggle('active', unit === 'box');
           renderDashCharts();
       }
+      // 💡 [독립 변수 추가] 연간 탭 전용 년도 기억 장치
+      window.dashYearlyYear = new Date().getFullYear();
+
       function setDashMode(mode) {
           window.dashMode = mode;
           document.getElementById('btnDashMonth').classList.toggle('active', mode === 'month');
           document.getElementById('btnDashYear').classList.toggle('active', mode === 'year');
           
           if (mode === 'year') {
-              if (!yearlyCache[window.dashYear]) fetchYearlyAndRender();
+              // 🚨 연간 전용 년도를 사용해 데이터를 가져옵니다.
+              if (!yearlyCache[window.dashYearlyYear]) fetchYearlyAndRender();
               else renderDashCharts();
           } else {
-              // 🚨 [핵심 패치] 연간에서 월간으로 돌아올 때 무조건 바뀐 년/월의 데이터를 다시 불러오도록 강제!
+              // 🚨 월간으로 돌아올 때 원래 보던 년/월(dashYear)을 그대로 유지!
               fetchDashMonthAndRender();
           }
       }
+
       function navDashDate(offset) {
           if (window.dashMode === 'month') {
               window.dashMonth += offset;
               if (window.dashMonth > 12) { window.dashMonth = 1; window.dashYear++; }
               else if (window.dashMonth < 1) { window.dashMonth = 12; window.dashYear--; }
-              
-              // 🚨 [핵심 수정] 무거운 goToAsync(달력 이동) 대신, 대시보드 전용 데이터만 가볍게 빼옵니다!
-              fetchDashMonthAndRender(); 
+              fetchDashMonthAndRender();
           } else {
-              window.dashYear += offset;
+              // 🚨 연간 탭에서는 월간 변수(dashYear)를 건드리지 않고, 연간 전용 변수만 조작!
+              window.dashYearlyYear += offset;
               fetchYearlyAndRender();
           }
       }
@@ -4927,22 +4929,20 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
       }
 
       function fetchYearlyAndRender() {
-          // 💡 연간은 화살표 사이에 년도만!
-          document.getElementById('dashTitleText').innerText = `${window.dashYear}년`;
+          // 💡 연간은 화살표 사이에 년도만! (전용 변수 적용)
+          document.getElementById('dashTitleText').innerText = `${window.dashYearlyYear}년`;
           let sub = document.getElementById('dashSubTitleText');
-          if (sub) sub.innerText = `${window.dashYear}년 연간 요약 (조회중)`;
+          if (sub) sub.innerText = `${window.dashYearlyYear}년 연간 요약 (조회중)`;
           
-          // ... (아래 캐시 조회 등 기존 코드 유지) ...
-          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYear}`;
+          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYearlyYear}`;
           let cached = localStorage.getItem(cacheKey);
           
           if (cached) {
-              try { yearlyCache[window.dashYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {}
+              try { yearlyCache[window.dashYearlyYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {}
           } else {
-              // 💡 2. 캐시가 없으면 더미 데이터로 차트를 초기화하고 모래시계 띄우기!
               let dummyArr = [];
               for(let i=0; i<12; i++) dummyArr.push({pal:0, box:0, details:{}});
-              yearlyCache[window.dashYear] = { year: window.dashYear, monthly: dummyArr, comp: {} };
+              yearlyCache[window.dashYearlyYear] = { year: window.dashYearlyYear, monthly: dummyArr, comp: {} };
               
               renderDashCharts();
               
@@ -4956,19 +4956,23 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
               .withSuccessHandler(res => {
                   yearlyCache[res.year] = res;
                   localStorage.setItem(cacheKey, JSON.stringify(res)); 
-                  if (window.dashMode === 'year' && window.dashYear === res.year) renderDashCharts();
+                  // 현재 보고 있는 화면이 연간이고, 지금 가져온 데이터가 내가 누른 년도가 맞을 때만 화면 갱신
+                  if (window.dashMode === 'year' && window.dashYearlyYear === res.year) renderDashCharts();
               })
               .withFailureHandler(err => {
                   if (window.dashMode === 'year' && !cached) {
                       document.getElementById('dashCardTitle1').innerText = "불러오기 실패 🥲";
                       document.getElementById('dashAvg').innerText = "❌";
                   }
-              }).getYearlyStatsAsync(currentType, window.dashYear);
+              }).getYearlyStatsAsync(currentType, window.dashYearlyYear);
       }
 
       function openDashboard() {
-          window.dashYear = serverData.year; window.dashMonth = serverData.month;
-          // 🚨 창을 열 때 현재 바탕에 있는 달력 데이터를 복사해서 통계용으로 씁니다
+          // 🚨 창을 처음 열 때는 월간/연간 변수를 모두 '현재 바탕 화면 달력' 기준으로 초기화
+          window.dashYear = serverData.year; 
+          window.dashMonth = serverData.month;
+          window.dashYearlyYear = serverData.year; 
+
           window.dashCurrentData = serverData; 
           document.getElementById('dashboardModal').style.display = 'flex';
           setTimeout(renderDashCharts, 100);
@@ -5029,16 +5033,18 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
                   }
               }
           } else {
-              // 💡 연간 타이틀 분리
-              document.getElementById('dashTitleText').innerText = `${window.dashYear}년`;
+              // 💡 연간 타이틀 분리 (연간 전용 변수 dashYearlyYear 적용)
+              document.getElementById('dashTitleText').innerText = `${window.dashYearlyYear}년`;
               let sub = document.getElementById('dashSubTitleText');
-              if (sub) sub.innerText = `${window.dashYear}년 연간 요약`;
+              if (sub) sub.innerText = `${window.dashYearlyYear}년 연간 요약`;
               for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); barDetails.push({}); }
               
-              let yData = yearlyCache[window.dashYear];
+              // 🚨 여기서도 dashYear 대신 dashYearlyYear 사용!
+              let yData = yearlyCache[window.dashYearlyYear];
               if (!yData) return;
               
               barData = yData.monthly.map(m => m[window.dashUnit]);
+              // ... (이 아래 코드는 기존 그대로 유지하시면 됩니다!)
               totalQty = barData.reduce((a, b) => a + b, 0);
               Object.keys(yData.comp).forEach(k => { compMap[k] = yData.comp[k][window.dashUnit]; });
 
