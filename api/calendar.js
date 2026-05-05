@@ -124,26 +124,26 @@ module.exports = async function(req, res) {
                 catch(e) { return val; }
             };
 
-            // 🎯 공통 시스템 로직 (CRM, 테마색)
+           // 🎯 공통 시스템 로직 (CRM, 테마색) - 근본 이름표로 복구 완료!
             if (action === 'GET_COMP_INFO_DB') {
-                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'crm_comp_info'`);
+                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`);
                 return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {});
             }
             if (action === 'SAVE_COMP_INFO_DB') {
                 const jsonStr = JSON.stringify(data);
-                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('crm_comp_info', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]);
+                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('COMP_INFO_DB', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]);
                 return res.status(200).json({ success: true });
             }
             if (action === 'GET_GLOBAL_COLORS') {
-                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'global_colors'`);
+                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'GLOBAL_COMPANY_COLORS'`);
                 return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {});
             }
             if (action === 'SAVE_GLOBAL_COLOR') {
-                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'global_colors'`);
+                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'GLOBAL_COMPANY_COLORS'`);
                 let colors = rows.length > 0 ? parseJSON(rows[0].setting_value) : {};
                 colors[compName] = colorIdx;
                 const jsonStr = JSON.stringify(colors);
-                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('global_colors', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]);
+                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('GLOBAL_COMPANY_COLORS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]);
                 return res.status(200).json({ success: true });
             }
             if (action === 'GET_YEARLY_HOLIDAYS') {
