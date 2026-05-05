@@ -1468,14 +1468,12 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
               let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
               if (meaningfulEtc !== '') tagClass += " has-etc";
 
+              // 기존에 있던 AI 뱃지는 과감하게 지우고 P 글씨도 뺍니다!
               let iconHtml = isItemDone ? `<span class="done-icon">✅</span>` : '';
               let shortName = item.bl.length > 4 ? item.bl.slice(-4) : item.bl;
               if (item.bl.startsWith('발행전')) shortName = '발행전';
               
-              // 🚨 [패치 1] AI 자동수정 건 뱃지 추가!
-              let aiBadge = item.isAi ? `<span style="color: #0a84ff; font-weight: 900; margin-right: 3px; font-size: 0.9em;">[AI]</span>` : '';
-              
-              let innerHtml = `<span class="pal-main">${item.pal}P</span><span class="bl-sub">${aiBadge}${iconHtml}${shortName}</span>`;
+              let innerHtml = `<span class="pal-main">${item.pal}</span><span class="bl-sub">${iconHtml}${shortName}</span>`;
               let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
               let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.bl}', ${isItemDone})"`;
 
@@ -1677,20 +1675,21 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
             let day = target.dateStr === '미정' ? 'pending' : parseInt(target.dateStr.split('-')[2], 10);
             let arr = day === 'pending' ? serverData.pendingItems : serverData.monthData[day];
             if(!arr) return;
-            let idx = arr.findIndex(i => i.bl === target.bl && norm(i.pal) === norm(target.pal) && (i.isDone === true || String(i.isDone) === "true") === (target.isDone === true || String(target.isDone) === "true"));
+            // 🚨 ID가 있으면 무조건 ID로 잡고, 없으면 글자로 찾아서 확실하게 업데이트!
+            let idx = arr.findIndex(i => {
+                if (target.id && i.id === target.id) return true;
+                return i.bl === target.bl && norm(i.pal) === norm(target.pal);
+            });
             if (idx !== -1) {
                if (action === 'MULTI_DELETE') arr.splice(idx, 1);
                else if (action === 'MULTI_DONE') arr[idx].isDone = true;
                else if (action === 'MULTI_UNDO_DONE') arr[idx].isDone = false;
             }
         });
-        // ... 기존 코드 유지
         lastLocalUpdateTime = Date.now(); 
         localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
-        
-        // 👇 💡 여기도 매니저 딱 1줄 호출!
         triggerStealthYearlySync(serverData.year);
-      } // <-- 함수 끝
+      }
 
       if (isAdmin) {
         const btn = document.getElementById('adminBtn');
@@ -2070,10 +2069,12 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
           let isItemDone = item.isDone === true || String(item.isDone) === "true";
           let typeIcon = item.sType === 'SEA' ? '🚢' : '✈️';
           
-          // 💡 [핵심] 해상/항공에 맞춰 파스텔 배경색 지정
           let isAir = item.sType === 'AIR';
           let pastelBg = isAir ? '#ff7eff' : '#26e2fd';
-          let iconOpacity = isItemDone ? '0.8' : '1'; // 완료된 건은 흐리게
+          let iconOpacity = isItemDone ? '0.8' : '1';
+
+          // 🚨 상세보기 창에만 예쁜 AI 알약 뱃지 장착!
+          let aiBadgeHtml = item.isAi ? `<span style="background:rgba(10,132,255,0.1); color:#0a84ff; border:1px solid rgba(10,132,255,0.3); padding:2px 6px; border-radius:8px; font-size:0.75em; font-weight:900; margin-left:8px; vertical-align:middle;">🤖 AI수정됨</span>` : '';
 
           let actionBtns = '';
           if (isAdmin) {
@@ -2088,7 +2089,7 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
           contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
                               <div class="modal-icon" style="background-color: ${pastelBg}; opacity: ${iconOpacity}; box-shadow: 0 2px 5px rgba(0,0,0,0.15);"></div>
                               <div class="modal-info">
-                                  <div class="modal-comp-row"><span class="modal-comp">${item.pal}P</span>${actionBtns}</div>
+                                  <div class="modal-comp-row"><span class="modal-comp">${item.pal}P ${aiBadgeHtml}</span>${actionBtns}</div>
                                   <div class="modal-vol">📄 B/L: ${item.bl} | ${typeIcon} 타입: ${item.sType}</div>
                                   <div class="modal-detail-text">🏢 FWD: ${item.fwd || '-'} | 🧾 INV: ${item.invoice || '-'}</div>
                                   ${etcHtml}
@@ -2104,24 +2105,22 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
         let inputDateVal = dateStr === '미정' ? '' : dateStr;
         let item = day === 'pending' ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
         
-        // 🚨 [패치 2] 입고 전용 데이터 추출
-        let sType = item.sType || '';
-        let fwd = item.fwd || '';
-        let invoice = item.invoice || '';
+        let sType = item.sType || ''; let fwd = item.fwd || ''; let invoice = item.invoice || '';
 
         card.style.flexDirection = ''; card.style.alignItems = '';
+        // 🚨 폼 레이블(글자) 위아래 여백을 줘서 인풋창에 절대 안 겹치게 만듭니다!
         card.innerHTML = `
           <div class="edit-form" style="width: 100%; padding:0; border:none; margin-top:0;">
-            <div class="form-label" style="margin-top:5px;">📦 B/L 번호</div>
+            <div class="form-label" style="margin-bottom: 6px; margin-top: 5px;">📦 B/L 번호</div>
             <input type="text" id="edit-bl-${idx}" class="edit-input" value="${bl}">
             
             <div style="display:flex; gap:10px;">
               <div style="flex:1;">
-                <div class="form-label">수량 (PAL)</div>
+                <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">수량 (PAL)</div>
                 <input type="number" id="edit-pal-${idx}" class="edit-input" value="${pal}">
               </div>
               <div style="flex:1;">
-                <div class="form-label">운송 타입</div>
+                <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">운송 타입</div>
                 <select id="edit-stype-${idx}" class="edit-input" style="padding:13px 12px; height: 100%;">
                   <option value="SEA" ${sType === 'SEA' ? 'selected' : ''}>🚢 해상 (SEA)</option>
                   <option value="AIR" ${sType === 'AIR' ? 'selected' : ''}>✈️ 항공 (AIR)</option>
@@ -2131,28 +2130,29 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
 
             <div style="display:flex; gap:10px;">
               <div style="flex:1;">
-                <div class="form-label">포워더 (FWD)</div>
+                <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">포워더 (FWD)</div>
                 <input type="text" id="edit-fwd-${idx}" class="edit-input" value="${fwd}">
               </div>
               <div style="flex:1;">
-                <div class="form-label">인보이스</div>
+                <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">인보이스</div>
                 <input type="text" id="edit-invoice-${idx}" class="edit-input" value="${invoice}">
               </div>
             </div>
 
-            <div class="form-label" style="margin-top:5px; display:flex; justify-content:space-between; align-items:center;">
+            <div class="form-label" style="margin-bottom: 6px; margin-top: 10px; display:flex; justify-content:space-between; align-items:center;">
               <span>입고일 (날짜)</span>
               <span style="color:#ff3b30; cursor:pointer; font-weight:800; font-size:0.85em; padding:4px 8px; background:rgba(255,59,48,0.1); border-radius:6px; transition:0.2s;" onclick="document.getElementById('edit-date-${idx}').value='';" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'">✕ 미정(대기)으로 변경</span>
             </div>
             <input type="date" id="edit-date-${idx}" class="edit-input" value="${inputDateVal}">
 
-            <div class="form-label" style="margin-top:5px;">비고 (메모 입력)</div>
+            <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">비고 (메모 입력)</div>
             <input type="text" id="edit-etc-${idx}" class="edit-input" value="${etc !== 'undefined' ? etc : ''}">
-            <div class="btn-row">
+            
+            <div class="btn-row" style="margin-top: 15px; padding-bottom: 10px;">
               <button class="save-btn" onclick="submitCMS('EDIT', '${bl}', '${dateStr}', ${idx})">💾 저장</button>
               <button class="cancel-btn" onclick="renderCalendar(); document.getElementById('modal').style.display='none';">취소</button>
             </div>
-            <button class="delete-btn" onclick="submitCMS('DELETE', '${bl}', '${dateStr}', ${idx})">🗑️ 이 스케줄 삭제</button>
+            <button class="delete-btn" style="margin-bottom: 15px;" onclick="submitCMS('DELETE', '${bl}', '${dateStr}', ${idx})">🗑️ 이 스케줄 삭제</button>
           </div>
         `;
       }
@@ -2166,14 +2166,16 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
       function showLastOcrImage() {
           document.getElementById('ocrImageModal').style.display = 'flex';
           document.getElementById('ocrImageContent').innerHTML = '불러오는 중... ⏳';
-          ocrTransform = { scale: 1, x: 0, y: 0 }; // 좌표 초기화
+          ocrTransform = { scale: 1, x: 0, y: 0 }; 
 
-          google.script.run.withSuccessHandler(function(url) {
-              if (url) {
+          google.script.run.withSuccessHandler(function(res) {
+              // 🚨 빈 값, 객체를 모두 튕겨내서 엑박 방지!
+              let url = (res && res.url) ? res.url : (typeof res === 'string' ? res : "");
+              if (url && url.startsWith("http")) {
                   document.getElementById('ocrImageContent').innerHTML = `<img id="ocrImgElement" src="${url}" alt="마지막 스케줄 이미지">`;
                   setTimeout(initOcrGestures, 100); 
               } else {
-                  document.getElementById('ocrImageContent').innerHTML = '최근 처리된 이미지가 없거나 만료되었습니다.';
+                  document.getElementById('ocrImageContent').innerHTML = '<div style="color:var(--text-sub); font-weight:800;">현재 서버에 등록된 최신 이미지가 없습니다.</div>';
               }
           }).withFailureHandler(function(err) {
               document.getElementById('ocrImageContent').innerHTML = '이미지 로딩 에러: ' + err.message;
@@ -2342,12 +2344,91 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
       // 📊 [개발 추가] 입고 통계 대시보드 스크립트 모음
       // =====================================================
       window.dashMode = 'month';
-      window.dashYear = new Date().getFullYear();
-      window.dashMonth = new Date().getMonth() + 1;
+      window.dashMonthViewYear = new Date().getFullYear(); 
+      window.dashMonthViewMonth = new Date().getMonth() + 1;
+      window.dashYearViewYear = new Date().getFullYear();  // 🚨 연간용 년도 분리!
       let yearlyCache = {};
       let mainChartIns = null;
       let shareChartIns = null;
       window.dashCurrentData = null; 
+
+      function openDashboard() {
+          window.dashMonthViewYear = serverData.year;
+          window.dashMonthViewMonth = serverData.month;
+          window.dashYearViewYear = serverData.year; 
+          window.dashCurrentData = serverData; 
+          document.getElementById('dashboardModal').style.display = 'flex';
+          setTimeout(renderDashCharts, 100);
+      }
+
+      function setDashMode(mode) {
+          window.dashMode = mode;
+          document.getElementById('btnDashMonth').classList.toggle('active', mode === 'month');
+          document.getElementById('btnDashYear').classList.toggle('active', mode === 'year');
+          // 🚨 넘길 때마다 강제 리프레시!
+          if (mode === 'year') {
+              if (!yearlyCache[window.dashYearViewYear]) fetchYearlyAndRender();
+              else renderDashCharts();
+          } else {
+              fetchDashMonthAndRender(); 
+          }
+      }
+
+      function navDashDate(offset) {
+          if (window.dashMode === 'month') {
+              window.dashMonthViewMonth += offset;
+              if (window.dashMonthViewMonth > 12) { window.dashMonthViewMonth = 1; window.dashMonthViewYear++; }
+              else if (window.dashMonthViewMonth < 1) { window.dashMonthViewMonth = 12; window.dashMonthViewYear--; }
+              fetchDashMonthAndRender();
+          } else {
+              window.dashYearViewYear += offset; // 연간은 연간끼리 놂
+              fetchYearlyAndRender();
+          }
+      }
+
+      function fetchDashMonthAndRender() {
+          document.getElementById('dashTitleText').innerText = `${window.dashMonthViewYear}년 ${window.dashMonthViewMonth}월`;
+          let sub = document.getElementById('dashSubTitleText');
+          if (sub) sub.innerText = `${window.dashMonthViewYear}년 ${window.dashMonthViewMonth}월 요약 (조회중)`;
+          
+          let cacheKey = `cal_cache_${currentType}_${window.dashMonthViewYear}_${window.dashMonthViewMonth}`;
+          let cached = localStorage.getItem(cacheKey);
+          if (cached) { try { window.dashCurrentData = JSON.parse(cached); renderDashCharts(); } catch(e) {} } 
+          else {
+              window.dashCurrentData = { monthData: {}, pendingItems: [] }; renderDashCharts();
+              document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
+              document.getElementById('dashAvg').innerText = "⏳";
+          }
+          google.script.run.withSuccessHandler(res => {
+              let finalData = typeof res === 'string' ? JSON.parse(res) : res;
+              window.dashCurrentData = finalData;
+              localStorage.setItem(cacheKey, JSON.stringify(finalData));
+              if (window.dashMode === 'month') renderDashCharts();
+          }).withFailureHandler(err => { if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
+          .getCalendarDataAsync(currentType, window.dashMonthViewYear, window.dashMonthViewMonth);
+      }
+
+      function fetchYearlyAndRender() {
+          document.getElementById('dashTitleText').innerText = `${window.dashYearViewYear}년`;
+          let sub = document.getElementById('dashSubTitleText');
+          if (sub) sub.innerText = `${window.dashYearViewYear}년 연간 요약 (조회중)`;
+          
+          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYearViewYear}`;
+          let cached = localStorage.getItem(cacheKey);
+          if (cached) { try { yearlyCache[window.dashYearViewYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {} } 
+          else {
+              let dummyArr = []; for(let i=0; i<12; i++) dummyArr.push({pal:0, box:0, details:{}});
+              yearlyCache[window.dashYearViewYear] = { year: window.dashYearViewYear, monthly: dummyArr, comp: {} };
+              renderDashCharts();
+              document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
+              document.getElementById('dashAvg').innerText = "⏳";
+          }
+          google.script.run.withSuccessHandler(res => {
+              yearlyCache[res.year] = res; localStorage.setItem(`yearly_stats_cache_${currentType}_${res.year}`, JSON.stringify(res)); 
+              if (window.dashMode === 'year' && window.dashYearViewYear === res.year) renderDashCharts();
+          }).withFailureHandler(err => { if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
+          .getYearlyStatsAsync(currentType, window.dashYearViewYear);
+      }
 
       function updateStatsSummary() {
           let tPal = 0, dPal = 0;
@@ -2364,96 +2445,7 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
           let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
           let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
       }
-
-      
-
-      function setDashMode(mode) {
-          window.dashMode = mode;
-          document.getElementById('btnDashMonth').classList.toggle('active', mode === 'month');
-          document.getElementById('btnDashYear').classList.toggle('active', mode === 'year');
-          if (mode === 'year' && !yearlyCache[window.dashYear]) fetchYearlyAndRender();
-          else renderDashCharts();
-      }
-
-      function navDashDate(offset) {
-          if (window.dashMode === 'month') {
-              window.dashMonth += offset;
-              if (window.dashMonth > 12) { window.dashMonth = 1; window.dashYear++; }
-              else if (window.dashMonth < 1) { window.dashMonth = 12; window.dashYear--; }
-              fetchDashMonthAndRender();
-          } else {
-              window.dashYear += offset;
-              fetchYearlyAndRender();
-          }
-      }
-
-      function fetchDashMonthAndRender() {
-          // 💡 달력 넘기는 부분은 짧게, 서브타이틀은 길게!
-          document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
-          let sub = document.getElementById('dashSubTitleText');
-          if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약 (조회중)`;
-          
-          // ... (아래 캐시 조회 등 기존 코드 유지) ...
-          let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
-          let cached = localStorage.getItem(cacheKey);
-          
-          if (cached) { 
-              try { window.dashCurrentData = JSON.parse(cached); renderDashCharts(); } catch(e) {} 
-          } else {
-              window.dashCurrentData = { monthData: {}, pendingItems: [] };
-              renderDashCharts();
-              document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
-              document.getElementById('dashAvg').innerText = "⏳";
-          }
-          
-          google.script.run
-              .withSuccessHandler(res => {
-                  let finalData = typeof res === 'string' ? JSON.parse(res) : res;
-                  window.dashCurrentData = finalData;
-                  localStorage.setItem(cacheKey, JSON.stringify(finalData));
-                  if (window.dashMode === 'month') renderDashCharts();
-              })
-              .withFailureHandler(err => { if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
-              .getCalendarDataAsync(currentType, window.dashYear, window.dashMonth);
-      }
-
-      function fetchYearlyAndRender() {
-          // 💡 연간은 화살표 사이에 년도만!
-          document.getElementById('dashTitleText').innerText = `${window.dashYear}년`;
-          let sub = document.getElementById('dashSubTitleText');
-          if (sub) sub.innerText = `${window.dashYear}년 연간 요약 (조회중)`;
-          
-          // ... (아래 캐시 조회 등 기존 코드 유지) ...
-          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYear}`;
-          let cached = localStorage.getItem(cacheKey);
-          
-          if (cached) { 
-              try { yearlyCache[window.dashYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {} 
-          } else {
-              let dummyArr = [];
-              for(let i=0; i<12; i++) dummyArr.push({pal:0, box:0, details:{}});
-              yearlyCache[window.dashYear] = { year: window.dashYear, monthly: dummyArr, comp: {} };
-              renderDashCharts();
-              document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
-              document.getElementById('dashAvg').innerText = "⏳";
-          }
-          
-          google.script.run
-              .withSuccessHandler(res => {
-                  yearlyCache[res.year] = res; localStorage.setItem(cacheKey, JSON.stringify(res)); 
-                  if (window.dashMode === 'year' && window.dashYear === res.year) renderDashCharts();
-              })
-              .withFailureHandler(err => { if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
-              .getYearlyStatsAsync(currentType, window.dashYear);
-      }
-
-      function openDashboard() {
-          window.dashYear = serverData.year;
-          window.dashMonth = serverData.month;
-          window.dashCurrentData = serverData; 
-          document.getElementById('dashboardModal').style.display = 'flex';
-          setTimeout(renderDashCharts, 100);
-      }
+    
 
  // 1. 도넛 가운데에 정보 띄우기 (풀네임 적용 및 글자 짤림 완벽 방어)
       const pieCenterTextPlugin = {
@@ -2603,7 +2595,8 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
               let sub = document.getElementById('dashSubTitleText');
               if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
               
-              let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
+              // 기존 let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
+              let days = new Date(window.dashMonthViewYear, window.dashMonthViewMonth, 0).getDate();
               for (let d = 1; d <= days; d++) { labels.push(`${d}일`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
 
               const process = (it, dIdx) => {
@@ -2637,7 +2630,8 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
               if (sub) sub.innerText = `${window.dashYear}년 연간 요약`;
               for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
               
-              let yData = yearlyCache[window.dashYear];
+              // 기존 let yData = yearlyCache[window.dashYear];
+              let yData = yearlyCache[window.dashYearViewYear];
               if (yData) {
                   for (let i = 0; i < 12; i++) {
                       let mData = yData.monthly[i] || {};
@@ -2967,7 +2961,8 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
         let fetchStartTime = Date.now();
 
         // 💡 OCR 통신도 백그라운드로 안전하게 요청
-        google.script.run.withSuccessHandler(function(timeStr) {
+        google.script.run.withSuccessHandler(function(res) {
+            let timeStr = (res && res.time) ? res.time : (typeof res === 'string' ? res : "최근 처리내역 없음");
             const el = document.getElementById('ocrTimeText');
             if(el) el.innerText = timeStr;
         }).getOcrLastTimeStr();
