@@ -170,28 +170,31 @@ export default async function handler(req, res) {
        // 4. TiDB 저장 (DB 연결 및 쿼리 실행)
         const pool = mysql.createPool(process.env.DATABASE_URL);
         
-        // 🚨 [추적용 디버그 패치] 봇이 DB에 저장 성공했는지 실패했는지 텔레그램으로 바로 보고합니다!
+        // 🚨 [에러 원인 해결!] 생짜 텍스트가 아닌 JSON 포맷으로 예쁘게 포장해서 DB에 넣습니다!
         try {
             await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
             
             const imageUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`;
             const currentTime = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
             
-            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [imageUrl, imageUrl]);
-            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [currentTime, currentTime]);
+            // JSON 포장 작업
+            const jsonImage = JSON.stringify({ url: imageUrl });
+            const jsonTime = JSON.stringify({ time: currentTime });
 
-            // 🔥 성공 시: 관리자 텔레그램으로 "저장 성공" 메시지와 주소를 쏴줍니다.
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonImage, jsonImage]);
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
+
+            // 성공하면 텔레그램으로 기분 좋게 알림 쏘기!
             await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: chatId, text: `✅ [시스템] OCR 이미지 DB 저장 성공!\n주소: ${imageUrl}` })
+                body: JSON.stringify({ chat_id: chatId, text: `✅ [시스템] OCR 이미지 DB 저장 완벽 성공!` })
             });
 
         } catch (dbErr) {
             console.error("🔥 OCR 이미지/시간 DB 저장 실패:", dbErr);
-            // 🔥 실패 시: 왜 실패했는지 에러 원인을 텔레그램으로 쏴줍니다!
             await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: chatId, text: `🔥 [시스템] OCR 이미지 DB 저장 실패!\n원인: ${dbErr.message}` })
+                body: JSON.stringify({ chat_id: chatId, text: `🔥 [시스템] 저장 실패!\n원인: ${dbErr.message}` })
             });
         }
 
