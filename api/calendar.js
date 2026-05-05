@@ -111,9 +111,77 @@ module.exports = async function(req, res) {
             if (action === 'GET_YEARLY_HOLIDAYS') { const y = year || new Date().getFullYear(); const apiKey = process.env.HOLIDAY_API_KEY; if (apiKey) { try { const url = `http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?solYear=${y}&ServiceKey=${apiKey}&_type=json&numOfRows=100`; const response = await fetch(url); const json = await response.json(); if (json?.response?.body?.items?.item) { const items = Array.isArray(json.response.body.items.item) ? json.response.body.items.item : [json.response.body.items.item]; return res.status(200).json(items.map(h => { const d = String(h.locdate); return `${d.substring(0,4)}-${d.substring(4,6)}-${d.substring(6,8)}`; })); } } catch (e) { console.error("🔥 공휴일 API 에러:", e); } } return res.status(200).json([`${y}-01-01`, `${y}-03-01`, `${y}-05-05`, `${y}-06-06`, `${y}-08-15`, `${y}-10-03`, `${y}-10-09`, `${y}-12-25`]); }
 
             if (domain === 'out') {
-                const targetName = data?.oldComp; const newName = data?.newComp || targetName; const targetDate = data?.oldDate === '미정' ? null : data?.oldDate; const newDate = data?.newDate === '미정' ? null : data?.newDate; const targetPal = data?.oldPal || ''; const targetBox = data?.oldBox || '';
-                if (action === 'DONE' || action === 'UNDO_DONE') { await pool.query(`UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [action === 'DONE' ? 1 : 0, targetName, targetDate, targetPal, targetBox]); } else if (action === 'DELETE') { await pool.query(`DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [targetName, targetDate, targetPal, targetBox]); } else if (action === 'EDIT') { await pool.query(`UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [newDate, newName, data?.newPal || '', data?.newBox || '', data?.newEtc || '', targetName, targetDate, targetPal, targetBox]); } else if (action === 'ADD') { await pool.query(`INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`, [newName, data?.newPal || '', data?.newBox || '', newDate, data?.newEtc || '']); } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) { for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) { let tDate = dateStr === '미정' ? null : dateStr; for (const item of orderList) { if (item.id) await pool.query(`UPDATE outbound SET sort_idx = ? WHERE id = ?`, [item.sortIdx, item.id]); else await pool.query(`UPDATE outbound SET sort_idx = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [item.sortIdx, item.company, tDate, item.pal, item.box]); } } } else if (action === 'MULTI_DELETE' && data?.items) { for (const it of data.items) { const tDate = it.dateStr === '미정' ? null : it.dateStr; await pool.query(`DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [it.comp, tDate, it.pal, it.box]); } } else if ((action === 'MULTI_DONE' || action === 'MULTI_UNDO_DONE') && data?.items) { const isDoneVal = action === 'MULTI_DONE' ? 1 : 0; for (const it of data.items) { const tDate = it.dateStr === '미정' ? null : it.dateStr; await pool.query(`UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [isDoneVal, it.comp, tDate, it.pal, it.box]); } }
-            } 
+    const targetName = data?.oldComp;
+    const newName = data?.newComp || targetName;
+    const targetDate = data?.oldDate === '미정' ? null : data?.oldDate;
+    const newDate = data?.newDate === '미정' ? null : data?.newDate;
+    const targetPal = data?.oldPal || '';
+    const targetBox = data?.oldBox || '';
+
+    if (action === 'DONE' || action === 'UNDO_DONE') {
+        await pool.query(
+            `UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
+            [action === 'DONE' ? 1 : 0, targetName, targetDate, targetPal, targetBox]
+        );
+    } 
+    else if (action === 'DELETE') {
+        await pool.query(
+            `DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
+            [targetName, targetDate, targetPal, targetBox]
+        );
+    } 
+    else if (action === 'EDIT') {
+        await pool.query(
+            `UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? 
+             WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
+            [newDate, newName, data?.newPal || '', data?.newBox || '', data?.newEtc || '', targetName, targetDate, targetPal, targetBox]
+        );
+    } else if (action === 'ADD') { 
+                    // 🚨 [출고 중복 방지] 같은 날짜에 같은 업체가 있는지 검사
+                    const [exist] = await pool.query(`SELECT id FROM outbound WHERE company = ? AND outbound_date <=> ?`, [newName, newDate]);
+                    if (exist.length > 0) {
+                        // 있으면 내용만 최신으로 덮어쓰기 (중복 생성 방지)
+                        await pool.query(`UPDATE outbound SET pal = ?, box = ?, etc = ? WHERE id = ?`, [data?.newPal || '', data?.newBox || '', data?.newEtc || '', exist[0].id]);
+                    } else {
+                        // 없으면 새로 생성
+                        await pool.query(`INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`, [newName, data?.newPal || '', data?.newBox || '', newDate, data?.newEtc || '']); 
+                    }
+                }
+    else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
+        for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
+            let tDate = dateStr === '미정' ? null : dateStr;
+            for (const item of orderList) {
+                if (item.id) {
+                    await pool.query(`UPDATE outbound SET sort_idx = ? WHERE id = ?`, [item.sortIdx, item.id]);
+                } else {
+                    await pool.query(
+                        `UPDATE outbound SET sort_idx = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
+                        [item.sortIdx, item.company, tDate, item.pal, item.box]
+                    );
+                }
+            }
+        }
+    } 
+    else if (action === 'MULTI_DELETE' && data?.items) {
+        for (const it of data.items) {
+            const tDate = it.dateStr === '미정' ? null : it.dateStr;
+            await pool.query(
+                `DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
+                [it.comp, tDate, it.pal, it.box]
+            );
+        }
+    } 
+    else if ((action === 'MULTI_DONE' || action === 'MULTI_UNDO_DONE') && data?.items) {
+        const isDoneVal = action === 'MULTI_DONE' ? 1 : 0;
+        for (const it of data.items) {
+            const tDate = it.dateStr === '미정' ? null : it.dateStr;
+            await pool.query(
+                `UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
+                [isDoneVal, it.comp, tDate, it.pal, it.box]
+            );
+        }
+    }
+}
             else {
                 // 🚢 [8, 9번 해결] 입고 다중선택/수정 시 ID 최우선으로 매핑!
                 const newName = data?.newComp || data?.newBL;
@@ -135,8 +203,17 @@ module.exports = async function(req, res) {
                             [newDate, newName, data?.newPal||'', data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'', data?.oldBL, data?.oldDate === '미정' ? null : data?.oldDate]);
                     }
                 } else if (action === 'ADD') {
-                    await pool.query(`INSERT INTO inbound (bl_number, pallets, receive_date, status, remarks, s_type, fwd, invoice) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?)`, 
-                        [newName, data?.newPal||'', newDate, data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'']);
+                    // 🚨 [입고 중복 방지] 같은 날짜에 같은 B/L 번호가 있는지 검사
+                    const [exist] = await pool.query(`SELECT id FROM inbound WHERE bl_number = ? AND receive_date <=> ?`, [newName, newDate]);
+                    if (exist.length > 0) {
+                        // 있으면 내용만 최신으로 덮어쓰기 & 봇이 건드렸으니 AI 뱃지 ON!
+                        await pool.query(`UPDATE inbound SET pallets=?, remarks=?, s_type=?, fwd=?, invoice=?, is_ai_modified=1 WHERE id=?`, 
+                            [data?.newPal||'', data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'', exist[0].id]);
+                    } else {
+                        // 없으면 새로 생성
+                        await pool.query(`INSERT INTO inbound (bl_number, pallets, receive_date, status, remarks, s_type, fwd, invoice, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, 1)`, 
+                            [newName, data?.newPal||'', newDate, data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'']);
+                    }
                 } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
                     for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
                         let tDate = dateStr === '미정' ? null : dateStr;
