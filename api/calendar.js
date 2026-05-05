@@ -17,7 +17,7 @@ module.exports = async function(req, res) {
         if (req.method === 'GET') {
             const { type, year, month, action } = req.query;
 
-            // 📊 [수정 1] 연간 통계 로딩 (서버에서 1~12월 데이터를 직접 합산해서 던져줌!)
+            // 📊 연간 통계 로딩
             if (action === 'yearlyStats') {
                 let rows = [];
                 if (type === 'out') {
@@ -34,13 +34,12 @@ module.exports = async function(req, res) {
                     if (!dateVal) return;
                     
                     let d = new Date(dateVal);
-                    let mIdx = d.getMonth(); // 0~11 (1월~12월)
+                    let mIdx = d.getMonth(); 
                     
                     let name = type === 'out' ? r.company : r.bl_number;
                     let cleanName = (name || "").replace(/\[TASK\]/gi, "").trim();
                     let isTask = (name || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(cleanName);
                     
-                    // TASK(작업)가 아닌 진짜 화물만 1년 치 합산 계산
                     if (!isTask) {
                         let p = parseInt(type === 'out' ? r.pal : r.pallets) || 0;
                         let b = parseInt(r.box) || 0;
@@ -73,13 +72,16 @@ module.exports = async function(req, res) {
                     if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
                     formattedData.monthData[day].push({ 
                         id: row.id, company: row.company, pal: row.pal, box: row.box, 
-                        etc: row.etc, isDone: row.isDone === 1, sortIdx: row.sort_idx || 999 
+                        etc: row.etc, isDone: row.isDone === 1, 
+                        // 🚨 [핵심 패치] 0번 순서 증발 버그 완벽 방어!
+                        sortIdx: row.sort_idx !== null ? row.sort_idx : 999 
                     });
                 });
                 pendingRows.forEach(row => {
                     formattedData.pendingItems.push({ 
                         id: row.id, company: row.company, pal: row.pal, box: row.box, 
-                        etc: row.etc, isDone: row.isDone === 1, sortIdx: row.sort_idx || 999 
+                        etc: row.etc, isDone: row.isDone === 1, 
+                        sortIdx: row.sort_idx !== null ? row.sort_idx : 999 
                     });
                 });
             } 
@@ -94,13 +96,15 @@ module.exports = async function(req, res) {
                     formattedData.monthData[day].push({ 
                         id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, 
                         etc: row.remarks, sType: row.s_type, fwd: row.fwd, invoice: row.invoice, 
-                        isDone: row.status === '완료', sortIdx: row.sort_idx || 999 
+                        isDone: row.status === '완료', 
+                        sortIdx: row.sort_idx !== null ? row.sort_idx : 999 
                     });
                 });
                 pendingRows.forEach(row => {
                     formattedData.pendingItems.push({ 
                         id: row.id, bl: row.bl_number, company: row.bl_number, pal: row.pallets, box: row.box || 0, 
-                        etc: row.remarks, sType: row.s_type, isDone: row.status === '완료', sortIdx: row.sort_idx || 999 
+                        etc: row.remarks, sType: row.s_type, isDone: row.status === '완료', 
+                        sortIdx: row.sort_idx !== null ? row.sort_idx : 999 
                     });
                 });
             }
@@ -118,13 +122,12 @@ module.exports = async function(req, res) {
             
             if (action === 'PING') return res.status(200).json({ msg: token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
 
-            // 💡 [수정 2] DB의 텍스트(String)를 다시 JSON 객체로 예쁘게 파싱해주는 헬퍼
             const parseJSON = (val) => {
                 try { return typeof val === 'string' ? JSON.parse(val) : val; } 
                 catch(e) { return val; }
             };
 
-           // 🎯 공통 시스템 로직 (CRM, 테마색) - 근본 이름표로 복구 완료!
+            // 🎯 공통 시스템 로직 (CRM, 테마색)
             if (action === 'GET_COMP_INFO_DB') {
                 const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`);
                 return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {});
@@ -146,11 +149,37 @@ module.exports = async function(req, res) {
                 await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('GLOBAL_COMPANY_COLORS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]);
                 return res.status(200).json({ success: true });
             }
+            
+            // 🎯 [핵심 패치 2] 공공데이터포털 공휴일 API 완벽 연동
             if (action === 'GET_YEARLY_HOLIDAYS') {
                 const y = year || new Date().getFullYear();
-                const holidays = [`${y}-01-01`, `${y}-03-01`, `${y}-05-05`, `${y}-06-06`, `${y}-08-15`, `${y}-10-03`, `${y}-10-09`, `${y}-12-25`];
-                return res.status(200).json(holidays);
+                const apiKey = process.env.HOLIDAY_API_KEY; // 🚨 Vercel 환경변수에 추가 필요!
+                
+                if (apiKey) {
+                    try {
+                        const url = `http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?solYear=${y}&ServiceKey=${apiKey}&_type=json&numOfRows=100`;
+                        const response = await fetch(url);
+                        const json = await response.json();
+                        
+                        if (json?.response?.body?.items?.item) {
+                            const items = json.response.body.items.item;
+                            const arr = Array.isArray(items) ? items : [items];
+                            const holidays = arr.map(h => {
+                                const d = String(h.locdate);
+                                return `${d.substring(0,4)}-${d.substring(4,6)}-${d.substring(6,8)}`;
+                            });
+                            return res.status(200).json(holidays);
+                        }
+                    } catch (e) {
+                        console.error("🔥 공휴일 API 통신 에러:", e);
+                    }
+                }
+                
+                // API 키가 없거나 통신 에러 시, 달력이 터지지 않도록 기본 공휴일 방어막 작동
+                const fallbackHolidays = [`${y}-01-01`, `${y}-03-01`, `${y}-05-05`, `${y}-06-06`, `${y}-08-15`, `${y}-10-03`, `${y}-10-09`, `${y}-12-25`];
+                return res.status(200).json(fallbackHolidays);
             }
+
             if (action === 'GET_LAST_OCR_IMAGE') return res.status(200).json(""); 
             if (action === 'GET_OCR_LAST_TIME') return res.status(200).json("최근 처리내역 없음");
 
@@ -171,9 +200,7 @@ module.exports = async function(req, res) {
                     await pool.query(`UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [newDate, newName, data?.newPal || '', data?.newBox || '', data?.newEtc || '', targetName, targetDate, targetPal, targetBox]);
                 } else if (action === 'ADD') {
                     await pool.query(`INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`, [newName, data?.newPal || '', data?.newBox || '', newDate, data?.newEtc || '']);
-                } 
-                // 🚨 [수정됨] 고유 ID를 이용한 무적의 순서 변경 로직!
-                else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
+                } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
                     for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
                         let targetDate = dateStr === '미정' ? null : dateStr;
                         for (const item of orderList) {
@@ -185,7 +212,7 @@ module.exports = async function(req, res) {
                         }
                     }
                 }
-            }
+            } 
             // 🚢 [입고 전용 데이터 조작 로직]
             else {
                 const targetName = data?.oldComp || data?.oldBL;
@@ -202,14 +229,14 @@ module.exports = async function(req, res) {
                 } else if (action === 'ADD') {
                     await pool.query(`INSERT INTO inbound (bl_number, pallets, box, receive_date, status, remarks) VALUES (?, ?, ?, ?, '입고대기', ?)`, [newName, data?.newPal || 0, data?.newBox || 0, newDate, data?.newEtc || '']);
                 } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
-                    for (const [dateStr, orders] of Object.entries(data.dailyOrders)) {
-                        for (const [key, sortIdx] of Object.entries(orders)) {
-                            const isTask = key.startsWith('T_');
-                            const parts = key.split('_');
-                            const compName = isTask ? `[TASK]${parts[1]}` : parts[1];
-                            const pal = parts[2] === "" ? 0 : parseInt(parts[2]);
-                            const box = parts[3] === "" ? 0 : parseInt(parts[3]);
-                            await pool.query(`UPDATE inbound SET sort_idx = ? WHERE bl_number = ? AND receive_date <=> ? AND pallets = ? AND box = ?`, [sortIdx, compName, dateStr, pal, box]);
+                    for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
+                        let targetDate = dateStr === '미정' ? null : dateStr;
+                        for (const item of orderList) {
+                            if (item.id) {
+                                await pool.query(`UPDATE inbound SET sort_idx = ? WHERE id = ?`, [item.sortIdx, item.id]);
+                            } else {
+                                await pool.query(`UPDATE inbound SET sort_idx = ? WHERE bl_number = ? AND receive_date <=> ? AND pallets = ? AND box = ?`, [item.sortIdx, item.company, targetDate, item.pal, item.box]);
+                            }
                         }
                     }
                 }

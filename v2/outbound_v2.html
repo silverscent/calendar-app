@@ -4847,8 +4847,14 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
           window.dashMode = mode;
           document.getElementById('btnDashMonth').classList.toggle('active', mode === 'month');
           document.getElementById('btnDashYear').classList.toggle('active', mode === 'year');
-          if (mode === 'year' && !yearlyCache[window.dashYear]) fetchYearlyAndRender();
-          else renderDashCharts();
+          
+          if (mode === 'year') {
+              if (!yearlyCache[window.dashYear]) fetchYearlyAndRender();
+              else renderDashCharts();
+          } else {
+              // 🚨 [핵심 패치] 연간에서 월간으로 돌아올 때 무조건 바뀐 년/월의 데이터를 다시 불러오도록 강제!
+              fetchDashMonthAndRender();
+          }
       }
       function navDashDate(offset) {
           if (window.dashMode === 'month') {
