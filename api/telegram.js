@@ -182,13 +182,13 @@ ${JSON.stringify(parsedResult)}
                 let isAiVal = aiSuccess ? 1 : 0; // AI 교정 여부
 
                 let exist = [];
-                // 인보이스가 있으면 우선 검색
+                // 🚨 1. 인보이스가 있으면 인보이스로만 검색 (날짜가 바뀌었든 말든 동일 화물로 간주)
                 if (invoice) {
-                    [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? AND receive_date <=> ? LIMIT 1`, [invoice, inDate]);
+                    [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
                 }
-                // 인보이스가 없고 B/L이 발행전이 아니면 검색
+                // 🚨 2. 인보이스가 없고 B/L이 발행전이 아니면 B/L 번호로만 검색
                 if (exist.length === 0 && bl !== '발행전' && bl !== '') {
-                    [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? AND receive_date <=> ? LIMIT 1`, [bl, inDate]);
+                    [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
                 }
 
                 if (exist.length > 0) {
