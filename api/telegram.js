@@ -1,7 +1,7 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
-// 텔레그램 메시지 전송 헬퍼 (인라인 키보드 버튼 지원)
+// 텔레그램 메시지 전송 헬퍼
 async function sendTgMsg(chatId, text, inlineKeyboard = null) {
     try {
         const payload = { chat_id: chatId, text: text };
@@ -18,6 +18,23 @@ async function sendTgMsg(chatId, text, inlineKeyboard = null) {
 function getKstDateStr(dateObj) {
     const kst = new Date(dateObj.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
     return `${kst.getFullYear()}-${String(kst.getMonth()+1).padStart(2,'0')}-${String(kst.getDate()).padStart(2,'0')}`;
+}
+
+// 🛡️ [버그 1 해결] DB 날짜 안전 변환기 (Date 객체든 String이든 무조건 MM/DD로 변환)
+function formatDbDateShort(dbDate) {
+    if (!dbDate) return "미정";
+    if (dbDate instanceof Date) return `${String(dbDate.getMonth() + 1).padStart(2, '0')}/${String(dbDate.getDate()).padStart(2, '0')}`;
+    if (typeof dbDate === 'string' && dbDate.length >= 10) return dbDate.substring(5, 10).replace('-', '/');
+    return String(dbDate);
+}
+
+// 🛡️ [버그 2,3 해결] DB JSON 안전 파싱기 (이미 Object면 그대로 통과)
+function safeGetJson(val) {
+    if (typeof val === 'object' && val !== null) return val;
+    if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch(e) {}
+    }
+    return { id: val, url: val, time: val }; // 최후의 보루 폴백
 }
 
 export default async function handler(req, res) {
@@ -121,7 +138,7 @@ export default async function handler(req, res) {
             else {
                 let currentD = '';
                 rows.forEach(r => {
-                    let dStr = r.receive_date.substring(5, 10).replace('-', '/'); 
+                    let dStr = formatDbDateShort(r.receive_date); // 🚨 버그 1 해결 적용!
                     if (currentD !== dStr) { msg += `\n🔽 ${dStr}\n`; currentD = dStr; }
                     let mark = r.status === '완료' ? ' [완료]' : '';
                     let etc = r.remarks ? ` [${r.remarks}]` : '';
@@ -133,7 +150,7 @@ export default async function handler(req, res) {
         }
 
         // =================================================================
-        // 4. 🚨 [복구 완벽 적용] /달력, /출고달력 (웹앱 버튼 포함)
+        // 4. /달력, /출고달력 (웹앱 버튼 포함)
         // =================================================================
         if (text.startsWith('/달력') || text.startsWith('/calendar') || text.startsWith('/출고달력') || text.startsWith('/용차달력')) {
             const isOutbound = text.includes('출고') || text.includes('용차');
@@ -158,7 +175,7 @@ export default async function handler(req, res) {
                 
                 let currentD = ''; let dailyPal = 0; let dailyStr = '';
                 rows.forEach(r => {
-                    let dStr = r.outbound_date.substring(5, 10).replace('-', '/');
+                    let dStr = formatDbDateShort(r.outbound_date); // 🚨 버그 1 해결 적용!
                     if (currentD !== dStr) {
                         if (currentD !== '') calStr += `🚚 ${currentD} - 총 ${dailyPal}p\n${dailyStr}\n`;
                         currentD = dStr; dailyPal = 0; dailyStr = '';
@@ -179,7 +196,7 @@ export default async function handler(req, res) {
                 
                 let currentD = ''; let dailyPal = 0; let dailyStr = '';
                 rows.forEach(r => {
-                    let dStr = r.receive_date.substring(5, 10).replace('-', '/');
+                    let dStr = formatDbDateShort(r.receive_date); // 🚨 버그 1 해결 적용!
                     if (currentD !== dStr) {
                         if (currentD !== '') calStr += `📦 ${currentD} - 총 ${dailyPal}p\n${dailyStr}\n`;
                         currentD = dStr; dailyPal = 0; dailyStr = '';
@@ -234,7 +251,16 @@ export default async function handler(req, res) {
         }
 
         // =================================================================
-        // 6. 핵심 OCR + Gemini AI 파이프라인 실행 (/ocr, /test, /reparse)
+        // 6. 대기열 취소 (/cancel)
+        // =================================================================
+        if (text.startsWith('/cancel')) {
+            await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
+            await sendTgMsg(chatId, `🗑️ 대기열 이미지가 취소되었습니다.`);
+            return res.status(200).send('OK');
+        }
+
+        // =================================================================
+        // 7. 핵심 OCR + Gemini AI 파이프라인 실행 (/ocr, /test, /reparse)
         // =================================================================
         const isTest = text.startsWith('/test');
         const isReparse = text.startsWith('/reparse');
@@ -247,14 +273,20 @@ export default async function handler(req, res) {
                 if (rows.length === 0 || !rows[0].setting_value) {
                     await sendTgMsg(chatId, `⚠️ 재처리할 이전 이미지가 없습니다.`); return res.status(200).send('OK');
                 }
-                try { fullUrl = JSON.parse(rows[0].setting_value).url; } catch(e) { fullUrl = rows[0].setting_value; }
+                // 🚨 [버그 2 해결] 안전한 JSON 파싱기 사용
+                const pData = safeGetJson(rows[0].setting_value);
+                fullUrl = pData.url || "";
             } else {
                 const [pendingRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
                 if (pendingRows.length === 0 || !pendingRows[0].setting_value) {
                     await sendTgMsg(chatId, `⚠️ 대기 중인 이미지가 없습니다. 사진을 먼저 올려주세요.`); return res.status(200).send('OK');
                 }
-                const pData = JSON.parse(pendingRows[0].setting_value);
-                targetFileId = pData.id; targetUniqueId = pData.uniqueId;
+                
+                // 🚨 [버그 3 해결] Object 중복 파싱 에러 방지
+                const pData = safeGetJson(pendingRows[0].setting_value);
+                targetFileId = pData.id; 
+                targetUniqueId = pData.uniqueId || null;
+
                 if (!isTest) await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
             }
 
@@ -265,6 +297,11 @@ export default async function handler(req, res) {
                 const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${targetFileId}`);
                 const fileData = await fileRes.json();
                 fullUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
+            }
+
+            if (!fullUrl) {
+                await sendTgMsg(chatId, `⚠ 이미지 주소를 읽어오는 데 실패했습니다.`);
+                return res.status(200).send('OK');
             }
 
             const imgRes = await fetch(fullUrl);
@@ -368,9 +405,7 @@ ${JSON.stringify(parsedResult)}
             resultMsg += `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건)`;
             await sendTgMsg(chatId, resultMsg);
 
-            // =================================================================
-            // 8. 🚨 [복구 완벽 적용] 스케줄 누락 화물(고아 데이터) 스마트 감지 레이더
-            // =================================================================
+            // 8) 스케줄 누락 화물(고아 데이터) 스마트 감지 레이더
             try {
                 const currentKeys = finalRows.map(r => String(r.bl || '').replace(/[\s•·\-\*]/g, ''));
                 const [pendingRowsInDb] = await pool.query(`SELECT bl_number, pallets, remarks FROM inbound WHERE status = '입고대기' OR receive_date IS NULL OR receive_date = '미정'`);
