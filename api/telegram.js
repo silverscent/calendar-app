@@ -193,8 +193,8 @@ ${JSON.stringify(parsedResult)}
 
                 if (exist.length > 0) {
                     await pool.query(
-                        `UPDATE inbound SET bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`,
-                        [bl, pal, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id]
+                        `UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`,
+                        [bl, pal, inDate, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id]
                     );
                     updateCount++;
                 } else {
