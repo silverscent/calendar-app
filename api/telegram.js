@@ -45,59 +45,31 @@ export default async function handler(req, res) {
     const text = message.text || '';
     const pool = mysql.createPool(process.env.DATABASE_URL);
 
+    // 👑 [핵심 보안] 관리자 여부 철통 검증
+    const isAdmin = String(chatId) === String(process.env.ADMIN_TELEGRAM_USER_ID);
+
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
         await pool.query(`CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
         // =================================================================
-        // 1. 관리자 헬프 및 상태 (/? , /help, /status)
+        // 🔓 퍼블릭(공용) 관문 : 누구나 조회 가능한 스케줄 명령어
         // =================================================================
-        if (text.startsWith('/?') || text.startsWith('/help') || text.startsWith('/도움')) {
+        
+        // 1. 공용 매뉴얼 (/help)
+        if (text.startsWith('/help') || text.startsWith('/도움')) {
             const helpMsg = `🤖 3PL 입/출고 알림 봇 사용 안내\n\n` +
                             `[ 📥 입고 스케줄 ]\n` +
                             `📦 /입고 (또는 /today)\n- 오늘 기준 입고 예정 건 조회\n\n` +
                             `📅 /이번주, /다음주, /저번주\n- 주차별 입고 스케줄 요약 브리핑\n\n` +
                             `🗓️ /달력 [월] (예: /달력 3)\n- 월간 입고 스케줄을 한눈에 보는 캘린더\n\n` +
                             `[ 🚚 출고 스케줄 ]\n` +
-                            `🗓️ /출고달력 [월] (예: /출고달력 3)\n- 월간 용차/출고 스케줄 캘린더\n\n` +
-                            `[ 📸 이미지 처리 ]\n` +
-                            `[사진 전송] : OCR 대기열 등록\n/ocr : DB 자동 등록\n/test : AI 결과 텍스트 확인\n/reparse : 마지막 사진 재파싱\n/cancel : 대기열 취소\n\n` +
-                            `[ ⚙️ 시스템 관리 ]\n/dup on|off|reset : 중복 차단 설정\n/status : 봇 상태 확인`;
+                            `🗓️ /출고달력 [월] (예: /출고달력 3)\n- 월간 용차/출고 스케줄 캘린더`;
             await sendTgMsg(chatId, helpMsg);
             return res.status(200).send('OK');
         }
 
-        if (text.startsWith('/status')) {
-            let dbStatus = "🔴 연결 실패";
-            try { await pool.query('SELECT 1'); dbStatus = "🟢 정상 연결됨"; } catch(e) {}
-            const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
-            let queueStatus = rows.length > 0 ? "🟡 1장 대기 중" : "⚪ 비어있음";
-            const [dupRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'DUP_OPTION'`);
-            let dupStatus = (dupRows.length > 0 && dupRows[0].setting_value === 'OFF') ? "🔓 허용" : "🔒 차단";
-            await sendTgMsg(chatId, `📊 [시스템 상태 보고]\n\nTiDB 데이터: ${dbStatus}\nOCR 대기열: ${queueStatus}\n중복 방지: ${dupStatus}\nAI 엔진: Gemini 2.5 Flash 🟢`);
-            return res.status(200).send('OK');
-        }
-
-        // =================================================================
-        // 2. 중복 방지 옵션 설정 (/dup on | off | reset)
-        // =================================================================
-        if (text.startsWith('/dup')) {
-            if (text.includes('on')) {
-                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('DUP_OPTION', 'ON') ON DUPLICATE KEY UPDATE setting_value='ON'`);
-                await sendTgMsg(chatId, '🔒 중복 이미지 차단 모드 활성화');
-            } else if (text.includes('off')) {
-                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('DUP_OPTION', 'OFF') ON DUPLICATE KEY UPDATE setting_value='OFF'`);
-                await sendTgMsg(chatId, '🔓 중복 이미지 허용 모드 활성화');
-            } else if (text.includes('reset')) {
-                await pool.query(`DELETE FROM processed_images`);
-                await sendTgMsg(chatId, '♻ 중복 이미지 기록을 모두 초기화했습니다.');
-            }
-            return res.status(200).send('OK');
-        }
-
-        // =================================================================
-        // 3. 입고 일정 조회 (/입고, /이번주, /다음주, /저번주)
-        // =================================================================
+        // 2. 입고 일정 조회 (/입고, /이번주, /다음주, /저번주)
         const cmdList = ['/입고', '/today', '/이번주', '/thisweek', '/다음주', '/nextweek', '/저번주', '/lastweek'];
         if (cmdList.includes(text.split(' ')[0])) {
             const today = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
@@ -138,7 +110,7 @@ export default async function handler(req, res) {
             else {
                 let currentD = '';
                 rows.forEach(r => {
-                    let dStr = formatDbDateShort(r.receive_date); // 🚨 버그 1 해결 적용!
+                    let dStr = formatDbDateShort(r.receive_date);
                     if (currentD !== dStr) { msg += `\n🔽 ${dStr}\n`; currentD = dStr; }
                     let mark = r.status === '완료' ? ' [완료]' : '';
                     let etc = r.remarks ? ` [${r.remarks}]` : '';
@@ -149,9 +121,7 @@ export default async function handler(req, res) {
             return res.status(200).send('OK');
         }
 
-        // =================================================================
-        // 4. /달력, /출고달력 (웹앱 버튼 포함)
-        // =================================================================
+        // 3. /달력, /출고달력 (웹앱 버튼 포함)
         if (text.startsWith('/달력') || text.startsWith('/calendar') || text.startsWith('/출고달력') || text.startsWith('/용차달력')) {
             const isOutbound = text.includes('출고') || text.includes('용차');
             const parts = text.trim().split(/\s+/);
@@ -175,7 +145,7 @@ export default async function handler(req, res) {
                 
                 let currentD = ''; let dailyPal = 0; let dailyStr = '';
                 rows.forEach(r => {
-                    let dStr = formatDbDateShort(r.outbound_date); // 🚨 버그 1 해결 적용!
+                    let dStr = formatDbDateShort(r.outbound_date);
                     if (currentD !== dStr) {
                         if (currentD !== '') calStr += `🚚 ${currentD} - 총 ${dailyPal}p\n${dailyStr}\n`;
                         currentD = dStr; dailyPal = 0; dailyStr = '';
@@ -196,7 +166,7 @@ export default async function handler(req, res) {
                 
                 let currentD = ''; let dailyPal = 0; let dailyStr = '';
                 rows.forEach(r => {
-                    let dStr = formatDbDateShort(r.receive_date); // 🚨 버그 1 해결 적용!
+                    let dStr = formatDbDateShort(r.receive_date);
                     if (currentD !== dStr) {
                         if (currentD !== '') calStr += `📦 ${currentD} - 총 ${dailyPal}p\n${dailyStr}\n`;
                         currentD = dStr; dailyPal = 0; dailyStr = '';
@@ -222,113 +192,159 @@ export default async function handler(req, res) {
         }
 
         // =================================================================
-        // 5. 이미지 수신 -> 중복 검사 -> 대기열(Queue) 등록
+        // 🔒 관리자(Admin) 전용 관문 : 이미지 업로드 및 통제 명령어
         // =================================================================
-        let fileId = null; let uniqueId = null;
-        if (message.photo && message.photo.length > 0) {
-            const p = message.photo[message.photo.length - 1];
-            fileId = p.file_id; uniqueId = p.file_unique_id;
-        } else if (message.document && message.document.mime_type?.startsWith('image/')) {
-            fileId = message.document.file_id; uniqueId = message.document.file_unique_id;
-        }
+        const isImageUpload = (message.photo && message.photo.length > 0) || (message.document && message.document.mime_type?.startsWith('image/'));
+        const adminCmdList = ['/?', '/status', '/dup', '/cancel', '/ocr', '/test', '/reparse'];
+        const isAdminCmd = adminCmdList.some(cmd => text.startsWith(cmd));
 
-        if (fileId) {
-            const [dupRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'DUP_OPTION'`);
-            let blockDup = (dupRows.length === 0 || dupRows[0].setting_value !== 'OFF');
-            
-            if (blockDup) {
-                const [exist] = await pool.query(`SELECT 1 FROM processed_images WHERE unique_id = ?`, [uniqueId]);
-                if (exist.length > 0) {
-                    await sendTgMsg(chatId, `⚠️ 이미 처리된 이미지입니다. (중복 차단)\n강제로 처리하려면 '/dup off' 입력 후 다시 올려주세요.`);
+        if (isAdminCmd || isImageUpload) {
+            // 🚨 철벽 방어막: 관리자가 아니면 경고창 띄우고 즉시 차단!
+            if (!isAdmin) {
+                await sendTgMsg(chatId, "🚫 시스템 접근 거부: 관리자 전용 기능입니다. 권한이 없습니다.");
+                return res.status(200).send('OK');
+            }
+
+            // --- 👑 여기서부터 진짜 관리자 전용 로직 실행 ---
+
+            // 1. 관리자 전용 매뉴얼 (/?)
+            if (text.startsWith('/?')) {
+                const adminHelpMsg = `📘 [관리자 전용 시스템 봇 매뉴얼]\n\n` +
+                                `📸 이미지 처리\n` +
+                                `[사진 전송] : OCR 대기열 등록\n/ocr : DB 자동 등록\n/test : AI 결과 텍스트 확인\n/reparse : 마지막 사진 재파싱\n/cancel : 대기열 취소\n\n` +
+                                `⚙️ 시스템 관리\n/dup on|off|reset : 중복 차단 설정\n/status : 봇 & DB 상태 확인`;
+                await sendTgMsg(chatId, adminHelpMsg);
+                return res.status(200).send('OK');
+            }
+
+            // 2. 봇 상태 확인 (/status)
+            if (text.startsWith('/status')) {
+                let dbStatus = "🔴 연결 실패";
+                try { await pool.query('SELECT 1'); dbStatus = "🟢 정상 연결됨"; } catch(e) {}
+                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
+                let queueStatus = rows.length > 0 ? "🟡 1장 대기 중" : "⚪ 비어있음";
+                const [dupRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'DUP_OPTION'`);
+                let dupStatus = (dupRows.length > 0 && dupRows[0].setting_value === 'OFF') ? "🔓 허용" : "🔒 차단";
+                await sendTgMsg(chatId, `📊 [관리자 시스템 보고]\n\nTiDB 데이터: ${dbStatus}\nOCR 대기열: ${queueStatus}\n중복 방지: ${dupStatus}\nAI 엔진: Gemini 2.5 Flash 🟢`);
+                return res.status(200).send('OK');
+            }
+
+            // 3. 중복 방지 설정 (/dup on | off | reset)
+            if (text.startsWith('/dup')) {
+                if (text.includes('on')) {
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('DUP_OPTION', 'ON') ON DUPLICATE KEY UPDATE setting_value='ON'`);
+                    await sendTgMsg(chatId, '🔒 중복 이미지 차단 모드 활성화');
+                } else if (text.includes('off')) {
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('DUP_OPTION', 'OFF') ON DUPLICATE KEY UPDATE setting_value='OFF'`);
+                    await sendTgMsg(chatId, '🔓 중복 이미지 허용 모드 활성화');
+                } else if (text.includes('reset')) {
+                    await pool.query(`DELETE FROM processed_images`);
+                    await sendTgMsg(chatId, '♻ 중복 이미지 기록을 모두 초기화했습니다.');
+                }
+                return res.status(200).send('OK');
+            }
+
+            // 4. 이미지 수신 -> 중복 검사 -> 대기열(Queue) 등록
+            if (isImageUpload) {
+                let fileId = null; let uniqueId = null;
+                if (message.photo && message.photo.length > 0) {
+                    const p = message.photo[message.photo.length - 1];
+                    fileId = p.file_id; uniqueId = p.file_unique_id;
+                } else if (message.document && message.document.mime_type?.startsWith('image/')) {
+                    fileId = message.document.file_id; uniqueId = message.document.file_unique_id;
+                }
+
+                if (fileId) {
+                    const [dupRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'DUP_OPTION'`);
+                    let blockDup = (dupRows.length === 0 || dupRows[0].setting_value !== 'OFF');
+                    
+                    if (blockDup) {
+                        const [exist] = await pool.query(`SELECT 1 FROM processed_images WHERE unique_id = ?`, [uniqueId]);
+                        if (exist.length > 0) {
+                            await sendTgMsg(chatId, `⚠️ 이미 처리된 이미지입니다. (중복 차단)\n강제로 처리하려면 '/dup off' 입력 후 다시 올려주세요.`);
+                            return res.status(200).send('OK');
+                        }
+                    }
+
+                    const jsonData = JSON.stringify({ id: fileId, uniqueId: uniqueId });
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('PENDING_IMAGE_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonData, jsonData]);
+                    await sendTgMsg(chatId, `📥 [이미지 대기열 등록 완료]\n\n▶️ DB에 즉시 반영: /ocr\n🧪 AI 결과 미리보기: /test\n❌ 처리 취소: /cancel`);
                     return res.status(200).send('OK');
                 }
             }
 
-            const jsonData = JSON.stringify({ id: fileId, uniqueId: uniqueId });
-            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('PENDING_IMAGE_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonData, jsonData]);
-            await sendTgMsg(chatId, `📥 [이미지 대기열 등록 완료]\n\n▶️ DB에 즉시 반영: /ocr\n🧪 AI 결과 미리보기: /test\n❌ 처리 취소: /cancel`);
-            return res.status(200).send('OK');
-        }
-
-        // =================================================================
-        // 6. 대기열 취소 (/cancel)
-        // =================================================================
-        if (text.startsWith('/cancel')) {
-            await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
-            await sendTgMsg(chatId, `🗑️ 대기열 이미지가 취소되었습니다.`);
-            return res.status(200).send('OK');
-        }
-
-        // =================================================================
-        // 7. 핵심 OCR + Gemini AI 파이프라인 실행 (/ocr, /test, /reparse)
-        // =================================================================
-        const isTest = text.startsWith('/test');
-        const isReparse = text.startsWith('/reparse');
-        
-        if (text.startsWith('/ocr') || isTest || isReparse) {
-            let targetFileId = null; let targetUniqueId = null; let fullUrl = '';
-
-            if (isReparse) {
-                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
-                if (rows.length === 0 || !rows[0].setting_value) {
-                    await sendTgMsg(chatId, `⚠️ 재처리할 이전 이미지가 없습니다.`); return res.status(200).send('OK');
-                }
-                // 🚨 [버그 2 해결] 안전한 JSON 파싱기 사용
-                const pData = safeGetJson(rows[0].setting_value);
-                fullUrl = pData.url || "";
-            } else {
-                const [pendingRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
-                if (pendingRows.length === 0 || !pendingRows[0].setting_value) {
-                    await sendTgMsg(chatId, `⚠️ 대기 중인 이미지가 없습니다. 사진을 먼저 올려주세요.`); return res.status(200).send('OK');
-                }
-                
-                // 🚨 [버그 3 해결] Object 중복 파싱 에러 방지
-                const pData = safeGetJson(pendingRows[0].setting_value);
-                targetFileId = pData.id; 
-                targetUniqueId = pData.uniqueId || null;
-
-                if (!isTest) await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
-            }
-
-            await sendTgMsg(chatId, isReparse ? `🔁 마지막 이미지 재파싱을 시작합니다...` : `🔄 이미지 다운로드 및 판독을 시작합니다...`);
-
-            const botToken = process.env.TELEGRAM_BOT_TOKEN;
-            if (!isReparse) {
-                const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${targetFileId}`);
-                const fileData = await fileRes.json();
-                fullUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
-            }
-
-            if (!fullUrl) {
-                await sendTgMsg(chatId, `⚠ 이미지 주소를 읽어오는 데 실패했습니다.`);
+            // 5. 대기열 취소 (/cancel)
+            if (text.startsWith('/cancel')) {
+                await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
+                await sendTgMsg(chatId, `🗑️ 대기열 이미지가 취소되었습니다.`);
                 return res.status(200).send('OK');
             }
 
-            const imgRes = await fetch(fullUrl);
-            const imgBuffer = await imgRes.arrayBuffer();
-            const base64Image = Buffer.from(imgBuffer).toString('base64');
+            // 6. 핵심 OCR + Gemini AI 파이프라인 (/ocr, /test, /reparse)
+            const isTest = text.startsWith('/test');
+            const isReparse = text.startsWith('/reparse');
+            
+            if (text.startsWith('/ocr') || isTest || isReparse) {
+                let targetFileId = null; let targetUniqueId = null; let fullUrl = '';
 
-            const visionRes = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'TEXT_DETECTION' }] }] })
-            });
-            const visionData = await visionRes.json();
-            const extractedText = visionData.responses[0]?.fullTextAnnotation?.text || "";
+                if (isReparse) {
+                    const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
+                    if (rows.length === 0 || !rows[0].setting_value) {
+                        await sendTgMsg(chatId, `⚠️ 재처리할 이전 이미지가 없습니다.`); return res.status(200).send('OK');
+                    }
+                    const pData = safeGetJson(rows[0].setting_value);
+                    fullUrl = pData.url || "";
+                } else {
+                    const [pendingRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
+                    if (pendingRows.length === 0 || !pendingRows[0].setting_value) {
+                        await sendTgMsg(chatId, `⚠️ 대기 중인 이미지가 없습니다. 사진을 먼저 올려주세요.`); return res.status(200).send('OK');
+                    }
+                    
+                    const pData = safeGetJson(pendingRows[0].setting_value);
+                    targetFileId = pData.id; 
+                    targetUniqueId = pData.uniqueId || null;
 
-            if (!extractedText) {
-                await sendTgMsg(chatId, `⚠ 이미지에서 텍스트를 찾을 수 없습니다.`); return res.status(200).send('OK');
-            }
+                    if (!isTest) await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
+                }
 
-            const parsedResult = parseOcrLinesLocal(extractedText);
-            if (parsedResult.length === 0) {
-                await sendTgMsg(chatId, `⚠ 인식된 데이터가 없습니다.`); return res.status(200).send('OK');
-            }
+                await sendTgMsg(chatId, isReparse ? `🔁 마지막 이미지 재파싱을 시작합니다...` : `🔄 이미지 다운로드 및 판독을 시작합니다...`);
 
-            await sendTgMsg(chatId, `🤖 Gemini AI가 데이터의 문맥을 분석하고 교정 중입니다...`);
+                const botToken = process.env.TELEGRAM_BOT_TOKEN;
+                if (!isReparse) {
+                    const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${targetFileId}`);
+                    const fileData = await fileRes.json();
+                    fullUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
+                }
 
-            let finalRows = parsedResult; let aiSuccess = false;
-            try {
-                const prompt = `너는 물류 데이터베이스 전문 AI 관리자야.
+                if (!fullUrl) {
+                    await sendTgMsg(chatId, `⚠ 이미지 주소를 읽어오는 데 실패했습니다.`); return res.status(200).send('OK');
+                }
+
+                const imgRes = await fetch(fullUrl);
+                const imgBuffer = await imgRes.arrayBuffer();
+                const base64Image = Buffer.from(imgBuffer).toString('base64');
+
+                const visionRes = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'TEXT_DETECTION' }] }] })
+                });
+                const visionData = await visionRes.json();
+                const extractedText = visionData.responses[0]?.fullTextAnnotation?.text || "";
+
+                if (!extractedText) {
+                    await sendTgMsg(chatId, `⚠ 이미지에서 텍스트를 찾을 수 없습니다.`); return res.status(200).send('OK');
+                }
+
+                const parsedResult = parseOcrLinesLocal(extractedText);
+                if (parsedResult.length === 0) {
+                    await sendTgMsg(chatId, `⚠ 인식된 데이터가 없습니다.`); return res.status(200).send('OK');
+                }
+
+                await sendTgMsg(chatId, `🤖 Gemini AI가 데이터의 문맥을 분석하고 교정 중입니다...`);
+
+                let finalRows = parsedResult; let aiSuccess = false;
+                try {
+                    const prompt = `너는 물류 데이터베이스 전문 AI 관리자야.
 [원본 텍스트]
 ${extractedText}
 [기존 파싱 결과]
@@ -340,105 +356,107 @@ ${JSON.stringify(parsedResult)}
 3. 원본에 '발행 전' 또는 '발행전'이라고 적힌 항목은 'B/L번호'를 의미해. 절대 ETC 등 다른 열로 밀어내지 말고, 반드시 첫 번째 열(B/L번호)에 "발행전" 이라고 입력해.
 4. 오직 [bl, pal, eta, inDate, fwd, sType, invoice, etc] 키를 가진 JSON 객체 배열만 출력해. (마크다운 금지)`;
 
-                const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.0, responseMimeType: "application/json" } })
-                });
+                    const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.0, responseMimeType: "application/json" } })
+                    });
+                    
+                    if (!geminiRes.ok) throw new Error(`API 통신 에러 (${geminiRes.status})`);
+
+                    const geminiJson = await geminiRes.json();
+                    if (geminiJson.candidates && geminiJson.candidates.length > 0) {
+                        let aiText = geminiJson.candidates[0].content.parts[0].text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                        const aiData = JSON.parse(aiText);
+                        if (Array.isArray(aiData) && aiData.length > 0) { finalRows = aiData; aiSuccess = true; }
+                        else throw new Error("AI 배열 파괴 오류");
+                    } else throw new Error("AI 응답 없음");
+                } catch (e) { 
+                    console.error("Gemini 교정 에러:", e);
+                    await sendTgMsg(chatId, `⚠️ AI 교정 실패 (기본 파싱 데이터로 안전하게 강제 진행합니다):\n${e.message}`);
+                }
+
+                let resultMsg = isTest ? `🧪 [테스트 모드 결과] DB 저장 안됨\n` : `✨ [DB 반영 완료]\n`;
+                resultMsg += aiSuccess ? `(AI 스마트 교정 적용 / ${finalRows.length}행)\n` : `(정규식 기본 파싱 보존 / ${finalRows.length}행)\n`;
+                finalRows.forEach(r => { resultMsg += `• ${r.bl} | ${r.pal}PAL | ${r.inDate || '미정'}\n`; });
+
+                if (isTest) {
+                    await sendTgMsg(chatId, resultMsg); return res.status(200).send('OK');
+                }
+
+                // UPSERT 실행
+                let updateCount = 0; let insertCount = 0;
+                for (const r of finalRows) {
+                    let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, '');
+                    let pal = parseInt(r.pal) || 0;
+                    let inDate = r.inDate || null;
+                    let fwd = r.fwd || '';
+                    let sType = String(r.sType || '').toUpperCase();
+                    let invoice = r.invoice || '';
+                    let etc = r.etc || '';
+                    let eta = r.eta || null;
+                    let isAiVal = aiSuccess ? 1 : 0; 
+
+                    let exist = [];
+                    if (invoice) {
+                        [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
+                    }
+                    if (exist.length === 0 && bl !== '발행전' && bl !== '') {
+                        [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
+                    }
+
+                    if (exist.length > 0) {
+                        await pool.query(
+                            `UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`,
+                            [bl, pal, inDate, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id]
+                        );
+                        updateCount++;
+                    } else {
+                        await pool.query(
+                            `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, ?)`,
+                            [bl, pal, inDate, sType, fwd, invoice, eta, etc, isAiVal]
+                        );
+                        insertCount++;
+                    }
+                }
+
+                resultMsg += `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건)`;
+                await sendTgMsg(chatId, resultMsg);
+
+                // 스케줄 누락 화물(고아 데이터) 스마트 감지
+                try {
+                    const currentKeys = finalRows.map(r => String(r.bl || '').replace(/[\s•·\-\*]/g, ''));
+                    const [pendingRowsInDb] = await pool.query(`SELECT bl_number, pallets, remarks FROM inbound WHERE status = '입고대기' OR receive_date IS NULL OR receive_date = '미정'`);
+
+                    let orphans = [];
+                    pendingRowsInDb.forEach(row => {
+                        let dbKey = String(row.bl_number).replace(/[\s•·\-\*]/g, '');
+                        if (!currentKeys.includes(dbKey)) orphans.push({ bl: row.bl_number, pal: row.pallets });
+                    });
+
+                    if (orphans.length > 0) {
+                        let orphanMsg = `💡 [스케줄 누락 화물 감지]\n방금 올리신 이미지에는 없지만, 기존 DB에 '입고보류/미정' 상태인 화물이 ${orphans.length}건 있습니다.\n\n`;
+                        orphans.forEach(o => orphanMsg += `• ${o.bl} (${o.pal} PAL)\n`);
+                        orphanMsg += `\n입고가 완료되어 스케줄에서 빠진 것이라면, 웹앱 달력에서 터치하여 즉시 완료 처리해 주세요!`;
+                        await sendTgMsg(chatId, orphanMsg);
+                    }
+                } catch (orphanErr) { console.error("고아 데이터 감지 에러:", orphanErr); }
+
+                // 중복 방지 리스트 추가 및 캘린더 이미지 갱신
+                if (!isReparse && targetUniqueId) {
+                    await pool.query(`INSERT IGNORE INTO processed_images (unique_id) VALUES (?)`, [targetUniqueId]);
+                }
+
+                const currentTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+                const timeStr = `${currentTime.getMonth() + 1}월${currentTime.getDate()}일 ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`;
+                const jsonUrl = JSON.stringify({ url: fullUrl });
+                const jsonTime = JSON.stringify({ time: timeStr });
                 
-                if (!geminiRes.ok) throw new Error(`API 통신 에러 (${geminiRes.status})`);
-
-                const geminiJson = await geminiRes.json();
-                if (geminiJson.candidates && geminiJson.candidates.length > 0) {
-                    let aiText = geminiJson.candidates[0].content.parts[0].text.replace(/```json/gi, '').replace(/```/g, '').trim();
-                    const aiData = JSON.parse(aiText);
-                    if (Array.isArray(aiData) && aiData.length > 0) { finalRows = aiData; aiSuccess = true; }
-                    else throw new Error("AI 배열 파괴 오류");
-                } else throw new Error("AI 응답 없음");
-            } catch (e) { 
-                console.error("Gemini 교정 에러:", e);
-                await sendTgMsg(chatId, `⚠️ AI 교정 실패 (기본 파싱 데이터로 안전하게 강제 진행합니다):\n${e.message}`);
+                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonUrl, jsonUrl]);
+                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
+                
+                return res.status(200).send('OK');
             }
-
-            let resultMsg = isTest ? `🧪 [테스트 모드 결과] DB 저장 안됨\n` : `✨ [DB 반영 완료]\n`;
-            resultMsg += aiSuccess ? `(AI 스마트 교정 적용 / ${finalRows.length}행)\n` : `(정규식 기본 파싱 보존 / ${finalRows.length}행)\n`;
-            finalRows.forEach(r => { resultMsg += `• ${r.bl} | ${r.pal}PAL | ${r.inDate || '미정'}\n`; });
-
-            if (isTest) {
-                await sendTgMsg(chatId, resultMsg); return res.status(200).send('OK');
-            }
-
-            let updateCount = 0; let insertCount = 0;
-            for (const r of finalRows) {
-                let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, '');
-                let pal = parseInt(r.pal) || 0;
-                let inDate = r.inDate || null;
-                let fwd = r.fwd || '';
-                let sType = String(r.sType || '').toUpperCase();
-                let invoice = r.invoice || '';
-                let etc = r.etc || '';
-                let eta = r.eta || null;
-                let isAiVal = aiSuccess ? 1 : 0; 
-
-                let exist = [];
-                if (invoice) {
-                    [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
-                }
-                if (exist.length === 0 && bl !== '발행전' && bl !== '') {
-                    [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
-                }
-
-                if (exist.length > 0) {
-                    await pool.query(
-                        `UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`,
-                        [bl, pal, inDate, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id]
-                    );
-                    updateCount++;
-                } else {
-                    await pool.query(
-                        `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, ?)`,
-                        [bl, pal, inDate, sType, fwd, invoice, eta, etc, isAiVal]
-                    );
-                    insertCount++;
-                }
-            }
-
-            resultMsg += `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건)`;
-            await sendTgMsg(chatId, resultMsg);
-
-            // 8) 스케줄 누락 화물(고아 데이터) 스마트 감지 레이더
-            try {
-                const currentKeys = finalRows.map(r => String(r.bl || '').replace(/[\s•·\-\*]/g, ''));
-                const [pendingRowsInDb] = await pool.query(`SELECT bl_number, pallets, remarks FROM inbound WHERE status = '입고대기' OR receive_date IS NULL OR receive_date = '미정'`);
-
-                let orphans = [];
-                pendingRowsInDb.forEach(row => {
-                    let dbKey = String(row.bl_number).replace(/[\s•·\-\*]/g, '');
-                    if (!currentKeys.includes(dbKey)) orphans.push({ bl: row.bl_number, pal: row.pallets });
-                });
-
-                if (orphans.length > 0) {
-                    let orphanMsg = `💡 [스케줄 누락 화물 감지]\n방금 올리신 이미지에는 없지만, 기존 DB에 '입고보류/미정' 상태인 화물이 ${orphans.length}건 있습니다.\n\n`;
-                    orphans.forEach(o => orphanMsg += `• ${o.bl} (${o.pal} PAL)\n`);
-                    orphanMsg += `\n입고가 완료되어 스케줄에서 빠진 것이라면, 웹앱 달력에서 터치하여 즉시 완료 처리해 주세요!`;
-                    await sendTgMsg(chatId, orphanMsg);
-                }
-            } catch (orphanErr) { console.error("고아 데이터 감지 에러:", orphanErr); }
-
-            // 9) 중복 방지 리스트 추가 및 달력 이미지 갱신
-            if (!isReparse && targetUniqueId) {
-                await pool.query(`INSERT IGNORE INTO processed_images (unique_id) VALUES (?)`, [targetUniqueId]);
-            }
-
-            const currentTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
-            const timeStr = `${currentTime.getMonth() + 1}월${currentTime.getDate()}일 ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`;
-            const jsonUrl = JSON.stringify({ url: fullUrl });
-            const jsonTime = JSON.stringify({ time: timeStr });
-            
-            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonUrl, jsonUrl]);
-            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
-            
-            return res.status(200).send('OK');
-        }
+        } // <--- 관리자 전용 블록 끝
 
     } catch (error) {
         console.error("🔥 시스템 에러:", error);
