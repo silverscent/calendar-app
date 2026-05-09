@@ -2200,7 +2200,6 @@ function showLastOcrImage() {
         let url = (res && res.url) ? res.url : (typeof res === 'string' ? res : "");
         if (url && url.startsWith("http")) {
             
-            // 💡 위아래 화면 분할(Split View) 구조 적용!
             document.getElementById('ocrImageContent').innerHTML = `
                 <div style="display: flex; flex-direction: column; width: 100%; height: 80vh; max-height: 800px; overflow: hidden;">
                     
@@ -2219,7 +2218,10 @@ function showLastOcrImage() {
                     
                     <div id="ocrVerifyTableContainer" 
                          ontouchstart="event.stopPropagation()" 
-                         style="flex: 1 1 60%; overflow-y: auto; overflow-x: auto; background: #fff; display: none; padding: 0px 5px; border-top: 1px solid #eee;">
+                         ontouchmove="event.stopPropagation()" 
+                         ontouchend="event.stopPropagation()" 
+                         onwheel="event.stopPropagation()" 
+                         style="flex: 1 1 60%; overflow-y: auto; overflow-x: auto; background: #fff; display: none; padding: 0px 5px; border-top: 1px solid #eee; touch-action: pan-x pan-y; overscroll-behavior: contain;">
                     </div>
                 </div>
             `;
