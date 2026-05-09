@@ -1089,26 +1089,6 @@
         /* 💡 입고 달력 관리자 로그인 창 센터링 픽스 */
       #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
       #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
-    
-    /* ========================================= */
-      /* ✨ V2 Pro: 엣지, 섀도우, 모던 버튼 통합 스타일 */
-      /* ========================================= */
-      button {
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-          border-radius: 12px;
-      }
-      button:active {
-          transform: scale(0.96) translateY(1px);
-      }
-      .v2-btn-icon {
-          width: 38px; height: 38px; border-radius: 50% !important; border: none;
-          display: flex; align-items: center; justify-content: center;
-          background: transparent; color: var(--text-main); padding: 0 !important; cursor: pointer;
-      }
-      .v2-btn-icon:hover { background: var(--border-color); }
-      .modal-box, .calendar-container {
-          border-radius: 20px !important;
-      }
     </style>
   </head>
   <body>
@@ -1127,18 +1107,12 @@
 
     <div class="top-wrapper">
       <div class="top-row">
-        <div class="title-area" style="gap: 5px;">
-          <button class="v2-btn-icon" onclick="navMonth(-1)">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-          </button>
-          
-          <button class="title-btn" onclick="openPicker()" style="border-radius: 12px;">
+        <div class="title-area">
+          <button class="nav-arrow" onclick="navMonth(-1)">◀</button>
+          <button class="title-btn" onclick="openPicker()">
             📥 <span id="calTitle"></span> <span class="drop-icon">▼</span>
           </button>
-          
-          <button class="v2-btn-icon" onclick="navMonth(1)">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-          </button>
+          <button class="nav-arrow" onclick="navMonth(1)">▶</button>
         </div>
         <div class="controls-area">
           <button class="theme-toggle" onclick="toggleTheme()">☀️</button>
@@ -1194,14 +1168,9 @@
       <div class="pending-list" id="pendingList"></div>
     </div>
 
-    <div id="statsSummaryBar" onclick="openDashboard()" style="margin: 20px 15px; padding: 22px; background: var(--card-bg); border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); cursor: pointer; border: 1px solid var(--border-color);">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <span style="font-weight: 800; color: var(--text-main); font-size: 15px;">📊 당월 입고 진척률 <span style="font-size: 0.8em; color: var(--text-sub);">(대시보드)</span></span>
-        <span style="font-weight: 900; color: #0a84ff; font-size: 17px;"><span id="sumDonePal">0</span> / <span id="sumTotalPal">0</span> P</span>
-      </div>
-      <div style="width: 100%; background: var(--bg-color); border-radius: 12px; height: 14px; overflow: hidden; position: relative; border: 1px solid var(--border-color);">
-        <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #0a84ff 0%, #2dd4bf 100%); transition: width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
-      </div>
+    <div id="statsSummaryBar" class="stats-summary-bar" onclick="openDashboard()">
+      <div class="stats-title">📊 당월 입고 진척률</div>
+      <div class="stats-numbers"><span class="done" id="sumDonePal">0</span><span class="total">/ <span id="sumTotalPal">0</span> P</span></div>
     </div>
 
     <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
@@ -2549,28 +2518,7 @@ function loadOcrVerificationData(btnElement) {
           for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
           let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
           let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
-          updateProgressBarUI();
       }
-
-      // 💡 V2 게이지 바 애니메이션 업데이트 함수
-function updateProgressBarUI() {
-    let done = parseInt(document.getElementById('sumDonePal').innerText) || 0;
-    let total = parseInt(document.getElementById('sumTotalPal').innerText) || 0;
-    let percent = total === 0 ? 0 : Math.round((done / total) * 100);
-    
-    const barEl = document.getElementById('progressBar');
-    if (barEl) {
-        setTimeout(() => { 
-            barEl.style.width = `${percent}%`; 
-            // 100% 달성 시 영롱한 초록색으로 변신
-            if (percent === 100 && total > 0) {
-                barEl.style.background = 'linear-gradient(90deg, #34c759 0%, #30d158 100%)';
-            } else {
-                barEl.style.background = 'linear-gradient(90deg, #0a84ff 0%, #2dd4bf 100%)';
-            }
-        }, 100);
-    }
-}
 
       function openDashboard() {
           window.dashYear = serverData.year;
