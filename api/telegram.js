@@ -41,12 +41,16 @@ export default async function handler(req, res) {
     if (req.method !== 'POST' || !req.body.message) return res.status(200).send('OK');
 
     const message = req.body.message;
-    const chatId = message.chat.id;
+    
+    // 💡 텔레그램 API 분리 수신!
+    const chatId = message.chat.id;         // 💬 답장을 보낼 '방 번호' (단톡방이면 마이너스)
+    const senderId = message.from.id;       // 👤 메시지를 보낸 '사람 고유번호' (불변)
+    
     const text = message.text || '';
     const pool = mysql.createPool(process.env.DATABASE_URL);
 
-    // 👑 관리자 여부 철통 검증
-    const isAdmin = String(chatId) === String(process.env.ADMIN_TELEGRAM_USER_ID);
+    // 👑 [핵심 보안] 방 번호(chatId)가 아닌 보낸 사람(senderId)을 검사합니다!
+    const isAdmin = String(senderId) === String(process.env.ADMIN_TELEGRAM_USER_ID);
 
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
