@@ -3032,21 +3032,6 @@ function loadOcrVerificationData(btnElement) {
       }
 
 
-      function updateStatsSummary() {
-          let tPal = 0, dPal = 0;
-          const process = (it) => {
-              let rawName = String(it.bl || it.company || "").trim();
-              if (!rawName || rawName === "미정") return;
-              tPal += parseInt(it.pal) || 0;
-              if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
-          };
-          // ✅ [수정 후] (pendingItems 처리 줄 삭제 또는 주석 처리)
-      for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
-      // if (serverData.pendingItems) serverData.pendingItems.forEach(process); 🚨 미정 데이터 제외
-          
-          let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
-          let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
-      }
     
 
       // =====================================================
