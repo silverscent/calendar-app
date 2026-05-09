@@ -20,7 +20,7 @@ function getKstDateStr(dateObj) {
     return `${kst.getFullYear()}-${String(kst.getMonth()+1).padStart(2,'0')}-${String(kst.getDate()).padStart(2,'0')}`;
 }
 
-// 🛡️ [버그 1 해결] DB 날짜 안전 변환기 (Date 객체든 String이든 무조건 MM/DD로 변환)
+// 🛡️ DB 날짜 안전 변환기
 function formatDbDateShort(dbDate) {
     if (!dbDate) return "미정";
     if (dbDate instanceof Date) return `${String(dbDate.getMonth() + 1).padStart(2, '0')}/${String(dbDate.getDate()).padStart(2, '0')}`;
@@ -28,13 +28,13 @@ function formatDbDateShort(dbDate) {
     return String(dbDate);
 }
 
-// 🛡️ [버그 2,3 해결] DB JSON 안전 파싱기 (이미 Object면 그대로 통과)
+// 🛡️ DB JSON 안전 파싱기
 function safeGetJson(val) {
     if (typeof val === 'object' && val !== null) return val;
     if (typeof val === 'string') {
         try { return JSON.parse(val); } catch(e) {}
     }
-    return { id: val, url: val, time: val }; // 최후의 보루 폴백
+    return { id: val, url: val, time: val };
 }
 
 export default async function handler(req, res) {
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     const text = message.text || '';
     const pool = mysql.createPool(process.env.DATABASE_URL);
 
-    // 👑 [핵심 보안] 관리자 여부 철통 검증
+    // 👑 관리자 여부 철통 검증
     const isAdmin = String(chatId) === String(process.env.ADMIN_TELEGRAM_USER_ID);
 
     try {
@@ -53,23 +53,14 @@ export default async function handler(req, res) {
         await pool.query(`CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
         // =================================================================
-        // 🔓 퍼블릭(공용) 관문 : 누구나 조회 가능한 스케줄 명령어
+        // 🔓 퍼블릭(공용) 관문
         // =================================================================
-        
-        // 1. 공용 매뉴얼 (/help)
         if (text.startsWith('/help') || text.startsWith('/도움')) {
-            const helpMsg = `🤖 3PL 입/출고 알림 봇 사용 안내\n\n` +
-                            `[ 📥 입고 스케줄 ]\n` +
-                            `📦 /입고 (또는 /today)\n- 오늘 기준 입고 예정 건 조회\n\n` +
-                            `📅 /이번주, /다음주, /저번주\n- 주차별 입고 스케줄 요약 브리핑\n\n` +
-                            `🗓️ /달력 [월] (예: /달력 3)\n- 월간 입고 스케줄을 한눈에 보는 캘린더\n\n` +
-                            `[ 🚚 출고 스케줄 ]\n` +
-                            `🗓️ /출고달력 [월] (예: /출고달력 3)\n- 월간 용차/출고 스케줄 캘린더`;
+            const helpMsg = `🤖 3PL 입/출고 알림 봇 사용 안내\n\n[ 📥 입고 스케줄 ]\n📦 /입고 (또는 /today)\n- 오늘 기준 입고 예정 건 조회\n\n📅 /이번주, /다음주, /저번주\n- 주차별 입고 스케줄 요약 브리핑\n\n🗓️ /달력 [월] (예: /달력 3)\n- 월간 입고 스케줄을 한눈에 보는 캘린더\n\n[ 🚚 출고 스케줄 ]\n🗓️ /출고달력 [월] (예: /출고달력 3)\n- 월간 용차/출고 스케줄 캘린더`;
             await sendTgMsg(chatId, helpMsg);
             return res.status(200).send('OK');
         }
 
-        // 2. 입고 일정 조회 (/입고, /이번주, /다음주, /저번주)
         const cmdList = ['/입고', '/today', '/이번주', '/thisweek', '/다음주', '/nextweek', '/저번주', '/lastweek'];
         if (cmdList.includes(text.split(' ')[0])) {
             const today = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
@@ -121,7 +112,6 @@ export default async function handler(req, res) {
             return res.status(200).send('OK');
         }
 
-        // 3. /달력, /출고달력 (웹앱 버튼 포함)
         if (text.startsWith('/달력') || text.startsWith('/calendar') || text.startsWith('/출고달력') || text.startsWith('/용차달력')) {
             const isOutbound = text.includes('출고') || text.includes('용차');
             const parts = text.trim().split(/\s+/);
@@ -130,7 +120,7 @@ export default async function handler(req, res) {
             if (parts[1]) {
                 const m = parseInt(parts[1], 10);
                 if (m >= 1 && m <= 12) targetDate.setMonth(m - 1);
-                else { await sendTgMsg(chatId, `⚠️ 월 형식이 잘못되었습니다. (예: /${isOutbound ? '출고' : ''}달력 3)`); return res.status(200).send('OK'); }
+                else { await sendTgMsg(chatId, `⚠️ 월 형식이 잘못되었습니다.`); return res.status(200).send('OK'); }
             }
             
             const year = targetDate.getFullYear(); 
@@ -192,32 +182,24 @@ export default async function handler(req, res) {
         }
 
         // =================================================================
-        // 🔒 관리자(Admin) 전용 관문 : 이미지 업로드 및 통제 명령어
+        // 🔒 관리자(Admin) 전용 관문
         // =================================================================
         const isImageUpload = (message.photo && message.photo.length > 0) || (message.document && message.document.mime_type?.startsWith('image/'));
         const adminCmdList = ['/?', '/status', '/dup', '/cancel', '/ocr', '/test', '/reparse'];
         const isAdminCmd = adminCmdList.some(cmd => text.startsWith(cmd));
 
         if (isAdminCmd || isImageUpload) {
-            // 🚨 철벽 방어막: 관리자가 아니면 경고창 띄우고 즉시 차단!
             if (!isAdmin) {
                 await sendTgMsg(chatId, "🚫 시스템 접근 거부: 관리자 전용 기능입니다. 권한이 없습니다.");
                 return res.status(200).send('OK');
             }
 
-            // --- 👑 여기서부터 진짜 관리자 전용 로직 실행 ---
-
-            // 1. 관리자 전용 매뉴얼 (/?)
             if (text.startsWith('/?')) {
-                const adminHelpMsg = `📘 [관리자 전용 시스템 봇 매뉴얼]\n\n` +
-                                `📸 이미지 처리\n` +
-                                `[사진 전송] : OCR 대기열 등록\n/ocr : DB 자동 등록\n/test : AI 결과 텍스트 확인\n/reparse : 마지막 사진 재파싱\n/cancel : 대기열 취소\n\n` +
-                                `⚙️ 시스템 관리\n/dup on|off|reset : 중복 차단 설정\n/status : 봇 & DB 상태 확인`;
+                const adminHelpMsg = `📘 [관리자 전용 시스템 봇 매뉴얼]\n\n📸 이미지 처리\n[사진 전송] : OCR 대기열 등록\n/ocr : DB 자동 등록\n/test : AI 결과 텍스트 확인\n/reparse : 마지막 사진 재파싱\n/cancel : 대기열 취소\n\n⚙️ 시스템 관리\n/dup on|off|reset : 중복 차단 설정\n/status : 봇 & DB 상태 확인`;
                 await sendTgMsg(chatId, adminHelpMsg);
                 return res.status(200).send('OK');
             }
 
-            // 2. 봇 상태 확인 (/status)
             if (text.startsWith('/status')) {
                 let dbStatus = "🔴 연결 실패";
                 try { await pool.query('SELECT 1'); dbStatus = "🟢 정상 연결됨"; } catch(e) {}
@@ -229,7 +211,6 @@ export default async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
-            // 3. 중복 방지 설정 (/dup on | off | reset)
             if (text.startsWith('/dup')) {
                 if (text.includes('on')) {
                     await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('DUP_OPTION', 'ON') ON DUPLICATE KEY UPDATE setting_value='ON'`);
@@ -244,7 +225,6 @@ export default async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
-            // 4. 이미지 수신 -> 중복 검사 -> 대기열(Queue) 등록
             if (isImageUpload) {
                 let fileId = null; let uniqueId = null;
                 if (message.photo && message.photo.length > 0) {
@@ -273,14 +253,12 @@ export default async function handler(req, res) {
                 }
             }
 
-            // 5. 대기열 취소 (/cancel)
             if (text.startsWith('/cancel')) {
                 await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
                 await sendTgMsg(chatId, `🗑️ 대기열 이미지가 취소되었습니다.`);
                 return res.status(200).send('OK');
             }
 
-            // 6. 핵심 OCR + Gemini AI 파이프라인 (/ocr, /test, /reparse)
             const isTest = text.startsWith('/test');
             const isReparse = text.startsWith('/reparse');
             
@@ -383,7 +361,6 @@ ${JSON.stringify(parsedResult)}
                     await sendTgMsg(chatId, resultMsg); return res.status(200).send('OK');
                 }
 
-                // UPSERT 실행
                 let updateCount = 0; let insertCount = 0;
                 for (const r of finalRows) {
                     let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, '');
@@ -422,7 +399,6 @@ ${JSON.stringify(parsedResult)}
                 resultMsg += `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건)`;
                 await sendTgMsg(chatId, resultMsg);
 
-                // 스케줄 누락 화물(고아 데이터) 스마트 감지
                 try {
                     const currentKeys = finalRows.map(r => String(r.bl || '').replace(/[\s•·\-\*]/g, ''));
                     const [pendingRowsInDb] = await pool.query(`SELECT bl_number, pallets, remarks FROM inbound WHERE status = '입고대기' OR receive_date IS NULL OR receive_date = '미정'`);
@@ -441,7 +417,6 @@ ${JSON.stringify(parsedResult)}
                     }
                 } catch (orphanErr) { console.error("고아 데이터 감지 에러:", orphanErr); }
 
-                // 중복 방지 리스트 추가 및 캘린더 이미지 갱신
                 if (!isReparse && targetUniqueId) {
                     await pool.query(`INSERT IGNORE INTO processed_images (unique_id) VALUES (?)`, [targetUniqueId]);
                 }
@@ -451,12 +426,16 @@ ${JSON.stringify(parsedResult)}
                 const jsonUrl = JSON.stringify({ url: fullUrl });
                 const jsonTime = JSON.stringify({ time: timeStr });
                 
+                // 🚨 [새로 추가된 핵심 1줄] 표(Table)로 그릴 데이터도 JSON으로 포장해서 DB에 저장!
+                const jsonDataStr = JSON.stringify(finalRows); 
+                
                 await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonUrl, jsonUrl]);
                 await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
+                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonDataStr, jsonDataStr]);
                 
                 return res.status(200).send('OK');
             }
-        } // <--- 관리자 전용 블록 끝
+        } 
 
     } catch (error) {
         console.error("🔥 시스템 에러:", error);

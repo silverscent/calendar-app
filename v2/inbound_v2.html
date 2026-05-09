@@ -1396,6 +1396,8 @@
                       getGlobalColors: function() { this._call({ source: 'vercel', action: 'GET_GLOBAL_COLORS' }); },
                       saveGlobalColor: function(c, i) { this._call({ source: 'vercel', action: 'SAVE_GLOBAL_COLOR', compName: c, colorIdx: i }); },
                       getLastOcrImageUrl: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_IMAGE' }); },
+                      // getLastOcrImageUrl 함수 선언 근처에 아래 한 줄 추가
+                      getLastOcrData: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_DATA' }); },
                       getOcrLastTimeStr: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }); },
                       getYearlyHolidays: function(y) { this._call({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: y }); },
                       getCompInfoDB: function() { this._call({ source: 'vercel', action: 'GET_COMP_INFO_DB' }); },
@@ -2184,29 +2186,102 @@
       }
 
       // =====================================================
-      // 🚀 [OCR 최종 패치] 광활한 핀치 투 줌/이동 엔진 (먹통 버그 해결)
-      // =====================================================
-      let ocrTransform = { scale: 1, x: 0, y: 0 };
-      let _ocrGesturesInitialized = false; // 💡 제스처 엔진 중복 실행 방지 플래그
-      
-      function showLastOcrImage() {
-          document.getElementById('ocrImageModal').style.display = 'flex';
-          document.getElementById('ocrImageContent').innerHTML = '불러오는 중... ⏳';
-          ocrTransform = { scale: 1, x: 0, y: 0 }; 
+// 🚀 [OCR 최종 패치] 광활한 핀치 투 줌/이동 엔진 (먹통 버그 해결)
+// =====================================================
+let ocrTransform = { scale: 1, x: 0, y: 0 };
+let _ocrGesturesInitialized = false; // 💡 제스처 엔진 중복 실행 방지 플래그
 
-          google.script.run.withSuccessHandler(function(res) {
-              // 🚨 빈 값, 객체를 모두 튕겨내서 엑박 방지!
-              let url = (res && res.url) ? res.url : (typeof res === 'string' ? res : "");
-              if (url && url.startsWith("http")) {
-                  document.getElementById('ocrImageContent').innerHTML = `<img id="ocrImgElement" src="${url}" alt="마지막 스케줄 이미지">`;
-                  setTimeout(initOcrGestures, 100); 
-              } else {
-                  document.getElementById('ocrImageContent').innerHTML = '<div style="color:var(--text-sub); font-weight:800;">현재 서버에 등록된 최신 이미지가 없습니다.</div>';
-              }
-          }).withFailureHandler(function(err) {
-              document.getElementById('ocrImageContent').innerHTML = '이미지 로딩 에러: ' + err.message;
-          }).getLastOcrImageUrl();
-      }
+function showLastOcrImage() {
+    document.getElementById('ocrImageModal').style.display = 'flex';
+    document.getElementById('ocrImageContent').innerHTML = '불러오는 중... ⏳';
+    ocrTransform = { scale: 1, x: 0, y: 0 }; 
+
+    google.script.run.withSuccessHandler(function(res) {
+        // 🚨 빈 값, 객체를 모두 튕겨내서 엑박 방지!
+        let url = (res && res.url) ? res.url : (typeof res === 'string' ? res : "");
+        if (url && url.startsWith("http")) {
+            
+            // 💡 [핵심 수정 부분] <img> 태그 바로 밑에 '버튼'과 '표 컨테이너'를 함께 넣어줍니다!
+            document.getElementById('ocrImageContent').innerHTML = `
+                <img id="ocrImgElement" src="${url}" alt="마지막 스케줄 이미지" style="max-width: 100%; display: block; margin: 0 auto; z-index: 1;">
+                
+                <div style="margin-top: 20px; width: 100%; text-align: center; position: relative; z-index: 100;">
+                    <button onclick="loadOcrVerificationData(this)" style="padding: 12px 20px; background: #4a90e2; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 90%; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 15px; letter-spacing: 0.5px;">
+                        📊 AI 파싱 데이터 원본 검수하기
+                    </button>
+                </div>
+                
+                <div id="ocrVerifyTableContainer" style="margin-top: 15px; text-align: left; overflow-x: auto; display: none; width: 100%; padding-bottom: 20px; position: relative; z-index: 100;"></div>
+            `;
+            setTimeout(initOcrGestures, 100); 
+        } else {
+            document.getElementById('ocrImageContent').innerHTML = '<div style="color:var(--text-sub); font-weight:800;">현재 서버에 등록된 최신 이미지가 없습니다.</div>';
+        }
+    }).withFailureHandler(function(err) {
+        document.getElementById('ocrImageContent').innerHTML = '이미지 로딩 에러: ' + err.message;
+    }).getLastOcrImageUrl();
+}
+
+// 🚨 [새로 추가하는 함수] 검수 버튼을 누르면 표를 그려줍니다! (showLastOcrImage 함수 바로 밑에 찰싹 붙여주세요)
+function loadOcrVerificationData(btnElement) {
+    const originalText = btnElement.innerHTML;
+    btnElement.innerHTML = '데이터 불러오는 중... ⏳';
+    btnElement.disabled = true;
+    btnElement.style.background = '#ccc';
+
+    google.script.run.withSuccessHandler(function(data) {
+        btnElement.innerHTML = originalText;
+        btnElement.disabled = false;
+        btnElement.style.background = '#4a90e2';
+        
+        const container = document.getElementById('ocrVerifyTableContainer');
+        
+        if (!data || data.length === 0) {
+            container.innerHTML = `<div style="background: #ffebee; border-radius: 8px; padding: 15px; text-align: center; color: #c0392b; font-weight: bold;">⚠️ 저장된 파싱 데이터가 없습니다.<br><span style="font-size:12px; font-weight:normal;">(가장 최근 사진이 OCR 분석을 거치지 않았을 수 있습니다.)</span></div>`;
+            container.style.display = 'block';
+            return;
+        }
+
+        // 엑셀 스타일의 깔끔한 표 렌더링
+        let tableHtml = `
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: center; color: #333; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.15); border-radius: 8px; overflow: hidden;">
+                <thead style="background: #f8f9fa; border-bottom: 2px solid #ddd;">
+                    <tr>
+                        <th style="padding: 10px 4px; border: 1px solid #ddd; white-space: nowrap;">B/L번호</th>
+                        <th style="padding: 10px 4px; border: 1px solid #ddd; white-space: nowrap; color: #e74c3c;">PAL</th>
+                        <th style="padding: 10px 4px; border: 1px solid #ddd; white-space: nowrap;">입고일</th>
+                        <th style="padding: 10px 4px; border: 1px solid #ddd; white-space: nowrap;">Type</th>
+                        <th style="padding: 10px 4px; border: 1px solid #ddd; white-space: nowrap;">인보이스</th>
+                        <th style="padding: 10px 4px; border: 1px solid #ddd;">비고</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        data.forEach(r => {
+            tableHtml += `
+                <tr>
+                    <td style="padding: 8px 4px; border: 1px solid #ddd; font-weight: 800;">${r.bl || ''}</td>
+                    <td style="padding: 8px 4px; border: 1px solid #ddd; color: #e74c3c; font-weight: bold;">${r.pal || '0'}</td>
+                    <td style="padding: 8px 4px; border: 1px solid #ddd; background: #fdfbfb;">${r.inDate || '미정'}</td>
+                    <td style="padding: 8px 4px; border: 1px solid #ddd;">${r.sType || ''}</td>
+                    <td style="padding: 8px 4px; border: 1px solid #ddd;">${r.invoice || ''}</td>
+                    <td style="padding: 8px 4px; border: 1px solid #ddd; color: #555; text-align: left; font-size: 11px;">${r.etc || ''}</td>
+                </tr>
+            `;
+        });
+        
+        tableHtml += `</tbody></table>`;
+        container.innerHTML = tableHtml;
+        container.style.display = 'block';
+        
+    }).withFailureHandler(function(err) {
+        btnElement.innerHTML = originalText;
+        btnElement.disabled = false;
+        btnElement.style.background = '#4a90e2';
+        alert("데이터를 불러오지 못했습니다: " + err.message);
+    }).getLastOcrData();
+}
 
       function initOcrGestures() {
           const wrapper = document.getElementById('ocrImageWrapper');

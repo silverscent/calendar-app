@@ -147,6 +147,11 @@ module.exports = async function(req, res) {
                 
                 return res.status(200).json({ success: true });
             }
+            // 🚨 [여기에 딱 추가!] 검수용 데이터 요청 처리
+            if (action === 'GET_LAST_OCR_DATA') {
+                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'LAST_OCR_DATA'`);
+                return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : []);
+            }
 
             if (action === 'GET_COMP_INFO_DB') { const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`); return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {}); }
             if (action === 'SAVE_COMP_INFO_DB') { const jsonStr = JSON.stringify(data); await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('COMP_INFO_DB', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]); return res.status(200).json({ success: true }); }
