@@ -2347,7 +2347,7 @@
               }
           }).getYearlyHolidays(year);
       }
-      // 🚀 구글 의존성 100% 삭제 + [모바일 에러 추적기 탑재!]
+     // 🚀 구글 의존성 100% 삭제 + [모바일 에러 스텔스 방어막 탑재!]
       const VERCEL_API_URL = "/api/calendar";
 
       const google = {
@@ -2366,9 +2366,9 @@
                               .then(r => r.json()).then(d => { 
                                   clearTimeout(timeoutId);
                                   let finalData = d;
-try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
+                                  try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
                                   
-                                  // 🚨 [핵심 패치] 서버가 에러를 뱉으면 폰 화면에 팝업을 띄웁니다!
+                                  // 🚨 서버가 에러를 뱉으면 폰 화면에 팝업
                                   if (finalData && finalData.error) {
                                       alert("🔥 서버 에러: " + finalData.error);
                                       setLoadingState(false);
@@ -2377,6 +2377,9 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
                                   if(this._ok) this._ok(finalData); 
                               }).catch(e => { 
                                   clearTimeout(timeoutId);
+                                  // 🛡️ [스텔스 패치 1] 앱 전환으로 인한 통신 절단(aborted) 무시!
+                                  if (e.name === 'AbortError' || e.message.includes('aborted')) return;
+                                  
                                   alert("🔥 통신 에러: " + e.message);
                                   if(this._err) this._err(e); 
                               }).finally(() => setLoadingState(false));
@@ -2385,7 +2388,6 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
                           setLoadingState(true);
                           fetch(`${VERCEL_API_URL}?api=true&type=${type}&year=${y}&month=${m}&t=${Date.now()}`)
                               .then(r => r.json()).then(d => { 
-                                  // 🚨 [핵심 패치] 달력 로딩 에러 시 팝업!
                                   if (d && d.error) {
                                       alert("🔥 달력 로딩 에러: " + d.error);
                                       setLoadingState(false);
@@ -2393,6 +2395,9 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
                                   }
                                   if(this._ok) this._ok(d); 
                               }).catch(e => { 
+                                  // 🛡️ [스텔스 패치 2] 앱 전환 절단 무시!
+                                  if (e.name === 'AbortError' || e.message.includes('aborted')) return;
+                                  
                                   alert("🔥 달력 통신 에러: " + e.message);
                                   if(this._err) this._err(e); 
                               }).finally(() => setLoadingState(false));
@@ -2403,14 +2408,22 @@ try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
                               .then(r => r.json()).then(d => { 
                                   if (d && d.error) { alert("🔥 통계 에러: " + d.error); return; }
                                   if(this._ok) this._ok(d); 
-                              }).catch(e => { if(this._err) this._err(e); }).finally(() => setLoadingState(false));
+                              }).catch(e => { 
+                                  // 🛡️ [스텔스 패치 3] 앱 전환 절단 무시!
+                                  if (e.name === 'AbortError' || e.message.includes('aborted')) return;
+                                  
+                                  if(this._err) this._err(e); 
+                              }).finally(() => setLoadingState(false));
                       },
                       manageWebOutboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'out', action: act, data: data, token: tk }); },
                       manageWebInboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'in', action: act, data: data, token: tk }); },
                       verifyAdminPw: function(pw) {
                           setLoadingState(true);
                           fetch(VERCEL_API_URL, { method: 'POST', body: JSON.stringify({ source: 'vercel', domain: currentType, action: 'PING', data: {}, token: pw }) })
-                              .then(r => r.json()).then(d => { if(this._ok) this._ok(!(d.msg && d.msg.includes('보안'))); }).catch(e => { if(this._err) this._err(e); }).finally(() => setLoadingState(false));
+                              .then(r => r.json()).then(d => { if(this._ok) this._ok(!(d.msg && d.msg.includes('보안'))); }).catch(e => { 
+                                  if (e.name === 'AbortError' || e.message.includes('aborted')) return;
+                                  if(this._err) this._err(e); 
+                              }).finally(() => setLoadingState(false));
                       },
                       getGlobalColors: function() { this._call({ source: 'vercel', action: 'GET_GLOBAL_COLORS' }); },
                       saveGlobalColor: function(c, i) { this._call({ source: 'vercel', action: 'SAVE_GLOBAL_COLOR', compName: c, colorIdx: i }); },
