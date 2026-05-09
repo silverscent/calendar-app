@@ -2185,7 +2185,7 @@
         `;
       }
 
-      // =====================================================
+// =====================================================
 // 🚀 [OCR 최종 패치] 광활한 핀치 투 줌/이동 엔진 (먹통 버그 해결)
 // =====================================================
 let ocrTransform = { scale: 1, x: 0, y: 0 };
@@ -2201,17 +2201,26 @@ function showLastOcrImage() {
         let url = (res && res.url) ? res.url : (typeof res === 'string' ? res : "");
         if (url && url.startsWith("http")) {
             
-            // 💡 [핵심 수정 부분] <img> 태그 바로 밑에 '버튼'과 '표 컨테이너'를 함께 넣어줍니다!
+            // 💡 [핵심 패치] 위에서 아래로(세로) 강제 정렬 + 버튼 터치 가로채기 방어막 추가!
             document.getElementById('ocrImageContent').innerHTML = `
-                <img id="ocrImgElement" src="${url}" alt="마지막 스케줄 이미지" style="max-width: 100%; display: block; margin: 0 auto; z-index: 1;">
+                <div style="display: flex; flex-direction: column; align-items: center; width: 100%; height: 100%;">
+                    
+                    <div style="width: 100%; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; flex: 1;">
+                        <img id="ocrImgElement" src="${url}" alt="마지막 스케줄 이미지" style="max-width: 100%; max-height: 60vh; display: block; object-fit: contain; z-index: 1;">
+                    </div>
+                    
+                    <div style="margin-top: 15px; margin-bottom: 10px; width: 100%; text-align: center; position: relative; z-index: 9999;">
+                        <button onclick="loadOcrVerificationData(this)" 
+                                ontouchstart="event.stopPropagation()" 
+                                onmousedown="event.stopPropagation()" 
+                                style="padding: 12px 20px; background: #4a90e2; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 90%; max-width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 15px; letter-spacing: 0.5px; pointer-events: auto;">
+                            📊 AI 파싱 데이터 원본 검수하기
+                        </button>
+                    </div>
+                    
+                    <div id="ocrVerifyTableContainer" style="width: 100%; overflow-x: auto; display: none; padding-bottom: 20px; position: relative; z-index: 9999;"></div>
                 
-                <div style="margin-top: 20px; width: 100%; text-align: center; position: relative; z-index: 100;">
-                    <button onclick="loadOcrVerificationData(this)" style="padding: 12px 20px; background: #4a90e2; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 90%; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 15px; letter-spacing: 0.5px;">
-                        📊 AI 파싱 데이터 원본 검수하기
-                    </button>
                 </div>
-                
-                <div id="ocrVerifyTableContainer" style="margin-top: 15px; text-align: left; overflow-x: auto; display: none; width: 100%; padding-bottom: 20px; position: relative; z-index: 100;"></div>
             `;
             setTimeout(initOcrGestures, 100); 
         } else {
