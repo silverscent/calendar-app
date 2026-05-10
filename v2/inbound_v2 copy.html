@@ -1498,24 +1498,22 @@
           let isHoliday = !!holidayName;
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
 
-          // 🚨 [입고] 좌우 분리 없애고 '상하 2층' 구조로 변경
-          let dateRowHtml = `<div class="date-row" style="display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%;">`;
+          let dateRowHtml = `<div class="date-row" style="align-items: flex-start;">`;
           
-          // (1층) 날짜와 총 팔레트 수를 양 끝으로 배치
-          dateRowHtml += `<div style="display: flex; justify-content: space-between; width: 100%; align-items: center; line-height: 1;">`;
+          // 🚨 [수정 1] flex: 1; min-width: 0; 을 줘서 아이폰 사파리가 이 박스의 크기를 제한하게 만듭니다.
+          dateRowHtml += `<div style="display:flex; flex-direction:column; align-items:flex-start; line-height:1.1; flex:1; min-width:0; padding-right:2px;">`;
           dateRowHtml += `<span class="${dateClass}" style="${redStyle}">${day}</span>`;
-          if (dayData && dayData.length > 0) {
-              let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
-              if (totalPallets > 0) {
-                  // 총 팔레트 수
-                  dateRowHtml += `<span class="daily-total" style="flex-shrink: 0; font-weight: 800;">${totalPallets}</span>`;
-              }
+          if (isHoliday && typeof holidayName === 'string') {
+              // 🚨 [수정 2] display:block, width:100% 및 overflow-wrap 추가로 아이폰에서도 무조건 접히게 만듭니다.
+              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; display:block; width:100%; white-space:normal; word-break:keep-all; overflow-wrap:break-word;">${holidayName}</span>`;
           }
           dateRowHtml += `</div>`;
 
-          // (2층) 공휴일 이름을 아래쪽에 배치 (좌우 꽉 차게 사용)
-          if (isHoliday && typeof holidayName === 'string') {
-              dateRowHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:1px; display: block; width: 100%; white-space: normal; word-break: break-all; line-height: 1.1;">${holidayName}</span>`;
+          // 2. 오른쪽 묶음 (파렛트 총합)
+          if (dayData && dayData.length > 0) {
+              let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
+              // 🚨 [수정 3] flex-shrink: 0; 을 줘서 왼쪽의 공휴일 글씨가 길어져도 숫자가 찌그러지지 않게 방어합니다.
+              if (totalPallets > 0) dateRowHtml += `<span class="daily-total" style="flex-shrink:0;">${totalPallets}</span>`;
           }
           dateRowHtml += `</div>`;
           

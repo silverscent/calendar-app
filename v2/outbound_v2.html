@@ -3164,20 +3164,33 @@
         const isThisMonthView = serverData.year === todayDateObj.getFullYear() && serverData.month === todayDateObj.getMonth() + 1;
         const todayDayNumber = todayDateObj.getDate();
 
-        // 🚨 [지능형 가변 높이 엔진] 
-        // 1. 기본적으로 모든 주차의 헤더 높이는 'auto' (날짜 바로 밑에 막대가 찰싹 붙어 공간 절약)
+       // 🚨 [출고 지능형 가변 높이 엔진 V3] - 글자 크기 설정 반영형
         let weekHeights = {};
+        
+        // 현재 앱의 글자 크기 설정을 가져옵니다 (A-, A, A+)
+        let savedSize = localStorage.getItem('cal_fontSize') || 'M';
+        // 글자 크기에 따라 한 줄에 들어가는 글자 수 기준 설정
+        let charsPerLine = (savedSize === 'L') ? 4 : 5; // A+는 4자, 그 외는 5자 기준
+
         for (let d = 1; d <= serverData.daysInMonth; d++) {
             let wIdx = Math.floor((serverData.firstDay + d - 1) / 7);
             if (!weekHeights[wIdx]) weekHeights[wIdx] = 'auto'; 
 
             let dYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            let isHol = !!(window.yearlyHolidays && window.yearlyHolidays[dYmd]);
+            let hName = window.yearlyHolidays ? window.yearlyHolidays[dYmd] : null;
             let hasSched = serverData.monthData[d] && serverData.monthData[d].length > 0;
 
-            // 2. 공휴일인데 일정이 있는 경우(또는 일정이 공휴일을 지나가는 경우)에만 그 주간 전체를 3.4em으로 튼튼하게 고정!
-            if (isHol && hasSched) {
-                weekHeights[wIdx] = '3.4em'; 
+            if (hName && hasSched) {
+                // 💡 [핵심] 실제 줄 수 계산: (글자수 / 기준글자수)를 올림하여 줄 수 계산
+                let linesNeeded = Math.ceil(hName.length / charsPerLine);
+                
+                // 줄 수에 따른 em 높이 계산 (날짜 1.2em + 공휴일 줄당 0.95em)
+                let calcH = (1.2 + (linesNeeded * 0.95)).toFixed(1) + 'em';
+
+                // 해당 주차의 최대 높이 갱신
+                if (weekHeights[wIdx] === 'auto' || parseFloat(weekHeights[wIdx]) < parseFloat(calcH)) {
+                    weekHeights[wIdx] = calcH;
+                }
             }
         }
 
@@ -3207,16 +3220,22 @@
           let w = Math.floor((serverData.firstDay + day - 1) / 7);
           let currentHeaderHeight = weekHeights[w];
 
+          if (isHoliday && (!dayData || dayData.length === 0)) {
+              currentHeaderHeight = 'auto';
+          }
+
+          let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
+          
           let cellHtml = `<div class="${cellClass}" ${bindCell}>`;
           
-          // 🚨 2. 동적 높이(currentHeaderHeight) + 아이폰 강제 너비 제한
-          cellHtml += `<div style="height: ${currentHeaderHeight}; width: 100%; min-width: 0; display:flex; flex-direction:column; align-items:flex-start; line-height: 1.1; margin-bottom: 2px; overflow: hidden;">`;
+          // 🚨 [최종 밀착 구조] min-height 대신 height를 사용하여 높이 강제 통일
+          cellHtml += `<div style="height: ${currentHeaderHeight}; width: 100%; min-width: 0; display:flex; flex-direction:column; align-items:flex-start; margin-bottom: 0px; overflow: hidden; justify-content: flex-start; gap: 0px;">`;
           
-          cellHtml += `<div class="${dateClass}" style="${redStyle}; margin-bottom: 0; margin-left: 2px;">${day}</div>`;
+          cellHtml += `<div class="${dateClass}" style="${redStyle}; margin-bottom: 0px; margin-left: 2px; line-height: 1.2;">${day}</div>`;
           
-          // 🚨 3. 공휴일 글씨 강제 줄바꿈
           if (isHoliday) {
-              cellHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; margin-left:2px; display:block; width:calc(100% - 4px); white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.1;">${holidayName}</span>`;
+              // word-break: break-all로 한 글자 단위까지 빽빽하게 줄바꿈 유도
+              cellHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:0px; margin-left:2px; display:block; width:calc(100% - 4px); white-space:normal; word-break:break-all; overflow-wrap:break-word; line-height:1.0;">${holidayName}</span>`;
           }
           cellHtml += `</div>`; // 헤더 구역 끝
 
