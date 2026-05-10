@@ -3164,6 +3164,23 @@
         const isThisMonthView = serverData.year === todayDateObj.getFullYear() && serverData.month === todayDateObj.getMonth() + 1;
         const todayDayNumber = todayDateObj.getDate();
 
+        // 🚨 [지능형 가변 높이 엔진] 
+        // 1. 기본적으로 모든 주차의 헤더 높이는 'auto' (날짜 바로 밑에 막대가 찰싹 붙어 공간 절약)
+        let weekHeights = {};
+        for (let d = 1; d <= serverData.daysInMonth; d++) {
+            let wIdx = Math.floor((serverData.firstDay + d - 1) / 7);
+            if (!weekHeights[wIdx]) weekHeights[wIdx] = 'auto'; 
+
+            let dYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            let isHol = !!(window.yearlyHolidays && window.yearlyHolidays[dYmd]);
+            let hasSched = serverData.monthData[d] && serverData.monthData[d].length > 0;
+
+            // 2. 공휴일인데 일정이 있는 경우(또는 일정이 공휴일을 지나가는 경우)에만 그 주간 전체를 3.4em으로 튼튼하게 고정!
+            if (isHol && hasSched) {
+                weekHeights[wIdx] = '3.4em'; 
+            }
+        }
+
         for (let day = 1; day <= serverData.daysInMonth; day++) {
           if (cellCount > 0 && cellCount % 7 === 0) rowHtml += '</div><div class="grid-row">';
           const dayOfWeek = (serverData.firstDay + day - 1) % 7;
@@ -3186,20 +3203,24 @@
 
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
           
+          // 🚨 1. 위에서 계산한 지능형 높이를 현재 주차(w)에 맞춰 가져옵니다.
+          let w = Math.floor((serverData.firstDay + day - 1) / 7);
+          let currentHeaderHeight = weekHeights[w];
+
           let cellHtml = `<div class="${cellClass}" ${bindCell}>`;
           
-          // 🚨 1. 높이 고정 + 아이폰 강제 너비 제한 (width: 100%, min-width: 0, overflow: hidden 추가)
-          cellHtml += `<div style="height: 3.4em; width: 100%; min-width: 0; display:flex; flex-direction:column; align-items:flex-start; line-height: 1.1; margin-bottom: 2px; overflow: hidden;">`;
+          // 🚨 2. 동적 높이(currentHeaderHeight) + 아이폰 강제 너비 제한
+          cellHtml += `<div style="height: ${currentHeaderHeight}; width: 100%; min-width: 0; display:flex; flex-direction:column; align-items:flex-start; line-height: 1.1; margin-bottom: 2px; overflow: hidden;">`;
           
           cellHtml += `<div class="${dateClass}" style="${redStyle}; margin-bottom: 0; margin-left: 2px;">${day}</div>`;
           
-          // 🚨 2. 공휴일 글씨 강제 줄바꿈 (display: block, width: 100%, overflow-wrap 추가)
+          // 🚨 3. 공휴일 글씨 강제 줄바꿈
           if (isHoliday) {
               cellHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; margin-left:2px; display:block; width:calc(100% - 4px); white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.1;">${holidayName}</span>`;
           }
-          cellHtml += `</div>`; // 고정 높이 헤더 구역 끝
+          cellHtml += `</div>`; // 헤더 구역 끝
 
-          let w = Math.floor((serverData.firstDay + day - 1) / 7);
+          // (💡 참고: 기존에 여기에 있던 let w = Math.floor... 줄은 위로 올렸으므로 삭제하시면 됩니다!)
 
           if (dayData && dayData.length > 0) {
             let maxSlot = -1;
