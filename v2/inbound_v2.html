@@ -1323,7 +1323,8 @@
           if (!google || !google.script) return;
           google.script.run.withSuccessHandler(res => {
               if (res && Array.isArray(res)) {
-                  res.forEach(d => window.yearlyHolidays[d] = true);
+                  // 🚨 [수정] true 대신 공휴일 이름을 저장하도록 변경 
+                  res.forEach(item => window.yearlyHolidays[item.date] = item.name);
                   if (typeof renderCalendar === 'function') renderCalendar();
               }
           }).getYearlyHolidays(year);
@@ -1475,10 +1476,21 @@
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
           let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           
-          let isHoliday = window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true;
+          // 🚨 [수정] 이름 확인 및 UI 추가 
+          let holidayName = window.yearlyHolidays ? window.yearlyHolidays[currentYmd] : null;
+          let isHoliday = !!holidayName;
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
+          
+          let dateRowHtml = `<div class="date-row" style="align-items: flex-start; justify-content: space-between;">`;
+          dateRowHtml += `<div style="display:flex; flex-direction:column; align-items:flex-start; line-height: 1.1;">`;
+          dateRowHtml += `<span class="${dateClass}" style="${redStyle}">${day}</span>`;
+          
+          // 공휴일 이름이 있으면 날짜 아래에 작게 표시
+          if (isHoliday) {
+              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:1px; white-space:nowrap;">${holidayName}</span>`;
+          }
+          dateRowHtml += `</div>`;
 
-          let dateRowHtml = `<div class="date-row"><span class="${dateClass}" style="${redStyle}">${day}</span>`;
           if (dayData && dayData.length > 0) {
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
               if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;

@@ -188,36 +188,8 @@ module.exports = async function(req, res) {
             if (action === 'SAVE_COMP_INFO_DB') { const jsonStr = JSON.stringify(data); await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('COMP_INFO_DB', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]); return res.status(200).json({ success: true }); }
             if (action === 'GET_GLOBAL_COLORS') { const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'GLOBAL_COMPANY_COLORS'`); return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {}); }
             if (action === 'SAVE_GLOBAL_COLOR') { const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'GLOBAL_COMPANY_COLORS'`); let colors = rows.length > 0 ? parseJSON(rows[0].setting_value) : {}; colors[compName] = colorIdx; const jsonStr = JSON.stringify(colors); await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('GLOBAL_COMPANY_COLORS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]); return res.status(200).json({ success: true }); }
-// [calendar.js] 약 133라인 부근
-if (action === 'GET_YEARLY_HOLIDAYS') {
-    const y = year || new Date().getFullYear();
-    const apiKey = process.env.HOLIDAY_API_KEY;
-    if (apiKey) {
-        try {
-            const url = `http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?solYear=${y}&ServiceKey=${apiKey}&_type=json&numOfRows=100`;
-            const response = await fetch(url);
-            const json = await response.json();
-            if (json?.response?.body?.items?.item) {
-                const items = Array.isArray(json.response.body.items.item) ? json.response.body.items.item : [json.response.body.items.item];
-                // 🚨 [수정] 날짜와 이름을 객체로 묶어서 반환 [cite: 6]
-                return res.status(200).json(items.map(h => {
-                    const d = String(h.locdate);
-                    return {
-                        date: `${d.substring(0,4)}-${d.substring(4,6)}-${d.substring(6,8)}`,
-                        name: h.dateName // 공휴일 명칭
-                    };
-                }));
-            }
-        } catch (e) { console.error("🔥 공휴일 API 에러:", e); }
-    }
-    // API 실패 시 기본 공휴일도 형식 통일 [cite: 6]
-    const baseHolidays = [
-        {date:`${y}-01-01`, name:"신정"}, {date:`${y}-03-01`, name:"삼일절"}, {date:`${y}-05-05`, name:"어린이날"},
-        {date:`${y}-06-06`, name:"현충일"}, {date:`${y}-08-15`, name:"광복절"}, {date:`${y}-10-03`, name:"개천절"},
-        {date:`${y}-10-09`, name:"한글날"}, {date:`${y}-12-25`, name:"성탄절"}
-    ];
-    return res.status(200).json(baseHolidays);
-}
+            if (action === 'GET_YEARLY_HOLIDAYS') { const y = year || new Date().getFullYear(); const apiKey = process.env.HOLIDAY_API_KEY; if (apiKey) { try { const url = `http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?solYear=${y}&ServiceKey=${apiKey}&_type=json&numOfRows=100`; const response = await fetch(url); const json = await response.json(); if (json?.response?.body?.items?.item) { const items = Array.isArray(json.response.body.items.item) ? json.response.body.items.item : [json.response.body.items.item]; return res.status(200).json(items.map(h => { const d = String(h.locdate); return `${d.substring(0,4)}-${d.substring(4,6)}-${d.substring(6,8)}`; })); } } catch (e) { console.error("🔥 공휴일 API 에러:", e); } } return res.status(200).json([`${y}-01-01`, `${y}-03-01`, `${y}-05-05`, `${y}-06-06`, `${y}-08-15`, `${y}-10-03`, `${y}-10-09`, `${y}-12-25`]); }
+
             if (domain === 'out') {
     const targetName = data?.oldComp;
     const newName = data?.newComp || targetName;

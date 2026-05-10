@@ -2353,7 +2353,8 @@
           if (!google || !google.script) return;
           google.script.run.withSuccessHandler(res => {
               if (res && Array.isArray(res)) {
-                  res.forEach(d => window.yearlyHolidays[d] = true);
+                  // 🚨 [수정] true 대신 객체의 이름(name)을 저장!
+                  res.forEach(item => window.yearlyHolidays[item.date] = item.name);
                   if (typeof renderCalendar === 'function') renderCalendar();
               }
           }).getYearlyHolidays(year);
@@ -3154,8 +3155,10 @@
           let cellClass = isToday ? "day-cell today-cell" : "day-cell";
 
           let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          let isHoliday = false;
-          if (window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true) isHoliday = true;
+          
+          // 🚨 [수정] 이름이 있는지 확인해서 true/false 결정
+          let holidayName = window.yearlyHolidays ? window.yearlyHolidays[currentYmd] : null;
+          let isHoliday = !!holidayName; 
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
 
           let dayData = serverData.monthData[day];
@@ -3163,7 +3166,17 @@
           let nextDayData = serverData.monthData[day + 1];
 
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
-          let cellHtml = `<div class="${cellClass}" ${bindCell}><div class="${dateClass}" style="${redStyle}">${day}</div>`;
+          
+          // 🚨 [핵심 수정] 출고 달력 전용 뼈대 (dateRowHtml 없이 cellHtml에 바로 Flex Box 생성)
+          let cellHtml = `<div class="${cellClass}" ${bindCell}>`;
+          cellHtml += `<div style="display:flex; flex-direction:column; align-items:flex-start; line-height: 1.1; margin-bottom: 2px;">`;
+          cellHtml += `<div class="${dateClass}" style="${redStyle}; margin-bottom: 0; margin-left: 2px;">${day}</div>`;
+          
+          // 공휴일 이름이 있으면 날짜 아래에 작게 표시
+          if (isHoliday) {
+              cellHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; white-space:nowrap; margin-left:2px;">${holidayName}</span>`;
+          }
+          cellHtml += `</div>`;
 
           let w = Math.floor((serverData.firstDay + day - 1) / 7);
 

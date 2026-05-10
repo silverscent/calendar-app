@@ -2596,19 +2596,49 @@ function loadOcrVerificationData(btnElement) {
           
           let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
           let cached = localStorage.getItem(cacheKey);
-          if (cached) { try { window.dashCurrentData = JSON.parse(cached); renderDashCharts(); } catch(e) {} } 
+          let oldSig = null; // 🚨 [방어막 지문]
+
+          if (cached) { 
+              try { 
+                  window.dashCurrentData = JSON.parse(cached); 
+                  // 로컬 캐시 알맹이 지문
+                  oldSig = JSON.stringify(window.dashCurrentData.monthData || {}) + JSON.stringify(window.dashCurrentData.pendingItems || []);
+                  renderDashCharts(); 
+              } catch(e) {} 
+          } 
           else {
-              window.dashCurrentData = { monthData: {}, pendingItems: [] }; renderDashCharts();
+              window.dashCurrentData = { monthData: {}, pendingItems: [] };
+              renderDashCharts();
               document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
               document.getElementById('dashAvg').innerText = "⏳";
           }
+
+          // 🚀 Vercel API 백그라운드 호출 (기존 래퍼 사용)
           google.script.run.withSuccessHandler(res => {
               let finalData = typeof res === 'string' ? JSON.parse(res) : res;
+              
+              // 🚨 Vercel 서버에서 온 새 데이터 지문
+              let newSig = JSON.stringify(finalData.monthData || {}) + JSON.stringify(finalData.pendingItems || []);
+
+              // 🛡️ [스마트 방어막] 지문이 완벽히 동일하면?
+              if (oldSig === newSig) {
+                  localStorage.setItem(cacheKey, JSON.stringify(finalData)); // 캐시만 조용히 갱신
+                  let subTxt = document.getElementById('dashSubTitleText');
+                  if (subTxt) subTxt.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`; // '(조회중)' 글씨만 제거
+                  return; // ⛔ 2차 렌더링 스킵!
+              }
+
+              // 지문이 다르면 정상적으로 차트를 다시 그림
               window.dashCurrentData = finalData;
               localStorage.setItem(cacheKey, JSON.stringify(finalData));
-              if (window.dashMode === 'month') renderDashCharts();
-          }).withFailureHandler(err => { if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
-          .getCalendarDataAsync(currentType, window.dashYear, window.dashMonth);
+              if (window.dashMode === 'month') {
+                  let subTxt = document.getElementById('dashSubTitleText');
+                  if (subTxt) subTxt.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
+                  renderDashCharts();
+              }
+          }).withFailureHandler(err => { 
+              if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; 
+          }).getCalendarDataAsync(currentType, window.dashYear, window.dashMonth);
       }
 
       function fetchYearlyAndRender() {
@@ -2618,19 +2648,47 @@ function loadOcrVerificationData(btnElement) {
           
           let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYearlyYear}`;
           let cached = localStorage.getItem(cacheKey);
-          if (cached) { try { yearlyCache[window.dashYearlyYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {} } 
+          let oldSig = null; // 🚨 [방어막 지문]
+
+          if (cached) { 
+              try { 
+                  yearlyCache[window.dashYearlyYear] = JSON.parse(cached); 
+                  let yData = yearlyCache[window.dashYearlyYear];
+                  oldSig = JSON.stringify(yData.monthly || []) + JSON.stringify(yData.comp || {});
+                  renderDashCharts(); 
+              } catch(e) {} 
+          } 
           else {
-              let dummyArr = []; for(let i=0; i<12; i++) dummyArr.push({pal:0, box:0, details:{}});
+              let dummyArr = [];
+              for(let i=0; i<12; i++) dummyArr.push({pal:0, box:0, details:{}});
               yearlyCache[window.dashYearlyYear] = { year: window.dashYearlyYear, monthly: dummyArr, comp: {} };
               renderDashCharts();
               document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
               document.getElementById('dashAvg').innerText = "⏳";
           }
+
+          // 🚀 Vercel API 백그라운드 호출
           google.script.run.withSuccessHandler(res => {
-              yearlyCache[res.year] = res; localStorage.setItem(cacheKey, JSON.stringify(res)); 
-              if (window.dashMode === 'year' && window.dashYearlyYear === res.year) renderDashCharts();
-          }).withFailureHandler(err => { if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
-          .getYearlyStatsAsync(currentType, window.dashYearlyYear);
+              let newSig = JSON.stringify(res.monthly || []) + JSON.stringify(res.comp || {});
+
+              if (oldSig === newSig) {
+                  yearlyCache[res.year] = res; 
+                  localStorage.setItem(cacheKey, JSON.stringify(res)); 
+                  let subTxt = document.getElementById('dashSubTitleText');
+                  if (subTxt) subTxt.innerText = `${window.dashYearlyYear}년 연간 요약`;
+                  return; // ⛔ 차트 2차 렌더링 스킵!
+              }
+
+              yearlyCache[res.year] = res; 
+              localStorage.setItem(cacheKey, JSON.stringify(res)); 
+              if (window.dashMode === 'year' && window.dashYearlyYear === res.year) {
+                  let subTxt = document.getElementById('dashSubTitleText');
+                  if (subTxt) subTxt.innerText = `${window.dashYearlyYear}년 연간 요약`;
+                  renderDashCharts();
+              }
+          }).withFailureHandler(err => { 
+              if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; 
+          }).getYearlyStatsAsync(currentType, window.dashYearlyYear);
       }
 
       // 1. 도넛 가운데에 정보 띄우기 플러그인 유지
