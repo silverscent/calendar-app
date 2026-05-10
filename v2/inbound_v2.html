@@ -1492,32 +1492,31 @@
           let cellClass = (isThisMonthView && day === todayDayNumber) ? "day-cell today-cell" : "day-cell";
           let dayData = serverData.monthData[day];
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
-         let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           
-          // 🚨 기존 true 체크 대신, 글자(이름)가 있는지 확인
           let holidayName = window.yearlyHolidays ? window.yearlyHolidays[currentYmd] : null;
           let isHoliday = !!holidayName;
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
 
-          // 🚨 원본 뼈대 완벽 유지
-          let dateRowHtml = `<div class="date-row">`;
+          let dateRowHtml = `<div class="date-row" style="align-items: flex-start;">`;
           
-          // 1. 왼쪽 묶음 (날짜 + 공휴일 이름)
-          dateRowHtml += `<div style="display:flex; flex-direction:column; align-items:flex-start; line-height:1.1;">`;
+          // 🚨 [수정 1] flex: 1; min-width: 0; 을 줘서 아이폰 사파리가 이 박스의 크기를 제한하게 만듭니다.
+          dateRowHtml += `<div style="display:flex; flex-direction:column; align-items:flex-start; line-height:1.1; flex:1; min-width:0; padding-right:2px;">`;
           dateRowHtml += `<span class="${dateClass}" style="${redStyle}">${day}</span>`;
           if (isHoliday && typeof holidayName === 'string') {
-              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; white-space:normal; word-break:keep-all;">${holidayName}</span>`;
+              // 🚨 [수정 2] display:block, width:100% 및 overflow-wrap 추가로 아이폰에서도 무조건 접히게 만듭니다.
+              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; display:block; width:100%; white-space:normal; word-break:keep-all; overflow-wrap:break-word;">${holidayName}</span>`;
           }
           dateRowHtml += `</div>`;
 
-          // 2. 오른쪽 묶음 (파렛트 총합 - 원본 코드 그대로)
+          // 2. 오른쪽 묶음 (파렛트 총합)
           if (dayData && dayData.length > 0) {
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
-              if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
+              // 🚨 [수정 3] flex-shrink: 0; 을 줘서 왼쪽의 공휴일 글씨가 길어져도 숫자가 찌그러지지 않게 방어합니다.
+              if (totalPallets > 0) dateRowHtml += `<span class="daily-total" style="flex-shrink:0;">${totalPallets}</span>`;
           }
           dateRowHtml += `</div>`;
           
-          // 3. 셀 조립 (원본 코드 그대로)
           let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
 
                    
