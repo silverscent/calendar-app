@@ -1168,14 +1168,9 @@
       <div class="pending-list" id="pendingList"></div>
     </div>
 
-    <div id="statsSummaryBar" onclick="openDashboard()" style="margin-top: 15px; padding: 20px; background: var(--card-bg); border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); cursor: pointer; border: 1px solid var(--border-color); width: 100%; box-sizing: border-box;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <span style="font-weight: 800; color: var(--text-main); font-size: 1.05em;">📊 당월 <span id="statsLabelType">입고</span> 진척률</span>
-        <span style="font-weight: 900; color: #0a84ff; font-size: 1.1em;"><span id="sumDonePal">0</span> / <span id="sumTotalPal">0</span> P</span>
-      </div>
-      <div style="width: 100%; background: rgba(128,128,128,0.1); border-radius: 12px; height: 14px; overflow: hidden; position: relative;">
-        <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #0a84ff 0%, #34c759 100%); transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
-      </div>
+    <div id="statsSummaryBar" class="stats-summary-bar" onclick="openDashboard()">
+      <div class="stats-title">📊 당월 입고 진척률</div>
+      <div class="stats-numbers"><span class="done" id="sumDonePal">0</span><span class="total">/ <span id="sumTotalPal">0</span> P</span></div>
     </div>
 
     <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
@@ -2518,31 +2513,11 @@ function loadOcrVerificationData(btnElement) {
               let rawName = String(it.bl || it.company || "").trim();
               if (!rawName || rawName === "미정") return;
               tPal += parseInt(it.pal) || 0;
-              // 🚨 입고(status='완료') 또는 출고(isDone=true) 로직을 모두 커버하여 완벽하게 카운트합니다!
-              if (it.isDone === true || String(it.isDone) === "true" || it.status === "완료") dPal += parseInt(it.pal) || 0;
+              if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
           };
-          
-          // 미정 데이터 제외하고 날짜 확정된 데이터만 계산 (기존 로직 완벽 유지)
-          for (let d = 1; d <= serverData.daysInMonth; d++) { 
-              if (serverData.monthData[d]) serverData.monthData[d].forEach(process); 
-          }
-          
+          for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
           let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
           let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
-
-          // 🚀 [V2 게이지 바 애니메이션 로직 탑재] 계산된 숫자를 바탕으로 즉시 게이지를 채웁니다.
-          const barEl = document.getElementById('progressBar');
-          if (barEl) {
-              let percent = tPal === 0 ? 0 : Math.round((dPal / tPal) * 100);
-              setTimeout(() => { 
-                  barEl.style.width = `${percent}%`; 
-                  if (percent === 100 && tPal > 0) {
-                      barEl.style.background = 'linear-gradient(90deg, #34c759 0%, #30d158 100%)';
-                  } else {
-                      barEl.style.background = 'linear-gradient(90deg, #0a84ff 0%, #34c759 100%)';
-                  }
-              }, 100); 
-          }
       }
 
       function openDashboard() {
