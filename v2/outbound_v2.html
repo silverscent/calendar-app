@@ -3186,28 +3186,20 @@
 
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
           
-          // 🚨 [핵심 수정] 출고 달력 전용 뼈대 (dateRowHtml 없이 cellHtml에 바로 Flex Box 생성)
           let cellHtml = `<div class="${cellClass}" ${bindCell}>`;
-          cellHtml += `<div style="display:flex; flex-direction:column; align-items:flex-start; line-height: 1.1; margin-bottom: 2px;">`;
+          
+          // 🚨 [간트차트 정렬 핵심 패치] 
+          // 헤더 구역의 높이를 '3.4em'으로 단단하게 고정합니다. 
+          // 글자가 없든 3줄이든 이 구역이 차지하는 부피가 똑같아져서, 아래 달리는 막대들이 무조건 일직선으로 정렬됩니다.
+          cellHtml += `<div style="height: 3.4em; display:flex; flex-direction:column; align-items:flex-start; line-height: 1.1; margin-bottom: 2px;">`;
+          
           cellHtml += `<div class="${dateClass}" style="${redStyle}; margin-bottom: 0; margin-left: 2px;">${day}</div>`;
           
-          // 공휴일 이름 표시 (줄넘김 강화 버전)
+          // 공휴일 이름이 있으면 날짜 아래에 작게 표시
           if (isHoliday) {
-              cellHtml += `<span style="
-                  color: #ff3b30; 
-                  font-size: 0.6em; 
-                  font-weight: 800; 
-                  letter-spacing: -0.8px; 
-                  margin-top: 1px; 
-                  margin-left: 2px;
-                  display: block; 
-                  width: calc(100% - 4px); 
-                  white-space: normal; 
-                  word-break: break-all; 
-                  line-height: 1.0;
-              ">${holidayName}</span>`;
+              cellHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; margin-left:2px; white-space:normal; word-break:keep-all; line-height:1.1;">${holidayName}</span>`;
           }
-          cellHtml += `</div>`;
+          cellHtml += `</div>`; // 고정 높이 헤더 구역 끝
 
           let w = Math.floor((serverData.firstDay + day - 1) / 7);
 
