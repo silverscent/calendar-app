@@ -1476,6 +1476,32 @@
         for (let d = 1; d <= serverData.daysInMonth; d++) {
             if (serverData.monthData[d]) { serverData.monthData[d].forEach((item, idx) => { item._rawIdx = idx; }); }
         }
+
+        // 🚨 [입고 지능형 가변 높이 엔진] - 초밀착 정렬형
+        let weekHeights = {};
+        let savedSize = localStorage.getItem('cal_fontSize') || 'M';
+        let charsPerLine = (savedSize === 'L') ? 4 : 5; // 글자 크기에 따른 줄바꿈 기준
+
+        for (let d = 1; d <= serverData.daysInMonth; d++) {
+            let wIdx = Math.floor((serverData.firstDay + d - 1) / 7);
+            if (!weekHeights[wIdx]) weekHeights[wIdx] = 'auto'; 
+
+            let dYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            let hName = window.yearlyHolidays ? window.yearlyHolidays[dYmd] : null;
+            let hasSched = serverData.monthData[d] && serverData.monthData[d].length > 0;
+
+            // 공휴일에 입고 일정이 있을 때만! 그 주차(Week)의 헤더 높이를 통일함
+            if (hName && hasSched) {
+                let linesNeeded = Math.ceil(hName.length / charsPerLine);
+                // 입고 레이아웃(1.0 + 공휴일줄)에 최적화된 수치 적용
+                let calcH = (1.0 + (linesNeeded * 0.75)).toFixed(2) + 'em';
+
+                if (weekHeights[wIdx] === 'auto' || parseFloat(weekHeights[wIdx]) < parseFloat(calcH)) {
+                    weekHeights[wIdx] = calcH;
+                }
+            }
+        }
+
         document.getElementById('calTitle').innerText = `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2,'0')}`;
         const grid = document.getElementById('calendarGrid');
         let rowHtml = '<div class="grid-row">'; let cellCount = 0;
@@ -1492,35 +1518,43 @@
           let cellClass = (isThisMonthView && day === todayDayNumber) ? "day-cell today-cell" : "day-cell";
           let dayData = serverData.monthData[day];
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
-        let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           
           let holidayName = window.yearlyHolidays ? window.yearlyHolidays[currentYmd] : null;
           let isHoliday = !!holidayName;
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
 
-          // 🚨 [입고] 좌우 분리 없애고 '상하 2층' 구조로 변경
-          let dateRowHtml = `<div class="date-row" style="display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%;">`;
+          let w = Math.floor((serverData.firstDay + day - 1) / 7);
+          let currentHeaderHeight = weekHeights[w];
+
+          // 일정이 없는 공휴일은 공간 절약을 위해 auto로 찰싹 붙임
+          if (isHoliday && (!dayData || dayData.length === 0)) {
+              currentHeaderHeight = 'auto';
+          }
+
+          // 🚨 [입고 2층 구조 유지] 1층(날짜/합계) + 2층(공휴일) 유지하며 height만 조절
+          let dateRowHtml = `<div class="date-row" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0px; width: 100%; height: ${currentHeaderHeight}; overflow: hidden; justify-content: flex-start; margin-bottom: 2px;">`;
           
-          // (1층) 날짜와 총 팔레트 수를 양 끝으로 배치
-          dateRowHtml += `<div style="display: flex; justify-content: space-between; width: 100%; align-items: center; line-height: 1;">`;
+          // (1층) 날짜와 총 팔레트 수
+          dateRowHtml += `<div style="display: flex; justify-content: space-between; width: 100%; align-items: center; line-height: 1.0; height: 1.1em;">`;
           dateRowHtml += `<span class="${dateClass}" style="${redStyle}">${day}</span>`;
           if (dayData && dayData.length > 0) {
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
               if (totalPallets > 0) {
-                  // 총 팔레트 수
-                  dateRowHtml += `<span class="daily-total" style="flex-shrink: 0; font-weight: 800;">${totalPallets}</span>`;
+                  dateRowHtml += `<span class="daily-total" style="flex-shrink: 0; font-weight: 800; font-size: 0.75em;">${totalPallets}</span>`;
               }
           }
           dateRowHtml += `</div>`;
 
-          // (2층) 공휴일 이름을 아래쪽에 배치 (좌우 꽉 차게 사용)
+          // (2층) 공휴일 이름 (전체 너비 사용)
           if (isHoliday && typeof holidayName === 'string') {
-              dateRowHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:1px; display: block; width: 100%; white-space: normal; word-break: break-all; line-height: 1.1;">${holidayName}</span>`;
+              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:1px; display: block; width: 100%; white-space: normal; word-break: break-all; line-height: 1.0;">${holidayName}</span>`;
           }
           dateRowHtml += `</div>`;
           
           let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
 
+          // ... (이후 item-tag 렌더링 및 미정건 로직은 기존과 동일) ...
                    
           if(dayData && dayData.length > 0) {
             dayData.forEach((item, idx) => {
