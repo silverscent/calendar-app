@@ -441,7 +441,8 @@ ${JSON.stringify(parsedResult)}
 
                 const currentTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
                 const timeStr = `${currentTime.getMonth() + 1}월${currentTime.getDate()}일 ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`;
-                const jsonUrl = JSON.stringify({ url: fullUrl });
+                // 💡 [수정] 294라인: url뿐만 아니라 fileId도 함께 저장하여 영구 보존 준비
+                const jsonUrl = JSON.stringify({ url: fullUrl, fileId: targetFileId }); 
                 const jsonTime = JSON.stringify({ time: timeStr });
                 
                 // 🚨 [새로 추가된 핵심 1줄] 표(Table)로 그릴 데이터도 JSON으로 포장해서 DB에 저장!

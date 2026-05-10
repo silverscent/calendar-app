@@ -90,26 +90,57 @@ module.exports = async function(req, res) {
             if (action === 'PING') return res.status(200).json({ msg: token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
             const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
 
-         // ====================================================================
-        // 🚨 [OCR 전용 하이패스] 이중 포장(Object) 완벽 파쇄기 엔진!
+        // ====================================================================
+        // 🚨 [OCR 전용 하이패스] 이중 포장 파쇄기 + 텔레그램 이미지 실시간 심폐소생!
         // ====================================================================
         if (action === 'getLastOcrImageUrl' || action === 'GET_LAST_OCR_IMAGE') {
             try {
                 await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
                 const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
                 let finalUrl = "";
+                let fileId = null;
+
                 if (rows.length > 0) {
                     let val = rows[0].setting_value;
+                    
                     // 1단계: 글씨면 일단 JSON 상자인지 확인하고 까버림
                     if (typeof val === 'string') { try { val = JSON.parse(val); } catch(e) {} }
-                    // 2단계: 까봤더니 상자(Object)면 그 안의 알맹이(.url)만 쏙 빼옴
-                    if (typeof val === 'object' && val !== null) { finalUrl = val.url || ""; }
+                    
+                    // 2단계: 까봤더니 상자(Object)면 그 안의 알맹이(.url)와 고유번호(.fileId)를 쏙 빼옴
+                    if (typeof val === 'object' && val !== null) { 
+                        finalUrl = val.url || ""; 
+                        fileId = val.fileId || null;
+                    }
                     // 3단계: 애초에 그냥 생짜 글씨였으면 그대로 씀
                     else if (typeof val === 'string') { finalUrl = val; }
+
+                    // 🚨 4단계 [핵심 심폐소생]: fileId가 있으면 텔레그램 서버에 1시간짜리 싱싱한 새 주소를 발급받음!
+                    if (fileId) {
+                        try {
+                            const botToken = process.env.TELEGRAM_BOT_TOKEN;
+                            const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
+                            const fileData = await fileRes.json();
+                            
+                            if (fileData.ok) {
+                                // 싱싱한 새 주소로 덮어쓰기
+                                finalUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
+                                
+                                // (선택) 다음 번 호출 속도를 위해 갱신된 주소를 DB에도 조용히 업데이트
+                                if (typeof val === 'object') {
+                                    val.url = finalUrl;
+                                    await pool.query(`UPDATE system_settings SET setting_value = ? WHERE setting_key = 'last_ocr_image'`, [JSON.stringify(val)]);
+                                }
+                            }
+                        } catch(apiErr) {
+                            console.error("🔥 텔레그램 새 이미지 주소 발급 실패:", apiErr);
+                        }
+                    }
                 }
-                // 프론트엔드가 헷갈리지 않게 깔끔하게 {"url": "https...", "success": true} 로 보냄
+                
+                // 프론트엔드가 헷갈리지 않게 깔끔하게 전달
                 return res.status(200).json({ url: finalUrl, success: true });
             } catch(e) {
+                console.error("🔥 OCR 이미지 로딩 에러:", e);
                 return res.status(200).json({ url: "", success: false });
             }
         }
