@@ -3214,8 +3214,7 @@
           let prevDayData = serverData.monthData[day - 1];
           let nextDayData = serverData.monthData[day + 1];
 
-          let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
-          
+         
           // 🚨 1. 위에서 계산한 지능형 높이를 현재 주차(w)에 맞춰 가져옵니다.
           let w = Math.floor((serverData.firstDay + day - 1) / 7);
           let currentHeaderHeight = weekHeights[w];
