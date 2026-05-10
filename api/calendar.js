@@ -199,12 +199,19 @@ if (action === 'GET_YEARLY_HOLIDAYS') {
             const json = await response.json();
             if (json?.response?.body?.items?.item) {
                 const items = Array.isArray(json.response.body.items.item) ? json.response.body.items.item : [json.response.body.items.item];
-                // 🚨 [수정] 날짜와 이름을 객체로 묶어서 반환 [cite: 6]
+                
                 return res.status(200).json(items.map(h => {
                     const d = String(h.locdate);
+                    let holidayName = h.dateName || "";
+                    
+                    // 🚨 [핵심 추가] '대체공휴일' 글자가 포함되어 있으면 '대체'로 줄임
+                    if (holidayName.includes("대체공휴일")) {
+                        holidayName = holidayName.replace("대체공휴일", "대체");
+                    }
+
                     return {
                         date: `${d.substring(0,4)}-${d.substring(4,6)}-${d.substring(6,8)}`,
-                        name: h.dateName // 공휴일 명칭
+                        name: holidayName 
                     };
                 }));
             }
