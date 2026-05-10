@@ -1494,43 +1494,33 @@
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
          let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           
+          // 🚨 기존 true 체크 대신, 글자(이름)가 있는지 확인
           let holidayName = window.yearlyHolidays ? window.yearlyHolidays[currentYmd] : null;
           let isHoliday = !!holidayName;
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
+
+          // 🚨 원본 뼈대 완벽 유지
+          let dateRowHtml = `<div class="date-row">`;
           
-          // 🚨 레이아웃 수정: 날짜와 합계 숫자가 서로의 영역을 침범하지 않게 분리
-          let dateRowHtml = `<div class="date-row" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">`;
-          
-          // 왼쪽: 날짜 + 공휴일 이름
-          dateRowHtml += `<div style="display: flex; flex-direction: column; align-items: flex-start; max-width: 70%;">`;
-          dateRowHtml += `<span class="${dateClass}" style="${redStyle} line-height: 1;">${day}</span>`;
+          // 1. 왼쪽 묶음 (날짜 + 공휴일 이름)
+          dateRowHtml += `<div style="display:flex; flex-direction:column; align-items:flex-start; line-height:1.1;">`;
+          dateRowHtml += `<span class="${dateClass}" style="${redStyle}">${day}</span>`;
           if (isHoliday && typeof holidayName === 'string') {
-              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; display: block; white-space: normal; word-break: break-all; line-height: 1.1;">${holidayName}</span>`;
+              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; white-space:normal; word-break:keep-all;">${holidayName}</span>`;
           }
           dateRowHtml += `</div>`;
 
-          // 오른쪽: 파렛트 합계
-          if (dayData && dayData.length > 0) {
-              let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
-              if (totalPallets > 0) {
-                  dateRowHtml += `<span class="daily-total" style="flex-shrink: 0; margin-left: 4px;">${totalPallets}</span>`;
-              }
-          }
-          dateRowHtml += `</div>`;
-
+          // 2. 오른쪽 묶음 (파렛트 총합 - 원본 코드 그대로)
           if (dayData && dayData.length > 0) {
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
               if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
           }
           dateRowHtml += `</div>`;
-
-          if (dayData && dayData.length > 0) {
-              let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
-              if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
-          }
-          dateRowHtml += `</div>`;
-          let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
           
+          // 3. 셀 조립 (원본 코드 그대로)
+          let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
+
+                   
           if(dayData && dayData.length > 0) {
             dayData.forEach((item, idx) => {
               let isItemDone = item.isDone === true || String(item.isDone) === "true";
