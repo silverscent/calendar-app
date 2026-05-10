@@ -1498,25 +1498,23 @@
           let isHoliday = !!holidayName;
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
           
-          let dateRowHtml = `<div class="date-row" style="align-items: flex-start; justify-content: space-between;">`;
-          // 🚨 줄넘김을 위해 display: flex; width: 100% 등을 세밀하게 조정
-          dateRowHtml += `<div style="display:flex; flex-direction:column; align-items:flex-start; line-height: 1.1; width: calc(100% - 25px); overflow: hidden;">`;
-          dateRowHtml += `<span class="${dateClass}" style="${redStyle}">${day}</span>`;
+          // 🚨 레이아웃 수정: 날짜와 합계 숫자가 서로의 영역을 침범하지 않게 분리
+          let dateRowHtml = `<div class="date-row" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">`;
           
-          // 공휴일 이름 표시 (강력 줄넘김 버전)
+          // 왼쪽: 날짜 + 공휴일 이름
+          dateRowHtml += `<div style="display: flex; flex-direction: column; align-items: flex-start; max-width: 70%;">`;
+          dateRowHtml += `<span class="${dateClass}" style="${redStyle} line-height: 1;">${day}</span>`;
           if (isHoliday && typeof holidayName === 'string') {
-              dateRowHtml += `<span style="
-                  color: #ff3b30; 
-                  font-size: 0.6em; 
-                  font-weight: 800; 
-                  letter-spacing: -0.5px; 
-                  margin-top: 1px; 
-                  display: block; 
-                  width: 100%; 
-                  white-space: normal; 
-                  word-break: break-all; 
-                  line-height: 1.0;
-              ">${holidayName}</span>`;
+              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; display: block; white-space: normal; word-break: break-all; line-height: 1.1;">${holidayName}</span>`;
+          }
+          dateRowHtml += `</div>`;
+
+          // 오른쪽: 파렛트 합계
+          if (dayData && dayData.length > 0) {
+              let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
+              if (totalPallets > 0) {
+                  dateRowHtml += `<span class="daily-total" style="flex-shrink: 0; margin-left: 4px;">${totalPallets}</span>`;
+              }
           }
           dateRowHtml += `</div>`;
 
