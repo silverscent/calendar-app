@@ -1487,7 +1487,7 @@
           
           // 공휴일 이름이 있으면 날짜 아래에 작게 표시
           if (isHoliday) {
-              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:1px; white-space:nowrap;">${holidayName}</span>`;
+              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:1px; white-space:normal; word-break:keep-all; line-height:1.1;">${holidayName}</span>`;
           }
           dateRowHtml += `</div>`;
 

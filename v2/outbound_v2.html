@@ -3174,7 +3174,7 @@
           
           // 공휴일 이름이 있으면 날짜 아래에 작게 표시
           if (isHoliday) {
-              cellHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; white-space:nowrap; margin-left:2px;">${holidayName}</span>`;
+              cellHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; margin-left:2px; white-space:normal; word-break:keep-all; line-height:1.1;">${holidayName}</span>`;
           }
           cellHtml += `</div>`;
 
