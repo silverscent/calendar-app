@@ -1772,11 +1772,20 @@
     <div class="top-wrapper">
       <div class="top-row">
         <div class="title-area">
-          <button class="nav-arrow" onclick="navMonth(-1)">◀</button>
-          <button class="title-btn" onclick="openPicker()">
-            🚚 <span id="calTitle"></span> <span class="drop-icon">▼</span>
+          <button class="nav-arrow" style="display:flex; align-items:center; justify-content:center; padding: 6px 12px;" onclick="navMonth(-1)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
           </button>
-          <button class="nav-arrow" onclick="navMonth(1)">▶</button>
+          
+          <button class="title-btn" onclick="openPicker()" style="display:flex; align-items:center; justify-content:center; gap:4px;">
+            🚚 <span id="calTitle"></span> 
+            <span class="drop-icon" style="display:flex; align-items:center; margin-left: 2px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </span>
+          </button>
+          
+          <button class="nav-arrow" style="display:flex; align-items:center; justify-content:center; padding: 6px 12px;" onclick="navMonth(1)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
         </div>
         <div class="controls-area">
           <button class="theme-toggle" onclick="toggleTheme()">☀️</button>

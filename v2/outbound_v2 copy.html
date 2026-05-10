@@ -1836,11 +1836,13 @@
       <div class="pending-list" id="pendingList"></div>
     </div>
 
-    <div id="statsSummaryBar" class="stats-summary-bar" onclick="openDashboard()">
-      <div class="stats-title">📊 당월 <span id="statsLabelType">스케줄</span> 진척률</div>
-      <div class="stats-numbers">
-        <span class="done" id="sumDonePal">0</span>
-        <span class="total">/ <span id="sumTotalPal">0</span> PAL</span>
+    <div id="statsSummaryBar" onclick="openDashboard()" style="margin-top: 15px; padding: 20px; background: var(--card-bg); border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); cursor: pointer; border: 1px solid var(--border-color); width: 100%; box-sizing: border-box;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <span style="font-weight: 800; color: var(--text-main); font-size: 1.05em;">📊 당월 <span id="statsLabelType">입고</span> 진척률</span>
+        <span style="font-weight: 900; color: #0a84ff; font-size: 1.1em;"><span id="sumDonePal">0</span> / <span id="sumTotalPal">0</span> P</span>
+      </div>
+      <div style="width: 100%; background: rgba(128,128,128,0.1); border-radius: 12px; height: 14px; overflow: hidden; position: relative;">
+        <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #0a84ff 0%, #34c759 100%); transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
       </div>
     </div>
 
@@ -5359,9 +5361,10 @@
       });
 
       // 달력 바닥에 있는 "하단 요약바"용 업데이트 (출고 최적화)
-      function updateStatsSummary() {
+     function updateStatsSummary() {
           let tPal = 0, dPal = 0;
           const process = (it) => {
+              // 🚨 [출고 전용 로직 보존] TASK나 휴무, 점검 등 순수 작업은 진척률 통계(물량)에서 완벽히 제외합니다!
               let clean = String(it.company || "").replace(/\[TASK\]/gi, "").trim();
               if (String(it.company || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean))) return;
               
@@ -5376,6 +5379,20 @@
           let elType = document.getElementById("statsLabelType"); if(elType) elType.innerText = "출고";
           let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
           let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
+
+          // 🚀 [V2 게이지 바 애니메이션 로직 탑재] 출고 전용으로 계산된 숫자를 바탕으로 게이지를 채웁니다.
+          const barEl = document.getElementById('progressBar');
+          if (barEl) {
+              let percent = tPal === 0 ? 0 : Math.round((dPal / tPal) * 100);
+              setTimeout(() => { 
+                  barEl.style.width = `${percent}%`; 
+                  if (percent === 100 && tPal > 0) {
+                      barEl.style.background = 'linear-gradient(90deg, #34c759 0%, #30d158 100%)'; // 100% 초록
+                  } else {
+                      barEl.style.background = 'linear-gradient(90deg, #0a84ff 0%, #34c759 100%)'; // 진행중 파랑
+                  }
+              }, 100); 
+          }
       }
 
       function closeModalOnBgClick(e) {
