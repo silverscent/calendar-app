@@ -3164,13 +3164,10 @@
         const isThisMonthView = serverData.year === todayDateObj.getFullYear() && serverData.month === todayDateObj.getMonth() + 1;
         const todayDayNumber = todayDateObj.getDate();
 
-       // 🚨 [출고 지능형 가변 높이 엔진 V3] - 글자 크기 설정 반영형
+       // 🚨 [출고 지능형 가변 높이 엔진 V4] - 초밀착 정렬형
         let weekHeights = {};
-        
-        // 현재 앱의 글자 크기 설정을 가져옵니다 (A-, A, A+)
         let savedSize = localStorage.getItem('cal_fontSize') || 'M';
-        // 글자 크기에 따라 한 줄에 들어가는 글자 수 기준 설정
-        let charsPerLine = (savedSize === 'L') ? 4 : 5; // A+는 4자, 그 외는 5자 기준
+        let charsPerLine = (savedSize === 'L') ? 4 : 5; 
 
         for (let d = 1; d <= serverData.daysInMonth; d++) {
             let wIdx = Math.floor((serverData.firstDay + d - 1) / 7);
@@ -3181,13 +3178,10 @@
             let hasSched = serverData.monthData[d] && serverData.monthData[d].length > 0;
 
             if (hName && hasSched) {
-                // 💡 [핵심] 실제 줄 수 계산: (글자수 / 기준글자수)를 올림하여 줄 수 계산
                 let linesNeeded = Math.ceil(hName.length / charsPerLine);
-                
-                // 줄 수에 따른 em 높이 계산 (날짜 1.2em + 공휴일 줄당 0.95em)
-                let calcH = (1.2 + (linesNeeded * 0.95)).toFixed(1) + 'em';
+                // 💡 [수치 조정] 기존 1.2/0.95에서 -> 0.9/0.72로 대폭 축소하여 빈 공간 제거
+                let calcH = (0.9 + (linesNeeded * 0.72)).toFixed(2) + 'em';
 
-                // 해당 주차의 최대 높이 갱신
                 if (weekHeights[wIdx] === 'auto' || parseFloat(weekHeights[wIdx]) < parseFloat(calcH)) {
                     weekHeights[wIdx] = calcH;
                 }
@@ -3215,7 +3209,6 @@
           let nextDayData = serverData.monthData[day + 1];
 
          
-          // 🚨 1. 위에서 계산한 지능형 높이를 현재 주차(w)에 맞춰 가져옵니다.
           let w = Math.floor((serverData.firstDay + day - 1) / 7);
           let currentHeaderHeight = weekHeights[w];
 
@@ -3227,14 +3220,15 @@
           
           let cellHtml = `<div class="${cellClass}" ${bindCell}>`;
           
-          // 🚨 [최종 밀착 구조] min-height 대신 height를 사용하여 높이 강제 통일
-          cellHtml += `<div style="height: ${currentHeaderHeight}; width: 100%; min-width: 0; display:flex; flex-direction:column; align-items:flex-start; margin-bottom: 0px; overflow: hidden; justify-content: flex-start; gap: 0px;">`;
+          // 🚨 [최종 밀착 구조] line-height를 1.0으로 고정하고 여백(gap)을 0으로 설정
+          cellHtml += `<div style="height: ${currentHeaderHeight}; width: 100%; min-width: 0; display:flex; flex-direction:column; align-items:flex-start; line-height: 1.0; margin-bottom: 0px; overflow: hidden; justify-content: flex-start; gap: 0px;">`;
           
-          cellHtml += `<div class="${dateClass}" style="${redStyle}; margin-bottom: 0px; margin-left: 2px; line-height: 1.2;">${day}</div>`;
+          // 날짜 숫자 줄 간격 타이트하게 조정
+          cellHtml += `<div class="${dateClass}" style="${redStyle}; margin-bottom: 0px; margin-left: 2px; line-height: 1.0; height: 1em;">${day}</div>`;
           
           if (isHoliday) {
-              // word-break: break-all로 한 글자 단위까지 빽빽하게 줄바꿈 유도
-              cellHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:0px; margin-left:2px; display:block; width:calc(100% - 4px); white-space:normal; word-break:break-all; overflow-wrap:break-word; line-height:1.0;">${holidayName}</span>`;
+              // margin-top: 1px만 주어 날짜와 최소한의 구분만 하고 막대와 바짝 붙임
+              cellHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:1px; margin-left:2px; display:block; width:calc(100% - 4px); white-space:normal; word-break:break-all; overflow-wrap:break-word; line-height:1.0;">${holidayName}</span>`;
           }
           cellHtml += `</div>`; // 헤더 구역 끝
 
