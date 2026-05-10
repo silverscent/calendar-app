@@ -2350,12 +2350,31 @@
       window.yearlyHolidays = {};
       
       function checkAndFetchHolidays(year) {
+          const cacheKey = `holidays_${year}`;
+          // 1. 일단 로컬 스토리지(캐시)에서 먼저 꺼내서 즉시 적용
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+              const parsed = JSON.parse(cached);
+              Object.assign(window.yearlyHolidays, parsed);
+              if (typeof renderCalendar === 'function') renderCalendar();
+          }
+
+          // 2. 그 뒤에 백그라운드에서 최신 데이터를 긁어와서 캐시 업데이트
           if (!google || !google.script) return;
           google.script.run.withSuccessHandler(res => {
               if (res && Array.isArray(res)) {
-                  // 🚨 [수정] true 대신 객체의 이름(name)을 저장!
-                  res.forEach(item => window.yearlyHolidays[item.date] = item.name);
-                  if (typeof renderCalendar === 'function') renderCalendar();
+                  const newHolidays = {};
+                  res.forEach(item => {
+                      if (typeof item === 'object') newHolidays[item.date] = item.name;
+                      else newHolidays[item] = true;
+                  });
+                  
+                  // 캐시와 다르면 업데이트 후 다시 그리기
+                  if (JSON.stringify(newHolidays) !== cached) {
+                      localStorage.setItem(cacheKey, JSON.stringify(newHolidays));
+                      Object.assign(window.yearlyHolidays, newHolidays);
+                      if (typeof renderCalendar === 'function') renderCalendar();
+                  }
               }
           }).getYearlyHolidays(year);
       }
@@ -3172,9 +3191,21 @@
           cellHtml += `<div style="display:flex; flex-direction:column; align-items:flex-start; line-height: 1.1; margin-bottom: 2px;">`;
           cellHtml += `<div class="${dateClass}" style="${redStyle}; margin-bottom: 0; margin-left: 2px;">${day}</div>`;
           
-          // 공휴일 이름이 있으면 날짜 아래에 작게 표시
+          // 공휴일 이름 표시 (줄넘김 강화 버전)
           if (isHoliday) {
-              cellHtml += `<span style="color:#ff3b30; font-size:0.65em; font-weight:800; letter-spacing:-0.5px; margin-top:2px; margin-left:2px; white-space:normal; word-break:keep-all; line-height:1.1;">${holidayName}</span>`;
+              cellHtml += `<span style="
+                  color: #ff3b30; 
+                  font-size: 0.6em; 
+                  font-weight: 800; 
+                  letter-spacing: -0.8px; 
+                  margin-top: 1px; 
+                  margin-left: 2px;
+                  display: block; 
+                  width: calc(100% - 4px); 
+                  white-space: normal; 
+                  word-break: break-all; 
+                  line-height: 1.0;
+              ">${holidayName}</span>`;
           }
           cellHtml += `</div>`;
 
