@@ -204,23 +204,31 @@ export default async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
+           // 📍 [VS Code 약 207라인 부근] /status 명령어
             if (text.startsWith('/status')) {
                 let dbStatus = "🔴 연결 실패";
                 try { await pool.query('SELECT 1'); dbStatus = "🟢 정상 연결됨"; } catch(e) {}
                 const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
                 let queueStatus = rows.length > 0 ? "🟡 1장 대기 중" : "⚪ 비어있음";
                 const [dupRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'DUP_OPTION'`);
-                let dupStatus = (dupRows.length > 0 && dupRows[0].setting_value === 'OFF') ? "🔓 허용" : "🔒 차단";
+                
+                // 💡 [수정 1] 쌍따옴표가 있든 없든 안전하게 체크하도록 .includes('OFF') 사용
+                let dupStatus = (dupRows.length > 0 && String(dupRows[0].setting_value).includes('OFF')) ? "🔓 허용" : "🔒 차단";
+                
                 await sendTgMsg(chatId, `📊 [관리자 시스템 보고]\n\nTiDB 데이터: ${dbStatus}\nOCR 대기열: ${queueStatus}\n중복 방지: ${dupStatus}\nAI 엔진: Gemini 2.5 Flash 🟢`);
                 return res.status(200).send('OK');
             }
 
+            // 📍 [VS Code 약 220라인 부근] /dup 명령어
             if (text.startsWith('/dup')) {
                 if (text.includes('on')) {
-                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('DUP_OPTION', 'ON') ON DUPLICATE KEY UPDATE setting_value='ON'`);
+                    // 💡 [수정 2] DB 에러 방지를 위해 JSON 규격인 쌍따옴표 문자열('"ON"')로 변수화
+                    const val = '"ON"'; 
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('DUP_OPTION', ?) ON DUPLICATE KEY UPDATE setting_value=?`, [val, val]);
                     await sendTgMsg(chatId, '🔒 중복 이미지 차단 모드 활성화');
                 } else if (text.includes('off')) {
-                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('DUP_OPTION', 'OFF') ON DUPLICATE KEY UPDATE setting_value='OFF'`);
+                    const val = '"OFF"';
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('DUP_OPTION', ?) ON DUPLICATE KEY UPDATE setting_value=?`, [val, val]);
                     await sendTgMsg(chatId, '🔓 중복 이미지 허용 모드 활성화');
                 } else if (text.includes('reset')) {
                     await pool.query(`DELETE FROM processed_images`);
@@ -229,6 +237,7 @@ export default async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
+            // 📍 [VS Code 약 237라인 부근] 이미지 업로드 시 중복 검사
             if (isImageUpload) {
                 let fileId = null; let uniqueId = null;
                 if (message.photo && message.photo.length > 0) {
@@ -240,7 +249,9 @@ export default async function handler(req, res) {
 
                 if (fileId) {
                     const [dupRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'DUP_OPTION'`);
-                    let blockDup = (dupRows.length === 0 || dupRows[0].setting_value !== 'OFF');
+                    
+                    // 💡 [수정 3] 쌍따옴표 유무에 관계없이 안전하게 'OFF' 상태를 판별
+                    let blockDup = (dupRows.length === 0 || !String(dupRows[0].setting_value).includes('OFF'));
                     
                     if (blockDup) {
                         const [exist] = await pool.query(`SELECT 1 FROM processed_images WHERE unique_id = ?`, [uniqueId]);
@@ -249,6 +260,9 @@ export default async function handler(req, res) {
                             return res.status(200).send('OK');
                         }
                     }
+
+                    // 이 아래로는 기존 코드 그대로 이어집니다...
+                    // const jsonData = JSON.stringify({ id: fileId, uniqueId: uniqueId });
 
                     const jsonData = JSON.stringify({ id: fileId, uniqueId: uniqueId });
                     await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('PENDING_IMAGE_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonData, jsonData]);
