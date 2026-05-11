@@ -13,13 +13,16 @@ module.exports = async function(req, res) {
         if (req.method === 'GET') {
             const { type, year, month, action } = req.query;
 
-            // 🚨 [4번 해결] 연간 통계 해상/항공 분리 완벽 적용!
+            // 🚨 [초고속 튜닝 1] 연간 통계 구간 검색 적용 (YEAR 함수 제거)
             if (action === 'yearlyStats') {
                 let rows = [];
+                const startYear = `${year}-01-01`;
+                const endYear = `${parseInt(year) + 1}-01-01`;
+
                 if (type === 'out') {
-                    [rows] = await pool.query(`SELECT outbound_date, pal, box, etc, company, isDone FROM outbound WHERE YEAR(outbound_date) = ?`, [year]);
+                    [rows] = await pool.query(`SELECT outbound_date, pal, box, etc, company, isDone FROM outbound WHERE outbound_date >= ? AND outbound_date < ?`, [startYear, endYear]);
                 } else {
-                    [rows] = await pool.query(`SELECT receive_date, pallets, s_type, remarks, bl_number FROM inbound WHERE YEAR(receive_date) = ?`, [year]);
+                    [rows] = await pool.query(`SELECT receive_date, pallets, s_type, remarks, bl_number FROM inbound WHERE receive_date >= ? AND receive_date < ?`, [startYear, endYear]);
                 }
 
                 let monthly = Array.from({length: 12}, () => ({ pal: 0, box: 0, details: {} }));
@@ -44,7 +47,6 @@ module.exports = async function(req, res) {
                             compStats[cleanName].pal += p; compStats[cleanName].box += b;
                         }
                     } else {
-                        // 🚨 [입고 연간통계 패치] B/L번호가 아니라 '해상/항공' 단위로 묶어줘야 차트가 그려집니다!
                         let p = parseInt(r.pallets) || 0;
                         monthly[mIdx].pal += p;
                         let sLabel = r.s_type === 'AIR' ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
@@ -61,8 +63,14 @@ module.exports = async function(req, res) {
 
             let formattedData = { year: parseInt(year), month: parseInt(month), monthData: {}, pendingItems: [] };
 
+            // 🚨 [초고속 튜닝 2] 월간 달력 데이터 구간 검색 적용 (MONTH 함수 제거)
+            const m = parseInt(month);
+            const y = parseInt(year);
+            const startYmd = `${y}-${String(m).padStart(2, '0')}-01`;
+            const endYmd = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+
             if (type === 'out') {
-                const [monthRows] = await pool.query(`SELECT * FROM outbound WHERE YEAR(outbound_date) = ? AND MONTH(outbound_date) = ? ORDER BY sort_idx ASC, id ASC`, [year, month]);
+                const [monthRows] = await pool.query(`SELECT * FROM outbound WHERE outbound_date >= ? AND outbound_date < ? ORDER BY sort_idx ASC, id ASC`, [startYmd, endYmd]);
                 const [pendingRows] = await pool.query(`SELECT * FROM outbound WHERE outbound_date IS NULL ORDER BY sort_idx ASC, id ASC`);
                 monthRows.forEach(row => {
                     const day = new Date(row.outbound_date).getDate();
@@ -71,7 +79,7 @@ module.exports = async function(req, res) {
                 });
                 pendingRows.forEach(row => { formattedData.pendingItems.push({ id: row.id, company: row.company, pal: row.pal, box: row.box, etc: row.etc, isDone: row.isDone === 1, sortIdx: row.sort_idx !== null ? row.sort_idx : 999 }); });
             } else {
-                const [monthRows] = await pool.query(`SELECT * FROM inbound WHERE YEAR(receive_date) = ? AND MONTH(receive_date) = ? ORDER BY sort_idx ASC, id ASC`, [year, month]);
+                const [monthRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date >= ? AND receive_date < ? ORDER BY sort_idx ASC, id ASC`, [startYmd, endYmd]);
                 const [pendingRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`);
                 monthRows.forEach(row => {
                     const day = new Date(row.receive_date).getDate();
@@ -188,7 +196,8 @@ module.exports = async function(req, res) {
             if (action === 'SAVE_COMP_INFO_DB') { const jsonStr = JSON.stringify(data); await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('COMP_INFO_DB', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]); return res.status(200).json({ success: true }); }
             if (action === 'GET_GLOBAL_COLORS') { const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'GLOBAL_COMPANY_COLORS'`); return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {}); }
             if (action === 'SAVE_GLOBAL_COLOR') { const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'GLOBAL_COMPANY_COLORS'`); let colors = rows.length > 0 ? parseJSON(rows[0].setting_value) : {}; colors[compName] = colorIdx; const jsonStr = JSON.stringify(colors); await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('GLOBAL_COMPANY_COLORS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]); return res.status(200).json({ success: true }); }
-// [calendar.js] 약 133라인 부근
+            
+// [calendar.js] 공휴일 정보 
 if (action === 'GET_YEARLY_HOLIDAYS') {
     const y = year || new Date().getFullYear();
     const apiKey = process.env.HOLIDAY_API_KEY;
@@ -217,7 +226,7 @@ if (action === 'GET_YEARLY_HOLIDAYS') {
             }
         } catch (e) { console.error("🔥 공휴일 API 에러:", e); }
     }
-    // API 실패 시 기본 공휴일도 형식 통일 [cite: 6]
+    // API 실패 시 기본 공휴일도 형식 통일
     const baseHolidays = [
         {date:`${y}-01-01`, name:"신정"}, {date:`${y}-03-01`, name:"삼일절"}, {date:`${y}-05-05`, name:"어린이날"},
         {date:`${y}-06-06`, name:"현충일"}, {date:`${y}-08-15`, name:"광복절"}, {date:`${y}-10-03`, name:"개천절"},
@@ -225,6 +234,7 @@ if (action === 'GET_YEARLY_HOLIDAYS') {
     ];
     return res.status(200).json(baseHolidays);
 }
+
             if (domain === 'out') {
     const targetName = data?.oldComp;
     const newName = data?.newComp || targetName;
