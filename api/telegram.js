@@ -539,7 +539,7 @@ export default async function handler(req, res) {
                     return res.status(200).send('OK');
                 }
 
-                // DB 저장 로직 (생략 - 기존 로직 유지)
+                // DB 저장 로직
                 let updateCount = 0; let insertCount = 0;
                 for (const r of finalRows) {
                     let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, '');
@@ -596,7 +596,15 @@ export default async function handler(req, res) {
                 
                 return res.status(200).send('OK');
             }
-        }
+        } 
+
+    } catch (error) {
+        console.error("🔥 시스템 에러:", error);
+        await sendTgMsg(chatId, `🔥 에러 발생: ${error.message}`);
+    }
+
+    return res.status(200).send('OK');
+}
 
 // =================================================================
 // 🧠 관리자님의 로컬 정규식 파싱 엔진 (원본 100% 동일)
@@ -604,14 +612,14 @@ export default async function handler(req, res) {
 function parseOcrLinesLocal(text) {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     const cleanBL = v => String(v).replace(/[\s•·\-\*]/g, '');
-    const isBL = v => /^(DSV|BUD|S)\d{6,8}$/i.test(cleanBL(v)) || cleanBL(v) === '발행전'; 
+    const isBL = v => /^(DSV|BUD|S)\d{6,8}$/i.test(cleanBL(v)) || cleanBL(v) === '발행전';
     const isPal = v => /^\d{1,3}$/.test(v); 
     const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v); 
-    const isSType = v => /^(AIR|SEA)$/i.test(v); 
+    const isSType = v => /^(AIR|SEA)$/i.test(v);
     const isFwd = v => /^[A-Za-z]+$/.test(v) && !isSType(v); 
     const isInvoice = v => /^\d{7,8}$/.test(v); 
 
-    const rows = []; 
+    const rows = [];
     let orphanInvoices = []; let orphanEtc = [];
     let activeRowIndex = 0; 
 
@@ -657,7 +665,6 @@ function parseOcrLinesLocal(text) {
 
         let assigned = false;
         let curr = activeRowIndex;
-        
         while (curr < rows.length) {
             if (isPal(raw)) { if (!rows[curr].pal) { rows[curr].pal = raw; activeRowIndex = curr; assigned = true; break; } } 
             else if (isDate(raw)) {
