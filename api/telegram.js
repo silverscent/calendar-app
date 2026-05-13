@@ -386,7 +386,8 @@ module.exports = async function handler(req, res) {
         // 🔒 관리자 전용 관문
         // =================================================================
         const isImageUpload = (message.photo && message.photo.length > 0) || (message.document && message.document.mime_type?.startsWith('image/'));
-        const adminCmdList = ['/?', '/status', '/dup', '/cancel', '/ocr', '/test', '/reparse', '/완료', '/처리', '/일괄완료', '/용차', '/이동', '/위치', '/출고완료', '/용차완료', '/출고삭제', '/용차삭제', '/알림', '/알림시간', '/알림요일'];
+        // 🚨 [수정] adminCmdList에서 '/알림시간' 영구 삭제
+        const adminCmdList = ['/?', '/status', '/dup', '/cancel', '/ocr', '/test', '/reparse', '/완료', '/처리', '/일괄완료', '/용차', '/이동', '/위치', '/출고완료', '/용차완료', '/출고삭제', '/용차삭제', '/알림', '/알림요일'];
         const isAdminCmd = adminCmdList.some(cmd => text.startsWith(cmd));
 
         if (isAdminCmd || isImageUpload) {
@@ -395,12 +396,13 @@ module.exports = async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
+            // 📘 [수정] 도움말에서 시간 설정 제거 및 8시 고정 명시
             if (text.startsWith('/?')) {
                 const adminHelpMsg = "📘 관리자 명령어 목록\n\n" +
                                      "🔔 자동 알림 제어\n" +
                                      "/알림 [켜기|끄기]\n" +
-                                     "/알림시간 [0~23] (예: /알림시간 8)\n" +
-                                     "/알림요일 [평일|매일|주말|월화수목금]\n\n" +
+                                     "/알림요일 [평일|매일|주말|월화수목금]\n" +
+                                     "※ 알림 발송 시간은 아침 8시로 고정되어 있습니다.\n\n" +
                                      "[ 🚚 출고 및 랙 관리 ]\n" +
                                      "/용차 [업체] [박스] [파레트] [날짜] [비고]\n" +
                                      "- 출고 등록 (예: /용차 쿠팡 120 3 0310)\n\n" +
@@ -424,6 +426,7 @@ module.exports = async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
+            // 📊 [수정] 상태 보고창에서도 아침 8시 고정 표기
             if (text.startsWith('/status')) {
                 let dbStatus = "🟢 정상"; try { await pool.query('SELECT 1'); } catch(e) { dbStatus = "🔴 연결 실패"; }
                 const [pendingRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
@@ -432,7 +435,6 @@ module.exports = async function handler(req, res) {
                 const [lastImgRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
                 const [cRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_COUNT'`);
                 const [aStatusRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_STATUS'`);
-                const [aHourRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_HOUR'`);
                 const [aDaysRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_DAYS'`);
 
                 let queueStatus = pendingRows.length > 0 ? "🖼 있음 (1건 대기)" : "— 없음";
@@ -441,7 +443,6 @@ module.exports = async function handler(req, res) {
                 let ocrCount = cRows.length > 0 ? cRows[0].setting_value : "0";
 
                 let aStatus = aStatusRows.length > 0 ? aStatusRows[0].setting_value : 'ON';
-                let aHour = aHourRows.length > 0 ? aHourRows[0].setting_value : '8';
                 let aDays = aDaysRows.length > 0 ? aDaysRows[0].setting_value : '1,2,3,4,5';
                 const dayNames = ['일','월','화','수','목','금','토'];
                 let alertDayNames = aDays.split(',').map(d => dayNames[parseInt(d)]).join(', ');
@@ -453,7 +454,7 @@ module.exports = async function handler(req, res) {
                                   `🔒 중복 차단: ${dupStatus}\n` +
                                   `📈 이달 사용량: ${ocrCount} / 1000\n\n` + 
                                   `⏰ 자동 알림: ${alertStatusIcon}\n` +
-                                  `   └ 설정: 매일 [${aHour}시] (${alertDayNames})\n\n` +
+                                  `   └ 설정: 매일 [아침 8시 고정] (${alertDayNames})\n\n` +
                                   `🤖 AI 엔진: Gemini 2.5 Flash 🟢\n\n` +
                                   `🕒 마지막 OCR 시간\n${lastTime}\n========================`;
                 
@@ -463,23 +464,14 @@ module.exports = async function handler(req, res) {
                     if (imgData.fileId) {
                         await sendTgPhoto(chatId, imgData.fileId, "📁 가장 최근에 판독한 원본 이미지입니다.");
                     } else if (imgData.url) {
-                        await sendTgMsg(chatId, "⚠️ (이전 이미지는 URL 방식으로 저장되어 텔레그램 보안 정책상 직접 표시할 수 없습니다. 새로 /ocr 을 한 번 실행하시면 다음부터 정상 표시됩니다.)");
+                        await sendTgMsg(chatId, "⚠️ (이전 이미지는 URL 방식으로 저장되어 텔레그램 보안 정책상 직접 표시할 수 없습니다. 새로 /ocr 을 실행하시면 다음부터 정상 표시됩니다.)");
                     }
                 }
                 return res.status(200).send('OK');
             }
 
-            if (text.startsWith('/알림시간')) {
-                const hour = parseInt(text.split(' ')[1]);
-                if (isNaN(hour) || hour < 0 || hour > 23) {
-                    await sendTgMsg(chatId, "⚠️ 사용법: /알림시간 [0~23]\n예시: /알림시간 8\n(※ 현재 Vercel 무료 요금제 제한으로 인해 시간 설정은 DB에 저장만 되며, 실제 발송 시간은 vercel.json에 설정된 KST 오전 8시에 1회만 동작합니다.)");
-                    return res.status(200).send('OK');
-                }
-                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('ALERT_HOUR', ?) ON DUPLICATE KEY UPDATE setting_value=?`, [hour.toString(), hour.toString()]);
-                await sendTgMsg(chatId, `⏰ [알림 설정] 시간이 [${hour}시]로 저장되었습니다.\n(※ 실제 알림은 Vercel 서버 스케줄에 맞춰 발송됩니다.)`);
-                return res.status(200).send('OK');
-            } 
-            else if (text.startsWith('/알림요일')) {
+            // 🚨 [수정] /알림시간 명령어 블록 완전 삭제 완료. 요일 설정만 남김.
+            if (text.startsWith('/알림요일')) {
                 const dayStr = text.replace('/알림요일', '').trim();
                 let daysArr = [];
                 if (dayStr.includes('매일')) daysArr = [0,1,2,3,4,5,6];
@@ -498,14 +490,14 @@ module.exports = async function handler(req, res) {
                 const val = daysArr.join(',');
                 await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('ALERT_DAYS', ?) ON DUPLICATE KEY UPDATE setting_value=?`, [val, val]);
                 const dayNames = ['일','월','화','수','목','금','토']; const setNames = daysArr.map(d => dayNames[d]).join(', ');
-                await sendTgMsg(chatId, `🗓 [자동 알림] 요일이 [${setNames}]요일로 설정되었습니다.`);
+                await sendTgMsg(chatId, `🗓 [자동 알림] 발송 요일이 [${setNames}]요일로 설정되었습니다.\n(※ 매일 아침 8시 고정 발송)`);
                 return res.status(200).send('OK');
             } 
             else if (text.startsWith('/알림')) {
                 const cmdStr = text.split(' ')[1];
                 if (cmdStr === '켜기' || cmdStr === 'on') {
                     await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('ALERT_STATUS', 'ON') ON DUPLICATE KEY UPDATE setting_value='ON'`);
-                    await sendTgMsg(chatId, "🔔 매일 입고 스케줄 [자동 알림] 기능이 활성화(ON)되었습니다.");
+                    await sendTgMsg(chatId, "🔔 매일 입고 스케줄 [자동 알림] 기능이 활성화(ON)되었습니다.\n(※ 매일 아침 8시 고정 발송)");
                 } else if (cmdStr === '끄기' || cmdStr === 'off') {
                     await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('ALERT_STATUS', 'OFF') ON DUPLICATE KEY UPDATE setting_value='OFF'`);
                     await sendTgMsg(chatId, "🔕 매일 입고 스케줄 [자동 알림] 기능이 비활성화(OFF)되었습니다.");
@@ -515,7 +507,9 @@ module.exports = async function handler(req, res) {
                 return res.status(200).send('OK');
             }
             
+            // ⚙️ [옵션 제어]
             if (text.startsWith('/dup')) {
+// ... 이하 코드 동일 ...
                 if (text.includes('on')) {
                     const val = '"ON"'; await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('DUP_OPTION', ?) ON DUPLICATE KEY UPDATE setting_value=?`, [val, val]);
                     await sendTgMsg(chatId, '🔒 중복 이미지 차단 모드가 활성화되었습니다.');
