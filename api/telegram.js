@@ -297,12 +297,14 @@ export default async function handler(req, res) {
             
             if (isOutbound) {
                 const [rows] = await pool.query(`SELECT outbound_date, company, pal, box, isDone, etc FROM outbound WHERE YEAR(outbound_date) = ? AND MONTH(outbound_date) = ? ORDER BY outbound_date ASC`, [year, month]);
-                const [pendings] = await pool.query(`SELECT company, pal, box, etc FROM outbound WHERE outbound_date IS NULL OR outbound_date = '미정'`);
+                
+                // 🚨 [패치 완료] 출고 완료되지 않은(isDone=0) 항목 중 날짜가 없는 것만 추출
+                const [pendings] = await pool.query(`SELECT company, pal, box, etc FROM outbound WHERE isDone = 0 AND (outbound_date IS NULL OR outbound_date = '미정')`);
                 
                 let currentD = ''; let dailyPal = 0; let dailyStr = '';
                 rows.forEach(r => {
                     let dDate = new Date(r.outbound_date);
-                    let dStr = `${month}/${String(dDate.getDate()).padStart(2, '0')}(${dayNames[dDate.getDay()]})`; // 원본 요일 복원
+                    let dStr = `${month}/${String(dDate.getDate()).padStart(2, '0')}(${dayNames[dDate.getDay()]})`;
                     
                     if (currentD !== dStr) {
                         if (currentD !== '') calStr += `🚚 ${currentD} - 총 ${dailyPal}p\n${dailyStr}\n`;
@@ -319,12 +321,14 @@ export default async function handler(req, res) {
                 pendings.forEach(p => { pendingStr += ` • ${p.company} ${p.pal}p (${p.box}b)${p.etc ? ' ['+p.etc+']' : ''}\n`; });
             } else {
                 const [rows] = await pool.query(`SELECT receive_date, bl_number, pallets, s_type, status, remarks FROM inbound WHERE YEAR(receive_date) = ? AND MONTH(receive_date) = ? ORDER BY receive_date ASC`, [year, month]);
-                const [pendings] = await pool.query(`SELECT bl_number, pallets, s_type, remarks FROM inbound WHERE status = '입고대기' OR receive_date IS NULL OR receive_date = '미정'`);
+                
+                // 🚨 [패치 완료] OR를 AND와 괄호()로 묶어 '날짜가 없는 대기 상태'만 완벽하게 필터링!
+                const [pendings] = await pool.query(`SELECT bl_number, pallets, s_type, remarks FROM inbound WHERE status = '입고대기' AND (receive_date IS NULL OR receive_date = '미정')`);
                 
                 let currentD = ''; let dailyPal = 0; let dailyStr = '';
                 rows.forEach(r => {
                     let dDate = new Date(r.receive_date);
-                    let dStr = `${month}/${String(dDate.getDate()).padStart(2, '0')}(${dayNames[dDate.getDay()]})`; // 원본 요일 복원
+                    let dStr = `${month}/${String(dDate.getDate()).padStart(2, '0')}(${dayNames[dDate.getDay()]})`;
                     
                     if (currentD !== dStr) {
                         if (currentD !== '') calStr += `📦 ${currentD} - 총 ${dailyPal}p\n${dailyStr}\n`;
