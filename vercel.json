@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/telegram",
+      "schedule": "0 * * * *", 
+      "body": "{\"action\":\"AUTO_ALERT_CHECK\"}"
+    }
+  ]
+}
