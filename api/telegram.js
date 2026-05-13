@@ -460,7 +460,11 @@ module.exports = async function handler(req, res) {
                 await sendTgMsg(chatId, statusMsg);
                 if (lastImgRows.length > 0) {
                     const imgData = safeGetJson(lastImgRows[0].setting_value);
-                    if (imgData.fileId || imgData.url) await sendTgPhoto(chatId, imgData.fileId || imgData.url, "📁 가장 최근에 판독한 원본 이미지입니다.");
+                    if (imgData.fileId) {
+                        await sendTgPhoto(chatId, imgData.fileId, "📁 가장 최근에 판독한 원본 이미지입니다.");
+                    } else if (imgData.url) {
+                        await sendTgMsg(chatId, "⚠️ (이전 이미지는 URL 방식으로 저장되어 텔레그램 보안 정책상 직접 표시할 수 없습니다. 새로 /ocr 을 한 번 실행하시면 다음부터 정상 표시됩니다.)");
+                    }
                 }
                 return res.status(200).send('OK');
             }
@@ -717,7 +721,9 @@ module.exports = async function handler(req, res) {
                 if (isReparse) {
                     const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
                     if (rows.length === 0 || !rows[0].setting_value) { await sendTgMsg(chatId, `⚠️ 재처리할 이전 이미지가 없습니다.`); return res.status(200).send('OK'); }
-                    const pData = safeGetJson(rows[0].setting_value); fullUrl = pData.url || "";
+                    const pData = safeGetJson(rows[0].setting_value); 
+                    fullUrl = pData.url || "";
+                    targetFileId = pData.fileId || null; // 🚨 [버그 수정] 재파싱할 때 사진 고유번호(fileId)도 잃어버리지 않게 복구!
                 } else {
                     const [pendingRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
                     if (pendingRows.length === 0 || !pendingRows[0].setting_value) { await sendTgMsg(chatId, `⚠️ 대기 중인 이미지가 없습니다.`); return res.status(200).send('OK'); }
