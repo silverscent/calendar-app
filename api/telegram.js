@@ -718,6 +718,32 @@ export default async function handler(req, res) {
             if (text.startsWith('/ocr') || isTest || isReparse) {
                 let targetFileId = null; let targetUniqueId = null; let fullUrl = '';
 
+                // 🚨 [핵심 기능 복원] 월간 OCR 횟수 제한 및 카운팅 로직
+                const OCR_FREE_LIMIT_MONTHLY = 1000;
+                let currentMonthStr = String(new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"})).getMonth() + 1);
+                
+                // DB에서 현재 OCR 카운트 상태 불러오기
+                const [mRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_MONTH'`);
+                const [cRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_COUNT'`);
+                const [tRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_TOTAL_COUNT'`);
+                
+                let dbMonth = mRows.length > 0 ? mRows[0].setting_value : '';
+                let ocrCount = cRows.length > 0 ? parseInt(cRows[0].setting_value) || 0 : 0;
+                let ocrTotal = tRows.length > 0 ? parseInt(tRows[0].setting_value) || 0 : 0;
+
+                // 달이 바뀌었으면 카운트 초기화
+                if (dbMonth !== currentMonthStr) {
+                    ocrCount = 0;
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_MONTH', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [currentMonthStr, currentMonthStr]);
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, ['0', '0']);
+                }
+
+                // 한도 초과 차단 (테스트나 재파싱은 API를 새로 호출하지 않거나 가상환경이므로 제외)
+                if (!isTest && !isReparse && ocrCount >= OCR_FREE_LIMIT_MONTHLY) {
+                    await sendTgMsg(chatId, `🚫 [경고] 이번 달 무료 OCR 판독 한도(${OCR_FREE_LIMIT_MONTHLY}건)를 모두 소진했습니다!\nAPI 과금을 막기 위해 시스템이 일시 정지됩니다.`);
+                    return res.status(200).send('OK');
+                }
+
                 if (isReparse) {
                     const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
                     if (rows.length === 0 || !rows[0].setting_value) {
@@ -737,7 +763,8 @@ export default async function handler(req, res) {
                     if (!isTest) await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
                 }
 
-                await sendTgMsg(chatId, isReparse ? `🔁 마지막 이미지 재파싱을 시작합니다...` : `🔄 이미지 다운로드 및 판독을 시작합니다...`);
+                await sendTgMsg(chatId, isReparse ? `🔁 마지막 이미지 재파싱을 시작합니다...` : `🔄 이미지 다운로드 및 판독을 시작합니다...\n(이번 달 사용량: ${ocrCount + (!isTest && !isReparse ? 1 : 0)} / ${OCR_FREE_LIMIT_MONTHLY})`);
+                
                 const botToken = process.env.TELEGRAM_BOT_TOKEN;
                 if (!isReparse) {
                     const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${targetFileId}`);
@@ -754,10 +781,19 @@ export default async function handler(req, res) {
                     body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'TEXT_DETECTION' }] }] })
                 });
                 const visionData = await visionRes.json();
+                
+                // 🚨 [핵심 기능 복원] 정상적으로 API를 호출했다면 카운트 증가 저장
+                if (!isTest && !isReparse) {
+                    ocrCount++; ocrTotal++;
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [ocrCount.toString(), ocrCount.toString()]);
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_TOTAL_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [ocrTotal.toString(), ocrTotal.toString()]);
+                }
+
                 const extractedText = visionData.responses[0]?.fullTextAnnotation?.text || "";
                 if (!extractedText) { await sendTgMsg(chatId, `⚠️ 텍스트를 찾을 수 없습니다.`); return res.status(200).send('OK'); }
 
                 const parsedResult = parseOcrLinesLocal(extractedText);
+// ... 이후 기존 parsedResult 검사 및 Gemini 로직 그대로 유지 ...
                 if (parsedResult.length === 0) { await sendTgMsg(chatId, `⚠️ 인식된 데이터가 없습니다.`); return res.status(200).send('OK'); }
 
                 await sendTgMsg(chatId, `🤖 AI가 데이터를 분석 중입니다...`);
