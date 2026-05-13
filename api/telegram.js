@@ -57,7 +57,8 @@ const pool = mysql.createPool({
     keepAliveInitialDelay: 0
 });
 
-export default async function handler(req, res) {
+// 💡 [CommonJS 경고 해결] module.exports 방식으로 내보내기
+module.exports = async function handler(req, res) {
     if (req.method !== 'POST') return res.status(200).send('OK');
 
     const body = req.body;
@@ -103,7 +104,7 @@ export default async function handler(req, res) {
                     const [rawRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date BETWEEN ? AND ? ORDER BY receive_date ASC`, [startStr, todayStr]);
                     let rows = [];
                     rawRows.forEach(r => {
-                        // 🚨 [핵심 버그 수정] 이미 완료되거나 취소된 건은 아침 알림에서 무조건 제외!
+                        // 🚨 이미 완료되거나 취소된 건은 아침 알림에서 무조건 제외!
                         if (r.status === '완료' || String(r.status).includes('취소')) return;
 
                         let origDate = new Date(r.receive_date); let adjDate = new Date(origDate);
@@ -204,7 +205,6 @@ export default async function handler(req, res) {
             
             let rows = [];
             rawRows.forEach(r => {
-                // 🚨 [핵심 버그 수정] /입고 등 명령어에서도 완료 건은 보이지 않게 제거
                 if (r.status === '완료' || String(r.status).includes('취소')) return;
 
                 let origDate = new Date(r.receive_date);
@@ -476,7 +476,7 @@ export default async function handler(req, res) {
         const isImageUpload = (message.photo && message.photo.length > 0) || (message.document && message.document.mime_type?.startsWith('image/'));
         const adminCmdList = ['/?', '/status', '/dup', '/cancel', '/ocr', '/test', '/reparse', '/완료', '/처리', '/일괄완료', '/용차', '/이동', '/위치', '/출고완료', '/용차완료', '/출고삭제', '/용차삭제', '/알림', '/알림시간', '/알림요일'];
         const isAdminCmd = adminCmdList.some(cmd => text.startsWith(cmd));
- 
+
         if (isAdminCmd || isImageUpload) {
             if (!isAdmin) {
                 await sendTgMsg(chatId, "🚫 시스템 접근 거부: 관리자 전용 기능입니다. 권한이 없습니다.");
@@ -491,12 +491,11 @@ export default async function handler(req, res) {
                                      "/알림요일 [평일|매일|월화수목금]\n\n" +
                                      "[ 🚚 출고(용차) 및 랙 관리 ]\n" +
                                      "/용차 [업체] [박스] [파레트] [날짜] [비고]\n" +
-                                     "- 출고 스케줄 등록/수정 (순서 무관)\n" +
-                                     "- 예: /용차 쿠팡 120 3 0310 A구역\n\n" +
+                                     "- 출고 등록/수정 (예: /용차 쿠팡 120 3 0310)\n\n" +
                                      "/이동 [업체] [장소]\n" +
-                                     "- 파레트 보관 위치 변경 (예: /이동 쿠팡 바닥)\n\n" +
+                                     "- 위치 변경 (예: /이동 쿠팡 바닥)\n\n" +
                                      "/출고완료 [업체]\n" +
-                                     "- 상차 완료 처리 (랙 보관량에서 제외)\n\n" +
+                                     "- 상차 완료 처리 (랙 보관량 제외)\n\n" +
                                      "/출고삭제 [업체]\n" +         
                                      "- 취소 완전 삭제\n\n" + 
                                      "🟢 OCR 제어\n" +
