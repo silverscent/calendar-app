@@ -476,7 +476,7 @@ export default async function handler(req, res) {
         const isImageUpload = (message.photo && message.photo.length > 0) || (message.document && message.document.mime_type?.startsWith('image/'));
         const adminCmdList = ['/?', '/status', '/dup', '/cancel', '/ocr', '/test', '/reparse', '/완료', '/처리', '/일괄완료', '/용차', '/이동', '/위치', '/출고완료', '/용차완료', '/출고삭제', '/용차삭제', '/알림', '/알림시간', '/알림요일'];
         const isAdminCmd = adminCmdList.some(cmd => text.startsWith(cmd));
-
+ 
         if (isAdminCmd || isImageUpload) {
             if (!isAdmin) {
                 await sendTgMsg(chatId, "🚫 시스템 접근 거부: 관리자 전용 기능입니다. 권한이 없습니다.");
