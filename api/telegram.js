@@ -73,8 +73,9 @@ module.exports = async function handler(req, res) {
             const [aStatusRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_STATUS'`);
             const [aDaysRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_DAYS'`);
 
-            let aStatus = aStatusRows.length > 0 ? aStatusRows[0].setting_value : 'ON';
-            let aDays = aDaysRows.length > 0 ? aDaysRows[0].setting_value : '1,2,3,4,5'; 
+            // 💡 [버그 수정] DB에서 가져온 값의 쌍따옴표를 제거하여 순수 글자만 비교
+            let aStatus = aStatusRows.length > 0 ? String(aStatusRows[0].setting_value).replace(/"/g, '') : 'ON';
+            let aDays = aDaysRows.length > 0 ? String(aDaysRows[0].setting_value).replace(/"/g, '') : '1,2,3,4,5'; 
 
             if (aStatus === 'ON' && aDays.includes(currentDay.toString())) {
                 const targetChatId = process.env.TELEGRAM_CHAT_ID; 
@@ -386,7 +387,6 @@ module.exports = async function handler(req, res) {
         // 🔒 관리자 전용 관문
         // =================================================================
         const isImageUpload = (message.photo && message.photo.length > 0) || (message.document && message.document.mime_type?.startsWith('image/'));
-        // 🚨 [수정] adminCmdList에서 '/알림시간' 영구 삭제
         const adminCmdList = ['/?', '/status', '/dup', '/cancel', '/ocr', '/test', '/reparse', '/완료', '/처리', '/일괄완료', '/용차', '/이동', '/위치', '/출고완료', '/용차완료', '/출고삭제', '/용차삭제', '/알림', '/알림요일'];
         const isAdminCmd = adminCmdList.some(cmd => text.startsWith(cmd));
 
@@ -396,7 +396,6 @@ module.exports = async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
-            // 📘 [수정] 도움말에서 시간 설정 제거 및 8시 고정 명시
             if (text.startsWith('/?')) {
                 const adminHelpMsg = "📘 관리자 명령어 목록\n\n" +
                                      "🔔 자동 알림 제어\n" +
@@ -426,7 +425,6 @@ module.exports = async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
-            // 📊 [수정] 상태 보고창에서도 아침 8시 고정 표기
             if (text.startsWith('/status')) {
                 let dbStatus = "🟢 정상"; try { await pool.query('SELECT 1'); } catch(e) { dbStatus = "🔴 연결 실패"; }
                 const [pendingRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
@@ -442,8 +440,10 @@ module.exports = async function handler(req, res) {
                 let lastTime = lastTimeRows.length > 0 ? safeGetJson(lastTimeRows[0].setting_value).time : "기록 없음";
                 let ocrCount = cRows.length > 0 ? cRows[0].setting_value : "0";
 
-                let aStatus = aStatusRows.length > 0 ? aStatusRows[0].setting_value : 'ON';
-                let aDays = aDaysRows.length > 0 ? aDaysRows[0].setting_value : '1,2,3,4,5';
+                // 💡 [버그 수정] 따옴표 제거
+                let aStatus = aStatusRows.length > 0 ? String(aStatusRows[0].setting_value).replace(/"/g, '') : 'ON';
+                let aDays = aDaysRows.length > 0 ? String(aDaysRows[0].setting_value).replace(/"/g, '') : '1,2,3,4,5';
+                
                 const dayNames = ['일','월','화','수','목','금','토'];
                 let alertDayNames = aDays.split(',').map(d => dayNames[parseInt(d)]).join(', ');
                 let alertStatusIcon = aStatus === 'ON' ? "🔔 켜짐" : "🔕 꺼짐";
@@ -464,13 +464,12 @@ module.exports = async function handler(req, res) {
                     if (imgData.fileId) {
                         await sendTgPhoto(chatId, imgData.fileId, "📁 가장 최근에 판독한 원본 이미지입니다.");
                     } else if (imgData.url) {
-                        await sendTgMsg(chatId, "⚠️ (이전 이미지는 URL 방식으로 저장되어 텔레그램 보안 정책상 직접 표시할 수 없습니다. 새로 /ocr 을 실행하시면 다음부터 정상 표시됩니다.)");
+                        await sendTgMsg(chatId, "⚠️ (이전 이미지는 URL 방식으로 저장되어 직접 표시할 수 없습니다. 새로 /ocr 을 실행하시면 정상 표시됩니다.)");
                     }
                 }
                 return res.status(200).send('OK');
             }
 
-            // 🚨 [수정] /알림시간 명령어 블록 완전 삭제 완료. 요일 설정만 남김.
             if (text.startsWith('/알림요일')) {
                 const dayStr = text.replace('/알림요일', '').trim();
                 let daysArr = [];
@@ -487,7 +486,9 @@ module.exports = async function handler(req, res) {
                     await sendTgMsg(chatId, "⚠️ 사용법: /알림요일 [평일 | 매일 | 주말 | 월수금]\n예시: /알림요일 평일");
                     return res.status(200).send('OK');
                 }
-                const val = daysArr.join(',');
+                
+                // 💡 [버그 수정] DB 삽입 시 JSON 규격에 맞게 따옴표 포함 문자열로 변환
+                const val = JSON.stringify(daysArr.join(','));
                 await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('ALERT_DAYS', ?) ON DUPLICATE KEY UPDATE setting_value=?`, [val, val]);
                 const dayNames = ['일','월','화','수','목','금','토']; const setNames = daysArr.map(d => dayNames[d]).join(', ');
                 await sendTgMsg(chatId, `🗓 [자동 알림] 발송 요일이 [${setNames}]요일로 설정되었습니다.\n(※ 매일 아침 8시 고정 발송)`);
@@ -496,10 +497,14 @@ module.exports = async function handler(req, res) {
             else if (text.startsWith('/알림')) {
                 const cmdStr = text.split(' ')[1];
                 if (cmdStr === '켜기' || cmdStr === 'on') {
-                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('ALERT_STATUS', 'ON') ON DUPLICATE KEY UPDATE setting_value='ON'`);
+                    // 💡 [버그 수정] DB 삽입 시 JSON 규격에 맞게 쌍따옴표 포함
+                    const valOn = JSON.stringify('ON');
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('ALERT_STATUS', ?) ON DUPLICATE KEY UPDATE setting_value=?`, [valOn, valOn]);
                     await sendTgMsg(chatId, "🔔 매일 입고 스케줄 [자동 알림] 기능이 활성화(ON)되었습니다.\n(※ 매일 아침 8시 고정 발송)");
                 } else if (cmdStr === '끄기' || cmdStr === 'off') {
-                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('ALERT_STATUS', 'OFF') ON DUPLICATE KEY UPDATE setting_value='OFF'`);
+                    // 💡 [버그 수정] DB 삽입 시 JSON 규격에 맞게 쌍따옴표 포함
+                    const valOff = JSON.stringify('OFF');
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('ALERT_STATUS', ?) ON DUPLICATE KEY UPDATE setting_value=?`, [valOff, valOff]);
                     await sendTgMsg(chatId, "🔕 매일 입고 스케줄 [자동 알림] 기능이 비활성화(OFF)되었습니다.");
                 } else {
                     await sendTgMsg(chatId, "⚠️ 사용법: /알림 [켜기|끄기]");
@@ -507,9 +512,7 @@ module.exports = async function handler(req, res) {
                 return res.status(200).send('OK');
             }
             
-            // ⚙️ [옵션 제어]
             if (text.startsWith('/dup')) {
-// ... 이하 코드 동일 ...
                 if (text.includes('on')) {
                     const val = '"ON"'; await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('DUP_OPTION', ?) ON DUPLICATE KEY UPDATE setting_value=?`, [val, val]);
                     await sendTgMsg(chatId, '🔒 중복 이미지 차단 모드가 활성화되었습니다.');
@@ -699,13 +702,14 @@ module.exports = async function handler(req, res) {
                 const [cRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_COUNT'`);
                 const [tRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_TOTAL_COUNT'`);
                 
-                let dbMonth = mRows.length > 0 ? mRows[0].setting_value : '';
+                let dbMonth = mRows.length > 0 ? String(mRows[0].setting_value).replace(/"/g, '') : '';
                 let ocrCount = cRows.length > 0 ? parseInt(cRows[0].setting_value) || 0 : 0;
                 let ocrTotal = tRows.length > 0 ? parseInt(tRows[0].setting_value) || 0 : 0;
 
                 if (dbMonth !== currentMonthStr) {
                     ocrCount = 0;
-                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_MONTH', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [currentMonthStr, currentMonthStr]);
+                    const valMonth = JSON.stringify(currentMonthStr);
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_MONTH', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [valMonth, valMonth]);
                     await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, ['0', '0']);
                 }
                 if (!isTest && !isReparse && ocrCount >= OCR_FREE_LIMIT_MONTHLY) {
@@ -715,9 +719,8 @@ module.exports = async function handler(req, res) {
                 if (isReparse) {
                     const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
                     if (rows.length === 0 || !rows[0].setting_value) { await sendTgMsg(chatId, `⚠️ 재처리할 이전 이미지가 없습니다.`); return res.status(200).send('OK'); }
-                    const pData = safeGetJson(rows[0].setting_value); 
-                    fullUrl = pData.url || "";
-                    targetFileId = pData.fileId || null; // 🚨 [버그 수정] 재파싱할 때 사진 고유번호(fileId)도 잃어버리지 않게 복구!
+                    const pData = safeGetJson(rows[0].setting_value); fullUrl = pData.url || "";
+                    targetFileId = pData.fileId || null;
                 } else {
                     const [pendingRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
                     if (pendingRows.length === 0 || !pendingRows[0].setting_value) { await sendTgMsg(chatId, `⚠️ 대기 중인 이미지가 없습니다.`); return res.status(200).send('OK'); }
@@ -728,7 +731,7 @@ module.exports = async function handler(req, res) {
                 await sendTgMsg(chatId, isReparse ? `🔁 이미지 재파싱을 시작합니다...` : `🔄 판독을 시작합니다...\n(이번 달 사용량: ${ocrCount + (!isTest && !isReparse ? 1 : 0)} / ${OCR_FREE_LIMIT_MONTHLY})`);
                 
                 const botToken = process.env.TELEGRAM_BOT_TOKEN;
-                if (!isReparse) {
+                if (!isReparse && targetFileId) {
                     const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${targetFileId}`);
                     const fileData = await fileRes.json(); fullUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
                 }
