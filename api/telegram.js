@@ -57,93 +57,86 @@ const pool = mysql.createPool({
     keepAliveInitialDelay: 0
 });
 
-// 💡 CommonJS 문법으로 통일 (Vercel 경고 제거)
+// 💡 CommonJS 문법으로 통일
 module.exports = async function handler(req, res) {
-    if (req.method !== 'POST') return res.status(200).send('OK');
-
-    const body = req.body;
-    const payload = typeof body === 'string' ? JSON.parse(body) : body; 
-
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
         await pool.query(`CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 
         // =================================================================
-        // 🚦 [1차 관문] 웹앱 및 Vercel Cron 알림 자동 수신부
+        // ⏰ [1차 관문] Vercel Cron 알림 자동 수신부 (GET 방식 허용)
         // =================================================================
-        if (payload) {
-            if (payload.action === 'PING') {
-                return res.status(200).json({ msg: payload.token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
-            }
+        if (req.method === 'GET' && req.query.action === 'AUTO_ALERT_CHECK') {
+            const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+            const currentDay = now.getDay();
 
-            // ⏰ Vercel 하루 1번 자동 알림 (ON/OFF 및 요일 체크)
-            if (payload.action === 'AUTO_ALERT_CHECK') {
-                const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
-                const currentDay = now.getDay();
+            const [aStatusRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_STATUS'`);
+            const [aDaysRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_DAYS'`);
 
-                const [aStatusRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_STATUS'`);
-                const [aDaysRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_DAYS'`);
+            let aStatus = aStatusRows.length > 0 ? aStatusRows[0].setting_value : 'ON';
+            let aDays = aDaysRows.length > 0 ? aDaysRows[0].setting_value : '1,2,3,4,5'; 
 
-                let aStatus = aStatusRows.length > 0 ? aStatusRows[0].setting_value : 'ON';
-                let aDays = aDaysRows.length > 0 ? aDaysRows[0].setting_value : '1,2,3,4,5'; 
-
-                // 알림이 ON 이고, 설정한 요일이 맞을 때만 발송!
-                if (aStatus === 'ON' && aDays.includes(currentDay.toString())) {
-                    const targetChatId = process.env.TELEGRAM_CHAT_ID; 
-                    now.setHours(0,0,0,0);
-                    let fetchStart = new Date(now); fetchStart.setDate(fetchStart.getDate() - 10);
-                    
-                    const startStr = getKstDateStr(fetchStart);
-                    const todayStr = getKstDateStr(now);
-                    const dayNames = ["일","월","화","수","목","금","토"];
-                    
-                    const [rawRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date BETWEEN ? AND ? ORDER BY receive_date ASC`, [startStr, todayStr]);
-                    let rows = [];
-                    rawRows.forEach(r => {
-                        // 완료되거나 취소된 건은 아침 알림 제외
-                        if (r.status === '완료' || String(r.status).includes('취소')) return;
-
-                        let origDate = new Date(r.receive_date); let adjDate = new Date(origDate);
-                        while(adjDate.getDay() === 0 || adjDate.getDay() === 6) adjDate.setDate(adjDate.getDate() + 1);
-                        if (adjDate.getTime() === now.getTime()) {
-                            r.isMoved = (origDate.getTime() !== adjDate.getTime());
-                            r.origDateStr = formatDbDateShort(r.receive_date);
-                            r.adjDateStr = formatDbDateShort(adjDate);
-                            rows.push(r);
-                        }
+            if (aStatus === 'ON' && aDays.includes(currentDay.toString())) {
+                const targetChatId = process.env.TELEGRAM_CHAT_ID; 
+                now.setHours(0,0,0,0);
+                let fetchStart = new Date(now); fetchStart.setDate(fetchStart.getDate() - 10);
+                
+                const startStr = getKstDateStr(fetchStart);
+                const todayStr = getKstDateStr(now);
+                const dayNames = ["일","월","화","수","목","금","토"];
+                
+                const [rawRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date BETWEEN ? AND ? ORDER BY receive_date ASC`, [startStr, todayStr]);
+                let rows = [];
+                rawRows.forEach(r => {
+                    if (r.status === '완료' || String(r.status).includes('취소')) return;
+                    let origDate = new Date(r.receive_date); let adjDate = new Date(origDate);
+                    while(adjDate.getDay() === 0 || adjDate.getDay() === 6) adjDate.setDate(adjDate.getDate() + 1);
+                    if (adjDate.getTime() === now.getTime()) {
+                        r.isMoved = (origDate.getTime() !== adjDate.getTime());
+                        r.origDateStr = formatDbDateShort(r.receive_date);
+                        r.adjDateStr = formatDbDateShort(adjDate);
+                        rows.push(r);
+                    }
+                });
+                
+                let msg = `🚨 3PL 오늘 입고 자동 알림 🚨 (${todayStr}, ${dayNames[currentDay]}요일)\n••••••••••••••••••••••••••••••`;
+                if (rows.length === 0) msg += `\n📭 오늘 입고 예정 데이터가 없습니다.`;
+                else {
+                    msg += `\n📌 오늘 입고 항목 : ${rows.length}건\n------------------------------`;
+                    let totalPalToday = 0;
+                    rows.forEach((r, idx) => {
+                        totalPalToday += parseInt(r.pallets) || 0;
+                        let sTypeRaw = String(r.s_type || '').toUpperCase();
+                        let sType = sTypeRaw === "AIR" ? "탑차량" : (sTypeRaw === "SEA" ? "컨테이너" : sTypeRaw);
+                        let movedText = r.isMoved ? `🔁 휴무일 이월: ${r.origDateStr} → ${r.adjDateStr}\n` : '';
+                        msg += `\n${idx + 1}️⃣ B/L #: ${r.bl_number}\n📦 PAL       : ${r.pallets}\n🚢 배송방식  : ${sType}\n${movedText}🧾 Invoice#  : ${r.invoice || ''}`;
+                        if (r.remarks) msg += `\n✏️ ETC       : ${r.remarks}`;
+                        msg += `\n------------------------------`;
                     });
-                    
-                    let msg = `🚨 3PL 오늘 입고 자동 알림 🚨 (${todayStr}, ${dayNames[currentDay]}요일)\n••••••••••••••••••••••••••••••`;
-                    if (rows.length === 0) msg += `\n📭 오늘 입고 예정 데이터가 없습니다.`;
-                    else {
-                        msg += `\n📌 오늘 입고 항목 : ${rows.length}건\n------------------------------`;
-                        let totalPalToday = 0;
-                        rows.forEach((r, idx) => {
-                            totalPalToday += parseInt(r.pallets) || 0;
-                            let sTypeRaw = String(r.s_type || '').toUpperCase();
-                            let sType = sTypeRaw === "AIR" ? "탑차량" : (sTypeRaw === "SEA" ? "컨테이너" : sTypeRaw);
-                            let movedText = r.isMoved ? `🔁 휴무일 이월: ${r.origDateStr} → ${r.adjDateStr}\n` : '';
-                            msg += `\n${idx + 1}️⃣ B/L #: ${r.bl_number}\n📦 PAL       : ${r.pallets}\n🚢 배송방식  : ${sType}\n${movedText}🧾 Invoice#  : ${r.invoice || ''}`;
-                            if (r.remarks) msg += `\n✏️ ETC       : ${r.remarks}`;
-                            msg += `\n------------------------------`;
-                        });
-                        msg += `\n📊 오늘 총 PAL 수: ${totalPalToday}\n••••••••••••••••••••••••••••••`;
-                    }
-                    const [pendings] = await pool.query(`SELECT bl_number, pallets FROM inbound WHERE status = '입고대기' AND (receive_date IS NULL OR receive_date = '미정')`);
-                    if (pendings.length > 0) {
-                        msg += `\n\n⚠️ 입고일 확인 필요 (보류/미정 ${pendings.length}건)\n------------------------------`;
-                        pendings.forEach(p => { msg += `\n• B/L ${p.bl_number} | 📦 ${p.pallets} | 📅 미정`; });
-                    }
-                    await sendTgMsg(targetChatId, msg);
+                    msg += `\n📊 오늘 총 PAL 수: ${totalPalToday}\n••••••••••••••••••••••••••••••`;
                 }
-                return res.status(200).json({ success: true, msg: "Alert Checked" });
+                const [pendings] = await pool.query(`SELECT bl_number, pallets FROM inbound WHERE status = '입고대기' AND (receive_date IS NULL OR receive_date = '미정')`);
+                if (pendings.length > 0) {
+                    msg += `\n\n⚠️ 입고일 확인 필요 (보류/미정 ${pendings.length}건)\n------------------------------`;
+                    pendings.forEach(p => { msg += `\n• B/L ${p.bl_number} | 📦 ${p.pallets} | 📅 미정`; });
+                }
+                await sendTgMsg(targetChatId, msg);
             }
+            return res.status(200).json({ success: true, msg: "Alert Checked" });
         }
 
+        // =================================================================
+        // 🚦 [2차 관문] POST 요청만 허용 (텔레그램 및 웹앱 전용)
+        // =================================================================
+        if (req.method !== 'POST') return res.status(200).send('OK');
 
-        // =================================================================
-        // 💬 [2차 관문] 텔레그램 봇 일반 명령어 수신부
-        // =================================================================
+        const body = req.body;
+        const payload = typeof body === 'string' ? JSON.parse(body) : body; 
+
+        if (payload && payload.action === 'PING') {
+            return res.status(200).json({ msg: payload.token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
+        }
+
         if (!payload || !payload.message) return res.status(200).send('OK');
 
         const message = payload.message;
@@ -152,7 +145,7 @@ module.exports = async function handler(req, res) {
         const text = message.text || '';
         const isAdmin = String(senderId) === String(process.env.ADMIN_TELEGRAM_USER_ID);
 
-        // 🔓 퍼블릭 명령어 (도움말, 입고, 출고, 달력)
+        // 🔓 퍼블릭 명령어
         if (text.startsWith('/help') || text.startsWith('/도움')) {
             const helpMsg = `🤖 3PL 입/출고 알림 봇 사용 안내\n\n[ 📥 입고 스케줄 ]\n📦 /입고 (또는 /today)\n- 오늘 기준 입고 예정 건 조회\n\n📅 /이번주, /다음주, /저번주\n- 주차별 입고 요약 브리핑\n\n🗓️ /달력 [월]\n- 월간 입고 스케줄\n\n[ 🚚 출고 스케줄 ]\n📤 /출고\n- 일일 출고 대기 리스트 및 랙 현황\n\n🗓️ /출고달력 [월]\n- 월간 출고 캘린더`;
             await sendTgMsg(chatId, helpMsg);
@@ -390,7 +383,7 @@ module.exports = async function handler(req, res) {
         }
         
         // =================================================================
-        // 🔒 관리자 전용 관문 (모든 제어 명령어 및 알림 ON/OFF)
+        // 🔒 관리자 전용 관문
         // =================================================================
         const isImageUpload = (message.photo && message.photo.length > 0) || (message.document && message.document.mime_type?.startsWith('image/'));
         const adminCmdList = ['/?', '/status', '/dup', '/cancel', '/ocr', '/test', '/reparse', '/완료', '/처리', '/일괄완료', '/용차', '/이동', '/위치', '/출고완료', '/용차완료', '/출고삭제', '/용차삭제', '/알림', '/알림시간', '/알림요일'];
@@ -647,7 +640,7 @@ module.exports = async function handler(req, res) {
                     let etc = String(exist[0].etc || '').replace(/\[(보관|이동):\s*[^\]]+\]/g, '').trim(); let newEtc = (location === '랙' || location === '메인랙') ? etc : etc + ` [이동: ${location}]`;
                     await pool.query(`UPDATE outbound SET etc=? WHERE id=?`, [newEtc.trim(), exist[0].id]);
                     let msg = `🚚 [${company}] 파레트가 [${location}](으)로 이동 처리되었습니다.\n`;
-                    if (/(구역|창고|도크|바닥|외부|별도|야드)/.test(location)) msg += `👉 (해당 파레트만큼 메인 랙(Rack) 여유 공간 확보!)`; else msg += `👉 (다시 메인 랙(Rack) 점유율 합산)`;
+                    if (/(구역|창고|도크|바닥|외부|별도|야드)/.test(location)) msg += `👉 (해당 파레트만큼 메인 랙 여유 공간 확보!)`; else msg += `👉 (다시 메인 랙 점유율 합산)`;
                     await sendTgMsg(chatId, msg);
                 } else await sendTgMsg(chatId, `❌ 대기 중인 [${company}] 차량이 없습니다.`);
                 return res.status(200).send('OK');
@@ -670,7 +663,7 @@ module.exports = async function handler(req, res) {
                 const company = parts[1];
                 const [exist] = await pool.query(`SELECT id FROM outbound WHERE company = ? AND isDone = 0 ORDER BY id DESC LIMIT 1`, [company]);
                 if (exist.length > 0) {
-                    await pool.query(`DELETE FROM outbound WHERE id=?`, [exist[0].id]); await sendTgMsg(chatId, `🗑️ [${company}] 스케줄이 DB에서 완전히 삭제되었습니다.`);
+                    await pool.query(`DELETE FROM outbound WHERE id=?`, [exist[0].id]); await sendTgMsg(chatId, `🗑️ [${company}] 스케줄이 완전히 삭제되었습니다.`);
                 } else await sendTgMsg(chatId, `❌ 삭제 실패: 대기 중인 차량이 없습니다.`);
                 return res.status(200).send('OK');
             }
@@ -718,7 +711,7 @@ module.exports = async function handler(req, res) {
                     await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, ['0', '0']);
                 }
                 if (!isTest && !isReparse && ocrCount >= OCR_FREE_LIMIT_MONTHLY) {
-                    await sendTgMsg(chatId, `🚫 [경고] 이번 달 무료 OCR 한도(${OCR_FREE_LIMIT_MONTHLY}건) 소진! API가 일시 정지됩니다.`); return res.status(200).send('OK');
+                    await sendTgMsg(chatId, `🚫 [경고] 이번 달 무료 OCR 한도 소진! API가 일시 정지됩니다.`); return res.status(200).send('OK');
                 }
 
                 if (isReparse) {
@@ -821,10 +814,10 @@ module.exports = async function handler(req, res) {
         await sendTgMsg(process.env.TELEGRAM_CHAT_ID, `🔥 에러 발생: ${error.message}`);
     }
     return res.status(200).send('OK');
-}; // module.exports 끝
+}; 
 
 // =================================================================
-// 🧠 로컬 정규식 파싱 엔진 (원본)
+// 🧠 로컬 정규식 파싱 엔진
 // =================================================================
 function parseOcrLinesLocal(text) {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
