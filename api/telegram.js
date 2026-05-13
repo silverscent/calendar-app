@@ -73,41 +73,61 @@ export default async function handler(req, res) {
             let startDate, endDate, title;
             const cmd = text.split(' ')[0];
             if (cmd === '/입고' || cmd === '/today') {
-                startDate = new Date(today);
-                endDate = new Date(today); title = '오늘';
+                startDate = new Date(today); endDate = new Date(today); title = '오늘';
             } else {
                 const day = today.getDay();
-                const startOfThisWeek = new Date(today);
-                startOfThisWeek.setDate(today.getDate() - day);
+                const startOfThisWeek = new Date(today); startOfThisWeek.setDate(today.getDate() - day);
                 
                 if (cmd === '/이번주' || cmd === '/thisweek') {
                     startDate = new Date(startOfThisWeek);
                     endDate = new Date(startOfThisWeek); endDate.setDate(endDate.getDate() + 6);
                     title = '이번 주';
                 } else if (cmd === '/다음주' || cmd === '/nextweek') {
-                    startDate = new Date(startOfThisWeek);
-                    startDate.setDate(startDate.getDate() + 7);
+                    startDate = new Date(startOfThisWeek); startDate.setDate(startDate.getDate() + 7);
                     endDate = new Date(startDate); endDate.setDate(endDate.getDate() + 6);
                     title = '다음 주';
                 } else if (cmd === '/저번주' || cmd === '/lastweek') {
-                    startDate = new Date(startOfThisWeek);
-                    startDate.setDate(startDate.getDate() - 7);
+                    startDate = new Date(startOfThisWeek); startDate.setDate(startDate.getDate() - 7);
                     endDate = new Date(startDate); endDate.setDate(endDate.getDate() + 6);
                     title = '지난주';
                 }
             }
             
-            const sStr = getKstDateStr(startDate);
+            // 🚨 [오리지널 복원] 단순 검색이 아닙니다. 과거 10일 치를 가져와서 '주말 이월'을 계산합니다!
+            let fetchStart = new Date(startDate);
+            fetchStart.setDate(fetchStart.getDate() - 10);
+            const fetchStartStr = getKstDateStr(fetchStart);
             const eStr = getKstDateStr(endDate);
             const dayNames = ["일","월","화","수","목","금","토"];
             
-            const [rows] = await pool.query(`SELECT * FROM inbound WHERE receive_date BETWEEN ? AND ? ORDER BY receive_date ASC`, [sStr, eStr]);
+            const [rawRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date BETWEEN ? AND ? ORDER BY receive_date ASC`, [fetchStartStr, eStr]);
+            
+            let rows = [];
+            rawRows.forEach(r => {
+                let origDate = new Date(r.receive_date);
+                let adjDate = new Date(origDate);
+                
+                // 💡 [핵심 엔진] 토요일(6)이나 일요일(0)이면 월요일로 날짜를 밀어버림!
+                while(adjDate.getDay() === 0 || adjDate.getDay() === 6) {
+                    adjDate.setDate(adjDate.getDate() + 1);
+                }
+                
+                // 밀린 날짜가 우리가 찾는 기간(예: 오늘) 안에 들어오면 화면에 표시!
+                if (adjDate >= startDate && adjDate <= endDate) {
+                    r.isMoved = (origDate.getTime() !== adjDate.getTime());
+                    r.origDateStr = formatDbDateShort(r.receive_date);
+                    r.adjDateStr = formatDbDateShort(adjDate);
+                    r.sortDate = adjDate;
+                    rows.push(r);
+                }
+            });
+            // 이월된 날짜 기준으로 재정렬
+            rows.sort((a, b) => a.sortDate - b.sortDate);
             
             let msg = '';
             
-            // 🚨 원본 CheckAlerts.gs 양식: [오늘 입고 브리핑]
             if (title === '오늘') {
-                const todayStr = `${sStr}, ${dayNames[startDate.getDay()]}`;
+                const todayStr = `${getKstDateStr(startDate)}, ${dayNames[startDate.getDay()]}`;
                 msg = `🚨 3PL 입고 알림 🚨 (${todayStr})\n••••••••••••••••••••••••••••••`;
                 
                 if (rows.length === 0) {
@@ -122,34 +142,28 @@ export default async function handler(req, res) {
                         let sType = sTypeRaw === "AIR" ? "탑차량" : (sTypeRaw === "SEA" ? "컨테이너" : sTypeRaw);
                         let sTypeIcon = sTypeRaw === "AIR" ? "✈️" : (sTypeRaw === "SEA" ? "🚢" : "");
                         
+                        // 🚨 이월 꼬리표 추가!
+                        let movedText = r.isMoved ? `🔁 휴무일 이월: ${r.origDateStr} → ${r.adjDateStr}\n` : '';
+                        
                         msg += `\n${idx + 1}️⃣ B/L #: ${r.bl_number}\n` +
                                `📦 PAL       : ${r.pallets}\n` +
                                `${sTypeIcon} 배송방식  : ${sType}\n` +
+                               `${movedText}` +
                                `🧾 Invoice#  : ${r.invoice || ''}`;
                         if (r.remarks) msg += `\n✏️ ETC       : ${r.remarks}`;
                         msg += `\n------------------------------`;
                     });
                     msg += `\n📊 오늘 총 PAL 수: ${totalPalToday}\n••••••••••••••••••••••••••••••`;
                 }
-
-                // 미정/입고일 오류 항목 추가
-                const [pendings] = await pool.query(`SELECT bl_number, pallets FROM inbound WHERE status = '입고대기' AND (receive_date IS NULL OR receive_date = '미정')`);
-                if (pendings.length > 0) {
-                    msg += `\n\n⚠️ 입고일 확인 필요 (보류/미정 ${pendings.length}건)\n------------------------------`;
-                    pendings.forEach(p => { msg += `\n• B/L ${p.bl_number} | 📦 ${p.pallets} | 📅 미정`; });
-                }
-
             } else {
-                // 🚨 원본 Utils.gs 양식: [주간 요약 브리핑]
-                msg = `📦 ${title} 3PL 입고 요약\n(${sStr} ~ ${eStr})\n••••••••••••••••••••••••\n`;
+                msg = `📦 ${title} 3PL 입고 요약\n(${getKstDateStr(startDate)} ~ ${eStr})\n••••••••••••••••••••••••\n`;
                 
                 if (rows.length === 0) {
                     msg += `\n📭 해당 기간 입고 예정 없음`;
                 } else {
                     let map = {};
                     rows.forEach(r => {
-                        let dDate = new Date(r.receive_date);
-                        let dStr = `${String(dDate.getMonth() + 1).padStart(2, '0')}/${String(dDate.getDate()).padStart(2, '0')} (${dayNames[dDate.getDay()]})`;
+                        let dStr = `${r.adjDateStr} (${dayNames[r.sortDate.getDay()]})`;
                         if (!map[dStr]) map[dStr] = [];
                         map[dStr].push(r);
                     });
@@ -162,7 +176,9 @@ export default async function handler(req, res) {
                         items.forEach(it => {
                             let sTypeRaw = String(it.s_type || '').toUpperCase();
                             let sType = sTypeRaw === "AIR" ? "✈️ 탑차량" : (sTypeRaw === "SEA" ? "🚢 컨테이너" : sTypeRaw);
-                            msg += `• ${it.bl_number} | ${it.pallets} | ${sType}\n`;
+                            let movedText = it.isMoved ? `  🔁 휴무일 이월 (${it.origDateStr} → ${it.adjDateStr})\n` : '';
+                            
+                            msg += `• ${it.bl_number} | ${it.pallets} | ${sType}\n${movedText}`;
                         });
                     });
                 }
@@ -360,11 +376,13 @@ export default async function handler(req, res) {
             return res.status(200).send('OK');
         }
         
+     
         // =================================================================
-        // 🔒 관리자(Admin) 전용 관문 (오리지널 관리자 양식 100% 복원!)
+        // 🔒 관리자(Admin) 전용 관문 (수동 제어 명령어 100% 복원!)
         // =================================================================
         const isImageUpload = (message.photo && message.photo.length > 0) || (message.document && message.document.mime_type?.startsWith('image/'));
-        const adminCmdList = ['/?', '/status', '/dup', '/cancel', '/ocr', '/test', '/reparse'];
+        // 🚨 [패치 1] 누락되었던 관리자 명령어 리스트 대거 추가!
+        const adminCmdList = ['/?', '/status', '/dup', '/cancel', '/ocr', '/test', '/reparse', '/완료', '/처리', '/일괄완료', '/용차', '/이동', '/위치', '/출고완료', '/용차완료', '/출고삭제', '/용차삭제'];
         const isAdminCmd = adminCmdList.some(cmd => text.startsWith(cmd));
 
         if (isAdminCmd || isImageUpload) {
@@ -373,25 +391,39 @@ export default async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
-            // 📘 [관리자 도움말] 원본 양식 복원
+            // 📘 [관리자 도움말]
             if (text.startsWith('/?')) {
                 const adminHelpMsg = "📘 관리자 명령어 목록\n\n" +
+                                     "[ 🚚 출고(용차) 및 랙 관리 ]\n" +
+                                     "/용차 [업체] [박스] [파레트] [날짜] [비고]\n" +
+                                     "- 출고 스케줄 등록/수정 (순서 무관)\n" +
+                                     "- 예: /용차 쿠팡 120 3 0310 A구역\n\n" +
+                                     "/이동 [업체] [장소]\n" +
+                                     "- 파레트 보관 위치 변경 (예: /이동 쿠팡 바닥)\n\n" +
+                                     "/출고완료 [업체]\n" +
+                                     "- 상차 완료 처리 (랙 보관량에서 제외)\n\n" +
+                                     "/출고삭제 [업체]\n" +         
+                                     "- 취소/오입력된 대기 건 완전 삭제\n\n" + 
                                      "🟢 OCR 제어\n" +
                                      "[사진 전송] - OCR 대기열 등록\n" +
                                      "/ocr     - 대기 이미지 실행\n" +
                                      "/cancel  - 대기 이미지 취소\n" +
                                      "/reparse - 마지막 결과 재파싱\n" +
                                      "/test    - AI 교정 결과 가상 테스트\n\n" +
+                                     "✅ 입고 수동 처리\n" +
+                                     "/완료 [B/L|인보이스] [날짜]\n" +
+                                     "- 예: /완료 BUD123 0304\n\n" +
+                                     "/일괄완료 [날짜]\n" +
+                                     "- 스케줄 누락 화물(미정) 일괄 처리\n\n" +
                                      "⚙️ 시스템 관리\n" +
                                      "/dup on | off - 중복 허용/차단\n" +
-                                     "/dup reset    - 중복 기록 초기화\n\n" +
-                                     "📊 상태\n" +
-                                     "/status - 봇 & DB 상태 확인";
+                                     "/dup reset    - 중복 기록 초기화\n" +
+                                     "/status       - 봇 & DB 상태 확인";
                 await sendTgMsg(chatId, adminHelpMsg);
                 return res.status(200).send('OK');
             }
 
-            // 📊 [상태 보고] 원본 buildStatusMessage 구조 이식
+            // 📊 [상태 보고]
             if (text.startsWith('/status')) {
                 let dbStatus = "🟢 정상";
                 try { await pool.query('SELECT 1'); } catch(e) { dbStatus = "🔴 연결 실패"; }
@@ -417,7 +449,7 @@ export default async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
-            // ⚙️ [옵션 제어] 양식 통일
+            // ⚙️ [옵션 제어]
             if (text.startsWith('/dup')) {
                 if (text.includes('on')) {
                     const val = '"ON"';
@@ -434,8 +466,219 @@ export default async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
+            // 🚨 [패치 2] 입고 수동 완료 처리 복구 (/완료)
+            if (text.startsWith('/완료') || text.startsWith('/처리')) {
+                const parts = text.trim().split(/\s+/);
+                if (parts.length < 2) {
+                    await sendTgMsg(chatId, "⚠️ 사용법: /완료 [B/L 또는 인보이스] (옵션: 어제/0302)\n예시: /완료 BUD260143 0302");
+                    return res.status(200).send('OK');
+                }
+                const targetStr = parts[1].toUpperCase().replace(/[\s•·\-\*]/g, '');
+                const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+                let dateToSet = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+                if (parts[2]) {
+                    if (parts[2] === '어제') dateToSet.setDate(dateToSet.getDate() - 1);
+                    else {
+                        const match = parts[2].match(/^(\d{1,2})[-/]?(\d{1,2})$/);
+                        if (match) dateToSet = new Date(now.getFullYear(), parseInt(match[1]) - 1, parseInt(match[2]));
+                        else { await sendTgMsg(chatId, "⚠️ 날짜 형식이 잘못되었습니다. (예: 어제, 0302)"); return res.status(200).send('OK'); }
+                    }
+                }
+                const dateStr = getKstDateStr(dateToSet);
+
+                let exist = [];
+                if (targetStr !== '발행전') {
+                    [exist] = await pool.query(`SELECT id, remarks, bl_number, invoice FROM inbound WHERE TRIM(bl_number) = ? OR TRIM(invoice) = ? ORDER BY id DESC LIMIT 1`, [targetStr, targetStr]);
+                } else {
+                    await sendTgMsg(chatId, "⚠️ '발행전'은 인보이스 번호로 검색해주세요! (예: /완료 25021455)");
+                    return res.status(200).send('OK');
+                }
+
+                if (exist.length > 0) {
+                    let etc = String(exist[0].remarks || '').trim();
+                    if (!etc.includes('[수동완료]')) etc = etc ? etc + ' [수동완료]' : '[수동완료]';
+                    await pool.query(`UPDATE inbound SET receive_date = ?, remarks = ?, status = '완료' WHERE id = ?`, [dateStr, etc, exist[0].id]);
+                    let foundType = exist[0].bl_number === targetStr ? "B/L" : "인보이스";
+                    await sendTgMsg(chatId, `✅ DB 수정 완료!\n[${targetStr}] 항목(${foundType})을 [${dateStr}] 일자로 입고 처리했습니다.`);
+                } else await sendTgMsg(chatId, `❌ DB 검색 실패: [${targetStr}]에 해당하는 B/L이나 인보이스가 없습니다.`);
+                return res.status(200).send('OK');
+            }
+
+            // 🚨 [패치 3] 누락 화물 일괄 완료 처리 복구 (/일괄완료)
+            if (text.startsWith('/일괄완료')) {
+                const parts = text.trim().split(/\s+/);
+                const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+                let dateToSet = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+                if (parts[1]) {
+                    if (parts[1] === '어제') dateToSet.setDate(dateToSet.getDate() - 1);
+                    else {
+                        const match = parts[1].match(/^(\d{1,2})[-/]?(\d{1,2})$/);
+                        if (match) dateToSet = new Date(now.getFullYear(), parseInt(match[1]) - 1, parseInt(match[2]));
+                        else { await sendTgMsg(chatId, "⚠️ 날짜 형식이 잘못되었습니다. (예: /일괄완료 어제, /일괄완료 0302)"); return res.status(200).send('OK'); }
+                    }
+                }
+                const dateStr = getKstDateStr(dateToSet);
+
+                const [pendings] = await pool.query(`SELECT id, remarks FROM inbound WHERE status = '입고대기' AND (receive_date IS NULL OR receive_date = '미정')`);
+                if (pendings.length === 0) {
+                    await sendTgMsg(chatId, "⚠️ 현재 일괄 처리할 누락 화물(입고보류 등)이 DB에 없습니다.");
+                    return res.status(200).send('OK');
+                }
+
+                for (const p of pendings) {
+                    let etc = String(p.remarks || '').trim();
+                    if (!etc.includes('[일괄완료]')) etc = etc ? etc + ' [일괄완료]' : '[일괄완료]';
+                    await pool.query(`UPDATE inbound SET receive_date = ?, remarks = ?, status = '완료' WHERE id = ?`, [dateStr, etc, p.id]);
+                }
+                await sendTgMsg(chatId, `✅ 총 ${pendings.length}건의 누락 화물을 [${dateStr}] 일자로 일괄 입고 처리했습니다!\n이제 미입고 알림에 뜨지 않습니다.`);
+                return res.status(200).send('OK');
+            }
+
+            // 🚨 [패치 4] 용차(출고) 수동 등록 및 수정 복구 (/용차)
+            if (text.startsWith('/용차')) {
+                const parts = text.trim().split(/\s+/).slice(1);
+                if (parts.length === 0) {
+                    await sendTgMsg(chatId, "⚠️ 사용법: /용차 [업체명] [박스] [파레트] [날짜] [비고]\n예시: /용차 쿠팡 120 3 0310 A구역");
+                    return res.status(200).send('OK');
+                }
+                
+                const company = parts[0]; 
+                let dateStr = "미정"; let numbers = []; let etcParts = [];
+                let explicitPal = null; let explicitBox = null;
+                
+                for (let i = 1; i < parts.length; i++) {
+                    const p = parts[i];
+                    let isDate = false; let mStr, dStr;
+                    if (/^\d{4}$/.test(p)) {
+                        const m = parseInt(p.substring(0,2), 10); const d = parseInt(p.substring(2,4), 10);
+                        if (m >= 1 && m <= 12 && d >= 1 && d <= 31) { isDate = true; mStr = m; dStr = d; }
+                    } else if (/^(0?[1-9]|1[0-2])[-/]([0-2][0-9]|3[01])$/.test(p)) {
+                        const match = p.match(/^(0?[1-9]|1[0-2])[-/]([0-2][0-9]|3[01])$/);
+                        mStr = parseInt(match[1], 10); dStr = parseInt(match[2], 10); isDate = true;
+                    }
+                    
+                    const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+                    if (isDate) { dateStr = `${now.getFullYear()}-${String(mStr).padStart(2, '0')}-${String(dStr).padStart(2, '0')}`; continue; }
+                    if (p === '오늘') { dateStr = getKstDateStr(now); continue; }
+                    if (p === '내일') { now.setDate(now.getDate()+1); dateStr = getKstDateStr(now); continue; }
+                    
+                    const numMatch = p.match(/^(\d+)(p|파|파레트|팔레트|b|박|박스|box)?$/i);
+                    if (numMatch) {
+                        const val = parseInt(numMatch[1], 10); const unit = numMatch[2] ? numMatch[2].toLowerCase() : '';
+                        if (['p','파','파레트','팔레트'].includes(unit)) explicitPal = val;
+                        else if (['b','박','박스','box'].includes(unit)) explicitBox = val;
+                        else numbers.push(val);
+                        continue;
+                    }
+                    etcParts.push(p);
+                }
+                
+                let box = explicitBox !== null ? explicitBox : "";
+                let pal = explicitPal !== null ? explicitPal : "";
+                if (numbers.length === 2) {
+                    if (pal === "") pal = Math.min(numbers[0], numbers[1]);
+                    if (box === "") box = Math.max(numbers[0], numbers[1]);
+                } else if (numbers.length === 1) {
+                    if (pal === "" && box !== "") pal = numbers[0];
+                    else if (box === "" && pal !== "") box = numbers[0];
+                    else { box = numbers[0]; pal = ""; } 
+                }
+                
+                const etcStr = etcParts.join(" ");
+                const [exist] = await pool.query(`SELECT * FROM outbound WHERE company = ? AND isDone = 0 ORDER BY id DESC LIMIT 1`, [company]);
+                
+                if (exist.length > 0) {
+                    let existingPal = exist[0].pal; let existingBox = exist[0].box;
+                    if (numbers.length === 1 && explicitPal === null && explicitBox === null) {
+                        if (existingPal !== "" && existingBox === "") { box = numbers[0]; pal = existingPal; }
+                        else if (existingBox !== "" && existingPal === "") { pal = numbers[0]; box = existingBox; }
+                        else { box = numbers[0]; pal = existingPal; }
+                    } else if (pal === "" && box === "") { pal = existingPal; box = existingBox; }
+                    else { if(pal === "") pal = existingPal; if(box === "") box = existingBox; }
+                    
+                    const finalDate = dateStr !== "미정" ? dateStr : exist[0].outbound_date;
+                    const finalEtc = etcStr !== "" ? etcStr : exist[0].etc;
+                    
+                    await pool.query(`UPDATE outbound SET pal=?, box=?, outbound_date=?, etc=? WHERE id=?`, [pal, box, finalDate, finalEtc, exist[0].id]);
+                    let msg = `🔄 [${company}] 데이터 덮어쓰기 완료!\n`;
+                    if (pal === "" || box === "") msg += `⚠️ (주의) 박스나 파레트 수량이 누락되었습니다.\n`;
+                    msg += `👉 ${pal}p / ${box ? box : '?'}b / ${finalDate || '미정'} ${finalEtc ? '['+finalEtc+']' : ''}`;
+                    await sendTgMsg(chatId, msg);
+                } else {
+                    if (numbers.length === 1 && explicitPal === null && explicitBox === null) { pal = numbers[0]; }
+                    await pool.query(`INSERT INTO outbound (company, pal, box, outbound_date, etc, isDone) VALUES (?, ?, ?, ?, ?, 0)`, [company, pal, box, dateStr === '미정' ? null : dateStr, etcStr]);
+                    let msg = `✅ [${company}] 신규 출고 등록 완료!\n`;
+                    if (pal === "" || box === "") msg += `⚠️ (주의) 박스나 파레트 수량이 누락되었습니다.\n`;
+                    msg += `👉 ${pal ? pal+'p' : '?p'} / ${box ? box+'b' : '?b'} / ${dateStr} ${etcStr ? '['+etcStr+']' : ''}`;
+                    await sendTgMsg(chatId, msg);
+                }
+                return res.status(200).send('OK');
+            }
+
+            // 🚨 [패치 5] 용차 이동/위치 지정 복구 (/이동)
+            if (text.startsWith('/이동') || text.startsWith('/위치')) {
+                const parts = text.trim().split(/\s+/);
+                if (parts.length < 3) { 
+                    await sendTgMsg(chatId, "⚠️ 사용법: /이동 [업체명] [장소]\n예시: /이동 쿠팡 바닥\n(메인 랙으로 원복 시: /이동 쿠팡 랙)");
+                    return res.status(200).send('OK'); 
+                }
+                const company = parts[1]; const location = parts.slice(2).join(" ");
+                
+                const [exist] = await pool.query(`SELECT * FROM outbound WHERE company = ? AND isDone = 0 ORDER BY id DESC LIMIT 1`, [company]);
+                if (exist.length > 0) {
+                    let etc = String(exist[0].etc || '').replace(/\[(보관|이동):\s*[^\]]+\]/g, '').trim();
+                    let newEtc = (location === '랙' || location === '메인랙') ? etc : etc + ` [이동: ${location}]`;
+                    await pool.query(`UPDATE outbound SET etc=? WHERE id=?`, [newEtc.trim(), exist[0].id]);
+                    
+                    let msg = `🚚 [${company}] 파레트가 [${location}](으)로 이동 처리되었습니다.\n`;
+                    if (/(구역|창고|도크|바닥|외부|별도|야드)/.test(location)) msg += `👉 (해당 파레트만큼 메인 랙(Rack) 여유 공간이 즉시 확보되었습니다!)`;
+                    else msg += `👉 (다시 메인 랙(Rack) 점유율에 합산됩니다.)`;
+                    await sendTgMsg(chatId, msg);
+                } else await sendTgMsg(chatId, `❌ 대기 중인 [${company}] 차량이 없습니다.`);
+                return res.status(200).send('OK');
+            }
+
+            // 🚨 [패치 6] 용차 완료 수동 처리 복구 (/출고완료)
+            if (text.startsWith('/출고완료') || text.startsWith('/용차완료')) {
+                const parts = text.trim().split(/\s+/);
+                if (parts.length < 2) { 
+                    await sendTgMsg(chatId, "⚠️ 사용법: /출고완료 [업체명]\n예시: /출고완료 쿠팡");
+                    return res.status(200).send('OK'); 
+                }
+                const company = parts[1];
+                
+                const [exist] = await pool.query(`SELECT * FROM outbound WHERE company = ? AND isDone = 0 ORDER BY id DESC LIMIT 1`, [company]);
+                if (exist.length > 0) {
+                    let etc = String(exist[0].etc || '').trim();
+                    let newEtc = etc ? etc + ' [출고완료]' : '[출고완료]';
+                    await pool.query(`UPDATE outbound SET etc=?, isDone=1 WHERE id=?`, [newEtc, exist[0].id]);
+                    await sendTgMsg(chatId, `🚚 [${company}] 출고 완료!\n(해당 파레트가 랙(Rack) 보관량에서 제외되었습니다.)`);
+                } else await sendTgMsg(chatId, `❌ 대기 중인 [${company}] 차량이 없습니다.`);
+                return res.status(200).send('OK');
+            }
+
+            // 🚨 [패치 7] 잘못된 용차 내역 영구 삭제 복구 (/출고삭제)
+            if (text.startsWith('/출고삭제') || text.startsWith('/용차삭제')) {
+                const parts = text.trim().split(/\s+/);
+                if (parts.length < 2) { 
+                    await sendTgMsg(chatId, "⚠️ 사용법: /출고삭제 [업체명]\n예시: /출고삭제 쿠팡");
+                    return res.status(200).send('OK'); 
+                }
+                const company = parts[1];
+                
+                const [exist] = await pool.query(`SELECT id FROM outbound WHERE company = ? AND isDone = 0 ORDER BY id DESC LIMIT 1`, [company]);
+                if (exist.length > 0) {
+                    await pool.query(`DELETE FROM outbound WHERE id=?`, [exist[0].id]);
+                    await sendTgMsg(chatId, `🗑️ [${company}] 대기 중인 출고 스케줄이 DB에서 완전히 삭제되었습니다.`);
+                } else await sendTgMsg(chatId, `❌ 삭제 실패: 현재 대기 중인 [${company}] 차량이 없습니다.`);
+                return res.status(200).send('OK');
+            }
+
             // 📥 [이미지 대기열] 원본 가이드 메시지 복원
             if (isImageUpload) {
+            // ... (기존 코드와 이어집니다) ...
                 let fileId = null; let uniqueId = null;
                 if (message.photo && message.photo.length > 0) {
                     const p = message.photo[message.photo.length - 1];
