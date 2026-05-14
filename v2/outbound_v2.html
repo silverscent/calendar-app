@@ -6524,7 +6524,7 @@
       }
 
       // 🆕 새롭게 추가하는 로그인 처리 함수
-function handleLogin() {
+      function handleLogin() {
     const idElem = document.getElementById('adminIdInput');
     const pwElem = document.getElementById('adminPwInput');
     
@@ -6533,39 +6533,47 @@ function handleLogin() {
     const id = idElem.value.trim();
     const pw = pwElem.value.trim();
 
-    if (!id || !pw) return alert("아이디와 비밀번호를 모두 입력하세요.");
+    if (!id || !pw) return alert("아이디와 비밀번호를 입력하세요.");
 
-    // 🚨 방금 프록시에 새로 뚫은 login 함수를 호출합니다!
     google.script.run.withSuccessHandler(function(res) {
         if (res.success) {
-            // 🚨 1. [핵심] 기존 시스템이 인식하던 관리자 변수 스위치를 모두 ON으로 켭니다!
-            window.isAdmin = true; 
-            sessionStorage.setItem('isAdmin', 'true'); // (기존 코드 호환용 카멜케이스)
+            // 🚨 1. [가장 중요] 기존 let isAdmin 변수에 직접 true를 할당합니다.
+            isAdmin = true; 
+            
+            // 🚨 2. 세션 저장 (새로고침 시에도 유지되도록 기존 키값과 일치시킴)
             sessionStorage.setItem('is_admin', 'true');
+            sessionStorage.setItem('isAdmin', 'true'); 
             sessionStorage.setItem('admin_id', res.admin_id);
             sessionStorage.setItem('admin_role', res.role);
-            
-            alert(`${res.name}님 환영합니다.`);
+
+            alert(`${res.name}님 확인되었습니다.`);
             document.getElementById('adminLoginModal').style.display = 'none';
-            
-            // 입력칸 초기화
-            idElem.value = '';
-            pwElem.value = '';
-            
-            // 🎨 2. 상단 네비게이션이나 제목에 [관리자 모드]라고 시각적으로 띄워주기
-            const dashNav = document.querySelector('.dash-nav') || document.querySelector('.header-title');
-            if (dashNav && !dashNav.innerHTML.includes('관리자')) {
-                dashNav.innerHTML = `<span style="background:var(--sat-color, #4dabf7); color:#fff; padding:2px 8px; border-radius:5px; font-size:0.6em; margin-right:5px; vertical-align:middle;">SYSTEM ADMIN</span>` + dashNav.innerHTML;
+
+            // 🎨 3. 관리자 뱃지 확실하게 띄우기 (디자인 유지)
+            // .dash-nav 내부의 날짜 텍스트 옆에 뱃지를 추가합니다.
+            const nav = document.querySelector('.dash-nav');
+            if (nav && !document.getElementById('adminBadge')) {
+                const badge = document.createElement('span');
+                badge.id = 'adminBadge';
+                badge.innerHTML = 'SYSTEM ADMIN';
+                badge.style = "background:#4dabf7; color:#fff; padding:3px 8px; border-radius:6px; font-size:10px; font-weight:900; margin-right:8px; vertical-align:middle; box-shadow:0 2px 4px rgba(0,0,0,0.2);";
+                nav.prepend(badge); // 날짜 앞에 뱃지 삽입
+            }
+
+            // 🔄 4. 수정/삭제 버튼이 생기도록 달력을 즉시 다시 그립니다.
+            if (typeof renderCalendar === 'function') {
+                renderCalendar(); 
             }
             
-            // 🔄 3. 관리자 권한(isAdmin=true)을 가진 상태로 달력을 다시 그려서 수정/삭제 버튼 활성화!
-            if (typeof renderCalendar === 'function') renderCalendar(); 
+            // 입력칸 비우기
+            idElem.value = '';
+            pwElem.value = '';
+
         } else {
             alert(res.msg);
         }
     }).login(id, pw);
 }
-
     </script>
   </body>
 </html>
