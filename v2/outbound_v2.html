@@ -3781,15 +3781,34 @@
         });
       }
 
-      // 💡 [수정] 앱을 꺼도 관리자 로그인 유지
-      adminToken = localStorage.getItem("admin_token");
-      isAdmin = adminToken ? true : false;
-      if (isAdmin) {
-        const btn = document.getElementById("adminBtn");
-        btn.innerHTML = "🔓 관리자";
-        btn.classList.add("unlocked");
-        document.getElementById("adminActions").style.display = "flex";
-        document.getElementById("fabBtn").style.display = "flex";
+      // 💡 [수정] 앱을 꺼도 관리자 로그인 유지 (V2 초록색 관리자 버튼 완벽 복구)
+      if (sessionStorage.getItem('isAdmin') === 'true') {
+          window.isAdmin = true;
+          isAdmin = true;
+          
+          document.getElementById("adminActions").style.display = "flex";
+          document.getElementById("fabBtn").style.display = "flex";
+
+          const btn = document.getElementById("adminBtn");
+          if (btn) {
+              btn.innerHTML = '관리자';
+              btn.style.background = '#28a745'; // 초록색 테마
+              btn.style.color = '#fff';
+              btn.style.width = 'auto';
+              btn.style.padding = '0 12px';
+              btn.style.fontSize = '14px';
+              btn.style.fontWeight = '900';
+              btn.style.borderRadius = '8px';
+              btn.onclick = function() { 
+                  if(confirm("로그아웃 하시겠습니까?")) {
+                      sessionStorage.clear();
+                      location.reload();
+                  }
+              };
+          }
+      } else {
+          window.isAdmin = false;
+          isAdmin = false;
       }
 
       function toggleAdmin() {
@@ -6537,36 +6556,40 @@
 
     google.script.run.withSuccessHandler(function(res) {
         if (res.success) {
-            // 🚨 1. [권한 스위치] 전역 변수와 세션을 확실히 켭니다.
-            window.isAdmin = true; 
-            isAdmin = true; // 스코프 문제 방지
+            // 🚨 1. 권한 스위치 강제 활성화 (전역 변수 주입)
+            window.isAdmin = true;
+            isAdmin = true; 
+            sessionStorage.setItem('isAdmin', 'true');
             sessionStorage.setItem('is_admin', 'true');
-            sessionStorage.setItem('isAdmin', 'true'); 
             sessionStorage.setItem('admin_id', res.admin_id);
-            sessionStorage.setItem('admin_role', res.role);
 
-            // 🚨 2. [잠금 해제] 메인 화면의 잠금 아이콘/글자를 '관리자'로 변경
-            // 보통 상단 우측이나 헤더에 있는 로그인 버튼을 찾아 수정합니다.
-            const loginBtn = document.querySelector('button[onclick*="adminLoginModal"]');
-            if (loginBtn) {
-                loginBtn.innerHTML = '👤 ' + res.name; // 🔒 대신 사용자 이름 표시
-                loginBtn.style.color = 'var(--sat-color)';
+            // 🚨 2. [UI 변신] 🔒 아이콘 버튼을 초록색 '관리자' 버튼으로 즉시 변경
+            const btn = document.getElementById("adminBtn");
+            if (btn) {
+                btn.innerHTML = '관리자';
+                btn.style.background = '#28a745'; // ✅ 원래 원하셨던 초록색
+                btn.style.color = '#fff';
+                btn.style.width = 'auto';
+                btn.style.padding = '0 12px';
+                btn.style.fontSize = '14px';
+                btn.style.fontWeight = '900';
+                btn.style.borderRadius = '8px';
+                btn.onclick = function() { 
+                    if(confirm("로그아웃 하시겠습니까?")) {
+                        sessionStorage.clear();
+                        location.reload();
+                    }
+                };
             }
 
-            // 🚨 3. [배지 위치 수정] 날짜 이동칸이 아닌 '제목(출고 캘린더)' 옆으로 이동
-            const headerTitle = document.querySelector('.header-title');
-            if (headerTitle && !document.getElementById('adminBadge')) {
-                const badge = document.createElement('span');
-                badge.id = 'adminBadge';
-                badge.innerHTML = 'ADMIN';
-                badge.style = "background:#4dabf7; color:#fff; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:900; margin-left:8px; vertical-align:middle;";
-                headerTitle.appendChild(badge); // 제목 '뒤'에 붙임
-            }
+            // 🚨 3. [위치 수정] 레이아웃을 깨뜨렸던 하늘색 배지 제거
+            const oldBadge = document.getElementById('adminBadge');
+            if (oldBadge) oldBadge.remove();
 
-            alert(`${res.name} 관리자님, 환영합니다!`);
+            alert(`${res.name} 관리자님 확인되었습니다.`);
             document.getElementById('adminLoginModal').style.display = 'none';
 
-            // 🚨 4. [화면 갱신]isAdmin이 true인 상태로 달력을 다시 그려서 수정/삭제 버튼을 노출시킵니다.
+            // 🚨 4. [화면 갱신] isAdmin이 true인 상태로 달력을 다시 그려 수정/삭제 버튼 노출
             if (typeof renderCalendar === 'function') {
                 renderCalendar(); 
             }
