@@ -6538,6 +6538,9 @@ function handleLogin() {
     // 🚨 방금 프록시에 새로 뚫은 login 함수를 호출합니다!
     google.script.run.withSuccessHandler(function(res) {
         if (res.success) {
+            // 🚨 1. [핵심] 기존 시스템이 인식하던 관리자 변수 스위치를 모두 ON으로 켭니다!
+            window.isAdmin = true; 
+            sessionStorage.setItem('isAdmin', 'true'); // (기존 코드 호환용 카멜케이스)
             sessionStorage.setItem('is_admin', 'true');
             sessionStorage.setItem('admin_id', res.admin_id);
             sessionStorage.setItem('admin_role', res.role);
@@ -6545,14 +6548,22 @@ function handleLogin() {
             alert(`${res.name}님 환영합니다.`);
             document.getElementById('adminLoginModal').style.display = 'none';
             
+            // 입력칸 초기화
             idElem.value = '';
             pwElem.value = '';
             
+            // 🎨 2. 상단 네비게이션이나 제목에 [관리자 모드]라고 시각적으로 띄워주기
+            const dashNav = document.querySelector('.dash-nav') || document.querySelector('.header-title');
+            if (dashNav && !dashNav.innerHTML.includes('관리자')) {
+                dashNav.innerHTML = `<span style="background:var(--sat-color, #4dabf7); color:#fff; padding:2px 8px; border-radius:5px; font-size:0.6em; margin-right:5px; vertical-align:middle;">SYSTEM ADMIN</span>` + dashNav.innerHTML;
+            }
+            
+            // 🔄 3. 관리자 권한(isAdmin=true)을 가진 상태로 달력을 다시 그려서 수정/삭제 버튼 활성화!
             if (typeof renderCalendar === 'function') renderCalendar(); 
         } else {
-            alert(res.msg); // 비밀번호 틀렸을 때 알림
+            alert(res.msg);
         }
-    }).login(id, pw); // 👈 문자열 합치기 꼼수 제거, 깔끔하게 호출!
+    }).login(id, pw);
 }
 
     </script>
