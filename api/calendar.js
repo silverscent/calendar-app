@@ -92,44 +92,52 @@ module.exports = async function(req, res) {
         }
 
         if (req.method === 'POST') {
-            const body = req.body;
-            const payload = typeof body === 'string' ? JSON.parse(body) : body; 
-            const { domain, action, data, token, compName, colorIdx, year } = payload;
-            if (req.method === 'POST') {
     const body = req.body;
     const payload = typeof body === 'string' ? JSON.parse(body) : body; 
     const { domain, action, data, token, compName, colorIdx, year } = payload;
 
-    // 🚨 기존 PING 로직은 주석 처리하거나 삭제합니다.
-    // if (action === 'PING') return res.status(200).json({ msg: token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
+    // ✅ 1. 이 줄이 무조건 가장 먼저 있어야 합니다! (기존 로직이 쓰는 함수)
+    const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
 
-// ✅ 수정된 로그인 로직
-if (action === 'LOGIN') {
-    const { id, pw } = data; // 프론트에서 보낸 id와 pw 추출
-    const [rows] = await pool.query(
-        "SELECT admin_id, password_hash, admin_name, role FROM admins WHERE admin_id = ? AND status = 'ACTIVE'",
-        [id]
-    );
+    // ✅ 2. 그 다음이 바로 로그인 로직입니다.
+    if (action === 'LOGIN') {
+        try {
+            const { id, pw } = data; 
+            
+            // DB 조회
+            const [rows] = await pool.query(
+                "SELECT admin_id, password_hash, admin_name, role FROM admins WHERE admin_id = ? AND status = 'ACTIVE'",
+                [id]
+            );
 
-    // ID/PW 대조 (평문 비교 -> 나중에 bcrypt로 업그레이드 예정)
-    if (rows.length === 0 || rows[0].password_hash !== pw) {
-        return res.status(200).json({ success: false, msg: '정보가 일치하지 않습니다.' });
+            // 임시 평문 비교
+            if (rows.length === 0 || rows[0].password_hash !== pw) {
+                return res.status(200).json({ success: false, msg: '아이디 또는 비밀번호가 틀립니다.' });
+            }
+
+            const user = rows[0];
+
+            // 로그인 기록
+            await pool.query(
+                "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'LOGIN', '시스템 관리자 로그인 성공')",
+                [user.admin_id]
+            );
+
+            return res.status(200).json({ 
+                success: true, 
+                admin_id: user.admin_id, 
+                role: user.role, 
+                name: user.admin_name 
+            });
+
+        } catch (error) {
+            console.error("로그인 에러:", error);
+            // 에러 발생 시 프론트로 메시지 전달
+            return res.status(200).json({ success: false, msg: '로그인 처리 중 서버 오류가 발생했습니다.' });
+        }
     }
 
-    const user = rows[0];
-    // Audit Log 기록
-    await pool.query(
-        "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'LOGIN', '성공')",
-        [user.admin_id]
-    );
-
-    return res.status(200).json({ 
-        success: true, 
-        admin_id: user.admin_id, 
-        role: user.role, 
-        name: user.admin_name 
-    });
-}
+    // ... (이 아래부터는 기존 입/출고 업데이트 등 본섭 로직 유지) ...
 
     // --- 기존 로직 그대로 유지 ---
     const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
