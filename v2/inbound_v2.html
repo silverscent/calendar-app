@@ -1925,15 +1925,25 @@
       function toggleAdmin() {
         const btn = document.getElementById('adminBtn');
         if(isAdmin) {
-          isAdmin = false; localStorage.removeItem("admin_token");
-          // 💡 수정됨
-          adminToken = null;
-          btn.innerHTML = '🔒 잠김'; btn.classList.remove('unlocked');
-          document.getElementById('adminActions').style.display = 'none'; updateFooterUI();
-          showToast('🔒 일반 모드로 전환되었습니다.', 2000); return;
+          // 🚨 로그아웃 처리
+          isAdmin = false; 
+          window.isAdmin = false;
+          sessionStorage.clear(); // 세션 완전 초기화
+          localStorage.removeItem("admin_token");
+          
+          btn.innerHTML = '🔒 잠김'; 
+          btn.classList.remove('unlocked');
+          document.getElementById('adminActions').style.display = 'none'; 
+          updateFooterUI();
+          showToast('🔒 일반 모드로 전환되었습니다.', 2000); 
+          
+          renderCalendar(); // 달력 새로 그려서 수정버튼 숨기기
+          return;
         }
-        document.getElementById('adminPwInput').value = ''; document.getElementById('adminLoginModal').style.display = 'flex';
-        setTimeout(() => document.getElementById('adminPwInput').focus(), 100);
+        // 로그인 창 열기
+        document.getElementById('adminPwInput').value = ''; 
+        document.getElementById('adminLoginModal').style.display = 'flex';
+        setTimeout(() => document.getElementById('adminIdInput').focus(), 100);
       }
 
       function submitAdminLogin() {
@@ -2299,7 +2309,7 @@
           let iconOpacity = isItemDone ? '0.8' : '1';
 
           // 🚨 상세보기 창에만 예쁜 AI 알약 뱃지 장착!
-          let aiBadgeHtml = item.isAi ? `<span style="background:rgba(10,132,255,0.1); color:#0a84ff; border:1px solid rgba(10,132,255,0.3); padding:2px 6px; border-radius:8px; font-size:0.75em; font-weight:900; margin-left:8px; vertical-align:middle;">🤖 AI수정됨</span>` : '';
+          //let aiBadgeHtml = item.isAi ? `<span style="background:rgba(10,132,255,0.1); color:#0a84ff; border:1px solid rgba(10,132,255,0.3); padding:2px 6px; border-radius:8px; font-size:0.75em; font-weight:900; margin-left:8px; vertical-align:middle;">🤖 AI수정됨</span>` : '';
 
           let actionBtns = '';
           if (isAdmin) {
@@ -2314,7 +2324,7 @@
           contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
                               <div class="modal-icon" style="background-color: ${pastelBg}; opacity: ${iconOpacity}; box-shadow: 0 2px 5px rgba(0,0,0,0.15);"></div>
                               <div class="modal-info">
-                                  <div class="modal-comp-row"><span class="modal-comp">${item.pal}P ${aiBadgeHtml}</span>${actionBtns}</div>
+                                  <div class="modal-comp-row"><span class="modal-comp">${item.pal}P</span>${actionBtns}</div>
                                   <div class="modal-vol">📄 B/L: ${item.bl} | ${typeIcon} 타입: ${item.sType}</div>
                                   <div class="modal-detail-text">🏢 FWD: ${item.fwd || '-'} | 🧾 INV: ${item.invoice || '-'}</div>
                                   ${etcHtml}
@@ -3332,36 +3342,25 @@ function loadOcrVerificationData(btnElement) {
           }
       });
 
-    // 🚀 [앱 초기화] 
-      // 🚀 [앱 초기화] 
+  // 🚀 [앱 초기화] 
       window.addEventListener('DOMContentLoaded', () => {
         
-        // 💡 [수정] 앱을 꺼도 관리자 로그인 유지 (초록색 관리자 버튼 완벽 복구)
+        // 💡 [수정] 앱을 꺼도 관리자 로그인 유지 (초록색 🔓 관리자 버튼 완벽 복구)
         if (sessionStorage.getItem('isAdmin') === 'true') {
             window.isAdmin = true;
             isAdmin = true;
             
-            // 입고 달력 다중선택 메뉴 활성화
-            document.getElementById("adminActions").style.display = "flex";
-
             const btn = document.getElementById("adminBtn");
             if (btn) {
-                btn.innerHTML = '관리자';
-                btn.style.background = '#28a745'; // 초록색 테마
-                btn.style.color = '#fff';
-                btn.style.width = 'auto';
-                btn.style.padding = '0 12px';
-                btn.style.fontSize = '14px';
-                btn.style.fontWeight = '900';
-                btn.style.borderRadius = '8px';
-                btn.onclick = function() { 
-                    if(confirm("로그아웃 하시겠습니까?")) {
-                        sessionStorage.clear();
-                        location.reload();
-                    }
-                };
+                btn.innerHTML = '🔓 관리자';
+                btn.className = 'admin-btn unlocked'; // 원래 있던 예쁜 초록색 CSS 클래스
+                btn.style = ""; // 혹시 모를 찌꺼기 인라인 스타일 제거
             }
-            updateFooterUI();
+            
+            const actions = document.getElementById("adminActions");
+            if (actions) actions.style.display = "flex"; // 다중 선택 메뉴 표시
+            
+            if (typeof updateFooterUI === 'function') updateFooterUI();
         } else {
             window.isAdmin = false;
             isAdmin = false;
@@ -3442,57 +3441,36 @@ function loadOcrVerificationData(btnElement) {
 function handleLogin() {
     const idElem = document.getElementById('adminIdInput');
     const pwElem = document.getElementById('adminPwInput');
-    
     if (!idElem || !pwElem) return;
-
     const id = idElem.value.trim();
     const pw = pwElem.value.trim();
-
     if (!id || !pw) return alert("아이디와 비밀번호를 입력하세요.");
 
     google.script.run.withSuccessHandler(function(res) {
         if (res.success) {
-            // 🚨 1. 권한 스위치 강제 활성화 (전역 변수 주입)
+            // 1. 권한 스위치 ON
             window.isAdmin = true;
             isAdmin = true; 
             sessionStorage.setItem('isAdmin', 'true');
             sessionStorage.setItem('is_admin', 'true');
             sessionStorage.setItem('admin_id', res.admin_id);
 
-           // 🚨 2. [UI 변신] 🔒 아이콘 버튼을 초록색 '관리자' 버튼으로 즉시 변경
+            // 2. 촌스러운 인라인 스타일 날리고 원래 예쁜 클래스 복구!
             const btn = document.getElementById("adminBtn");
             if (btn) {
-                btn.innerHTML = '관리자';
-                btn.style.background = '#28a745'; // ✅ 원래 원하셨던 초록색
-                btn.style.color = '#fff';
-                btn.style.width = 'auto';
-                btn.style.padding = '0 12px';
-                btn.style.fontSize = '14px';
-                btn.style.fontWeight = '900';
-                btn.style.borderRadius = '8px';
-                btn.onclick = function() { 
-                    if(confirm("로그아웃 하시겠습니까?")) {
-                        sessionStorage.clear();
-                        location.reload();
-                    }
-                };
+                btn.innerHTML = '🔓 관리자';
+                btn.className = 'admin-btn unlocked'; // 원래 CSS 사용
+                btn.style = ""; // 찌꺼기 제거
             }
 
-            // 🚨 3. [위치 수정] 레이아웃을 깨뜨렸던 하늘색 배지 제거
-            const oldBadge = document.getElementById('adminBadge');
-            if (oldBadge) oldBadge.remove();
-
-            alert(`${res.name} 관리자님 확인되었습니다.`);
+            document.getElementById('adminActions').style.display = 'flex';
             document.getElementById('adminLoginModal').style.display = 'none';
-
-            // 🚨 4. [화면 갱신] isAdmin이 true인 상태로 달력을 다시 그려 수정/삭제 버튼 노출
-            if (typeof renderCalendar === 'function') {
-                renderCalendar(); 
-            }
+            alert(`${res.name} 관리자님 확인되었습니다.`);
             
-            idElem.value = '';
-            pwElem.value = '';
-
+            if (typeof renderCalendar === 'function') renderCalendar(); 
+            if (typeof updateFooterUI === 'function') updateFooterUI();
+            
+            idElem.value = ''; pwElem.value = '';
         } else {
             alert(res.msg);
         }

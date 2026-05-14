@@ -3812,22 +3812,27 @@
       }
 
       function toggleAdmin() {
-        const btn = document.getElementById("adminBtn");
-        if (isAdmin) {
-          isAdmin = false;
-          localStorage.removeItem("admin_token"); // 💡 수정됨
-          adminToken = null;
-          btn.innerHTML = "🔒 잠김";
-          btn.classList.remove("unlocked");
-          document.getElementById("adminActions").style.display = "none";
-          document.getElementById("fabBtn").style.display = "none";
+        const btn = document.getElementById('adminBtn');
+        if(isAdmin) {
+          // 🚨 로그아웃 처리
+          isAdmin = false; 
+          window.isAdmin = false;
+          sessionStorage.clear(); // 세션 완전 초기화
+          localStorage.removeItem("admin_token");
+          
+          btn.innerHTML = '🔒 잠김'; 
+          btn.classList.remove('unlocked');
+          document.getElementById('adminActions').style.display = 'none'; 
           updateFooterUI();
-          showToast("🔒 일반 모드로 전환되었습니다.", 2000);
+          showToast('🔒 일반 모드로 전환되었습니다.', 2000); 
+          
+          renderCalendar(); // 달력 새로 그려서 수정버튼 숨기기
           return;
         }
-        document.getElementById("adminPwInput").value = "";
-        document.getElementById("adminLoginModal").style.display = "flex";
-        setTimeout(() => document.getElementById("adminPwInput").focus(), 100);
+        // 로그인 창 열기
+        document.getElementById('adminPwInput').value = ''; 
+        document.getElementById('adminLoginModal').style.display = 'flex';
+        setTimeout(() => document.getElementById('adminIdInput').focus(), 100);
       }
 
       function submitAdminLogin() {
@@ -6543,60 +6548,39 @@
       }
 
       // 🆕 새롭게 추가하는 로그인 처리 함수
-      function handleLogin() {
+     function handleLogin() {
     const idElem = document.getElementById('adminIdInput');
     const pwElem = document.getElementById('adminPwInput');
-    
     if (!idElem || !pwElem) return;
-
     const id = idElem.value.trim();
     const pw = pwElem.value.trim();
-
     if (!id || !pw) return alert("아이디와 비밀번호를 입력하세요.");
 
     google.script.run.withSuccessHandler(function(res) {
         if (res.success) {
-            // 🚨 1. 권한 스위치 강제 활성화 (전역 변수 주입)
+            // 1. 권한 스위치 ON
             window.isAdmin = true;
             isAdmin = true; 
             sessionStorage.setItem('isAdmin', 'true');
             sessionStorage.setItem('is_admin', 'true');
             sessionStorage.setItem('admin_id', res.admin_id);
 
-            // 🚨 2. [UI 변신] 🔒 아이콘 버튼을 초록색 '관리자' 버튼으로 즉시 변경
+            // 2. 촌스러운 인라인 스타일 날리고 원래 예쁜 클래스 복구!
             const btn = document.getElementById("adminBtn");
             if (btn) {
-                btn.innerHTML = '관리자';
-                btn.style.background = '#28a745'; // ✅ 원래 원하셨던 초록색
-                btn.style.color = '#fff';
-                btn.style.width = 'auto';
-                btn.style.padding = '0 12px';
-                btn.style.fontSize = '14px';
-                btn.style.fontWeight = '900';
-                btn.style.borderRadius = '8px';
-                btn.onclick = function() { 
-                    if(confirm("로그아웃 하시겠습니까?")) {
-                        sessionStorage.clear();
-                        location.reload();
-                    }
-                };
+                btn.innerHTML = '🔓 관리자';
+                btn.className = 'admin-btn unlocked'; // 원래 CSS 사용
+                btn.style = ""; // 찌꺼기 제거
             }
 
-            // 🚨 3. [위치 수정] 레이아웃을 깨뜨렸던 하늘색 배지 제거
-            const oldBadge = document.getElementById('adminBadge');
-            if (oldBadge) oldBadge.remove();
-
-            alert(`${res.name} 관리자님 확인되었습니다.`);
+            document.getElementById('adminActions').style.display = 'flex';
             document.getElementById('adminLoginModal').style.display = 'none';
-
-            // 🚨 4. [화면 갱신] isAdmin이 true인 상태로 달력을 다시 그려 수정/삭제 버튼 노출
-            if (typeof renderCalendar === 'function') {
-                renderCalendar(); 
-            }
+            alert(`${res.name} 관리자님 확인되었습니다.`);
             
-            idElem.value = '';
-            pwElem.value = '';
-
+            if (typeof renderCalendar === 'function') renderCalendar(); 
+            if (typeof updateFooterUI === 'function') updateFooterUI();
+            
+            idElem.value = ''; pwElem.value = '';
         } else {
             alert(res.msg);
         }
