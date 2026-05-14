@@ -102,10 +102,10 @@ module.exports = async function(req, res) {
             const payload = typeof body === 'string' ? JSON.parse(body) : body; 
             const { domain, action, data, token, compName, colorIdx, year } = payload;
 
-            // ✅ 1. 로그인 로직 (통신망 우회 PING 방식)
-            if (action === 'PING') {
+            // ✅ 1. 로그인 로직 (정석적인 LOGIN 액션으로 깔끔하게 교체!)
+            if (action === 'LOGIN') {
                 try {
-                    const [id, pw] = token.split('||'); 
+                    const { id, pw } = data; 
                     const [rows] = await pool.query("SELECT admin_id, password_hash, admin_name, role FROM admins WHERE admin_id = ? AND status = 'ACTIVE'", [id]);
 
                     if (rows.length === 0 || rows[0].password_hash !== pw) {

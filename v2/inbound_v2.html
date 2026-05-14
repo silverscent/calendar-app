@@ -1535,6 +1535,10 @@
                                   if(this._err) this._err(e); 
                               }).finally(() => setLoadingState(false));
                       },
+                      // 👇 🚨 여기에 login 전용 통신망을 딱 한 줄 추가합니다!
+                      login: function(id, pw) { 
+                          this._call({ source: 'vercel', action: 'LOGIN', data: { id: id, pw: pw } }); 
+                      },
                       getGlobalColors: function() { this._call({ source: 'vercel', action: 'GET_GLOBAL_COLORS' }); },
                       saveGlobalColor: function(c, i) { this._call({ source: 'vercel', action: 'SAVE_GLOBAL_COLOR', compName: c, colorIdx: i }); },
                       getLastOcrImageUrl: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_IMAGE' }); },
@@ -3431,10 +3435,9 @@ function handleLogin() {
 
     if (!id || !pw) return alert("아이디와 비밀번호를 모두 입력하세요.");
 
-    // 기존에 만들어두신 강력한 프록시 객체를 그대로 사용!
+    // 🚨 방금 프록시에 새로 뚫은 login 함수를 호출합니다!
     google.script.run.withSuccessHandler(function(res) {
         if (res.success) {
-            // 권한 정보 세션 저장
             sessionStorage.setItem('is_admin', 'true');
             sessionStorage.setItem('admin_id', res.admin_id);
             sessionStorage.setItem('admin_role', res.role);
@@ -3442,20 +3445,15 @@ function handleLogin() {
             alert(`${res.name}님 환영합니다.`);
             document.getElementById('adminLoginModal').style.display = 'none';
             
-            // 입력칸 초기화
             idElem.value = '';
             pwElem.value = '';
             
-            // UI 강제 새로고침 (권한에 따른 화면 변화 반영)
-            if (typeof renderCalendar === 'function') {
-                renderCalendar(); 
-            }
+            if (typeof renderCalendar === 'function') renderCalendar(); 
         } else {
-            alert(res.msg);
+            alert(res.msg); // 비밀번호 틀렸을 때 알림
         }
-    }).login({ id: id, pw: pw }); // 백엔드 calendar.js로 전달
+    }).login(id, pw); // 👈 문자열 합치기 꼼수 제거, 깔끔하게 호출!
 }
-
     </script>
   </body>
 </html>
