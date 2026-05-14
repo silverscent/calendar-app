@@ -6537,35 +6537,40 @@
 
     google.script.run.withSuccessHandler(function(res) {
         if (res.success) {
-            // 🚨 1. [가장 중요] 기존 let isAdmin 변수에 직접 true를 할당합니다.
-            isAdmin = true; 
-            
-            // 🚨 2. 세션 저장 (새로고침 시에도 유지되도록 기존 키값과 일치시킴)
+            // 🚨 1. [권한 스위치] 전역 변수와 세션을 확실히 켭니다.
+            window.isAdmin = true; 
+            isAdmin = true; // 스코프 문제 방지
             sessionStorage.setItem('is_admin', 'true');
             sessionStorage.setItem('isAdmin', 'true'); 
             sessionStorage.setItem('admin_id', res.admin_id);
             sessionStorage.setItem('admin_role', res.role);
 
-            alert(`${res.name}님 확인되었습니다.`);
-            document.getElementById('adminLoginModal').style.display = 'none';
-
-            // 🎨 3. 관리자 뱃지 확실하게 띄우기 (디자인 유지)
-            // .dash-nav 내부의 날짜 텍스트 옆에 뱃지를 추가합니다.
-            const nav = document.querySelector('.dash-nav');
-            if (nav && !document.getElementById('adminBadge')) {
-                const badge = document.createElement('span');
-                badge.id = 'adminBadge';
-                badge.innerHTML = 'SYSTEM ADMIN';
-                badge.style = "background:#4dabf7; color:#fff; padding:3px 8px; border-radius:6px; font-size:10px; font-weight:900; margin-right:8px; vertical-align:middle; box-shadow:0 2px 4px rgba(0,0,0,0.2);";
-                nav.prepend(badge); // 날짜 앞에 뱃지 삽입
+            // 🚨 2. [잠금 해제] 메인 화면의 잠금 아이콘/글자를 '관리자'로 변경
+            // 보통 상단 우측이나 헤더에 있는 로그인 버튼을 찾아 수정합니다.
+            const loginBtn = document.querySelector('button[onclick*="adminLoginModal"]');
+            if (loginBtn) {
+                loginBtn.innerHTML = '👤 ' + res.name; // 🔒 대신 사용자 이름 표시
+                loginBtn.style.color = 'var(--sat-color)';
             }
 
-            // 🔄 4. 수정/삭제 버튼이 생기도록 달력을 즉시 다시 그립니다.
+            // 🚨 3. [배지 위치 수정] 날짜 이동칸이 아닌 '제목(출고 캘린더)' 옆으로 이동
+            const headerTitle = document.querySelector('.header-title');
+            if (headerTitle && !document.getElementById('adminBadge')) {
+                const badge = document.createElement('span');
+                badge.id = 'adminBadge';
+                badge.innerHTML = 'ADMIN';
+                badge.style = "background:#4dabf7; color:#fff; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:900; margin-left:8px; vertical-align:middle;";
+                headerTitle.appendChild(badge); // 제목 '뒤'에 붙임
+            }
+
+            alert(`${res.name} 관리자님, 환영합니다!`);
+            document.getElementById('adminLoginModal').style.display = 'none';
+
+            // 🚨 4. [화면 갱신]isAdmin이 true인 상태로 달력을 다시 그려서 수정/삭제 버튼을 노출시킵니다.
             if (typeof renderCalendar === 'function') {
                 renderCalendar(); 
             }
             
-            // 입력칸 비우기
             idElem.value = '';
             pwElem.value = '';
 
