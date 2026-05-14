@@ -2178,12 +2178,10 @@
       <div class="modal-box" onclick="event.stopPropagation()">
         <div class="bottom-sheet-handle"></div>
         <div class="modal-header">
-          <div class="modal-title" id="modalTitle">🔒 관리자 인증</div>
+          <div class="modal-title" id="modalTitle">🔒 시스템 관리자 로그인</div>
           <button
             class="close-btn"
-            onclick="
-              document.getElementById('adminLoginModal').style.display = 'none'
-            "
+            onclick="document.getElementById('adminLoginModal').style.display = 'none'"
           >
             ✕
           </button>
@@ -2196,8 +2194,9 @@
             font-weight: 600;
           "
         >
-          관리자 권한을 활성화하려면 비밀번호를 입력하세요.
+          관리자 권한을 활성화하려면 아이디와 비밀번호를 입력하세요.
         </div>
+
         <div
           style="
             display: flex;
@@ -2206,6 +2205,37 @@
             border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 0 12px;
+            margin-bottom: 12px;
+            transition: 0.2s;
+          "
+        >
+          <input
+            type="text"
+            id="adminIdInput"
+            style="
+              flex: 1;
+              border: none;
+              background: transparent;
+              color: var(--text-main);
+              padding: 16px 5px;
+              font-size: 1.1em;
+              outline: none;
+              font-weight: bold;
+            "
+            placeholder="아이디"
+            autocomplete="username"
+          />
+        </div>
+
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0 12px;
+            margin-bottom: 24px;
             transition: 0.2s;
           "
         >
@@ -2223,32 +2253,47 @@
               font-weight: bold;
             "
             placeholder="비밀번호"
+            autocomplete="current-password"
+            onkeypress="if(event.key === 'Enter') handleLogin()"
           />
+        </div>
+
+        <div style="display: flex; gap: 10px;">
           <button
-            type="button"
-            onmousedown="
-              event.preventDefault();
-              togglePwView();
-            "
-            ontouchstart="event.preventDefault(); togglePwView()"
+            onclick="handleLogin()"
             style="
-              background: none;
+              flex: 1;
+              padding: 16px;
+              background: var(--sat-color, #4dabf7);
+              color: #fff;
               border: none;
-              font-size: 1.2em;
+              border-radius: 12px;
+              font-size: 1.1em;
+              font-weight: 900;
               cursor: pointer;
-              padding: 5px;
             "
           >
-            <span id="pwToggleIcon">👁️</span>
+            로그인
+          </button>
+          <button
+            id="btnBioLogin"
+            onclick="handleBioLogin()"
+            style="
+              flex: 1;
+              padding: 16px;
+              background: transparent;
+              color: var(--text-sub);
+              border: 1px solid var(--border-color);
+              border-radius: 12px;
+              font-size: 1.1em;
+              font-weight: 900;
+              cursor: pointer;
+              display: none; 
+            "
+          >
+            지문/Face ID
           </button>
         </div>
-        <button
-          class="save-btn"
-          style="width: 100%; margin-top: 20px"
-          onclick="submitAdminLogin()"
-        >
-          🔓 인증하기
-        </button>
       </div>
     </div>
 
@@ -6473,6 +6518,43 @@
           
           showToast("🎨 색상이 선택되었습니다.", 1000);
       }
+
+      // 🆕 새롭게 추가하는 로그인 처리 함수
+function handleLogin() {
+    const idElem = document.getElementById('adminIdInput');
+    const pwElem = document.getElementById('adminPwInput');
+    
+    if (!idElem || !pwElem) return;
+
+    const id = idElem.value.trim();
+    const pw = pwElem.value.trim();
+
+    if (!id || !pw) return alert("아이디와 비밀번호를 모두 입력하세요.");
+
+    // 기존에 만들어두신 강력한 프록시 객체를 그대로 사용!
+    google.script.run.withSuccessHandler(function(res) {
+        if (res.success) {
+            // 권한 정보 세션 저장
+            sessionStorage.setItem('is_admin', 'true');
+            sessionStorage.setItem('admin_id', res.admin_id);
+            sessionStorage.setItem('admin_role', res.role);
+            
+            alert(`${res.name}님 환영합니다.`);
+            document.getElementById('adminLoginModal').style.display = 'none';
+            
+            // 입력칸 초기화
+            idElem.value = '';
+            pwElem.value = '';
+            
+            // UI 강제 새로고침 (권한에 따른 화면 변화 반영)
+            if (typeof renderCalendar === 'function') {
+                renderCalendar(); 
+            }
+        } else {
+            alert(res.msg);
+        }
+    }).login({ id: id, pw: pw }); // 백엔드 calendar.js로 전달
+}
 
     </script>
   </body>

@@ -95,8 +95,46 @@ module.exports = async function(req, res) {
             const body = req.body;
             const payload = typeof body === 'string' ? JSON.parse(body) : body; 
             const { domain, action, data, token, compName, colorIdx, year } = payload;
-            if (action === 'PING') return res.status(200).json({ msg: token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
-            const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
+            if (req.method === 'POST') {
+    const body = req.body;
+    const payload = typeof body === 'string' ? JSON.parse(body) : body; 
+    const { domain, action, data, token, compName, colorIdx, year } = payload;
+
+    // 🚨 기존 PING 로직은 주석 처리하거나 삭제합니다.
+    // if (action === 'PING') return res.status(200).json({ msg: token === process.env.ADMIN_PW ? 'OK' : '보안 에러' });
+
+// ✅ 수정된 로그인 로직
+if (action === 'LOGIN') {
+    const { id, pw } = data; // 프론트에서 보낸 id와 pw 추출
+    const [rows] = await pool.query(
+        "SELECT admin_id, password_hash, admin_name, role FROM admins WHERE admin_id = ? AND status = 'ACTIVE'",
+        [id]
+    );
+
+    // ID/PW 대조 (평문 비교 -> 나중에 bcrypt로 업그레이드 예정)
+    if (rows.length === 0 || rows[0].password_hash !== pw) {
+        return res.status(200).json({ success: false, msg: '정보가 일치하지 않습니다.' });
+    }
+
+    const user = rows[0];
+    // Audit Log 기록
+    await pool.query(
+        "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'LOGIN', '성공')",
+        [user.admin_id]
+    );
+
+    return res.status(200).json({ 
+        success: true, 
+        admin_id: user.admin_id, 
+        role: user.role, 
+        name: user.admin_name 
+    });
+}
+
+    // --- 기존 로직 그대로 유지 ---
+    const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
+    // ... (이하 입출고 업데이트, 삭제 로직 등) ...
+}
 
         // ====================================================================
         // 🚨 [OCR 전용 하이패스] 이중 포장 파쇄기 + 텔레그램 이미지 실시간 심폐소생!
