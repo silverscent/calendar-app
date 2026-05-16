@@ -1980,7 +1980,7 @@
       }
 
     // 💡 [개선] 권한명 및 아이콘 스타일 일괄 프로페셔널 최적화
-      function toggleAdmin() {
+    function toggleAdmin() {
         if(isAdmin) {
           let savedId = localStorage.getItem('admin_id') || '관리자';
           let savedRole = localStorage.getItem('admin_role'); 
@@ -1990,14 +1990,12 @@
           const roleTextElem = document.getElementById('myInfoAdminRole');
           const iconElem = document.getElementById('myInfoAdminIcon');
           
-          // 파란 관리자 노트북 보고 있던 감성의 클래식 그라디언트 아이콘 고정
           if(iconElem) {
               iconElem.innerText = '🧑‍💻';
               iconElem.style.background = 'linear-gradient(135deg, #0a84ff, #005bb5)';
               iconElem.style.boxShadow = '0 4px 10px rgba(10, 132, 255, 0.3)';
           }
 
-          // 마스터 및 어드민 텍스트 정비
           const isMasterUser = savedId.toLowerCase() === 'admin' || 
                                savedId.toLowerCase() === 'silverscent' ||
                                (savedRole && (savedRole.toUpperCase().includes('SUPER') || 
@@ -2006,14 +2004,17 @@
 
           if (isMasterUser) {
               roleTextElem.innerText = 'System Administrator';
-              roleTextElem.style.color = '#0a84ff'; // 신뢰감을 주는 애플 고유 블루 테마
+              roleTextElem.style.color = '#0a84ff'; 
           } else {
               roleTextElem.innerText = '관리자';
               roleTextElem.style.color = 'var(--text-main)'; 
           }
 
-          let isBioRegistered = localStorage.getItem('bio_registered') === 'true';
+          // 🚨 [정밀 패치] 생체인증 켜짐 여부는 현재 내 ID와 등록된 생체 ID가 일치할 때만 TRUE 처리
+          let isBioRegistered = localStorage.getItem('bio_registered') === 'true' && 
+                                localStorage.getItem('bio_id') === savedId;
           document.getElementById('toggleBioAuth').checked = isBioRegistered;
+          
           document.getElementById('myInfoModal').style.display = 'flex';
           return;
         }
@@ -2088,7 +2089,18 @@
                   checkbox.checked = false; 
                   showToast("❌ 생체 인증 등록이 취소되었습니다.", 2000);
               }
+          // handleBioToggleChange 함수 내부의 하단 else 구문을 아래 코드로 대체하세요
           } else {
+              let currentId = localStorage.getItem('admin_id');
+              let bioId = localStorage.getItem('bio_id');
+              
+              // 🚨 [정밀 패치] 내 계정으로 등록된 생체인증이 아니라면 마스터의 정보를 지우지 못하게 차단
+              if (localStorage.getItem('bio_registered') === 'true' && currentId !== bioId) {
+                  showToast("⚠️ 본인 계정으로 등록된 생체 인증 정보가 아닙니다.", 2500);
+                  checkbox.checked = false; // 강제로 다시 끔 처리
+                  return;
+              }
+
               if(confirm("생체 인증 로그인을 해제하시겠습니까?")) {
                   localStorage.removeItem('bio_registered');
                   localStorage.removeItem('bio_id');
@@ -2098,7 +2110,6 @@
                   checkbox.checked = true; 
               }
           }
-      }
       // (※ handleBioLogin 함수는 기존에 드린 것 그대로 유지하시면 됩니다!)
 
       // 💡 [개선] 비밀번호 눈알 토글 로직
@@ -3666,7 +3677,10 @@ async function handleLogin() {
             showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
             if (typeof renderCalendar === 'function') renderCalendar(); 
             if (typeof updateFooterUI === 'function') updateFooterUI();
-            
+            // handleLogin() 및 handleBioLogin() 함수 내 res.success 블록 하단에 각각 추가
+              if (typeof checkMasterAuthButtonVisibility === 'function') {
+                  checkMasterAuthButtonVisibility();
+              }
             idElem.value = ''; pwElem.value = '';
         } else {
             showToast(`❌ ${res.msg}`, 2500);
