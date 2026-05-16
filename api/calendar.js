@@ -418,6 +418,44 @@ module.exports = async function(req, res) {
                     let detailStr = changes.length > 0 ? changes.join(', ') : '비고/텍스트 변경';
                     await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", 
                         [currentAdmin, `[출고 수정] ${targetName} (${detailStr})`]);
+                } else if (action === 'ADD_QTY') {  // 👈 🚨 여기에 이 블록을 통째로 추가하세요!
+                    // [출고 수량추가] 버튼 클릭 시 DB 원본에 합산 및 비고(etc) 업데이트
+                    const addPal = parseInt(data?.addPal) || 0;
+                    const addBox = parseInt(data?.addBox) || 0;
+                    
+                    // 프론트엔드와 100% 동일한 히스토리 글씨 생성 (예: [5/17 1P 10B 추가])
+                    const histDate = `${new Date().getMonth() + 1}/${new Date().getDate()}`;
+                    const addPalStr = data?.addPal ? data.addPal + "P" : "";
+                    const addBoxStr = data?.addBox ? data.addBox + "B" : "";
+                    const spaceStr = (data?.addPal && data?.addBox) ? " " : "";
+                    const histStr = `[${histDate} ${addPalStr}${spaceStr}${addBoxStr} 추가]`;
+
+                    // 🚨 [안전장치] ID가 있으면 고유 ID로, 없으면 이름/날짜/수량으로 해당 일정을 정확히 찾아옵니다.
+                    let queryStr = "";
+                    let params = [];
+                    if (data?.id) {
+                        queryStr = `SELECT id, pal, box, etc FROM outbound WHERE id = ? LIMIT 1`;
+                        params = [data.id];
+                    } else {
+                        queryStr = `SELECT id, pal, box, etc FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ? LIMIT 1`;
+                        params = [targetName, targetDate, targetPal, targetBox];
+                    }
+
+                    const [rows] = await pool.query(queryStr, params);
+
+                    if (rows.length > 0) {
+                        let row = rows[0];
+                        // 원본 수량에 방금 입력한 추가 수량을 더함
+                        let newPal = (parseInt(row.pal) || 0) + addPal;
+                        let newBox = (parseInt(row.box) || 0) + addBox;
+                        // 원본 비고란 텍스트 맨 뒤에 추가 히스토리 글씨를 이어붙임
+                        let newEtc = (row.etc && row.etc.trim() !== "") ? row.etc.trim() + " " + histStr : histStr;
+
+                        // DB 실제 업데이트 및 보안 로그 작성
+                        await pool.query(`UPDATE outbound SET pal = ?, box = ?, etc = ? WHERE id = ?`, [newPal, newBox, newEtc, row.id]);
+                        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", 
+                            [currentAdmin, `[출고 수량추가] ${targetName} (+PL:${addPal}, +BOX:${addBox})`]);
+                    }
                 } else if (action === 'ADD') { 
                     let reqComp = (data?.newComp || data?.company || data?.comp || '').trim();
                     let reqDateOut = data?.newDate !== undefined ? data?.newDate : (data?.date !== undefined ? data?.date : data?.outbound_date);
