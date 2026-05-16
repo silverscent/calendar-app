@@ -1859,6 +1859,12 @@
         let idInput = document.getElementById('adminIdInput');
         if (idInput) idInput.value = ''; 
         
+        // 👇 🚨 생체 인증이 등록된 기기면 버튼을 짠! 하고 보여줌
+        const bioBtn = document.getElementById('btnBioLogin');
+        if (bioBtn) {
+            bioBtn.style.display = localStorage.getItem('bio_registered') === 'true' ? 'block' : 'none';
+        }
+
         document.getElementById('adminLoginModal').style.display = 'flex';
         // 모바일/PC 모두 오토포커스 부드럽게
         setTimeout(() => { if(idInput) idInput.focus(); else document.getElementById('adminPwInput').focus(); }, 150);
@@ -3450,6 +3456,16 @@ function loadOcrVerificationData(btnElement) {
             if (typeof updateFooterUI === 'function') updateFooterUI();
             
             idElem.value = ''; pwElem.value = '';
+            
+            // 👇 🚨 여기에 추가! (로그인 성공 시 지문 등록 물어보기)
+            if (window.PublicKeyCredential && localStorage.getItem('bio_registered') !== 'true') {
+                setTimeout(() => {
+                    if(confirm("다음부터 지문 / Face ID로 편하게 로그인하시겠습니까?")) {
+                        registerBiometrics(id, pw);
+                    }
+                }, 500);
+            }
+            // 👆 여기까지
         } else {
             // 실패 시에도 토스트 메시지
             showToast(`❌ ${res.msg}`, 2500);
@@ -3566,6 +3582,92 @@ function loadOcrVerificationData(btnElement) {
 
       // 🚀 페이지가 로드되면 독립적으로 네이티브 스와이프 엔진 즉시 가동!
       window.addEventListener('DOMContentLoaded', initNativeBottomSheet);
+
+      // =====================================================
+      // 🚀 [WebAuthn] 생체 인증 (지문 / Face ID) 코어 엔진
+      // =====================================================
+      async function handleBioLogin() {
+          if (!window.PublicKeyCredential) {
+              alert("이 브라우저/기기는 생체 인증을 지원하지 않습니다.");
+              return;
+          }
+
+          try {
+              // 1. 폰에 저장된 지문/Face ID 호출
+              const publicKey = {
+                  challenge: new Uint8Array(32),
+                  rpId: window.location.hostname,
+                  userVerification: "required",
+                  timeout: 60000
+              };
+              
+              const assertion = await navigator.credentials.get({ publicKey });
+              
+              if (assertion) {
+                  // 2. 인증 성공 시, 기기에 봉인해둔 계정 정보 잠금 해제
+                  const savedId = localStorage.getItem('bio_id');
+                  const savedPw = localStorage.getItem('bio_pw');
+                  
+                  if (savedId && savedPw) {
+                      document.getElementById('adminLoginModal').style.display = 'none';
+                      showToast("🔒 생체 인증 성공! 서버 확인 중...", 0);
+                      
+                      // 3. 기존 로그인 통신망을 통해 서버에 즉시 전송
+                      google.script.run.withSuccessHandler(function(res) {
+                          if (res.success) {
+                              window.isAdmin = true; isAdmin = true; 
+                              localStorage.setItem('isAdmin', 'true');
+                              localStorage.setItem('is_admin', 'true');
+                              localStorage.setItem('admin_id', res.admin_id);
+                              localStorage.setItem('admin_role', res.role);
+                              
+                              const btn = document.getElementById("adminBtn");
+                              if (btn) { btn.innerHTML = '🔓 관리자'; btn.className = 'admin-btn unlocked'; btn.removeAttribute("style"); }
+                              
+                              const actions = document.getElementById('adminActions');
+                              if (actions) actions.style.display = 'flex';
+                              const fab = document.getElementById("fabBtn");
+                              if (fab) fab.style.display = "flex";
+                              
+                              showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
+                              if (typeof renderCalendar === 'function') renderCalendar(); 
+                              if (typeof updateFooterUI === 'function') updateFooterUI();
+                          } else {
+                              showToast("❌ 서버 인증 실패. 비밀번호가 변경되었을 수 있습니다.", 2500);
+                          }
+                      }).login(savedId, savedPw);
+                  }
+              }
+          } catch (err) {
+              console.error(err);
+              showToast("❌ 생체 인증이 취소되었거나 실패했습니다.", 2500);
+          }
+      }
+
+      // 💡 기기에 지문/Face ID 권한을 등록하는 함수
+      async function registerBiometrics(id, pw) {
+          if (!window.PublicKeyCredential) return;
+          try {
+              const publicKey = {
+                  challenge: new Uint8Array(32),
+                  rp: { name: "3PL System", id: window.location.hostname },
+                  user: { id: new Uint8Array(16), name: id, displayName: "시스템 관리자" },
+                  pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+                  authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                  timeout: 60000
+              };
+              const credential = await navigator.credentials.create({ publicKey });
+              if (credential) {
+                  // 기기 고유 저장소에 계정 정보를 안전하게 봉인
+                  localStorage.setItem('bio_registered', 'true');
+                  localStorage.setItem('bio_id', id);
+                  localStorage.setItem('bio_pw', pw); 
+                  showToast("✅ 기기에 지문/Face ID가 등록되었습니다!", 3000);
+              }
+          } catch (err) {
+              console.log("생체 인증 등록 취소/실패", err);
+          }
+      }
     </script>
   </body>
 </html>
