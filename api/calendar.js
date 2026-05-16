@@ -156,30 +156,68 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // 🗄️ E. DB 다이렉트 조회 (입고/출고 전체 컬럼 로드 및 필터)
+            // 🗄️ E. DB 다이렉트 조회 (페이지네이션 및 직관적 필터 최적화)
             else if (action === 'GET_RAW_DB_ROWS') {
                 try {
-                    let rows = [];
+                    const limit = parseInt(payload.limit) || 20; // 한 번에 몇 줄 볼지 옵션 (기본 20줄)
+                    const page = parseInt(payload.page) || 1;    // 현재 페이지 번호
+                    const offset = (page - 1) * limit;
                     const filterCol = payload.filterCol || 'all'; 
+                    
+                    let rows = [];
+                    let countRows = [];
                     let queryStr = "";
+                    let countQueryStr = "";
                     let params = [];
+                    let countParams = [];
 
                     if (type === 'out') {
-                        queryStr = "SELECT id, company, pal, box, outbound_date, etc, created_at, sort_idx, isDone FROM outbound";
-                        if (keyword && filterCol === 'name') { queryStr += " WHERE company LIKE ?"; params.push(`%${keyword}%`); }
-                        else if (keyword && filterCol === 'date') { queryStr += " WHERE outbound_date LIKE ?"; params.push(`%${keyword}%`); }
-                        else if (keyword) { queryStr += " WHERE company LIKE ? OR outbound_date LIKE ?"; params.push(`%${keyword}%`, `%${keyword}%`); }
-                        queryStr += " ORDER BY id DESC LIMIT 50";
+                        queryStr = "SELECT id, company, pal, box, outbound_date, etc, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at, sort_idx, isDone FROM outbound";
+                        countQueryStr = "SELECT COUNT(*) as cnt FROM outbound";
+                        
+                        let whereClauses = [];
+                        if (keyword) {
+                            if (filterCol === 'name') { whereClauses.push("company LIKE ?"); params.push(`%${keyword}%`); }
+                            else if (filterCol === 'date') { whereClauses.push("outbound_date LIKE ?"); params.push(`%${keyword}%`); }
+                            else { whereClauses.push("(company LIKE ? OR outbound_date LIKE ?)"); params.push(`%${keyword}%`, `%${keyword}%`); }
+                        }
+                        if (whereClauses.length > 0) {
+                            const whereStr = " WHERE " + whereClauses.join(" AND ");
+                            queryStr += whereStr; countQueryStr += whereStr;
+                            countParams = [...params];
+                        }
+                        queryStr += " ORDER BY id DESC LIMIT ? OFFSET ?";
+                        params.push(limit, offset);
                     } else {
-                        queryStr = "SELECT id, bl_number, pallets, eta, receive_date, fwd, s_type, invoice, remarks, last_updated, sort_idx, status, is_ai_modified FROM inbound";
-                        if (keyword && filterCol === 'name') { queryStr += " WHERE bl_number LIKE ?"; params.push(`%${keyword}%`); }
-                        else if (keyword && filterCol === 'date') { queryStr += " WHERE receive_date LIKE ?"; params.push(`%${keyword}%`); }
-                        else if (keyword) { queryStr += " WHERE bl_number LIKE ? OR receive_date LIKE ?"; params.push(`%${keyword}%`, `%${keyword}%`); }
-                        queryStr += " ORDER BY id DESC LIMIT 50";
+                        queryStr = "SELECT id, bl_number, pallets, eta, receive_date, fwd, s_type, invoice, remarks, DATE_ADD(last_updated, INTERVAL 9 HOUR) AS last_updated, sort_idx, status, is_ai_modified FROM inbound";
+                        countQueryStr = "SELECT COUNT(*) as cnt FROM inbound";
+                        
+                        let whereClauses = [];
+                        if (keyword) {
+                            if (filterCol === 'name') { whereClauses.push("bl_number LIKE ?"); params.push(`%${keyword}%`); }
+                            else if (filterCol === 'date') { whereClauses.push("receive_date LIKE ?"); params.push(`%${keyword}%`); }
+                            else { whereClauses.push("(bl_number LIKE ? OR receive_date LIKE ?)"); params.push(`%${keyword}%`, `%${keyword}%`); }
+                        }
+                        if (whereClauses.length > 0) {
+                            const whereStr = " WHERE " + whereClauses.join(" AND ");
+                            queryStr += whereStr; countQueryStr += whereStr;
+                            countParams = [...params];
+                        }
+                        queryStr += " ORDER BY id DESC LIMIT ? OFFSET ?";
+                        params.push(limit, offset);
                     }
                     
                     [rows] = await pool.query(queryStr, params);
-                    return res.status(200).json({ success: true, rows: rows });
+                    [countRows] = await pool.query(countQueryStr, countParams);
+                    const totalCount = countRows[0].cnt; // 전체 데이터 수
+                    
+                    return res.status(200).json({ 
+                        success: true, 
+                        rows: rows, 
+                        totalCount: totalCount, 
+                        page: page, 
+                        totalPages: Math.ceil(totalCount / limit) 
+                    });
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 

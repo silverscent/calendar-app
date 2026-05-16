@@ -1381,17 +1381,26 @@
             <div style="font-weight: 900; color: var(--text-main); margin-bottom: 6px; font-size: 1em;">⚠️ DB 다이렉트 긴급 제어실</div>
             <div style="font-size: 0.85em; color: var(--text-sub); line-height: 1.45;">데이터베이스 테이블의 원본 데이터를 직접 검색하여 긴급 삭제할 수 있는 위험 영역 관리 화면입니다.</div>
           </div>
-          <div style="display: flex; gap: 8px; margin-bottom: 15px; box-sizing: border-box;">
+          <div style="display: flex; gap: 8px; margin-bottom: 15px; box-sizing: border-box; flex-wrap: wrap;">
             <select id="dbMasterFilterCol" style="padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; outline: none;">
-              <option value="all">전체 컬럼</option>
-              <option value="date">날짜 검색</option>
-              <option value="name">식별명 검색</option>
+              <option value="all">🔍 전체 검색</option>
+              <option value="name" id="filterOptName">식별명 검색</option>
+              <option value="date" id="filterOptDate">날짜 검색</option>
             </select>
-            <input type="text" id="dbMasterSearchKeyword" placeholder="검색어 입력..." style="flex: 1; padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; box-sizing: border-box;">
-            <button onclick="searchRawDatabaseRows()" style="padding: 0 22px; background: #0a84ff; color:#fff; border:none; border-radius:12px; font-weight:900; cursor:pointer;">조회</button>
+            
+            <select id="dbMasterLimit" onchange="dbPageResetAndSearch()" style="padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; outline: none;">
+              <option value="20">20줄씩 보기</option>
+              <option value="50">50줄씩 보기</option>
+              <option value="100">100줄씩 보기</option>
+            </select>
+
+            <input type="text" id="dbMasterSearchKeyword" placeholder="검색어 입력..." style="flex: 1; min-width: 150px; padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; box-sizing: border-box;">
+            <button onclick="dbPageResetAndSearch()" style="padding: 0 22px; background: #0a84ff; color:#fff; border:none; border-radius:12px; font-weight:900; cursor:pointer; height: 48px;">조회</button>
           </div>
           <div id="dbMasterRowsContainer" style="overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch; box-sizing: border-box;"></div>
+          <div id="dbMasterPaginationBar" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px; box-sizing: border-box;"></div>
         </div>
+
 
       </div>
     </div>
@@ -3847,6 +3856,7 @@ async function handleLogin() {
 // =====================================================
       // 👑 시스템 관리 (Admin Operations Pipeline) 엔진
       // =====================================================
+      // 제어실 오픈 시 모드에 따라 필터 글씨를 강제로 직관적으로 세팅해 주는 인터락
       function openMasterDashboard() {
           let role = localStorage.getItem('admin_role') || '';
           let adminId = localStorage.getItem('admin_id') || '';
@@ -3862,6 +3872,21 @@ async function handleLogin() {
               return;
           }
           
+          // 각 모드(입고/출고)에 맞게 명칭 변경
+          setTimeout(() => {
+              const nameOpt = document.getElementById('filterOptName');
+              const dateOpt = document.getElementById('filterOptDate');
+              if(nameOpt && dateOpt) {
+                  if(currentType === 'out') {
+                      nameOpt.innerText = "🏢 거래처명 검색 (company)";
+                      dateOpt.innerText = "📅 출고일자 검색 (out_date)";
+                  } else {
+                      nameOpt.innerText = "📄 B/L 번호 검색 (bl_number)";
+                      dateOpt.innerText = "📅 입고일자 검색 (receive_date)";
+                  }
+              }
+          }, 100);
+
           document.getElementById('masterDashboardModal').style.transform = 'translateX(-100%)';
           switchMasterTab('admin-mgr');
           refreshAdminList();
@@ -4020,13 +4045,32 @@ async function handleLogin() {
           });
       }
 
-      // 🗄️ DB 제어실: 전체 컬럼 조회 및 인라인 에디터 렌더링
+      // 🚨 DB 페이지네이션 관리 상태 변수
+      let dbCurrentPage = 1;
+
+      // 검색어나 줄 수가 바뀔 때 무조건 1페이지로 리셋하고 검색하는 함수
+      function dbPageResetAndSearch() {
+          dbCurrentPage = 1; 
+          searchRawDatabaseRows();
+      }
+
+      // 페이지 이동(이전/다음) 트리거 함수
+      function changeDbPage(direction) {
+          dbCurrentPage += direction;
+          searchRawDatabaseRows();
+      }
+
+      // 🗄️ 고도화된 DB 제어실 렌더링 (전체 컬럼 + 페이지네이션)
       function searchRawDatabaseRows() {
           const keyword = document.getElementById('dbMasterSearchKeyword').value.trim();
           const filterCol = document.getElementById('dbMasterFilterCol').value;
+          const limit = document.getElementById('dbMasterLimit').value; // 몇 줄씩 볼지
           const container = document.getElementById('dbMasterRowsContainer');
+          const pager = document.getElementById('dbMasterPaginationBar');
+          
           if (!container) return;
           container.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:25px; font-weight:800;'>실시간 데이터 파싱 중...</div>";
+          if (pager) pager.innerHTML = "";
 
           google.script.run.withSuccessHandler(function(res) {
               if (!res.success || !res.rows || res.rows.length === 0) {
@@ -4034,7 +4078,6 @@ async function handleLogin() {
                   return;
               }
               
-              // 💡 인라인 스타일 컴포넌트 추가 (가독성 및 넓은 횡스크롤 지원)
               let html = `<style>
                   .db-input { width: 100%; padding: 6px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; box-sizing: border-box; font-size: 0.85em; }
                   .db-btn-save { background: rgba(52,199,89,0.1); border: 1px solid #34c759; color: #34c759; border-radius: 6px; padding: 5px 10px; font-size: 0.85em; font-weight: 900; cursor: pointer; margin-right: 4px; }
@@ -4042,18 +4085,12 @@ async function handleLogin() {
               </style>`;
 
               if (currentType === 'out') {
-                  // 📤 [출고] 9개 컬럼 전용 테이블 렌더링
+                  // 📤 출고 테이블
                   html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 950px; table-layout: fixed;'>
-                      <colgroup>
-                          <col style='width: 50px;'><col style='width: 130px;'><col style='width: 70px;'><col style='width: 70px;'>
-                          <col style='width: 120px;'><col style='width: 100px;'><col style='width: 150px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'>
-                      </colgroup>
-                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'>
-                          <tr><th>ID</th><th>company</th><th>pal</th><th>box</th><th>out_date</th><th>etc</th><th>created_at</th><th>sort</th><th>isDone</th><th style='text-align:center;'>명령</th></tr>
-                      </thead><tbody>`;
+                      <colgroup><col style='width: 50px;'><col style='width: 130px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'><col style='width: 100px;'><col style='width: 150px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'></colgroup>
+                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr><th>ID</th><th>company</th><th>pal</th><th>box</th><th>out_date</th><th>etc</th><th>created_at</th><th>sort</th><th>isDone</th><th style='text-align:center;'>명령</th></tr></thead><tbody>`;
                   res.rows.forEach(r => {
-                      html += `<tr style='border-bottom:1px solid var(--border-color);'>
-                          <td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
+                      html += `<tr style='border-bottom:1px solid var(--border-color);'><td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
                           <td><input type="text" id="db-o-comp-${r.id}" value="${r.company || ''}" class="db-input"></td>
                           <td><input type="number" id="db-o-pal-${r.id}" value="${r.pal || 0}" class="db-input"></td>
                           <td><input type="number" id="db-o-box-${r.id}" value="${r.box || 0}" class="db-input"></td>
@@ -4062,27 +4099,15 @@ async function handleLogin() {
                           <td><input type="text" id="db-o-cre-${r.id}" value="${r.created_at || ''}" class="db-input"></td>
                           <td><input type="number" id="db-o-sort-${r.id}" value="${r.sort_idx || 0}" class="db-input"></td>
                           <td><input type="number" id="db-o-done-${r.id}" value="${r.isDone || 0}" class="db-input"></td>
-                          <td style='text-align:center;'>
-                              <button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button>
-                              <button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button>
-                          </td>
-                      </tr>`;
+                          <td style='text-align:center;'><button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button><button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button></td></tr>`;
                   });
               } else {
-                  // 📥 [입고] 13개 컬럼 전용 테이블 렌더링
+                  // 📥 입고 테이블
                   html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 1350px; table-layout: fixed;'>
-                      <colgroup>
-                          <col style='width: 50px;'><col style='width: 130px;'><col style='width: 60px;'><col style='width: 100px;'>
-                          <col style='width: 100px;'><col style='width: 80px;'><col style='width: 80px;'><col style='width: 100px;'>
-                          <col style='width: 120px;'><col style='width: 140px;'><col style='width: 60px;'><col style='width: 80px;'>
-                          <col style='width: 60px;'><col style='width: 120px;'>
-                      </colgroup>
-                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'>
-                          <tr><th>ID</th><th>bl_number</th><th>pallets</th><th>eta</th><th>receive_date</th><th>fwd</th><th>s_type</th><th>invoice</th><th>remarks</th><th>last_updated</th><th>sort</th><th>status</th><th>AI</th><th style='text-align:center;'>명령</th></tr>
-                      </thead><tbody>`;
+                      <colgroup><col style='width: 50px;'><col style='width: 130px;'><col style='width: 60px;'><col style='width: 100px;'><col style='width: 100px;'><col style='width: 80px;'><col style='width: 80px;'><col style='width: 100px;'><col style='width: 120px;'><col style='width: 140px;'><col style='width: 60px;'><col style='width: 80px;'><col style='width: 60px;'><col style='width: 120px;'></colgroup>
+                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr><th>ID</th><th>bl_number</th><th>pallets</th><th>eta</th><th>receive_date</th><th>fwd</th><th>s_type</th><th>invoice</th><th>remarks</th><th>last_updated</th><th>sort</th><th>status</th><th>AI</th><th style='text-align:center;'>명령</th></tr></thead><tbody>`;
                   res.rows.forEach(r => {
-                      html += `<tr style='border-bottom:1px solid var(--border-color);'>
-                          <td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
+                      html += `<tr style='border-bottom:1px solid var(--border-color);'><td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
                           <td><input type="text" id="db-i-bl-${r.id}" value="${r.bl_number || ''}" class="db-input"></td>
                           <td><input type="number" id="db-i-pal-${r.id}" value="${r.pallets || 0}" class="db-input"></td>
                           <td><input type="text" id="db-i-eta-${r.id}" value="${r.eta || ''}" class="db-input"></td>
@@ -4095,17 +4120,28 @@ async function handleLogin() {
                           <td><input type="number" id="db-i-sort-${r.id}" value="${r.sort_idx || 0}" class="db-input"></td>
                           <td><input type="text" id="db-i-stat-${r.id}" value="${r.status || ''}" class="db-input"></td>
                           <td><input type="number" id="db-i-ai-${r.id}" value="${r.is_ai_modified || 0}" class="db-input"></td>
-                          <td style='text-align:center;'>
-                              <button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button>
-                              <button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button>
-                          </td>
-                      </tr>`;
+                          <td style='text-align:center;'><button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button><button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button></td></tr>`;
                   });
               }
-              
               html += `</tbody></table>`;
               container.innerHTML = html;
-          })._call({ source: 'vercel', action: 'GET_RAW_DB_ROWS', keyword: keyword, filterCol: filterCol, type: currentType });
+
+              // 🆕 하단 페이지네이션 바 (이전/다음) 렌더링
+              if (pager && res.totalPages > 1) {
+                  let pageHtml = `<button onclick="changeDbPage(-1)" ${res.page === 1 ? 'disabled' : ''} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">◀ 이전</button>`;
+                  pageHtml += `<span style="color:var(--text-main); font-weight:900; font-size:1em;">${res.page} <span style="color:var(--text-sub); font-weight:normal;">/ ${res.totalPages}</span> <span style="font-size:0.85em; color:var(--text-sub); font-weight:normal; margin-left:5px;">(총 ${res.totalCount}건)</span></span>`;
+                  pageHtml += `<button onclick="changeDbPage(1)" ${res.page === res.totalPages ? 'disabled' : ''} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">다음 ▶</button>`;
+                  pager.innerHTML = pageHtml;
+              }
+          })._call({ 
+              source: 'vercel', 
+              action: 'GET_RAW_DB_ROWS', 
+              keyword: keyword, 
+              filterCol: filterCol, 
+              limit: Number(limit), 
+              page: dbCurrentPage, 
+              type: currentType 
+          });
       }
 
       // ✏️ 인라인 폼 데이터 취합 및 백엔드 전송
