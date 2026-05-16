@@ -5577,84 +5577,7 @@
         });
       }
 
-      // 🚀 [완벽 수정] 모달창 스와이프(내려 닫기) 100% 보장 엔진!
-      window.addEventListener('DOMContentLoaded', () => {
-          document.querySelectorAll('.overlay-modal').forEach(modal => {
-              const box = modal.querySelector('.modal-box');
-              if (!box) return;
-              
-              // 🚨 핵심: 전체 박스가 아니라 '손잡이'와 '헤더' 영역을 잡았을 때만 스와이프 발동!
-              const handle = box.querySelector('.bottom-sheet-handle');
-              const header = box.querySelector('.modal-header');
-              
-              let startY = 0, currentY = 0, isDragging = false;
-
-              const startDrag = (e) => {
-                  // 모달창 내부 스크롤이 맨 위일 때만 스와이프 허용 (내용물 보며 스크롤하다 닫히는 것 방지)
-                  if (box.scrollTop > 5) return; 
-                  startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-                  isDragging = true;
-                  box.style.transition = 'none'; // 드래그 중에는 애니메이션 끄기 (손가락에 딱 붙게)
-                  
-                  // PC 마우스 지원
-                  if (e.type === 'mousedown') {
-                      document.addEventListener('mousemove', moveDrag, { passive: false });
-                      document.addEventListener('mouseup', endDrag);
-                  }
-              };
-
-              const moveDrag = (e) => {
-                  if (!isDragging) return;
-                  currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-                  let diff = currentY - startY;
-                  
-                  // 아래로 내릴 때만 작동 (위로 올리는 건 무시)
-                  if (diff > 0) {
-                      if (e.cancelable) e.preventDefault(); // 화면 전체가 당겨지는 현상(Pull-to-refresh) 완벽 방어!
-                      box.style.transform = `translateY(${diff}px)`;
-                  }
-              };
-
-              const endDrag = (e) => {
-                  if (!isDragging) return;
-                  isDragging = false;
-                  let diff = currentY - startY;
-                  
-                  // 손을 뗐을 때 부드럽게 튕기는 애니메이션 적용
-                  box.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                  
-                  if (diff > 80) { // 🚨 80px 이상 내렸으면 아예 닫아버림
-                      box.style.transform = 'translateY(100%)';
-                      setTimeout(() => {
-                          modal.style.display = 'none';
-                          box.style.transform = ''; // 위치 초기화 (다음에 열릴 때를 위해)
-                      }, 250);
-                  } else { // 덜 내렸으면 제자리로 다시 튕겨 올라감
-                      box.style.transform = 'translateY(0)';
-                      setTimeout(() => { box.style.transform = ''; }, 250);
-                  }
-
-                  // PC 마우스 이벤트 해제
-                  if (e.type === 'mouseup' || e.type === 'mouseleave') {
-                      document.removeEventListener('mousemove', moveDrag);
-                      document.removeEventListener('mouseup', endDrag);
-                  }
-              };
-
-              // 터치 이벤트 부착
-              const attachEvents = (el) => {
-                  if (!el) return;
-                  el.addEventListener('touchstart', startDrag, { passive: true });
-                  el.addEventListener('touchmove', moveDrag, { passive: false });
-                  el.addEventListener('touchend', endDrag);
-                  el.addEventListener('touchcancel', endDrag);
-                  el.addEventListener('mousedown', startDrag);
-              };
-
-              attachEvents(handle);
-              attachEvents(header);
-          });
-      });
+      
 
       // =====================================================
       // 📈 [V3.4] 크로스 연도 정밀 비교 그리드 (글로벌 Max, 스르륵 삭제, 독립옵션 적용)
@@ -6565,6 +6488,107 @@
         showToast(`❌ 통신 오류가 발생했습니다.`, 2500);
     }).login(id, pw);
 }
+      // =====================================================
+      // 🚀 [네이티브 앱 감성 V3] 모달 스와이프(내려 닫기) 통합 엔진
+      // =====================================================
+      let swipeModalVars = {
+          activeBox: null, activeModal: null, startY: 0, currentY: 0, isDragging: false, startTime: 0
+      };
+
+      function initNativeBottomSheet() {
+          document.querySelectorAll('.overlay-modal').forEach(modal => {
+              const box = modal.querySelector('.modal-box');
+              if (!box) return;
+
+              // 🚨 핵심: 쪼그만 손잡이뿐만 아니라 헤더 전체 가로 영역을 타겟으로 잡음
+              const handle = box.querySelector('.bottom-sheet-handle');
+              const header = box.querySelector('.modal-header');
+
+              const startDrag = (e) => {
+                  // 인풋창이나 버튼을 누른 경우는 텍스트 입력/클릭을 위해 드래그 무시
+                  if (e.target && ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(e.target.tagName)) return;
+                  
+                  // 모달 내용물이 아래로 스크롤되어 있는 상태면 드래그 무시 (맨 위일 때만 닫기 허용)
+                  if (box.scrollTop > 5) return; 
+
+                  swipeModalVars.activeBox = box;
+                  swipeModalVars.activeModal = modal;
+                  swipeModalVars.startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                  swipeModalVars.currentY = swipeModalVars.startY;
+                  swipeModalVars.isDragging = true;
+                  swipeModalVars.startTime = Date.now();
+                  
+                  // 드래그 중에는 부드럽게 손가락을 따라오도록 트랜지션 해제
+                  box.style.transition = 'none';
+              };
+
+              const attach = (el) => {
+                  if (!el) return;
+                  el.addEventListener('touchstart', startDrag, { passive: true });
+                  el.addEventListener('mousedown', startDrag);
+                  el.style.cursor = 'grab';
+              };
+
+              // 손잡이, 헤더, 그리고 모달창의 맨 윗부분 빈 공간을 모두 드래그 패드로 지정!
+              attach(handle);
+              attach(header);
+              box.addEventListener('touchstart', (e) => { if(e.target === box) startDrag(e); }, { passive: true });
+              box.addEventListener('mousedown', (e) => { if(e.target === box) startDrag(e); });
+          });
+
+          // 🚨 드래그 중인 손가락/마우스 움직임은 화면 전체(document)에서 절대 안 놓치고 캐치!
+          const moveDrag = (e) => {
+              if (!swipeModalVars.isDragging || !swipeModalVars.activeBox) return;
+              let clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+              let diff = clientY - swipeModalVars.startY;
+
+              // 아래로 당길 때만 작동 (위로 올리면 고무줄처럼 튕기지 않고 단단하게 버팀)
+              if (diff > 0) {
+                  if (e.cancelable) e.preventDefault(); // 브라우저 자체 스크롤 락 (화면 딸려 올라감 방지)
+                  swipeModalVars.activeBox.style.transform = `translateY(${diff}px)`;
+                  swipeModalVars.currentY = clientY;
+              }
+          };
+
+          const endDrag = (e) => {
+              if (!swipeModalVars.isDragging || !swipeModalVars.activeBox) return;
+              swipeModalVars.isDragging = false;
+
+              let diff = swipeModalVars.currentY - swipeModalVars.startY;
+              let velocity = diff / (Date.now() - swipeModalVars.startTime); // 손가락 튕기는 속도 계산
+              let box = swipeModalVars.activeBox;
+              let modal = swipeModalVars.activeModal;
+
+              // 손을 떼는 순간 쫀득한 스프링 애니메이션 복구
+              box.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+              // 속도가 빠르게 휙! 내리거나 (0.5), 절반 이상(120px) 푹 내렸으면 닫기
+              if (velocity > 0.5 || diff > 120) {
+                  box.style.transform = 'translateY(100%)';
+                  setTimeout(() => {
+                      modal.style.display = 'none';
+                      box.style.transform = ''; // 다음번 열릴 때를 위해 원상복구
+                  }, 300);
+              } else {
+                  // 살짝 내리다 말았으면 다시 제자리로 튕겨 올라감
+                  box.style.transform = 'translateY(0)';
+                  setTimeout(() => { box.style.transform = ''; }, 300);
+              }
+              
+              swipeModalVars.activeBox = null;
+              swipeModalVars.activeModal = null;
+          };
+
+          // 글로벌 이벤트 리스너 부착
+          document.addEventListener('touchmove', moveDrag, { passive: false });
+          document.addEventListener('touchend', endDrag);
+          document.addEventListener('touchcancel', endDrag);
+          document.addEventListener('mousemove', moveDrag, { passive: false });
+          document.addEventListener('mouseup', endDrag);
+      }
+
+      // 🚀 페이지가 로드되면 독립적으로 네이티브 스와이프 엔진 즉시 가동!
+      window.addEventListener('DOMContentLoaded', initNativeBottomSheet);
     </script>
   </body>
 </html>
