@@ -4072,15 +4072,26 @@ async function handleLogin() {
           })._call({ source: 'vercel', action: 'DELETE_RAW_ROW_DIRECT', rowId: rowId, type: currentType });
       }
 
-      // 💡 [초기화 링크 인터락] 로그인 통과 시 마스터 버튼 노출 여부 제어
-      // 기존 로그인 성공 콜백 함수나 DOMContentLoaded 구문 중 localStorage 관리자 매핑 영역에 아래 한 줄을 끼워 넣어 주면 마스터 권한일 때만 버튼이 은밀하게 켜집니다.
+      // 💡 [보안/디버깅 강화] 마스터 권한 판별 인터락 및 콘솔 트래킹 엔진
       function checkMasterAuthButtonVisibility() {
           const btn = document.getElementById('masterDashboardBtn');
           if (!btn) return;
-          let adminId = localStorage.getItem('admin_id');
-          let role = localStorage.getItem('admin_role');
           
-          if (localStorage.getItem('isAdmin') === 'true' && (adminId === 'admin' || role === 'SUPER_ADMIN')) {
+          // 로컬 스토리지 데이터 정밀 추출
+          let isAdminActive = localStorage.getItem('isAdmin') === 'true' || localStorage.getItem('is_admin') === 'true';
+          let adminId = localStorage.getItem('admin_id') || '';
+          let role = localStorage.getItem('admin_role') || '';
+          
+          // 🔍 F12 콘솔 창에서 데이터 매칭 여부를 직접 추적할 수 있도록 로그 출력
+          console.log("[마스터 인터락 검전] 로그인상태:", isAdminActive, " / ID:", adminId, " / 권한등급:", role);
+          
+          // 아이디가 'admin'이거나 권한에 'SUPER' 또는 'MASTER' 문구가 들어있으면 무조건 통과 (대소문자 무시)
+          const isMasterUser = adminId.toLowerCase() === 'admin' || 
+                               role.toUpperCase().includes('SUPER') || 
+                               role.toUpperCase().includes('MASTER');
+
+          if (isAdminActive && isMasterUser) {
+              btn.style.styleText = "width: 100%; padding: 16px; background: rgba(10, 132, 255, 0.1); color: #0a84ff; border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; margin-bottom: 12px; transition: 0.2s;";
               btn.style.display = 'block';
           } else {
               btn.style.display = 'none';
