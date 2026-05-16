@@ -102,6 +102,106 @@ module.exports = async function(req, res) {
             const payload = typeof body === 'string' ? JSON.parse(body) : body; 
             const { domain, action, data, token, compName, colorIdx, year } = payload;
 
+
+            // ====================================================================
+        // 🛡️ [시스템 관리] 마스터 전용 백엔드 파이프라인 (어드민 / 로그 / DB 직제어)
+        // ====================================================================
+        if (req.method === 'POST') {
+            const body = req.body;
+            const payload = typeof body === 'string' ? JSON.parse(body) : body;
+            const { domain, action, data, keyword, type, rowId } = payload;
+
+            // 🆕 A. 신규 관리자 계정 추가
+            if (action === 'CREATE_ADMIN') {
+                try {
+                    const { id, name, pw } = data;
+                    const [exist] = await pool.query("SELECT admin_id FROM admins WHERE admin_id = ?", [id]);
+                    if (exist.length > 0) {
+                        return res.status(200).json({ success: false, msg: '이미 등록된 아이디입니다.' });
+                    }
+                    await pool.query("INSERT INTO admins (admin_id, password_hash, admin_name, role, status) VALUES (?, ?, ?, 'ADMIN', 'ACTIVE')", [id, pw, name]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CREATE_ADMIN', ?)", [payload.admin_id || 'system', `새로운 관리자 계정 발급: ${name}(${id})`]);
+                    return res.status(200).json({ success: true });
+                } catch (e) {
+                    return res.status(200).json({ success: false, msg: e.message });
+                }
+            }
+
+            // 👥 B. 관리자 목록 조회
+            else if (action === 'GET_ADMIN_LIST') {
+                try {
+                    const [rows] = await pool.query("SELECT admin_id, admin_name, role FROM admins WHERE status = 'ACTIVE' ORDER BY id ASC");
+                    return res.status(200).json({ success: true, list: rows });
+                } catch (e) {
+                    return res.status(200).json({ success: false, msg: e.message });
+                }
+            }
+
+            // 🗑️ C. 관리자 계정 삭제 (권한 회수)
+            else if (action === 'DELETE_ADMIN') {
+                try {
+                    const { id } = data;
+                    if (id === 'admin' || id === 'silverscent') {
+                        return res.status(200).json({ success: false, msg: '마스터 계정은 보안상 복구가 불가능하여 파기할 수 없습니다.' });
+                    }
+                    await pool.query("UPDATE admins SET status = 'DELETED' WHERE admin_id = ?", [id]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DELETE_ADMIN', ?)", [payload.admin_id || 'system', `관리자 계정 차단 및 삭제: ${id}`]);
+                    return res.status(200).json({ success: true });
+                } catch (e) {
+                    return res.status(200).json({ success: false, msg: e.message });
+                }
+            }
+
+            // 📜 D. 보안 감사 로그 타임라인 로드
+            else if (action === 'GET_AUDIT_LOGS') {
+                try {
+                    const [rows] = await pool.query("SELECT admin_id, action_type, description, created_at FROM admin_audit_logs ORDER BY id DESC LIMIT 50");
+                    return res.status(200).json({ success: true, logs: rows });
+                } catch (e) {
+                    return res.status(200).json({ success: false, msg: e.message });
+                }
+            }
+
+            // 🗄️ E. DB 원본 데이터 다이렉트 긴급 로우 그리드 뷰 검색
+            else if (action === 'GET_RAW_DB_ROWS') {
+                try {
+                    let rows = [];
+                    if (type === 'out') {
+                        if (keyword) {
+                            [rows] = await pool.query("SELECT id, outbound_date, company, pal, box FROM outbound WHERE company LIKE ? ORDER BY id DESC LIMIT 60", [`%${keyword}%`]);
+                        } else {
+                            [rows] = await pool.query("SELECT id, outbound_date, company, pal, box FROM outbound ORDER BY id DESC LIMIT 40");
+                        }
+                    } else {
+                        if (keyword) {
+                            [rows] = await pool.query("SELECT id, receive_date, bl_number, pallets FROM inbound WHERE bl_number LIKE ? OR remarks LIKE ? ORDER BY id DESC LIMIT 60", [`%${keyword}%`, `%${keyword}%`]);
+                        } else {
+                            [rows] = await pool.query("SELECT id, receive_date, bl_number, pallets FROM inbound ORDER BY id DESC LIMIT 40");
+                        }
+                    }
+                    return res.status(200).json({ success: true, rows: rows });
+                } catch (e) {
+                    return res.status(200).json({ success: false, msg: e.message });
+                }
+            }
+
+            // 💣 F. DB 원본 데이터 다이렉트 긴급 삭제 명령
+            else if (action === 'DELETE_RAW_ROW_DIRECT') {
+                try {
+                    if (type === 'out') {
+                        await pool.query("DELETE FROM outbound WHERE id = ?", [rowId]);
+                    } else {
+                        await pool.query("DELETE FROM inbound WHERE id = ?", [rowId]);
+                    }
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DB_RAW_DELETE', ?)", [payload.admin_id || 'system', `${type === 'out' ? '출고' : '입고'} 테이블 일련번호 [ID: ${rowId}] 로우 강제 소거`]);
+                    return res.status(200).json({ success: true });
+                } catch (e) {
+                    return res.status(200).json({ success: false, msg: e.message });
+                }
+            }
+
+            // (이어서 기존의 if (action === 'LOGIN') 코드가 오면 됩니다)
+
             // ✅ 1. 로그인 로직 (정석적인 LOGIN 액션으로 깔끔하게 교체!)
             if (action === 'LOGIN') {
                 try {
