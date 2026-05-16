@@ -3903,43 +3903,7 @@
           location.reload(); 
       }
 
-      // 💡 [개선] 비밀번호 눈알 토글 로직
-      function togglePwView() {
-        const input = document.getElementById("adminPwInput");
-        const icon = document.getElementById("pwToggleIcon");
-        if (input.type === "password") {
-          input.type = "text";
-          icon.innerText = "🙈";
-        } else {
-          input.type = "password";
-          icon.innerText = "👁️";
-        }
-      }
-
-      function submitAdminLogin() {
-        let pw = document.getElementById("adminPwInput").value;
-        if (!pw) return;
-        document.getElementById("adminLoginModal").style.display = "none";
-        showToast("🔒 보안 인증 중...", 0);
-        google.script.run
-          .withSuccessHandler(function (isValid) {
-            if (isValid) {
-              isAdmin = true;
-              localStorage.setItem("admin_token", pw); // 💡 수정됨
-              adminToken = pw;
-              document.getElementById("adminBtn").innerHTML = "🔓 관리자";
-              document.getElementById("adminBtn").classList.add("unlocked");
-              document.getElementById("adminActions").style.display = "flex";
-              document.getElementById("fabBtn").style.display = "flex";
-              updateFooterUI();
-              showToast("🔓 관리자 인증 성공!", 2000);
-              renderCalendar();
-            } else {
-              showToast("❌ 비밀번호가 틀렸습니다.", 2000);
-            }
-          })
-          .verifyAdminPw(pw);
-      }
+     
 
       let isMultiMode = false;
       let selectedItems = [];
