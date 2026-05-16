@@ -3794,23 +3794,8 @@
           isAdmin = false;
       }
 
-     // 💡 [개선] 관리자 버튼을 누르면 바로 로그아웃 묻지 않고 '내 정보 설정창' 띄우기
-      function toggleAdmin() {
-        if(isAdmin) {
-          // 1. 내 정보 세팅
-          let savedId = localStorage.getItem('admin_id') || '관리자';
-          document.getElementById('myInfoAdminId').innerText = `ID: ${savedId}`;
-          
-          // 2. 생체 인증 토글 스위치 상태 반영
-          let isBioRegistered = localStorage.getItem('bio_registered') === 'true';
-          document.getElementById('toggleBioAuth').checked = isBioRegistered;
-
-          // 3. 내 정보 모달창 띄우기
-          document.getElementById('myInfoModal').style.display = 'flex';
-          return;
-        }
-        
-        // 🚨 로그인 안 된 상태면 기존처럼 로그인 모달창 열기
+      // 💡 [신규] 수동 로그인 모달창을 띄우는 헬퍼 함수
+      function openLoginModal() {
         document.getElementById('adminPwInput').value = ''; 
         let idInput = document.getElementById('adminIdInput');
         if (idInput) idInput.value = ''; 
@@ -3820,6 +3805,27 @@
 
         document.getElementById('adminLoginModal').style.display = 'flex';
         setTimeout(() => { if(idInput) idInput.focus(); else document.getElementById('adminPwInput').focus(); }, 150);
+      }
+
+     // 💡 [개선] 등록된 기기면 클릭 즉시 Face ID 자동 팝업!
+      function toggleAdmin() {
+        if(isAdmin) {
+          let savedId = localStorage.getItem('admin_id') || '관리자';
+          document.getElementById('myInfoAdminId').innerText = `ID: ${savedId}`;
+          let isBioRegistered = localStorage.getItem('bio_registered') === 'true';
+          document.getElementById('toggleBioAuth').checked = isBioRegistered;
+          document.getElementById('myInfoModal').style.display = 'flex';
+          return;
+        }
+        
+        // 🚨 [핵심 패치] 생체 인증이 등록된 기기면 로그인 창을 건너뛰고 즉시 Face ID 호출!
+        if (localStorage.getItem('bio_registered') === 'true' && window.PublicKeyCredential) {
+            handleBioLogin();
+            return; 
+        }
+
+        // 등록 안 된 상태면 수동 로그인 창 띄우기
+        openLoginModal();
       }
 
       // 💡 [신규] 생체 인증 토글 스위치를 눌렀을 때 작동하는 엔진
@@ -6726,17 +6732,14 @@
       window.addEventListener('DOMContentLoaded', initNativeBottomSheet);
 
 
-      // =====================================================
-      // 🚀 [WebAuthn] 생체 인증 (지문 / Face ID) 코어 엔진
-      // =====================================================
+      // 💡 [개선] Face ID 실패/취소 시 수동 로그인 창으로 자연스럽게 안내 (Fallback)
       async function handleBioLogin() {
           if (!window.PublicKeyCredential) {
-              alert("이 브라우저/기기는 생체 인증을 지원하지 않습니다.");
+              openLoginModal(); // 지원 안 하면 바로 수동 로그인 창
               return;
           }
 
           try {
-              // 1. 폰에 저장된 지문/Face ID 호출
               const publicKey = {
                   challenge: new Uint8Array(32),
                   rpId: window.location.hostname,
@@ -6747,7 +6750,6 @@
               const assertion = await navigator.credentials.get({ publicKey });
               
               if (assertion) {
-                  // 2. 인증 성공 시, 기기에 봉인해둔 계정 정보 잠금 해제
                   const savedId = localStorage.getItem('bio_id');
                   const savedPw = localStorage.getItem('bio_pw');
                   
@@ -6755,7 +6757,6 @@
                       document.getElementById('adminLoginModal').style.display = 'none';
                       showToast("🔒 생체 인증 성공! 서버 확인 중...", 0);
                       
-                      // 3. 기존 로그인 통신망을 통해 서버에 즉시 전송
                       google.script.run.withSuccessHandler(function(res) {
                           if (res.success) {
                               window.isAdmin = true; isAdmin = true; 
@@ -6777,13 +6778,15 @@
                               if (typeof updateFooterUI === 'function') updateFooterUI();
                           } else {
                               showToast("❌ 서버 인증 실패. 비밀번호가 변경되었을 수 있습니다.", 2500);
+                              openLoginModal(); // 비번 틀렸을 때도 수동 창 띄우기
                           }
                       }).login(savedId, savedPw);
                   }
               }
           } catch (err) {
-              console.error(err);
-              showToast("❌ 생체 인증이 취소되었거나 실패했습니다.", 2500);
+              console.log("생체 인증 취소됨:", err);
+              // 🚨 [UX 패치] Face ID를 취소하거나 실패하면 자연스럽게 수동 로그인 창이 나타남
+              openLoginModal();
           }
       }
 
