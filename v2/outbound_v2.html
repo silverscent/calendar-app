@@ -1736,6 +1736,16 @@
         margin-bottom: 8px; margin-top: 5px;
       }
 
+
+      /* 🚀 iOS 스타일 토글 스위치 */
+      .ios-toggle { position: relative; display: inline-block; width: 50px; height: 30px; }
+      .ios-toggle input { opacity: 0; width: 0; height: 0; }
+      .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border-color); transition: .3s; border-radius: 30px; }
+      .toggle-slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+      .ios-toggle input:checked + .toggle-slider { background-color: #34c759; }
+      .ios-toggle input:checked + .toggle-slider:before { transform: translateX(20px); }
+      .ios-toggle input:disabled + .toggle-slider { opacity: 0.5; cursor: not-allowed; }
+
     </style>
   </head>
   <body>
@@ -2218,6 +2228,58 @@
           <button class="cancel-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: var(--bg-color); border: 1px solid var(--border-color);" onclick="document.getElementById('logoutConfirmModal').style.display='none'">취소</button>
           <button class="save-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: #ff3b30; box-shadow: 0 6px 15px rgba(255, 59, 48, 0.35);" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'" onclick="executeLogout()">로그아웃</button>
         </div>
+      </div>
+    </div>
+
+    <div id="myInfoModal" class="overlay-modal" onclick="closeModalOnBgClick(event)">
+      <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px 24px 0 0; padding: 25px 20px 40px 20px;">
+        <div class="bottom-sheet-handle"></div>
+        
+        <div class="modal-header" style="justify-content: center; border-bottom: none; margin-bottom: 5px;">
+          <div class="modal-title" style="font-size: 1.3em;">내 정보 및 설정</div>
+        </div>
+
+        <div style="display: flex; align-items: center; background: var(--bg-color); border: 1px solid var(--border-color); padding: 16px; border-radius: 16px; margin-bottom: 24px;">
+          <div style="width: 50px; height: 50px; background: linear-gradient(135deg, #0a84ff, #005bb5); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1.5em; margin-right: 15px; box-shadow: 0 4px 10px rgba(10,132,255,0.3);">
+            🧑‍💻
+          </div>
+          <div>
+            <div style="font-size: 1.15em; font-weight: 900; color: var(--text-main); margin-bottom: 4px;">시스템 관리자</div>
+            <div style="font-size: 0.85em; font-weight: 800; color: var(--text-sub);" id="myInfoAdminId">admin_id</div>
+          </div>
+        </div>
+
+        <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 16px; overflow: hidden; margin-bottom: 24px;">
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border-color);">
+            <div>
+              <div style="font-size: 1.05em; font-weight: 800; color: var(--text-main);">로그인 상태 유지</div>
+              <div style="font-size: 0.8em; color: var(--text-sub); margin-top: 4px;">앱을 종료해도 로그아웃되지 않습니다.</div>
+            </div>
+            <label class="ios-toggle">
+              <input type="checkbox" id="toggleAutoLogin" checked disabled>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px;">
+            <div>
+              <div style="font-size: 1.05em; font-weight: 800; color: var(--text-main);">생체 인증 (지문 / Face ID)</div>
+              <div style="font-size: 0.8em; color: var(--text-sub); margin-top: 4px;">빠르고 안전하게 시스템에 접근합니다.</div>
+            </div>
+            <label class="ios-toggle">
+              <input type="checkbox" id="toggleBioAuth" onchange="handleBioToggleChange(this)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+        </div>
+
+        <button onclick="document.getElementById('myInfoModal').style.display='none'; document.getElementById('logoutConfirmModal').style.display='flex';" 
+                style="width: 100%; padding: 16px; background: rgba(255, 59, 48, 0.1); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; transition: 0.2s;">
+          로그아웃
+        </button>
+
       </div>
     </div>
 
@@ -3732,30 +3794,90 @@
           isAdmin = false;
       }
 
-     // 💡 [수정] 못생긴 alert 대신 예쁜 로그아웃 모달 띄우기
+     // 💡 [개선] 관리자 버튼을 누르면 바로 로그아웃 묻지 않고 '내 정보 설정창' 띄우기
       function toggleAdmin() {
         if(isAdmin) {
-          // 관리자면 로그아웃 확인 모달 띄움
-          document.getElementById('logoutConfirmModal').style.display = 'flex';
+          // 1. 내 정보 세팅
+          let savedId = localStorage.getItem('admin_id') || '관리자';
+          document.getElementById('myInfoAdminId').innerText = `ID: ${savedId}`;
+          
+          // 2. 생체 인증 토글 스위치 상태 반영
+          let isBioRegistered = localStorage.getItem('bio_registered') === 'true';
+          document.getElementById('toggleBioAuth').checked = isBioRegistered;
+
+          // 3. 내 정보 모달창 띄우기
+          document.getElementById('myInfoModal').style.display = 'flex';
           return;
         }
         
-        // 로그인 안 된 상태면 로그인 모달창 띄움
+        // 🚨 로그인 안 된 상태면 기존처럼 로그인 모달창 열기
         document.getElementById('adminPwInput').value = ''; 
         let idInput = document.getElementById('adminIdInput');
         if (idInput) idInput.value = ''; 
         
-        // 👇 🚨 생체 인증이 등록된 기기면 버튼을 짠! 하고 보여줌
         const bioBtn = document.getElementById('btnBioLogin');
-        if (bioBtn) {
-            bioBtn.style.display = localStorage.getItem('bio_registered') === 'true' ? 'block' : 'none';
-        }
+        if (bioBtn) bioBtn.style.display = localStorage.getItem('bio_registered') === 'true' ? 'block' : 'none';
 
         document.getElementById('adminLoginModal').style.display = 'flex';
-        // 모바일/PC 모두 오토포커스 부드럽게
         setTimeout(() => { if(idInput) idInput.focus(); else document.getElementById('adminPwInput').focus(); }, 150);
       }
 
+      // 💡 [신규] 생체 인증 토글 스위치를 눌렀을 때 작동하는 엔진
+      async function handleBioToggleChange(checkbox) {
+          if (checkbox.checked) {
+              // 켬 (등록 시작)
+              if (!window.PublicKeyCredential) {
+                  alert("이 기기는 생체 인증을 지원하지 않습니다.");
+                  checkbox.checked = false;
+                  return;
+              }
+              
+              let currentId = localStorage.getItem('admin_id') || 'admin';
+              // 보안을 위해 비밀번호를 한 번 더 물어봐서 확실하게 등록
+              let currentPw = prompt("생체 인증을 등록하려면 현재 비밀번호를 입력하세요.");
+              
+              if (!currentPw) {
+                  checkbox.checked = false; // 취소하면 토글 스위치 다시 원상복구
+                  return; 
+              }
+
+              try {
+                  const publicKey = {
+                      challenge: new Uint8Array(32),
+                      rp: { name: "3PL System", id: window.location.hostname },
+                      user: { id: new Uint8Array(16), name: currentId, displayName: "시스템 관리자" },
+                      pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+                      authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                      timeout: 60000
+                  };
+                  const credential = await navigator.credentials.create({ publicKey });
+                  if (credential) {
+                      localStorage.setItem('bio_registered', 'true');
+                      localStorage.setItem('bio_id', currentId);
+                      localStorage.setItem('bio_pw', currentPw); 
+                      showToast("✅ 지문/Face ID가 등록되었습니다!", 3000);
+                  } else {
+                      checkbox.checked = false;
+                  }
+              } catch (err) {
+                  console.log("생체 인증 등록 취소/실패", err);
+                  checkbox.checked = false; // 실패 시 스위치 끄기
+                  showToast("❌ 생체 인증 등록이 취소되었습니다.", 2000);
+              }
+          } else {
+              // 끔 (등록 해제)
+              if(confirm("생체 인증 로그인을 해제하시겠습니까?")) {
+                  localStorage.removeItem('bio_registered');
+                  localStorage.removeItem('bio_id');
+                  localStorage.removeItem('bio_pw');
+                  showToast("🗑️ 생체 인증이 해제되었습니다.", 2000);
+              } else {
+                  checkbox.checked = true; // 취소하면 다시 켜짐 상태로 복구
+              }
+          }
+      }
+
+      // (※ handleBioLogin 함수는 기존에 드린 것 그대로 유지하시면 됩니다!)
       // 💡 [신규] 진짜로 로그아웃을 실행하는 함수
       function executeLogout() {
           document.getElementById('logoutConfirmModal').style.display = 'none';
@@ -6486,15 +6608,6 @@
             
             idElem.value = ''; pwElem.value = '';
             
-            // 👇 🚨 여기에 추가! (로그인 성공 시 지문 등록 물어보기)
-            if (window.PublicKeyCredential && localStorage.getItem('bio_registered') !== 'true') {
-                setTimeout(() => {
-                    if(confirm("다음부터 지문 / Face ID로 편하게 로그인하시겠습니까?")) {
-                        registerBiometrics(id, pw);
-                    }
-                }, 500);
-            }
-            // 👆 여기까지
             
         } else {
             // 실패 시에도 토스트 메시지
@@ -6674,30 +6787,7 @@
           }
       }
 
-      // 💡 기기에 지문/Face ID 권한을 등록하는 함수
-      async function registerBiometrics(id, pw) {
-          if (!window.PublicKeyCredential) return;
-          try {
-              const publicKey = {
-                  challenge: new Uint8Array(32),
-                  rp: { name: "3PL System", id: window.location.hostname },
-                  user: { id: new Uint8Array(16), name: id, displayName: "시스템 관리자" },
-                  pubKeyCredParams: [{ type: "public-key", alg: -7 }],
-                  authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
-                  timeout: 60000
-              };
-              const credential = await navigator.credentials.create({ publicKey });
-              if (credential) {
-                  // 기기 고유 저장소에 계정 정보를 안전하게 봉인
-                  localStorage.setItem('bio_registered', 'true');
-                  localStorage.setItem('bio_id', id);
-                  localStorage.setItem('bio_pw', pw); 
-                  showToast("✅ 기기에 지문/Face ID가 등록되었습니다!", 3000);
-              }
-          } catch (err) {
-              console.log("생체 인증 등록 취소/실패", err);
-          }
-      }
+      
     </script>
   </body>
 </html>
