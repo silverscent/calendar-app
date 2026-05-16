@@ -6561,11 +6561,32 @@
     if (!idElem || !pwElem) return;
     const id = idElem.value.trim();
     const pw = pwElem.value.trim();
-    if (!id || !pw) return alert("아이디와 비밀번호를 입력하세요.");
+    
+    if (!id || !pw) {
+        showToast("⚠️ 아이디와 비밀번호를 모두 입력하세요.", 2000);
+        return;
+    }
+
+    // 🚨 [UX 패치 1] 버튼 중복 터치 방지 및 로딩 텍스트 표시
+    const loginBtn = document.querySelector('#adminLoginModal button[onclick="handleLogin()"]');
+    let originalBtnText = "로그인";
+    if (loginBtn) {
+        originalBtnText = loginBtn.innerHTML;
+        loginBtn.innerHTML = '⏳ 확인 중...';
+        loginBtn.style.pointerEvents = 'none'; // 클릭 완벽 차단
+        loginBtn.style.opacity = '0.7';
+    }
 
     google.script.run.withSuccessHandler(function(res) {
+        // 🚨 [UX 패치 2] 통신이 끝나면 버튼 상태 원상복구
+        if (loginBtn) {
+            loginBtn.innerHTML = originalBtnText;
+            loginBtn.style.pointerEvents = 'auto';
+            loginBtn.style.opacity = '1';
+        }
+
         if (res.success) {
-            // 🚨 1. sessionStorage 대신 localStorage를 써서 앱을 꺼도 영구 유지!
+            // 장기 기억 저장
             window.isAdmin = true;
             isAdmin = true; 
             localStorage.setItem('isAdmin', 'true');
@@ -6573,7 +6594,6 @@
             localStorage.setItem('admin_id', res.admin_id);
             localStorage.setItem('admin_role', res.role);
 
-            // 🚨 2. 원래 예쁜 CSS 클래스로 복구하고, 찌꺼기 스타일 강제 삭제!
             const btn = document.getElementById("adminBtn");
             if (btn) {
                 btn.innerHTML = '🔓 관리자';
@@ -6581,20 +6601,33 @@
                 btn.removeAttribute("style"); 
             }
 
-            document.getElementById('adminActions').style.display = 'flex';
+            const actions = document.getElementById('adminActions');
+            if (actions) actions.style.display = 'flex';
+            
             const fab = document.getElementById("fabBtn");
             if (fab) fab.style.display = "flex";
 
             document.getElementById('adminLoginModal').style.display = 'none';
-            alert(`${res.name} 관리자님 확인되었습니다.`);
+            
+            // 🚨 [UX 패치 3] 딱딱한 alert 대신 시스템의 예쁜 토스트 메시지 활용!
+            showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
             
             if (typeof renderCalendar === 'function') renderCalendar(); 
             if (typeof updateFooterUI === 'function') updateFooterUI();
             
             idElem.value = ''; pwElem.value = '';
         } else {
-            alert(res.msg);
+            // 실패 시에도 토스트 메시지
+            showToast(`❌ ${res.msg}`, 2500);
         }
+    }).withFailureHandler(function(err) {
+        // 🚨 서버 에러 등으로 뻗었을 때 버튼이 계속 잠겨있는 현상 방어
+        if (loginBtn) {
+            loginBtn.innerHTML = originalBtnText;
+            loginBtn.style.pointerEvents = 'auto';
+            loginBtn.style.opacity = '1';
+        }
+        showToast(`❌ 통신 오류가 발생했습니다.`, 2500);
     }).login(id, pw);
 }
     </script>
