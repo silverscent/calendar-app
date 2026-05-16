@@ -1957,13 +1957,15 @@
               let currentId = localStorage.getItem('admin_id') || 'admin';
               // 보안을 위해 비밀번호를 한 번 더 물어봐서 확실하게 등록
               let currentPw = prompt("생체 인증을 등록하려면 현재 비밀번호를 입력하세요.");
-              
               if (!currentPw) {
-                  checkbox.checked = false; // 취소하면 토글 스위치 다시 원상복구
-                  return; 
+                  checkbox.checked = false;
+                  return;
               }
 
               try {
+                  // 🛡️ [보안 패치] 로컬 스토리지 보관 전 비밀번호 암호화 각인!
+                  const hashedPw = await encryptSHA256(currentPw);
+
                   const publicKey = {
                       challenge: new Uint8Array(32),
                       rp: { name: "3PL System", id: window.location.hostname },
@@ -1976,7 +1978,7 @@
                   if (credential) {
                       localStorage.setItem('bio_registered', 'true');
                       localStorage.setItem('bio_id', currentId);
-                      localStorage.setItem('bio_pw', currentPw); 
+                      localStorage.setItem('bio_pw', hashedPw); // 🛡️ 암호화된 해시 보관!
                       showToast("✅ 지문/Face ID가 등록되었습니다!", 3000);
                   } else {
                       checkbox.checked = false;
@@ -3507,30 +3509,31 @@ function loadOcrVerificationData(btnElement) {
         });
       }
 
-     function handleLogin() {
+async function handleLogin() {
     const idElem = document.getElementById('adminIdInput');
     const pwElem = document.getElementById('adminPwInput');
     if (!idElem || !pwElem) return;
     const id = idElem.value.trim();
     const pw = pwElem.value.trim();
-    
     if (!id || !pw) {
         showToast("⚠️ 아이디와 비밀번호를 모두 입력하세요.", 2000);
         return;
     }
 
-    // 🚨 [UX 패치 1] 버튼 중복 터치 방지 및 로딩 텍스트 표시
+    // 🚨 [UX 패치] 버튼 중복 터치 방지 및 로딩 표시
     const loginBtn = document.querySelector('#adminLoginModal button[onclick="handleLogin()"]');
     let originalBtnText = "로그인";
     if (loginBtn) {
         originalBtnText = loginBtn.innerHTML;
         loginBtn.innerHTML = '⏳ 확인 중...';
-        loginBtn.style.pointerEvents = 'none'; // 클릭 완벽 차단
+        loginBtn.style.pointerEvents = 'none'; 
         loginBtn.style.opacity = '0.7';
     }
 
+    // 🛡️ [보안 패치] 네트워크로 전송하기 전 비밀번호를 즉시 SHA-256 암호화
+    const hashedPw = await encryptSHA256(pw);
+
     google.script.run.withSuccessHandler(function(res) {
-        // 🚨 [UX 패치 2] 통신이 끝나면 버튼 상태 원상복구
         if (loginBtn) {
             loginBtn.innerHTML = originalBtnText;
             loginBtn.style.pointerEvents = 'auto';
@@ -3538,15 +3541,12 @@ function loadOcrVerificationData(btnElement) {
         }
 
         if (res.success) {
-            // 장기 기억 저장
-            window.isAdmin = true;
-            isAdmin = true; 
+            window.isAdmin = true; isAdmin = true; 
             localStorage.setItem('isAdmin', 'true');
             localStorage.setItem('is_admin', 'true');
             localStorage.setItem('admin_id', res.admin_id);
             localStorage.setItem('admin_role', res.role);
 
-            // 초록색 관리자 버튼으로 변신! (이 4줄만 남기면 끝입니다)
             const btn = document.getElementById("adminBtn");
             if (btn) {
                 btn.innerHTML = '🔓 관리자';
@@ -3561,29 +3561,22 @@ function loadOcrVerificationData(btnElement) {
             if (fab) fab.style.display = "flex";
 
             document.getElementById('adminLoginModal').style.display = 'none';
-            
-            // 🚨 [UX 패치 3] 딱딱한 alert 대신 시스템의 예쁜 토스트 메시지 활용!
             showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
-            
             if (typeof renderCalendar === 'function') renderCalendar(); 
             if (typeof updateFooterUI === 'function') updateFooterUI();
             
             idElem.value = ''; pwElem.value = '';
-            
-            
         } else {
-            // 실패 시에도 토스트 메시지
             showToast(`❌ ${res.msg}`, 2500);
         }
     }).withFailureHandler(function(err) {
-        // 🚨 서버 에러 등으로 뻗었을 때 버튼이 계속 잠겨있는 현상 방어
         if (loginBtn) {
             loginBtn.innerHTML = originalBtnText;
             loginBtn.style.pointerEvents = 'auto';
             loginBtn.style.opacity = '1';
         }
         showToast(`❌ 통신 오류가 발생했습니다.`, 2500);
-    }).login(id, pw);
+    }).login(id, hashedPw); // 🛡️ 평문 대신 암호화된 텍스트 전송!
 }
 
 // =====================================================
@@ -3707,7 +3700,7 @@ function loadOcrVerificationData(btnElement) {
               
               if (assertion) {
                   const savedId = localStorage.getItem('bio_id');
-                  const savedPw = localStorage.getItem('bio_pw');
+                  const savedPw = localStorage.getItem('bio_pw'); // 🛡️ 이미 암호화된 상태
                   
                   if (savedId && savedPw) {
                       document.getElementById('adminLoginModal').style.display = 'none';
@@ -3746,6 +3739,15 @@ function loadOcrVerificationData(btnElement) {
           }
       }
 
+      // =====================================================
+      // 🛡️ [보안 강화] 내장 브라우저 Web Crypto 기반 SHA-256 해시 엔진
+      // =====================================================
+      async function encryptSHA256(message) {
+          const msgBuffer = new TextEncoder().encode(message);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      }
       
     </script>
   </body>
