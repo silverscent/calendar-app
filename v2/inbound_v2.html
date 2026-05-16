@@ -1382,8 +1382,13 @@
             <div style="font-size: 0.85em; color: var(--text-sub); line-height: 1.45;">데이터베이스 테이블의 원본 데이터를 직접 검색하여 긴급 삭제할 수 있는 위험 영역 관리 화면입니다.</div>
           </div>
           <div style="display: flex; gap: 8px; margin-bottom: 15px; box-sizing: border-box;">
-            <input type="text" id="dbMasterSearchKeyword" placeholder="검색어 (거래처명 또는 B/L)" style="flex: 1; padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; box-sizing: border-box;">
-            <button onclick="searchRawDatabaseRows()" style="padding: 0 22px; background: #0a84ff; color:#fff; border:none; border-radius:12px; font-weight:900; cursor:pointer; box-sizing: border-box;">조회</button>
+            <select id="dbMasterFilterCol" style="padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; outline: none;">
+              <option value="all">전체 컬럼</option>
+              <option value="date">날짜 검색</option>
+              <option value="name">식별명 검색</option>
+            </select>
+            <input type="text" id="dbMasterSearchKeyword" placeholder="검색어 입력..." style="flex: 1; padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; box-sizing: border-box;">
+            <button onclick="searchRawDatabaseRows()" style="padding: 0 22px; background: #0a84ff; color:#fff; border:none; border-radius:12px; font-weight:900; cursor:pointer;">조회</button>
           </div>
           <div id="dbMasterRowsContainer" style="overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch; box-sizing: border-box;"></div>
         </div>
@@ -3924,9 +3929,11 @@ async function handleLogin() {
                   card.style = "display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid var(--border-color); padding:14px 16px; border-radius:14px; box-sizing:border-box;";
                   
                   const isMaster = item.admin_id.toLowerCase() === 'admin' || item.admin_id.toLowerCase() === 'silverscent';
+                  // 기존 actionArea 렌더링 부분을 아래 코드로 교체
                   const actionArea = isMaster ? 
                       `<span style='color:#0a84ff; font-size:0.85em; font-weight:800;'>🔒 System Admin</span>` : 
-                      `<button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:6px 12px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>삭제</button>`;
+                      `<button onclick="resetAdminPassword('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,159,10,0.1); border:1px solid #ff9f0a; color:#ff9f0a; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer; margin-right:5px;'>비번초기화</button>
+                       <button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>삭제</button>`;
 
                   card.innerHTML = `
                       <div>
@@ -3938,6 +3945,20 @@ async function handleLogin() {
                   container.appendChild(card);
               });
           })._call({ source: 'vercel', action: 'GET_ADMIN_LIST' });
+      }
+      
+      // 🔑 비밀번호 초기화 실행 함수
+      async function resetAdminPassword(id, name) {
+          const newPw = prompt(`[${name}(${id})] 계정의 새로운 비밀번호를 입력하세요:`);
+          if (!newPw || newPw.trim() === '') return;
+          if (!confirm(`정말 해당 계정의 비밀번호를 변경하시겠습니까?`)) return;
+
+          const hashedPw = await encryptSHA256(newPw); 
+          showToast("⏳ 비밀번호 변경 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) showToast("✅ 비밀번호가 성공적으로 초기화되었습니다.", 2000);
+              else showToast(`❌ 오류: ${res.msg}`, 2500);
+          })._call({ source: 'vercel', action: 'RESET_ADMIN_PW', data: { targetId: id, newPw: hashedPw }, admin_id: localStorage.getItem('admin_id') });
       }
 
       function deleteAdminAccount(id, name) {
@@ -3999,61 +4020,134 @@ async function handleLogin() {
           });
       }
 
-      // 4. DB 제어 그리드 테이블 렌더링 (틀어짐 완벽 방지 설계)
+      // 🗄️ DB 제어실: 전체 컬럼 조회 및 인라인 에디터 렌더링
       function searchRawDatabaseRows() {
           const keyword = document.getElementById('dbMasterSearchKeyword').value.trim();
+          const filterCol = document.getElementById('dbMasterFilterCol').value;
           const container = document.getElementById('dbMasterRowsContainer');
           if (!container) return;
-          container.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:25px; font-weight:800;'>실시간 데이터 스트림 파싱 중...</div>";
+          container.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:25px; font-weight:800;'>실시간 데이터 파싱 중...</div>";
 
           google.script.run.withSuccessHandler(function(res) {
               if (!res.success || !res.rows || res.rows.length === 0) {
-                  container.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:25px;'>일치하는 데이터 로우가 없습니다.</div>";
+                  container.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:25px;'>데이터가 없습니다.</div>";
                   return;
               }
               
-              // 모바일 고정 가로폭 해상도 보장용 table-layout 스크롤 그리드 구축
-              let html = `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 520px; table-layout: fixed;'>
-                  <colgroup>
-                      <col style='width: 55px;'>
-                      <col style='width: 105px;'>
-                      <col style='width: 170px;'>
-                      <col style='width: 90px;'>
-                      <col style='width: 100px;'>
-                  </colgroup>
-                  <thead style='background:var(--bg-color); color:var(--text-sub); font-weight:900; border-bottom:1px solid var(--border-color);'>
-                      <tr>
-                          <th style='padding:14px 10px;'>ID</th>
-                          <th style='padding:14px 10px;'>날짜</th>
-                          <th style='padding:14px 10px;'>식별명(회사/BL)</th>
-                          <th style='padding:14px 10px;'>물동량</th>
-                          <th style='padding:14px 10px; text-align:center;'>긴급명령</th>
-                      </tr>
-                  </thead>
-                  <tbody>`;
-              
-              res.rows.forEach(row => {
-                  let dateVal = currentType === 'out' ? row.outbound_date : row.receive_date;
-                  let nameVal = currentType === 'out' ? row.company : row.bl_number;
-                  let qtyVal = currentType === 'out' ? `${row.pal}P / ${row.box}B` : `${row.pallets}P`;
-                  let formattedDate = dateVal ? dateVal.substring(0,10) : '미정';
+              // 💡 인라인 스타일 컴포넌트 추가 (가독성 및 넓은 횡스크롤 지원)
+              let html = `<style>
+                  .db-input { width: 100%; padding: 6px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; box-sizing: border-box; font-size: 0.85em; }
+                  .db-btn-save { background: rgba(52,199,89,0.1); border: 1px solid #34c759; color: #34c759; border-radius: 6px; padding: 5px 10px; font-size: 0.85em; font-weight: 900; cursor: pointer; margin-right: 4px; }
+                  .db-btn-del { background: rgba(255,59,48,0.1); border: 1px solid #ff3b30; color: #ff3b30; border-radius: 6px; padding: 5px 10px; font-size: 0.85em; font-weight: 900; cursor: pointer; }
+              </style>`;
 
-                  // 💡 [수정] searchRawDatabaseRows 안의 버튼 영역을 2개로 나눔
-                  html += `<tr style='border-bottom:1px solid var(--border-color); font-weight:700; word-break: break-all;'>
-                      <td style='padding:12px 10px; color:var(--text-sub);'>${row.id}</td>
-                      <td style='padding:12px 10px; color:var(--text-main); white-space:nowrap;'>${formattedDate}</td>
-                      <td style='padding:12px 10px; color:var(--sat-color);'>${nameVal}</td>
-                      <td style='padding:12px 10px; color:var(--text-main);'>${qtyVal}</td>
-                      <td style='padding:12px 10px; text-align:center; white-space:nowrap;'>
-                          <button onclick="editRowDirectFromDB(${row.id}, '${nameVal}')" style='background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:5px 8px; font-size:0.85em; font-weight:900; cursor:pointer; margin-right:4px;'>수정</button>
-                          <button onclick="deleteRowDirectFromDB(${row.id})" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; border-radius:6px; padding:5px 8px; font-size:0.85em; font-weight:900; cursor:pointer;'>삭제</button>
-                      </td>
-                  </tr>`;
-              });
+              if (currentType === 'out') {
+                  // 📤 [출고] 9개 컬럼 전용 테이블 렌더링
+                  html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 950px; table-layout: fixed;'>
+                      <colgroup>
+                          <col style='width: 50px;'><col style='width: 130px;'><col style='width: 70px;'><col style='width: 70px;'>
+                          <col style='width: 120px;'><col style='width: 100px;'><col style='width: 150px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'>
+                      </colgroup>
+                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'>
+                          <tr><th>ID</th><th>company</th><th>pal</th><th>box</th><th>out_date</th><th>etc</th><th>created_at</th><th>sort</th><th>isDone</th><th style='text-align:center;'>명령</th></tr>
+                      </thead><tbody>`;
+                  res.rows.forEach(r => {
+                      html += `<tr style='border-bottom:1px solid var(--border-color);'>
+                          <td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
+                          <td><input type="text" id="db-o-comp-${r.id}" value="${r.company || ''}" class="db-input"></td>
+                          <td><input type="number" id="db-o-pal-${r.id}" value="${r.pal || 0}" class="db-input"></td>
+                          <td><input type="number" id="db-o-box-${r.id}" value="${r.box || 0}" class="db-input"></td>
+                          <td><input type="text" id="db-o-date-${r.id}" value="${r.outbound_date || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-o-etc-${r.id}" value="${r.etc || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-o-cre-${r.id}" value="${r.created_at || ''}" class="db-input"></td>
+                          <td><input type="number" id="db-o-sort-${r.id}" value="${r.sort_idx || 0}" class="db-input"></td>
+                          <td><input type="number" id="db-o-done-${r.id}" value="${r.isDone || 0}" class="db-input"></td>
+                          <td style='text-align:center;'>
+                              <button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button>
+                              <button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button>
+                          </td>
+                      </tr>`;
+                  });
+              } else {
+                  // 📥 [입고] 13개 컬럼 전용 테이블 렌더링
+                  html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 1350px; table-layout: fixed;'>
+                      <colgroup>
+                          <col style='width: 50px;'><col style='width: 130px;'><col style='width: 60px;'><col style='width: 100px;'>
+                          <col style='width: 100px;'><col style='width: 80px;'><col style='width: 80px;'><col style='width: 100px;'>
+                          <col style='width: 120px;'><col style='width: 140px;'><col style='width: 60px;'><col style='width: 80px;'>
+                          <col style='width: 60px;'><col style='width: 120px;'>
+                      </colgroup>
+                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'>
+                          <tr><th>ID</th><th>bl_number</th><th>pallets</th><th>eta</th><th>receive_date</th><th>fwd</th><th>s_type</th><th>invoice</th><th>remarks</th><th>last_updated</th><th>sort</th><th>status</th><th>AI</th><th style='text-align:center;'>명령</th></tr>
+                      </thead><tbody>`;
+                  res.rows.forEach(r => {
+                      html += `<tr style='border-bottom:1px solid var(--border-color);'>
+                          <td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
+                          <td><input type="text" id="db-i-bl-${r.id}" value="${r.bl_number || ''}" class="db-input"></td>
+                          <td><input type="number" id="db-i-pal-${r.id}" value="${r.pallets || 0}" class="db-input"></td>
+                          <td><input type="text" id="db-i-eta-${r.id}" value="${r.eta || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-date-${r.id}" value="${r.receive_date || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-fwd-${r.id}" value="${r.fwd || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-stype-${r.id}" value="${r.s_type || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-inv-${r.id}" value="${r.invoice || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-rem-${r.id}" value="${r.remarks || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-upd-${r.id}" value="${r.last_updated || ''}" class="db-input"></td>
+                          <td><input type="number" id="db-i-sort-${r.id}" value="${r.sort_idx || 0}" class="db-input"></td>
+                          <td><input type="text" id="db-i-stat-${r.id}" value="${r.status || ''}" class="db-input"></td>
+                          <td><input type="number" id="db-i-ai-${r.id}" value="${r.is_ai_modified || 0}" class="db-input"></td>
+                          <td style='text-align:center;'>
+                              <button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button>
+                              <button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button>
+                          </td>
+                      </tr>`;
+                  });
+              }
               
               html += `</tbody></table>`;
               container.innerHTML = html;
-          })._call({ source: 'vercel', action: 'GET_RAW_DB_ROWS', keyword: keyword, type: currentType });
+          })._call({ source: 'vercel', action: 'GET_RAW_DB_ROWS', keyword: keyword, filterCol: filterCol, type: currentType });
+      }
+
+      // ✏️ 인라인 폼 데이터 취합 및 백엔드 전송
+      function saveFullRowDB(id) {
+          let updateData = { rowId: id };
+          
+          if (currentType === 'out') {
+              updateData.company = document.getElementById(`db-o-comp-${id}`).value.trim();
+              updateData.pal = Number(document.getElementById(`db-o-pal-${id}`).value.trim() || 0);
+              updateData.box = Number(document.getElementById(`db-o-box-${id}`).value.trim() || 0);
+              updateData.outbound_date = document.getElementById(`db-o-date-${id}`).value.trim();
+              updateData.etc = document.getElementById(`db-o-etc-${id}`).value.trim();
+              updateData.created_at = document.getElementById(`db-o-cre-${id}`).value.trim();
+              updateData.sort_idx = Number(document.getElementById(`db-o-sort-${id}`).value.trim() || 0);
+              updateData.isDone = Number(document.getElementById(`db-o-done-${id}`).value.trim() || 0);
+          } else {
+              updateData.bl_number = document.getElementById(`db-i-bl-${id}`).value.trim();
+              updateData.pallets = Number(document.getElementById(`db-i-pal-${id}`).value.trim() || 0);
+              updateData.eta = document.getElementById(`db-i-eta-${id}`).value.trim();
+              updateData.receive_date = document.getElementById(`db-i-date-${id}`).value.trim();
+              updateData.fwd = document.getElementById(`db-i-fwd-${id}`).value.trim();
+              updateData.s_type = document.getElementById(`db-i-stype-${id}`).value.trim();
+              updateData.invoice = document.getElementById(`db-i-inv-${id}`).value.trim();
+              updateData.remarks = document.getElementById(`db-i-rem-${id}`).value.trim();
+              updateData.last_updated = document.getElementById(`db-i-upd-${id}`).value.trim();
+              updateData.sort_idx = Number(document.getElementById(`db-i-sort-${id}`).value.trim() || 0);
+              updateData.status = document.getElementById(`db-i-stat-${id}`).value.trim();
+              updateData.is_ai_modified = Number(document.getElementById(`db-i-ai-${id}`).value.trim() || 0);
+          }
+
+          if (!confirm(`[ID: ${id}] 변경된 모든 컬럼 데이터를 덮어쓰시겠습니까?`)) return;
+
+          showToast("⏳ DB 동기화 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) {
+                  showToast("✅ 원본 데이터 업데이트 완료", 2000);
+                  searchRawDatabaseRows();
+                  if (typeof renderCalendar === 'function') renderCalendar();
+              } else {
+                  showToast("❌ 실패: " + res.msg, 2500);
+              }
+          })._call({ source: 'vercel', action: 'UPDATE_RAW_ROW_FULL', updateData: updateData, type: currentType, admin_id: localStorage.getItem('admin_id') });
       }
 
       // ✏️ DB 로우 식별명 다이렉트 수정
