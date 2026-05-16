@@ -402,7 +402,22 @@ module.exports = async function(req, res) {
                 } else if (action === 'EDIT') {
                     await pool.query(`UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
                         [newDate, newName, data?.newPal || '', data?.newBox || '', data?.newEtc || '', targetName, targetDate, targetPal, targetBox]);
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `[출고 수정] ${targetName} ➡️ ${newName} (PL:${targetPal || 0} ➡️ ${data?.newPal || 0}, BOX:${targetBox || 0} ➡️ ${data?.newBox || 0})`]);
+                    
+                    // 🚨 [스마트 로그 패치] 실제로 변경된 항목만 추출해서 로그 기록
+                    let changes = [];
+                    const oldD = targetDate || '미정'; const newD = newDate || '미정';
+                    if (oldD !== newD) changes.push(`날짜: ${oldD} ➡️ ${newD}`);
+                    if (targetName !== newName) changes.push(`업체: ${targetName} ➡️ ${newName}`);
+                    
+                    const oldP = targetPal || 0; const newP = data?.newPal || 0;
+                    if (String(oldP) !== String(newP)) changes.push(`PL: ${oldP} ➡️ ${newP}`);
+                    
+                    const oldB = targetBox || 0; const newB = data?.newBox || 0;
+                    if (String(oldB) !== String(newB)) changes.push(`BOX: ${oldB} ➡️ ${newB}`);
+                    
+                    let detailStr = changes.length > 0 ? changes.join(', ') : '비고/텍스트 변경';
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", 
+                        [currentAdmin, `[출고 수정] ${targetName} (${detailStr})`]);
                 } else if (action === 'ADD') { 
                     let reqComp = (data?.newComp || data?.company || data?.comp || '').trim();
                     let reqDateOut = data?.newDate !== undefined ? data?.newDate : (data?.date !== undefined ? data?.date : data?.outbound_date);
@@ -476,7 +491,18 @@ module.exports = async function(req, res) {
                         await pool.query(`UPDATE inbound SET receive_date=?, bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=? WHERE bl_number=? AND receive_date<=>?`, 
                             [newDate, newName, data?.newPal||'', data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'', data?.oldBL, data?.oldDate === '미정' ? null : data?.oldDate]);
                     }
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `[입고 수정] ${targetBL} ➡️ ${newName} (수정PL:${data?.newPal||0})`]);
+
+                    // 🚨 [스마트 로그 패치] 입고 변경사항 정밀 추적
+                    let changes = [];
+                    const oldD = data?.oldDate || '미정'; const newD = newDate || '미정';
+                    if (oldD !== newD) changes.push(`날짜: ${oldD} ➡️ ${newD}`);
+                    if (targetBL !== newName) changes.push(`B/L: ${targetBL} ➡️ ${newName}`);
+                    
+                    const newP = data?.newPal || 0;
+                    changes.push(`최종수량: PL ${newP}`); // 입고는 원본 수량을 항상 들고오지 않으므로 최종 저장된 수량 표기
+                    
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", 
+                        [currentAdmin, `[입고 수정] ${targetBL} (${changes.join(', ')})`]);
                 } else if (action === 'ADD') {
                     let reqBl = (data?.newBL || data?.bl || data?.newComp || data?.company || data?.bl_number || '').trim();
                     let reqDate = data?.newDate !== undefined ? data?.newDate : (data?.date !== undefined ? data?.date : data?.receive_date);
