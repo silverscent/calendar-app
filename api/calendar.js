@@ -156,11 +156,11 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // 🗄️ E. DB 다이렉트 조회 (페이지네이션 및 직관적 필터 최적화)
+            // 🗄️ E. DB 다이렉트 조회 (페이지네이션 및 직관적 필터, KST 시간보정 적용)
             else if (action === 'GET_RAW_DB_ROWS') {
                 try {
-                    const limit = parseInt(payload.limit) || 20; // 한 번에 몇 줄 볼지 옵션 (기본 20줄)
-                    const page = parseInt(payload.page) || 1;    // 현재 페이지 번호
+                    const limit = parseInt(payload.limit) || 20; 
+                    const page = parseInt(payload.page) || 1;    
                     const offset = (page - 1) * limit;
                     const filterCol = payload.filterCol || 'all'; 
                     
@@ -209,15 +209,9 @@ module.exports = async function(req, res) {
                     
                     [rows] = await pool.query(queryStr, params);
                     [countRows] = await pool.query(countQueryStr, countParams);
-                    const totalCount = countRows[0].cnt; // 전체 데이터 수
+                    const totalCount = countRows[0].cnt;
                     
-                    return res.status(200).json({ 
-                        success: true, 
-                        rows: rows, 
-                        totalCount: totalCount, 
-                        page: page, 
-                        totalPages: Math.ceil(totalCount / limit) 
-                    });
+                    return res.status(200).json({ success: true, rows: rows, totalCount: totalCount, page: page, totalPages: Math.ceil(totalCount / limit) });
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
@@ -253,7 +247,7 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // ✅ 1. 로그인 로직 (정석적인 LOGIN 액션)
+            // ✅ 1. 로그인 로직
             else if (action === 'LOGIN') {
                 try {
                     const { id, pw } = data; 
@@ -387,7 +381,7 @@ module.exports = async function(req, res) {
                 return res.status(200).json(baseHolidays);
             }
 
-            // ✅ 3. 입/출고 데이터 처리 (원본 로직 완전 보존 + 로그 기록)
+            // ✅ 3. 입/출고 데이터 처리 (원본 로직 완벽 보존 + 구체적 수치 로그)
             else if (domain === 'out') {
                 const targetName = data?.oldComp;
                 const newName = data?.newComp || targetName;
@@ -397,17 +391,18 @@ module.exports = async function(req, res) {
                 const targetBox = data?.oldBox || '';
 
                 if (action === 'DONE' || action === 'UNDO_DONE') {
+                    const statName = action === 'DONE' ? '✅ 완료' : '⏳ 대기(취소)';
                     await pool.query(`UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
                         [action === 'DONE' ? 1 : 0, targetName, targetDate, targetPal, targetBox]);
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_STATUS', ?)", [currentAdmin, `출고 상태 변경: ${targetName}`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_STATUS', ?)", [currentAdmin, `[출고 상태] ${targetName} ➡️ ${statName} (PL:${targetPal || 0}, BOX:${targetBox || 0})`]);
                 } else if (action === 'DELETE') {
                     await pool.query(`DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
                         [targetName, targetDate, targetPal, targetBox]);
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_DELETE', ?)", [currentAdmin, `출고 항목 삭제: ${targetName}`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_DELETE', ?)", [currentAdmin, `[출고 삭제] ${targetName} (PL:${targetPal || 0}, BOX:${targetBox || 0}) 파기`]);
                 } else if (action === 'EDIT') {
                     await pool.query(`UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
                         [newDate, newName, data?.newPal || '', data?.newBox || '', data?.newEtc || '', targetName, targetDate, targetPal, targetBox]);
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `출고 항목 수정: ${targetName} ➡️ ${newName}`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `[출고 수정] ${targetName} ➡️ ${newName} (PL:${targetPal || 0} ➡️ ${data?.newPal || 0}, BOX:${targetBox || 0} ➡️ ${data?.newBox || 0})`]);
                 } else if (action === 'ADD') { 
                     let reqComp = (data?.newComp || data?.company || data?.comp || '').trim();
                     let reqDateOut = data?.newDate !== undefined ? data?.newDate : (data?.date !== undefined ? data?.date : data?.outbound_date);
@@ -421,15 +416,17 @@ module.exports = async function(req, res) {
                     const [exist] = await pool.query(`SELECT id FROM outbound WHERE TRIM(company) = ? AND outbound_date <=> ?`, [reqComp, reqDateOut]);
                     if (exist.length > 0) {
                         await pool.query(`UPDATE outbound SET pal = ?, box = ?, etc = ? WHERE id = ?`, [reqPalOut, reqBoxOut, reqEtcOut, exist[0].id]);
-                        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `출고 캘린더 수량 병합: ${reqComp}`]);
+                        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `[출고 병합] ${reqComp} ➡️ 덮어쓰기 완료 (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`]);
                     } else {
                         await pool.query(`INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`, [reqComp, reqPalOut, reqBoxOut, reqDateOut, reqEtcOut]); 
-                        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)", [currentAdmin, `출고 캘린더 신규 등록: ${reqComp}`]);
+                        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)", [currentAdmin, `[출고 등록] ${reqComp} 신규 추가 (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`]);
                     }
                 } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
+                    let moveCount = 0;
                     for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
                         let tDate = dateStr === '미정' ? null : dateStr;
                         for (const item of orderList) {
+                            moveCount++;
                             if (item.id) {
                                 await pool.query(`UPDATE outbound SET sort_idx = ? WHERE id = ?`, [item.sortIdx, item.id]);
                             } else {
@@ -437,37 +434,40 @@ module.exports = async function(req, res) {
                             }
                         }
                     }
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_SORT', ?)", [currentAdmin, `출고 화면 드래그 순서 변경`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_SORT', ?)", [currentAdmin, `[출고 정렬] 화면 드래그 순서 변경 (${moveCount}건 이동)`]);
                 } else if (action === 'MULTI_DELETE' && data?.items) {
                     for (const it of data.items) {
                         const tDate = it.dateStr === '미정' ? null : it.dateStr;
                         await pool.query(`DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [it.comp, tDate, it.pal, it.box]);
                     }
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_DEL', ?)", [currentAdmin, `출고 캘린더 다중 항목(${data.items.length}건) 삭제`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_DEL', ?)", [currentAdmin, `[출고 다중삭제] ${data.items.length}건 일괄 파기`]);
                 } else if ((action === 'MULTI_DONE' || action === 'MULTI_UNDO_DONE') && data?.items) {
                     const isDoneVal = action === 'MULTI_DONE' ? 1 : 0;
+                    const statName = action === 'MULTI_DONE' ? '✅ 완료' : '⏳ 대기(취소)';
                     for (const it of data.items) {
                         const tDate = it.dateStr === '미정' ? null : it.dateStr;
                         await pool.query(`UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [isDoneVal, it.comp, tDate, it.pal, it.box]);
                     }
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_STAT', ?)", [currentAdmin, `출고 다중 상태 변경(${data.items.length}건)`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_STAT', ?)", [currentAdmin, `[출고 다중상태] ${data.items.length}건 ➡️ ${statName} 처리`]);
                 }
                 return res.status(200).json({ success: true, msg: '작업 완료' });
             } 
             
             else {
+                const targetBL = data?.oldBL || '알수없음';
                 const newName = data?.newComp || data?.newBL;
                 const newDate = data?.newDate === '미정' ? null : data?.newDate;
 
                 if (action === 'DONE' || action === 'UNDO_DONE') {
                     const statusVal = action === 'DONE' ? '완료' : '입고대기';
+                    const statName = action === 'DONE' ? '✅ 완료' : '⏳ 대기(취소)';
                     if (data?.id) await pool.query(`UPDATE inbound SET status = ? WHERE id = ?`, [statusVal, data.id]);
                     else await pool.query(`UPDATE inbound SET status = ? WHERE bl_number = ? AND receive_date <=> ?`, [statusVal, data?.oldBL, data?.oldDate === '미정' ? null : data?.oldDate]);
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_STATUS', ?)", [currentAdmin, `입고 상태 변경: ${data?.oldBL}`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_STATUS', ?)", [currentAdmin, `[입고 상태] ${targetBL} ➡️ ${statName}`]);
                 } else if (action === 'DELETE') {
                     if (data?.id) await pool.query(`DELETE FROM inbound WHERE id = ?`, [data.id]);
                     else await pool.query(`DELETE FROM inbound WHERE bl_number = ? AND receive_date <=> ?`, [data?.oldBL, data?.oldDate === '미정' ? null : data?.oldDate]);
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_DELETE', ?)", [currentAdmin, `입고 항목 삭제: ${data?.oldBL}`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_DELETE', ?)", [currentAdmin, `[입고 삭제] ${targetBL} 파기`]);
                 } else if (action === 'EDIT') {
                     if (data?.id) {
                         await pool.query(`UPDATE inbound SET receive_date=?, bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=? WHERE id=?`, 
@@ -476,7 +476,7 @@ module.exports = async function(req, res) {
                         await pool.query(`UPDATE inbound SET receive_date=?, bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=? WHERE bl_number=? AND receive_date<=>?`, 
                             [newDate, newName, data?.newPal||'', data?.newEtc||'', data?.newSType||'', data?.newFwd||'', data?.newInvoice||'', data?.oldBL, data?.oldDate === '미정' ? null : data?.oldDate]);
                     }
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `입고 항목 수정: ${data?.oldBL} ➡️ ${newName}`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `[입고 수정] ${targetBL} ➡️ ${newName} (수정PL:${data?.newPal||0})`]);
                 } else if (action === 'ADD') {
                     let reqBl = (data?.newBL || data?.bl || data?.newComp || data?.company || data?.bl_number || '').trim();
                     let reqDate = data?.newDate !== undefined ? data?.newDate : (data?.date !== undefined ? data?.date : data?.receive_date);
@@ -500,34 +500,37 @@ module.exports = async function(req, res) {
                     if (exist.length > 0) {
                         await pool.query(`UPDATE inbound SET bl_number=?, pallets=?, remarks=?, s_type=?, fwd=?, invoice=?, is_ai_modified=1 WHERE id=?`, 
                             [reqBl, reqPal, reqEtc, reqSType, reqFwd, reqInvoice, exist[0].id]);
-                        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `입고 캘린더 데이터 갱신: ${reqBl}`]);
+                        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `[입고 병합] ${reqBl} ➡️ 덮어쓰기 완료 (PL:${reqPal || 0})`]);
                     } else {
                         await pool.query(`INSERT INTO inbound (bl_number, pallets, receive_date, status, remarks, s_type, fwd, invoice, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, 1)`, 
                             [reqBl, reqPal, reqDate, reqEtc, reqSType, reqFwd, reqInvoice]);
-                        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)", [currentAdmin, `입고 캘린더 신규 등록: ${reqBl}`]);
+                        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)", [currentAdmin, `[입고 등록] ${reqBl} 신규 추가 (PL:${reqPal || 0})`]);
                     }
                 } else if (action === 'UPDATE_ORDER' && data?.dailyOrders) {
+                    let moveCount = 0;
                     for (const [dateStr, orderList] of Object.entries(data.dailyOrders)) {
                         let tDate = dateStr === '미정' ? null : dateStr;
                         for (const item of orderList) {
+                            moveCount++;
                             if (item.id) await pool.query(`UPDATE inbound SET sort_idx = ? WHERE id = ?`, [item.sortIdx, item.id]);
                             else await pool.query(`UPDATE inbound SET sort_idx = ? WHERE bl_number = ? AND receive_date <=> ? AND pallets = ?`, [item.sortIdx, item.company, tDate, item.pal]);
                         }
                     }
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_SORT', ?)", [currentAdmin, `입고 화면 드래그 순서 변경 적용`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_SORT', ?)", [currentAdmin, `[입고 정렬] 화면 드래그 순서 변경 (${moveCount}건 이동)`]);
                 } else if (action === 'MULTI_DELETE' && data?.items) {
                     for (const it of data.items) {
                         if (it.id) await pool.query(`DELETE FROM inbound WHERE id = ?`, [it.id]);
                         else await pool.query(`DELETE FROM inbound WHERE bl_number = ? AND receive_date <=> ?`, [it.bl, it.dateStr === '미정' ? null : it.dateStr]);
                     }
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_DEL', ?)", [currentAdmin, `입고 캘린더 다중 항목(${data.items.length}건) 삭제`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_DEL', ?)", [currentAdmin, `[입고 다중삭제] ${data.items.length}건 일괄 파기`]);
                 } else if ((action === 'MULTI_DONE' || action === 'MULTI_UNDO_DONE') && data?.items) {
                     const statusVal = action === 'MULTI_DONE' ? '완료' : '입고대기';
+                    const statName = action === 'MULTI_DONE' ? '✅ 완료' : '⏳ 대기(취소)';
                     for (const it of data.items) {
                         if (it.id) await pool.query(`UPDATE inbound SET status = ? WHERE id = ?`, [statusVal, it.id]);
                         else await pool.query(`UPDATE inbound SET status = ? WHERE bl_number = ? AND receive_date <=> ?`, [statusVal, it.bl, it.dateStr === '미정' ? null : it.dateStr]);
                     }
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_STAT', ?)", [currentAdmin, `입고 다중 상태 변경(${data.items.length}건)`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_STAT', ?)", [currentAdmin, `[입고 다중상태] ${data.items.length}건 ➡️ ${statName} 처리`]);
                 }
                 return res.status(200).json({ success: true, msg: '작업 완료' });
             }
