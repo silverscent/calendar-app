@@ -94,15 +94,7 @@ module.exports = async function(req, res) {
             return res.status(200).json(formattedData);
         }
 
-        // ====================================================================
-        // 🚨 POST 요청 통합 블록 (모든 action과 domain이 이 안에 들어있어야 합니다)
-        // ====================================================================
-        if (req.method === 'POST') {
-            const body = req.body;
-            const payload = typeof body === 'string' ? JSON.parse(body) : body; 
-            const { domain, action, data, token, compName, colorIdx, year } = payload;
-
-
+      
             // ====================================================================
         // 🛡️ [시스템 관리] 마스터 전용 백엔드 파이프라인 (어드민 / 로그 / DB 직제어)
         // ====================================================================
