@@ -1924,26 +1924,40 @@
 
       function toggleAdmin() {
         const btn = document.getElementById('adminBtn');
+        
+        // 🚨 관리자로 로그인 된 상태에서 버튼을 누르면 로그아웃 여부 묻기
         if(isAdmin) {
-          // 🚨 로그아웃 처리
+          if(!confirm("로그아웃 하시겠습니까?")) return; 
+            
           isAdmin = false; 
           window.isAdmin = false;
-          sessionStorage.clear(); // 세션 완전 초기화
-          localStorage.removeItem("admin_token");
+          
+          // 테마나 폰트 크기는 놔두고, 권한 정보만 핀포인트로 삭제
+          localStorage.removeItem('isAdmin');
+          localStorage.removeItem('is_admin');
+          localStorage.removeItem('admin_id');
+          localStorage.removeItem('admin_role');
+          localStorage.removeItem('admin_token'); 
           
           btn.innerHTML = '🔒 잠김'; 
-          btn.classList.remove('unlocked');
+          btn.className = 'admin-btn';
+          btn.removeAttribute("style");
+          
           document.getElementById('adminActions').style.display = 'none'; 
           updateFooterUI();
           showToast('🔒 일반 모드로 전환되었습니다.', 2000); 
           
-          renderCalendar(); // 달력 새로 그려서 수정버튼 숨기기
+          if (typeof renderCalendar === 'function') renderCalendar();
           return;
         }
-        // 로그인 창 열기
+        
+        // 🚨 로그인 안 된 상태면 모달창 열기
         document.getElementById('adminPwInput').value = ''; 
+        let idInput = document.getElementById('adminIdInput');
+        if (idInput) idInput.value = ''; 
+        
         document.getElementById('adminLoginModal').style.display = 'flex';
-        setTimeout(() => document.getElementById('adminIdInput').focus(), 100);
+        setTimeout(() => { if(idInput) idInput.focus(); else document.getElementById('adminPwInput').focus(); }, 100);
       }
 
       function submitAdminLogin() {
@@ -3342,32 +3356,32 @@ function loadOcrVerificationData(btnElement) {
           }
       });
 
-  // 🚀 [앱 초기화] 
+ // 🚀 [앱 초기화] 
       window.addEventListener('DOMContentLoaded', () => {
         
-        // 💡 [수정] 앱을 꺼도 관리자 로그인 유지 (초록색 🔓 관리자 버튼 완벽 복구)
-        if (sessionStorage.getItem('isAdmin') === 'true') {
+        // 💡 단기 기억이 아닌 장기 기억(localStorage)을 확인하여 유지
+        if (localStorage.getItem('isAdmin') === 'true') {
             window.isAdmin = true;
             isAdmin = true;
             
             const btn = document.getElementById("adminBtn");
             if (btn) {
                 btn.innerHTML = '🔓 관리자';
-                btn.className = 'admin-btn unlocked'; // 원래 있던 예쁜 초록색 CSS 클래스
-                btn.style = ""; // 혹시 모를 찌꺼기 인라인 스타일 제거
+                btn.className = 'admin-btn unlocked';
+                btn.removeAttribute("style"); // 찌꺼기 청소 보장
             }
             
             const actions = document.getElementById("adminActions");
-            if (actions) actions.style.display = "flex"; // 다중 선택 메뉴 표시
+            if (actions) actions.style.display = "flex";
             
             if (typeof updateFooterUI === 'function') updateFooterUI();
         } else {
             window.isAdmin = false;
             isAdmin = false;
         }
-
+        
         const savedTheme = localStorage.getItem('cal_theme') || 'light';
-        // ... (이후 기존 코드와 동일) ...
+        // ... (아래부터는 기존 코드 그대로 유지) ...
         const themeBtn = document.querySelector('.theme-toggle');
         if (savedTheme === 'light') { document.body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; } else { document.body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; }
         const savedSize = localStorage.getItem('cal_fontSize') || 'M'; changeSize(savedSize);
@@ -3437,8 +3451,7 @@ function loadOcrVerificationData(btnElement) {
         });
       }
 
-      // 🆕 새롭게 추가하는 로그인 처리 함수
-function handleLogin() {
+      function handleLogin() {
     const idElem = document.getElementById('adminIdInput');
     const pwElem = document.getElementById('adminPwInput');
     if (!idElem || !pwElem) return;
@@ -3448,19 +3461,20 @@ function handleLogin() {
 
     google.script.run.withSuccessHandler(function(res) {
         if (res.success) {
-            // 1. 권한 스위치 ON
+            // 🚨 1. sessionStorage 대신 localStorage를 써서 장기 기억!
             window.isAdmin = true;
             isAdmin = true; 
-            sessionStorage.setItem('isAdmin', 'true');
-            sessionStorage.setItem('is_admin', 'true');
-            sessionStorage.setItem('admin_id', res.admin_id);
+            localStorage.setItem('isAdmin', 'true');
+            localStorage.setItem('is_admin', 'true');
+            localStorage.setItem('admin_id', res.admin_id);
+            localStorage.setItem('admin_role', res.role);
 
-            // 2. 촌스러운 인라인 스타일 날리고 원래 예쁜 클래스 복구!
+            // 🚨 2. 원래 예쁜 CSS 클래스로 복구하고, 찌꺼기 스타일 강제 삭제!
             const btn = document.getElementById("adminBtn");
             if (btn) {
                 btn.innerHTML = '🔓 관리자';
-                btn.className = 'admin-btn unlocked'; // 원래 CSS 사용
-                btn.style = ""; // 찌꺼기 제거
+                btn.className = 'admin-btn unlocked'; 
+                btn.removeAttribute("style"); // 과거의 어두운 녹색 찌꺼기 완벽 제거
             }
 
             document.getElementById('adminActions').style.display = 'flex';
