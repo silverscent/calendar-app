@@ -4425,44 +4425,27 @@
         oldBlockStart = null,
         oldBlockEnd = null,
       ) {
-        // 🚨 [핵심 패치] 저장 프로세스 시작 직전, 입력칸의 글씨를 멱살 잡고 풀네임으로 강제 변환!
         try {
           if (action === "ADD") {
             let addInput = document.getElementById("add-comp");
-            if (addInput && addInput.value)
-              addInput.value = getFullName(addInput.value);
+            if (addInput && addInput.value) addInput.value = getFullName(addInput.value);
           } else if (action === "EDIT" && idx !== null) {
             let editInput = document.getElementById(`edit-comp-${idx}`);
-            if (editInput && editInput.value)
-              editInput.value = getFullName(editInput.value);
+            if (editInput && editInput.value) editInput.value = getFullName(editInput.value);
           }
-        } catch (e) {
-          console.log("이름 변환 오류", e);
-        }
+        } catch (e) { console.log("이름 변환 오류", e); }
 
-        let oldPal = "",
-          oldBox = "";
-        const safeStr = (val) =>
-          val === "" || val == null ? "" : String(val).trim();
-        let currentIsDone =
-          isDone === true || String(isDone) === "true";
+        let oldPal = "", oldBox = "";
+        const safeStr = (val) => val === "" || val == null ? "" : String(val).trim();
+        let currentIsDone = isDone === true || String(isDone) === "true";
 
         if (idx !== null) {
-          let day =
-            oldDate === "미정"
-              ? "pending"
-              : parseInt(oldDate.split("-")[2], 10);
-          let item =
-            day === "pending"
-              ? serverData.pendingItems[idx]
-              : serverData.monthData[day]
-                ? serverData.monthData[day][idx]
-                : null;
+          let day = oldDate === "미정" ? "pending" : parseInt(oldDate.split("-")[2], 10);
+          let item = day === "pending" ? serverData.pendingItems[idx] : serverData.monthData[day] ? serverData.monthData[day][idx] : null;
           if (item) {
             oldPal = safeStr(item.pal);
             oldBox = safeStr(item.box);
-            currentIsDone =
-              item.isDone === true || String(item.isDone) === "true";
+            currentIsDone = item.isDone === true || String(item.isDone) === "true";
           }
         }
 
@@ -4475,15 +4458,11 @@
           oldBox: oldBox,
         };
 
-        let confirmName = oldComp
-          ? getFullName(oldComp.replace(/\[TASK\]/gi, "").trim())
-          : "";
+        let confirmName = oldComp ? getFullName(oldComp.replace(/\[TASK\]/gi, "").trim()) : "";
         if (action === "DONE") {
-          if (!confirm(`✅ [${confirmName}] 일정을 완료 처리하시겠습니까?`))
-            return;
+          if (!confirm(`✅ [${confirmName}] 일정을 완료 처리하시겠습니까?`)) return;
         } else if (action === "UNDO_DONE") {
-          if (!confirm(`⏪ [${confirmName}] 일정의 완료 상태를 취소하시겠습니까?`))
-            return;
+          if (!confirm(`⏪ [${confirmName}] 일정의 완료 상태를 취소하시겠습니까?`)) return;
         }
         
         let isTask = false;
@@ -4503,6 +4482,7 @@
           endDateStr = endNode ? endNode.value : "";
           payload.newDate = startDateStr;
           payload.newEtc = document.getElementById("add-etc").value;
+          
         } else if (action === "EDIT") {
           isTask = document.getElementById(`edit-type-task-${idx}`).checked;
           rawComp = document.getElementById(`edit-comp-${idx}`).value.trim();
@@ -4515,7 +4495,6 @@
           endDateStr = endNode ? endNode.value : "";
           startDateStr = payload.newDate;
           
-          // 🚨 최종 생존 및 수정된 이력 리스트들 싹 다 긁어모아 텍스트 패킹 재조립
           let cleanEtc = document.getElementById(`edit-etc-${idx}`).value.trim();
           let histRows = document.querySelectorAll(`.hist-edit-row-${idx}`);
           let histArr = [];
@@ -4538,181 +4517,128 @@
             let stdName = getFullName(rawComp);
             companyColors[stdName] = tempEditColorObj;
             customColors[stdName] = tempEditColorIdx;
-            localStorage.setItem(
-              "GLOBAL_COMPANY_COLORS",
-              JSON.stringify(customColors),
-            );
+            localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
             google.script.run.saveGlobalColor(stdName, tempEditColorIdx);
             tempEditColorObj = null;
             tempEditColorIdx = null;
           }
-        }
 
-        if (
-          (action === "ADD" || action === "EDIT") &&
-          (!payload.newComp || payload.newComp === "[TASK]")
-        ) {
-          alert("⚠️ 업체/작업명은 필수입니다.");
-          return;
-        }
-        if (
-          action === "DELETE" &&
-          !confirm(`⚠️ 정말 [${confirmName}] 일정을 영구 삭제하시겠습니까?`)
-        )
-          return;
+        // 🚨 [여기가 누락되었던 핵심 블록입니다] 수량 추가 시 값을 싣고, 화면(로컬)에도 즉시 반영!
+        } else if (action === "ADD_QTY") {
+          payload.addPal = document.getElementById(`add-q-pal-${idx}`).value;
+          payload.addBox = document.getElementById(`add-q-box-${idx}`).value;
+          
+          if (!payload.addPal && !payload.addBox) {
+              alert("⚠️ 추가할 파레트나 박스 수량을 입력해주세요.");
+              return;
+          }
 
-        if (action === "ADD" || action === "EDIT") {
-          if (
-            startDateStr !== "미정" &&
-            endDateStr &&
-            endDateStr < startDateStr
-          ) {
-            alert("⚠️ 종료일은 시작일보다 빠를 수 없습니다.");
-            return;
+          // 화면(서버 안 거치고 달력에 즉시 렌더링) 강제 주입
+          if (idx !== null) {
+              let day = oldDate === "미정" ? "pending" : parseInt(oldDate.split("-")[2], 10);
+              let item = day === "pending" ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
+              if (item) {
+                  item.pal = (parseInt(item.pal) || 0) + (parseInt(payload.addPal) || 0);
+                  item.box = (parseInt(item.box) || 0) + (parseInt(payload.addBox) || 0);
+                  let histDate = `${new Date().getMonth() + 1}/${new Date().getDate()}`;
+                  let pStr = payload.addPal ? `${payload.addPal}P` : '';
+                  let bStr = payload.addBox ? `${payload.addBox}B` : '';
+                  let spc = (payload.addPal && payload.addBox) ? ' ' : '';
+                  let histStr = `[${histDate} ${pStr}${spc}${bStr} 추가]`;
+                  item.etc = item.etc ? item.etc + " " + histStr : histStr;
+              }
           }
         }
 
-        // 💡 화면부터 즉시 닫기
+        if ((action === "ADD" || action === "EDIT") && (!payload.newComp || payload.newComp === "[TASK]")) {
+          alert("⚠️ 업체/작업명은 필수입니다."); return;
+        }
+        if (action === "DELETE" && !confirm(`⚠️ 정말 [${confirmName}] 일정을 영구 삭제하시겠습니까?`)) return;
+
+        if (action === "ADD" || action === "EDIT") {
+          if (startDateStr !== "미정" && endDateStr && endDateStr < startDateStr) {
+            alert("⚠️ 종료일은 시작일보다 빠를 수 없습니다."); return;
+          }
+        }
+
         document.getElementById("modal").style.display = "none";
         document.getElementById("addModal").style.display = "none";
 
         setTimeout(() => {
-          // 🟢 1. 신규 스케줄 ADD
-          if (
-            action === "ADD" &&
-            startDateStr !== "미정" &&
-            endDateStr &&
-            endDateStr >= startDateStr
-          ) {
-            updateLocalState(
-              "ADD",
-              { ...payload, newDate: startDateStr, newEndDate: endDateStr },
-              null,
-            );
+          if (action === "ADD" && startDateStr !== "미정" && endDateStr && endDateStr >= startDateStr) {
+            updateLocalState("ADD", { ...payload, newDate: startDateStr, newEndDate: endDateStr }, null);
             renderCalendar();
             let sDate = new Date(startDateStr);
             let eDate = new Date(endDateStr);
             let datesToProcess = [];
             while (sDate <= eDate) {
-              datesToProcess.push(
-                `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, "0")}-${String(sDate.getDate()).padStart(2, "0")}`,
-              );
+              datesToProcess.push(`${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, "0")}-${String(sDate.getDate()).padStart(2, "0")}`);
               sDate.setDate(sDate.getDate() + 1);
             }
             datesToProcess.forEach((dateStr) => {
               let curPayload = { ...payload, newDate: dateStr };
-              google.script.run.manageWebOutboundData(
-                "ADD",
-                curPayload,
-                adminToken,
-              );
+              google.script.run.manageWebOutboundData("ADD", curPayload, adminToken);
             });
             return;
           }
 
-          // 🟢 2. 간트차트 EDIT (즉시 반영 + 고스트 박멸)
-          if (
-            action === "EDIT" &&
-            oldBlockStart &&
-            oldBlockStart !== "null"
-          ) {
-            const optimisticPayload = {
-              ...payload,
-              newEndDate: endDateStr,
-              oldBlockStart: oldBlockStart,
-              oldBlockEnd: oldBlockEnd,
-            };
-            // 🚀 서버 가기 전에 0.1초 만에 화면부터 갈아버림!
+          if (action === "EDIT" && oldBlockStart && oldBlockStart !== "null") {
+            const optimisticPayload = { ...payload, newEndDate: endDateStr, oldBlockStart: oldBlockStart, oldBlockEnd: oldBlockEnd };
             updateLocalState("EDIT", optimisticPayload, idx);
             renderCalendar();
 
             let oldDates = [];
             if (oldBlockStart !== "미정") {
               let oldSDate = new Date(oldBlockStart);
-              let oldEDate =
-                oldBlockEnd && oldBlockEnd !== "null" && oldBlockEnd !== ""
-                  ? new Date(oldBlockEnd)
-                  : new Date(oldSDate);
+              let oldEDate = oldBlockEnd && oldBlockEnd !== "null" && oldBlockEnd !== "" ? new Date(oldBlockEnd) : new Date(oldSDate);
               let curr = new Date(oldSDate);
               while (curr <= oldEDate) {
-                oldDates.push(
-                  `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`,
-                );
+                oldDates.push(`${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`);
                 curr.setDate(curr.getDate() + 1);
               }
-            } else {
-              oldDates.push("미정");
-            }
+            } else { oldDates.push("미정"); }
 
             let newDates = [];
             if (startDateStr !== "미정") {
               let newSDate = new Date(startDateStr);
-              let newEDate = endDateStr
-                ? new Date(endDateStr)
-                : new Date(newSDate);
+              let newEDate = endDateStr ? new Date(endDateStr) : new Date(newSDate);
               if (newEDate < newSDate) newEDate = new Date(newSDate);
               let curr = new Date(newSDate);
               while (curr <= newEDate) {
-                newDates.push(
-                  `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`,
-                );
+                newDates.push(`${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`);
                 curr.setDate(curr.getDate() + 1);
               }
-            } else {
-              newDates.push("미정");
-            }
+            } else { newDates.push("미정"); }
 
             let actionsToRun = [];
             oldDates.forEach((dStr) => {
-              if (newDates.includes(dStr)) {
-                actionsToRun.push({
-                  action: "EDIT",
-                  payload: { ...payload, newDate: dStr, oldDate: dStr },
-                });
-              } else {
-                actionsToRun.push({
-                  action: "DELETE",
-                  payload: { ...payload, oldDate: dStr, newDate: dStr },
-                });
-              }
+              if (newDates.includes(dStr)) actionsToRun.push({ action: "EDIT", payload: { ...payload, newDate: dStr, oldDate: dStr } });
+              else actionsToRun.push({ action: "DELETE", payload: { ...payload, oldDate: dStr, newDate: dStr } });
             });
-
             newDates.forEach((dStr) => {
-              if (!oldDates.includes(dStr)) {
-                actionsToRun.push({
-                  action: "ADD",
-                  payload: { ...payload, newDate: dStr },
-                });
-              }
+              if (!oldDates.includes(dStr)) actionsToRun.push({ action: "ADD", payload: { ...payload, newDate: dStr } });
             });
 
             actionsToRun.forEach((act) => {
-              google.script.run
-                .withFailureHandler(() => {
-                  goToAsync(serverData.year, serverData.month);
-                })
-                .manageWebOutboundData(act.action, act.payload, adminToken);
+              google.script.run.withFailureHandler(() => { goToAsync(serverData.year, serverData.month); }).manageWebOutboundData(act.action, act.payload, adminToken);
             });
             return;
           }
 
-          // 🟢 3. 하루 일정 EDIT / DONE / DELETE 등 단일 처리
-          updateLocalState(action, payload, idx);
+          if (action !== "ADD_QTY") updateLocalState(action, payload, idx);
           renderCalendar();
+          
           google.script.run
             .withSuccessHandler(function (res) {
-              if (!res.success) {
-                showToast("❌ 서버 실패! 복구합니다.", 2500);
-                goToAsync(serverData.year, serverData.month);
-              }
+              if (!res.success) { showToast("❌ 서버 실패! 복구합니다.", 2500); goToAsync(serverData.year, serverData.month); }
             })
             .withFailureHandler(function (err) {
-              showToast("❌ 통신 오류! 복구합니다.", 2500);
-              goToAsync(serverData.year, serverData.month);
+              showToast("❌ 통신 오류! 복구합니다.", 2500); goToAsync(serverData.year, serverData.month);
             })
             .manageWebOutboundData(action, payload, adminToken);
         }, 50);
       }
+
       
       function executeMultiAction(action) {
         // ❌ [삭제됨] if(isProcessing) { showToast('⏳ 처리 중입니다.', 1000); return; }
