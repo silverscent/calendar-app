@@ -101,7 +101,9 @@ module.exports = async function(req, res) {
         if (req.method === 'POST') {
             const body = req.body;
             const payload = typeof body === 'string' ? JSON.parse(body) : body;
-            const { domain, action, data, keyword, type, rowId } = payload;
+            // 🚨 기존 코드: const { domain, action, data, keyword, type, rowId } = payload;
+        // 👇 아래 코드로 덮어씌워 주세요 (year, month 추가)
+        const { domain, action, data, keyword, type, rowId, year, month, id } = payload;
 
             // 🆕 A. 신규 관리자 계정 추가
             if (action === 'CREATE_ADMIN') {
@@ -186,6 +188,22 @@ module.exports = async function(req, res) {
                         await pool.query("DELETE FROM inbound WHERE id = ?", [rowId]);
                     }
                     await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DB_RAW_DELETE', ?)", [payload.admin_id || 'system', `${type === 'out' ? '출고' : '입고'} 테이블 일련번호 [ID: ${rowId}] 로우 강제 소거`]);
+                    return res.status(200).json({ success: true });
+                } catch (e) {
+                    return res.status(200).json({ success: false, msg: e.message });
+                }
+            }
+
+            // ✏️ G. DB 원본 데이터 다이렉트 긴급 수정
+            else if (action === 'UPDATE_RAW_ROW_DIRECT') {
+                try {
+                    const { newName } = payload;
+                    if (type === 'out') {
+                        await pool.query("UPDATE outbound SET company = ? WHERE id = ?", [newName, rowId]);
+                    } else {
+                        await pool.query("UPDATE inbound SET bl_number = ? WHERE id = ?", [newName, rowId]);
+                    }
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DB_RAW_UPDATE', ?)", [payload.admin_id || 'system', `일련번호 [ID: ${rowId}] 식별명 수정 (${newName})`]);
                     return res.status(200).json({ success: true });
                 } catch (e) {
                     return res.status(200).json({ success: false, msg: e.message });

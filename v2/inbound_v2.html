@@ -1369,9 +1369,9 @@
         </div>
 
         <div id="master-tab-audit-log" class="master-tab-content" style="display: none; box-sizing: border-box;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; box-sizing: border-box;">
-            <div style="font-weight: 900; color: var(--text-main); font-size: 0.95em;">최근 보안 감사 타임라인</div>
-            <button onclick="refreshAuditLogs()" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 6px 12px; border-radius: 8px; font-size: 0.85em; font-weight: 800; cursor: pointer;">새로고침</button>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; box-sizing: border-box; gap: 8px;">
+            <input type="text" id="logFilterInput" onkeyup="filterAuditLogs()" placeholder="🔍 ID 또는 액션 검색..." style="flex: 1; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: 800; font-size: 0.9em; box-sizing: border-box;">
+            <button onclick="refreshAuditLogs()" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px 14px; border-radius: 10px; font-size: 0.9em; font-weight: 800; cursor: pointer; white-space: nowrap;">새로고침</button>
           </div>
           <div id="masterLogTimeline" style="display: flex; flex-direction: column; gap: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 15px; box-sizing: border-box;"></div>
         </div>
@@ -3980,9 +3980,12 @@ async function handleLogin() {
                   return;
               }
               timeline.innerHTML = "";
+              // 기존 refreshAuditLogs 내부의 item 렌더링 부분에 클래스 추가
               res.logs.forEach(log => {
                   const item = document.createElement('div');
+                  item.className = 'audit-log-item'; // 🚨 이거 꼭 추가!
                   item.style = "padding-bottom:12px; border-bottom:1px solid var(--border-color); font-size:0.9em; box-sizing:border-box;";
+                  // ... 이하 동일
                   let dateStr = new Date(log.created_at).toLocaleString('ko-KR');
 
                   item.innerHTML = `
@@ -3996,6 +3999,19 @@ async function handleLogin() {
                   timeline.appendChild(item);
               });
           })._call({ source: 'vercel', action: 'GET_AUDIT_LOGS' });
+      }
+
+      // 🔍 로그 실시간 라이브 필터링 엔진
+      function filterAuditLogs() {
+          const keyword = document.getElementById('logFilterInput').value.toLowerCase();
+          const items = document.querySelectorAll('.audit-log-item');
+          items.forEach(item => {
+              if (item.innerText.toLowerCase().includes(keyword)) {
+                  item.style.display = 'block';
+              } else {
+                  item.style.display = 'none';
+              }
+          });
       }
 
       // 4. DB 제어 그리드 테이블 렌더링 (틀어짐 완벽 방지 설계)
@@ -4037,13 +4053,15 @@ async function handleLogin() {
                   let qtyVal = currentType === 'out' ? `${row.pal}P / ${row.box}B` : `${row.pallets}P`;
                   let formattedDate = dateVal ? dateVal.substring(0,10) : '미정';
 
+                  // 💡 [수정] searchRawDatabaseRows 안의 버튼 영역을 2개로 나눔
                   html += `<tr style='border-bottom:1px solid var(--border-color); font-weight:700; word-break: break-all;'>
                       <td style='padding:12px 10px; color:var(--text-sub);'>${row.id}</td>
                       <td style='padding:12px 10px; color:var(--text-main); white-space:nowrap;'>${formattedDate}</td>
                       <td style='padding:12px 10px; color:var(--sat-color);'>${nameVal}</td>
                       <td style='padding:12px 10px; color:var(--text-main);'>${qtyVal}</td>
-                      <td style='padding:12px 10px; text-align:center;'>
-                          <button onclick="deleteRowDirectFromDB(${row.id})" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; border-radius:6px; padding:5px 10px; font-size:0.9em; font-weight:900; cursor:pointer;'>강제삭제</button>
+                      <td style='padding:12px 10px; text-align:center; white-space:nowrap;'>
+                          <button onclick="editRowDirectFromDB(${row.id}, '${nameVal}')" style='background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:5px 8px; font-size:0.85em; font-weight:900; cursor:pointer; margin-right:4px;'>수정</button>
+                          <button onclick="deleteRowDirectFromDB(${row.id})" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; border-radius:6px; padding:5px 8px; font-size:0.85em; font-weight:900; cursor:pointer;'>삭제</button>
                       </td>
                   </tr>`;
               });
@@ -4051,6 +4069,23 @@ async function handleLogin() {
               html += `</tbody></table>`;
               container.innerHTML = html;
           })._call({ source: 'vercel', action: 'GET_RAW_DB_ROWS', keyword: keyword, type: currentType });
+      }
+
+      // ✏️ DB 로우 식별명 다이렉트 수정
+      function editRowDirectFromDB(rowId, oldName) {
+          let newName = prompt(`[ID: ${rowId}] 새로운 거래처명 또는 B/L 번호를 입력하세요:`, oldName);
+          if (!newName || newName.trim() === '' || newName === oldName) return;
+          
+          showToast("⏳ 원본 데이터 수정 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) {
+                  showToast("✅ 수정 완료!", 2000);
+                  searchRawDatabaseRows();
+                  if (typeof renderCalendar === 'function') renderCalendar();
+              } else {
+                  showToast("❌ 수정 실패", 2000);
+              }
+          })._call({ source: 'vercel', action: 'UPDATE_RAW_ROW_DIRECT', rowId: rowId, type: currentType, newName: newName.trim(), admin_id: localStorage.getItem('admin_id') });
       }
 
       function deleteRowDirectFromDB(rowId) {
