@@ -3882,9 +3882,16 @@
           const roleTextElem = document.getElementById('myInfoAdminRole');
           const iconElem = document.getElementById('myInfoAdminIcon');
           
-          if (savedId === 'admin' || savedRole === 'SUPER_ADMIN') {
+          // 🚨 [핵심 패치] silverscent 및 SYSTEM 권한 추가
+          const isMasterUser = savedId.toLowerCase() === 'admin' || 
+                               savedId.toLowerCase() === 'silverscent' ||
+                               (savedRole && (savedRole.toUpperCase().includes('SUPER') || 
+                                              savedRole.toUpperCase().includes('MASTER') ||
+                                              savedRole.toUpperCase().includes('SYSTEM')));
+
+          if (isMasterUser) {
               roleTextElem.innerText = '최상위 시스템 마스터';
-              roleTextElem.style.color = '#ff9f0a'; // 마스터 전용 골드 색상
+              roleTextElem.style.color = '#ff9f0a'; 
               if(iconElem) {
                   iconElem.innerText = '👑';
                   iconElem.style.background = 'linear-gradient(135deg, #ff9f0a, #ff375f)';
@@ -3892,7 +3899,7 @@
               }
           } else {
               roleTextElem.innerText = '시스템 운영 관리자';
-              roleTextElem.style.color = 'var(--text-main)'; // 일반 텍스트 색상
+              roleTextElem.style.color = 'var(--text-main)'; 
               if(iconElem) {
                   iconElem.innerText = '🧑‍💻';
                   iconElem.style.background = 'linear-gradient(135deg, #0a84ff, #005bb5)';
@@ -6873,17 +6880,22 @@ async function handleLogin() {
       
       // 🔓 마스터 대시보드 열기 권한 점검
       function openMasterDashboard() {
-          let role = localStorage.getItem('admin_role');
-          // 마스터 권한(SUPER_ADMIN 등) 검증 인터락
-          if (role !== 'SUPER_ADMIN' && localStorage.getItem('admin_id') !== 'admin') {
+          let role = localStorage.getItem('admin_role') || '';
+          let adminId = localStorage.getItem('admin_id') || '';
+          
+          const isMasterUser = adminId.toLowerCase() === 'admin' || 
+                               adminId.toLowerCase() === 'silverscent' ||
+                               role.toUpperCase().includes('SUPER') || 
+                               role.toUpperCase().includes('MASTER') ||
+                               role.toUpperCase().includes('SYSTEM');
+
+          // 🚨 [핵심 패치] 마스터 권한이 없으면 튕겨냄
+          if (!isMasterUser) {
               alert("🚨 접근 거부: 최상위 시스템 관리자만 진입할 수 있습니다.");
               return;
           }
           
-          // 우측에서 좌측으로 스르륵 미끄러져 들어오는 네이티브 애니메이션 실행
           document.getElementById('masterDashboardModal').style.transform = 'translateX(-100%)';
-          
-          // 첫 번째 탭 로드
           switchMasterTab('admin-mgr');
           refreshAdminList();
       }
@@ -6953,8 +6965,8 @@ async function handleLogin() {
                   const card = document.createElement('div');
                   card.style = "display:flex; justify-content:space-between; align-items:center; background:var(--bg-color); border:1px solid var(--border-color); padding:14px 16px; border-radius:12px;";
                   
-                  // 시스템 마스터는 삭제 불가능하게 인터락 구성
-                  const isMaster = item.admin_id === 'admin';
+                  // 🚨 [핵심 패치] admin과 silverscent 계정은 삭제 버튼 대신 자물쇠 표시
+                  const isMaster = item.admin_id.toLowerCase() === 'admin' || item.admin_id.toLowerCase() === 'silverscent';
                   const deleteBtn = isMaster ? 
                       `<span style='color:var(--text-sub); font-size:0.85em; font-weight:800;'>🔒 마스터 계정</span>` : 
                       `<button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:none; border:1px solid #ff3b30; color:#ff3b30; padding:5px 10px; border-radius:6px; font-weight:800; font-size:0.85em; cursor:pointer;'>삭제</button>`;
@@ -7082,26 +7094,23 @@ async function handleLogin() {
           })._call({ source: 'vercel', action: 'DELETE_RAW_ROW_DIRECT', rowId: rowId, type: currentType });
       }
 
-     // 💡 [보안/디버깅 강화] 마스터 권한 판별 인터락 및 콘솔 트래킹 엔진
+  // 💡 [보안/디버깅 강화] 마스터 권한 판별 인터락 및 콘솔 트래킹 엔진
       function checkMasterAuthButtonVisibility() {
           const btn = document.getElementById('masterDashboardBtn');
           if (!btn) return;
           
-          // 로컬 스토리지 데이터 정밀 추출
           let isAdminActive = localStorage.getItem('isAdmin') === 'true' || localStorage.getItem('is_admin') === 'true';
           let adminId = localStorage.getItem('admin_id') || '';
           let role = localStorage.getItem('admin_role') || '';
           
-          // 🔍 F12 콘솔 창에서 데이터 매칭 여부를 직접 추적할 수 있도록 로그 출력
-          console.log("[마스터 인터락 검전] 로그인상태:", isAdminActive, " / ID:", adminId, " / 권한등급:", role);
-          
-          // 아이디가 'admin'이거나 권한에 'SUPER' 또는 'MASTER' 문구가 들어있으면 무조건 통과 (대소문자 무시)
+          // 🚨 [핵심 패치] 'silverscent' 계정이거나 권한이 'SYSTEM'이면 무조건 마스터로 인정!
           const isMasterUser = adminId.toLowerCase() === 'admin' || 
+                               adminId.toLowerCase() === 'silverscent' ||
                                role.toUpperCase().includes('SUPER') || 
-                               role.toUpperCase().includes('MASTER');
+                               role.toUpperCase().includes('MASTER') ||
+                               role.toUpperCase().includes('SYSTEM');
 
           if (isAdminActive && isMasterUser) {
-              btn.style.styleText = "width: 100%; padding: 16px; background: rgba(10, 132, 255, 0.1); color: #0a84ff; border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; margin-bottom: 12px; transition: 0.2s;";
               btn.style.display = 'block';
           } else {
               btn.style.display = 'none';
