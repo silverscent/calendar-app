@@ -2014,27 +2014,27 @@
         }
       }
 
-      function submitAdminLogin() {
-        let pw = document.getElementById('adminPwInput').value;
-        if(!pw) return;
-        document.getElementById('adminLoginModal').style.display = 'none'; showToast("🔒 보안 인증 중...", 0);
-        google.script.run.withSuccessHandler(function(isValid) {
-          if (isValid) {
-            isAdmin = true;
-            localStorage.setItem("admin_token", pw); // 💡 수정됨
-            adminToken = pw;
-            document.getElementById('adminBtn').innerHTML = '🔓 관리자'; document.getElementById('adminBtn').classList.add('unlocked');
-            document.getElementById('adminActions').style.display = 'flex'; updateFooterUI();
-            showToast("🔓 관리자 인증 성공!", 2000); renderCalendar();
-          } else { showToast("❌ 비밀번호가 틀렸습니다.", 2000); }
-        }).verifyAdminPw(pw);
-      }
-
-      function togglePwView() {
-        const input = document.getElementById('adminPwInput');
-        const icon = document.getElementById('pwToggleIcon');
-        if (input.type === 'password') { input.type = 'text'; icon.innerText = '🙈';
-        } else { input.type = 'password'; icon.innerText = '👁️'; }
+      // 💡 [신규/필수] 누락되었던 로그아웃 실행 함수 추가!
+      function executeLogout() {
+          const logoutModal = document.getElementById('logoutConfirmModal');
+          if (logoutModal) logoutModal.style.display = 'none';
+          
+          const infoModal = document.getElementById('myInfoModal');
+          if (infoModal) infoModal.style.display = 'none';
+          
+          window.isAdmin = false; 
+          isAdmin = false;
+          
+          // 테마 설정을 제외한 관리자 권한 및 토큰 정보만 핀포인트 삭제
+          localStorage.removeItem('isAdmin');
+          localStorage.removeItem('is_admin');
+          localStorage.removeItem('admin_id');
+          localStorage.removeItem('admin_role');
+          localStorage.removeItem('admin_token'); 
+          sessionStorage.clear();
+          
+          // UI 상태를 일반 모드로 완전히 초기화하기 위해 새로고침
+          location.reload(); 
       }
 
       let isMultiMode = false;
