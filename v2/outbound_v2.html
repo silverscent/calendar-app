@@ -2180,19 +2180,19 @@
           관리자 권한을 활성화하려면 로그인하세요.
         </div>
 
-        <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 12px; display: flex; align-items: center; transition: 0.3s;" 
+        <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 12px; display: flex; align-items: center; transition: 0.3s; box-sizing: border-box; width: 100%;" 
              onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
              onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
-          <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub);">👤</span>
-          <input type="text" id="adminIdInput" style="flex: 1; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="아이디" autocomplete="username">
+          <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0;">👤</span>
+          <input type="text" id="adminIdInput" style="flex: 1; min-width: 0; width: 100%; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="아이디" autocomplete="username">
         </div>
 
-        <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 28px; display: flex; align-items: center; transition: 0.3s;"
+        <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 28px; display: flex; align-items: center; transition: 0.3s; box-sizing: border-box; width: 100%;"
              onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
              onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
-          <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub);">🔑</span>
-          <input type="password" id="adminPwInput" style="flex: 1; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="비밀번호" autocomplete="current-password" onkeypress="if(event.key === 'Enter') handleLogin()">
-          <span id="pwToggleIcon" style="font-size: 1.2em; cursor: pointer; padding: 5px; color: var(--text-sub); transition: 0.2s;" onclick="togglePwView()" onmousedown="this.style.transform='scale(0.8)'" onmouseup="this.style.transform='scale(1)'">👁️</span>
+          <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0;">🔑</span>
+          <input type="password" id="adminPwInput" style="flex: 1; min-width: 0; width: 100%; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="비밀번호" autocomplete="current-password" onkeypress="if(event.key === 'Enter') handleLogin()">
+          <span id="pwToggleIcon" style="font-size: 1.2em; cursor: pointer; padding: 5px; color: var(--text-sub); transition: 0.2s; flex-shrink: 0; margin-left: 4px; display: flex; align-items: center; justify-content: center;" onclick="togglePwView()" onmousedown="this.style.transform='scale(0.8)'" onmouseup="this.style.transform='scale(1)'">👁️</span>
         </div>
 
         <div style="display: flex; gap: 12px;">
