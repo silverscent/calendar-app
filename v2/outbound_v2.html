@@ -3828,10 +3828,9 @@
         openLoginModal();
       }
 
-      // 💡 [신규] 생체 인증 토글 스위치를 눌렀을 때 작동하는 엔진
+      // 💡 [보안 패치] 생체 인증 기기 각인 시 비밀번호 로컬 암호화 보관 (비트워든 완벽 호환)
       async function handleBioToggleChange(checkbox) {
           if (checkbox.checked) {
-              // 켬 (등록 시작)
               if (!window.PublicKeyCredential) {
                   alert("이 기기는 생체 인증을 지원하지 않습니다.");
                   checkbox.checked = false;
@@ -3839,48 +3838,55 @@
               }
               
               let currentId = localStorage.getItem('admin_id') || 'admin';
-              // 보안을 위해 비밀번호를 한 번 더 물어봐서 확실하게 등록
               let currentPw = prompt("생체 인증을 등록하려면 현재 비밀번호를 입력하세요.");
               if (!currentPw) {
-                  checkbox.checked = false;
-                  return;
+                  checkbox.checked = false; 
+                  return; 
               }
 
               try {
-                  // 🛡️ [보안 패치] 로컬 스토리지 보관 전 비밀번호 암호화 각인!
                   const hashedPw = await encryptSHA256(currentPw);
 
+                  // 🚨 [핵심 패치] 비트워든이 튕겨내지 못하도록 매번 완벽한 난수(랜덤) 챌린지 생성!
+                  const randomChallenge = new Uint8Array(32);
+                  window.crypto.getRandomValues(randomChallenge);
+                  const randomUserId = new Uint8Array(16);
+                  window.crypto.getRandomValues(randomUserId);
+
                   const publicKey = {
-                      challenge: new Uint8Array(32),
+                      challenge: randomChallenge,
                       rp: { name: "3PL System", id: window.location.hostname },
-                      user: { id: new Uint8Array(16), name: currentId, displayName: "시스템 관리자" },
-                      pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+                      user: { id: randomUserId, name: currentId, displayName: "시스템 관리자" },
+                      pubKeyCredParams: [
+                          { type: "public-key", alg: -7 },  // ES256 (애플 기본)
+                          { type: "public-key", alg: -257 } // RS256 (비트워든 등 서드파티 호환)
+                      ],
                       authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
                       timeout: 60000
                   };
+                  
                   const credential = await navigator.credentials.create({ publicKey });
                   if (credential) {
                       localStorage.setItem('bio_registered', 'true');
                       localStorage.setItem('bio_id', currentId);
-                      localStorage.setItem('bio_pw', hashedPw); // 🛡️ 암호화된 해시 보관!
+                      localStorage.setItem('bio_pw', hashedPw); 
                       showToast("✅ 지문/Face ID가 등록되었습니다!", 3000);
                   } else {
                       checkbox.checked = false;
                   }
               } catch (err) {
                   console.log("생체 인증 등록 취소/실패", err);
-                  checkbox.checked = false; // 실패 시 스위치 끄기
+                  checkbox.checked = false; 
                   showToast("❌ 생체 인증 등록이 취소되었습니다.", 2000);
               }
           } else {
-              // 끔 (등록 해제)
               if(confirm("생체 인증 로그인을 해제하시겠습니까?")) {
                   localStorage.removeItem('bio_registered');
                   localStorage.removeItem('bio_id');
                   localStorage.removeItem('bio_pw');
                   showToast("🗑️ 생체 인증이 해제되었습니다.", 2000);
               } else {
-                  checkbox.checked = true; // 취소하면 다시 켜짐 상태로 복구
+                  checkbox.checked = true; 
               }
           }
       }
@@ -6692,13 +6698,17 @@ async function handleLogin() {
       // 💡 [개선] Face ID 실패/취소 시 수동 로그인 창으로 자연스럽게 안내 (Fallback)
       async function handleBioLogin() {
           if (!window.PublicKeyCredential) {
-              openLoginModal(); // 지원 안 하면 바로 수동 로그인 창
+              openLoginModal();
               return;
           }
 
           try {
+              // 🚨 [핵심 패치] 로그인할 때도 똑같이 랜덤 챌린지를 생성해야 비트워든이 의심하지 않음
+              const randomChallenge = new Uint8Array(32);
+              window.crypto.getRandomValues(randomChallenge);
+
               const publicKey = {
-                  challenge: new Uint8Array(32),
+                  challenge: randomChallenge,
                   rpId: window.location.hostname,
                   userVerification: "required",
                   timeout: 60000
@@ -6708,7 +6718,7 @@ async function handleLogin() {
               
               if (assertion) {
                   const savedId = localStorage.getItem('bio_id');
-                  const savedPw = localStorage.getItem('bio_pw'); // 🛡️ 이미 암호화된 상태
+                  const savedPw = localStorage.getItem('bio_pw'); 
                   
                   if (savedId && savedPw) {
                       document.getElementById('adminLoginModal').style.display = 'none';
@@ -6735,14 +6745,13 @@ async function handleLogin() {
                               if (typeof updateFooterUI === 'function') updateFooterUI();
                           } else {
                               showToast("❌ 서버 인증 실패. 비밀번호가 변경되었을 수 있습니다.", 2500);
-                              openLoginModal(); // 비번 틀렸을 때도 수동 창 띄우기
+                              openLoginModal(); 
                           }
-                      }).login(savedId, savedPw);
+                      }).login(savedId, savedPw); 
                   }
               }
           } catch (err) {
               console.log("생체 인증 취소됨:", err);
-              // 🚨 [UX 패치] Face ID를 취소하거나 실패하면 자연스럽게 수동 로그인 창이 나타남
               openLoginModal();
           }
       }
