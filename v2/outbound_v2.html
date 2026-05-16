@@ -2170,129 +2170,53 @@
       </div>
     </div>
 
-    <div
-      id="adminLoginModal"
-      class="overlay-modal"
-      onclick="if (event.target === this) this.style.display = 'none';"
-    >
-      <div class="modal-box" onclick="event.stopPropagation()">
-        <div class="bottom-sheet-handle"></div>
-        <div class="modal-header">
-          <div class="modal-title" id="modalTitle">🔒 시스템 관리자 로그인</div>
-          <button
-            class="close-btn"
-            onclick="document.getElementById('adminLoginModal').style.display = 'none'"
-          >
-            ✕
-          </button>
+    <div id="adminLoginModal" class="overlay-modal" style="align-items: center; padding: 20px; box-sizing: border-box;" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; margin-bottom: 10vh; max-width: 340px; padding: 35px 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+        
+        <div class="modal-header" style="border: none; margin-bottom: 5px; padding-bottom: 0;">
+          <div class="modal-title" style="font-size: 1.5em; text-align: center; width: 100%; color: var(--text-main);">🔒 시스템 제어</div>
         </div>
-        <div
-          style="
-            margin-bottom: 15px;
-            font-size: 0.95em;
-            color: var(--text-sub);
-            font-weight: 600;
-          "
-        >
-          관리자 권한을 활성화하려면 아이디와 비밀번호를 입력하세요.
+        <div style="text-align: center; font-size: 0.85em; color: var(--text-sub); margin-bottom: 30px; font-weight: 600;">
+          관리자 권한을 활성화하려면 로그인하세요.
         </div>
 
-        <div
-          style="
-            display: flex;
-            align-items: center;
-            background: var(--bg-color);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 0 12px;
-            margin-bottom: 12px;
-            transition: 0.2s;
-          "
-        >
-          <input
-            type="text"
-            id="adminIdInput"
-            style="
-              flex: 1;
-              border: none;
-              background: transparent;
-              color: var(--text-main);
-              padding: 16px 5px;
-              font-size: 1.1em;
-              outline: none;
-              font-weight: bold;
-            "
-            placeholder="아이디"
-            autocomplete="username"
-          />
+        <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 12px; display: flex; align-items: center; transition: 0.3s;" 
+             onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
+             onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
+          <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub);">👤</span>
+          <input type="text" id="adminIdInput" style="flex: 1; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="아이디" autocomplete="username">
         </div>
 
-        <div
-          style="
-            display: flex;
-            align-items: center;
-            background: var(--bg-color);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 0 12px;
-            margin-bottom: 24px;
-            transition: 0.2s;
-          "
-        >
-          <input
-            type="password"
-            id="adminPwInput"
-            style="
-              flex: 1;
-              border: none;
-              background: transparent;
-              color: var(--text-main);
-              padding: 16px 5px;
-              font-size: 1.1em;
-              outline: none;
-              font-weight: bold;
-            "
-            placeholder="비밀번호"
-            autocomplete="current-password"
-            onkeypress="if(event.key === 'Enter') handleLogin()"
-          />
+        <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 28px; display: flex; align-items: center; transition: 0.3s;"
+             onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
+             onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
+          <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub);">🔑</span>
+          <input type="password" id="adminPwInput" style="flex: 1; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="비밀번호" autocomplete="current-password" onkeypress="if(event.key === 'Enter') handleLogin()">
+          <span id="pwToggleIcon" style="font-size: 1.2em; cursor: pointer; padding: 5px; color: var(--text-sub); transition: 0.2s;" onclick="togglePwView()" onmousedown="this.style.transform='scale(0.8)'" onmouseup="this.style.transform='scale(1)'">👁️</span>
         </div>
 
-        <div style="display: flex; gap: 10px;">
-          <button
-            onclick="handleLogin()"
-            style="
-              flex: 1;
-              padding: 16px;
-              background: var(--sat-color, #4dabf7);
-              color: #fff;
-              border: none;
-              border-radius: 12px;
-              font-size: 1.1em;
-              font-weight: 900;
-              cursor: pointer;
-            "
-          >
+        <div style="display: flex; gap: 12px;">
+          <button class="cancel-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: var(--bg-color); border: 1px solid var(--border-color);" onclick="document.getElementById('adminLoginModal').style.display='none'">닫기</button>
+          <button onclick="handleLogin()" style="flex: 1.5; padding: 16px; background: linear-gradient(135deg, #0a84ff, #005bb5); color: #fff; border: none; border-radius: 14px; font-size: 1.05em; font-weight: 900; cursor: pointer; box-shadow: 0 6px 15px rgba(10,132,255,0.35); transition: 0.2s;" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'">
             로그인
           </button>
-          <button
-            id="btnBioLogin"
-            onclick="handleBioLogin()"
-            style="
-              flex: 1;
-              padding: 16px;
-              background: transparent;
-              color: var(--text-sub);
-              border: 1px solid var(--border-color);
-              border-radius: 12px;
-              font-size: 1.1em;
-              font-weight: 900;
-              cursor: pointer;
-              display: none; 
-            "
-          >
-            지문/Face ID
-          </button>
+        </div>
+        <button id="btnBioLogin" onclick="handleBioLogin()" style="width: 100%; margin-top: 15px; padding: 16px; background: transparent; color: var(--text-main); border: 1.5px solid var(--border-color); border-radius: 14px; font-size: 1.05em; font-weight: 900; cursor: pointer; display: none; transition: 0.2s;" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'">
+           지문 / Face ID 로그인
+        </button>
+      </div>
+    </div>
+
+    <div id="logoutConfirmModal" class="overlay-modal" style="align-items: center; z-index: 3500; padding: 20px; box-sizing: border-box;" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; max-width: 320px; padding: 35px 25px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); margin-bottom: 10vh;">
+        <div style="font-size: 3.5rem; margin-bottom: 15px; line-height: 1;">👋</div>
+        <div style="font-size: 1.3em; font-weight: 900; color: var(--text-main); margin-bottom: 12px;">로그아웃 하시겠습니까?</div>
+        <div style="font-size: 0.9em; color: var(--text-sub); margin-bottom: 30px; line-height: 1.4; word-break: keep-all;">
+          관리자 권한이 해제되며<br>일반 읽기 모드로 전환됩니다.
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="cancel-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: var(--bg-color); border: 1px solid var(--border-color);" onclick="document.getElementById('logoutConfirmModal').style.display='none'">취소</button>
+          <button class="save-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: #ff3b30; box-shadow: 0 6px 15px rgba(255, 59, 48, 0.35);" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'" onclick="executeLogout()">로그아웃</button>
         </div>
       </div>
     </div>
@@ -3791,56 +3715,66 @@
           const fab = document.getElementById("fabBtn"); // 출고 전용 + 버튼
           if (fab) fab.style.display = "flex";
 
-          const btn = document.getElementById("adminBtn");
-          if (btn) {
-              btn.innerHTML = '🔓 관리자';
-              btn.className = 'admin-btn unlocked'; // 원래의 예쁜 초록색 CSS 적용
-              btn.removeAttribute("style"); // 어두운 녹색 찌꺼기 완벽 제거
-          }
+          // 초록색 관리자 버튼으로 변신! (이 4줄만 남기면 끝입니다)
+            const btn = document.getElementById("adminBtn");
+            if (btn) {
+                btn.innerHTML = '🔓 관리자';
+                btn.className = 'admin-btn unlocked'; 
+                btn.removeAttribute("style"); 
+            }
       } else {
           window.isAdmin = false;
           isAdmin = false;
       }
 
+     // 💡 [수정] 못생긴 alert 대신 예쁜 로그아웃 모달 띄우기
       function toggleAdmin() {
-        const btn = document.getElementById('adminBtn');
-        
-        // 🚨 관리자로 로그인 된 상태에서 버튼을 누르면 로그아웃 처리
         if(isAdmin) {
-          if(!confirm("로그아웃 하시겠습니까?")) return; 
-            
-          isAdmin = false; 
-          window.isAdmin = false;
-          
-          // 테마나 폰트는 놔두고, 권한 정보만 핀포인트로 삭제
-          localStorage.removeItem('isAdmin');
-          localStorage.removeItem('is_admin');
-          localStorage.removeItem('admin_id');
-          localStorage.removeItem('admin_role');
-          localStorage.removeItem('admin_token'); 
-          
-          btn.innerHTML = '🔒 잠김'; 
-          btn.className = 'admin-btn';
-          btn.removeAttribute("style");
-          
-          document.getElementById('adminActions').style.display = 'none'; 
-          const fab = document.getElementById("fabBtn");
-          if (fab) fab.style.display = "none"; // 출고 전용 숨김 처리
-
-          updateFooterUI();
-          showToast('🔒 일반 모드로 전환되었습니다.', 2000); 
-          
-          if (typeof renderCalendar === 'function') renderCalendar();
+          // 관리자면 로그아웃 확인 모달 띄움
+          document.getElementById('logoutConfirmModal').style.display = 'flex';
           return;
         }
         
-        // 🚨 로그인 안 된 상태면 모달창 열기
+        // 로그인 안 된 상태면 로그인 모달창 띄움
         document.getElementById('adminPwInput').value = ''; 
         let idInput = document.getElementById('adminIdInput');
         if (idInput) idInput.value = ''; 
         
         document.getElementById('adminLoginModal').style.display = 'flex';
-        setTimeout(() => { if(idInput) idInput.focus(); else document.getElementById('adminPwInput').focus(); }, 100);
+        // 모바일/PC 모두 오토포커스 부드럽게
+        setTimeout(() => { if(idInput) idInput.focus(); else document.getElementById('adminPwInput').focus(); }, 150);
+      }
+
+      // 💡 [신규] 진짜로 로그아웃을 실행하는 함수
+      function executeLogout() {
+          document.getElementById('logoutConfirmModal').style.display = 'none';
+          
+          isAdmin = false; 
+          window.isAdmin = false;
+          
+          // 시스템 설정(테마 등)은 살리고 권한 찌꺼기만 핀포인트로 파괴!
+          localStorage.removeItem('isAdmin');
+          localStorage.removeItem('is_admin');
+          localStorage.removeItem('admin_id');
+          localStorage.removeItem('admin_role');
+          localStorage.removeItem('admin_token'); 
+          sessionStorage.clear();
+          
+          // UI를 완벽하게 초기화하기 위해 페이지 새로고침
+          location.reload(); 
+      }
+
+      // 💡 [개선] 비밀번호 눈알 토글 로직
+      function togglePwView() {
+        const input = document.getElementById("adminPwInput");
+        const icon = document.getElementById("pwToggleIcon");
+        if (input.type === "password") {
+          input.type = "text";
+          icon.innerText = "🙈";
+        } else {
+          input.type = "password";
+          icon.innerText = "👁️";
+        }
       }
 
       function submitAdminLogin() {
@@ -6594,6 +6528,7 @@
             localStorage.setItem('admin_id', res.admin_id);
             localStorage.setItem('admin_role', res.role);
 
+            // 초록색 관리자 버튼으로 변신! (이 4줄만 남기면 끝입니다)
             const btn = document.getElementById("adminBtn");
             if (btn) {
                 btn.innerHTML = '🔓 관리자';
