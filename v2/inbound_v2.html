@@ -1283,7 +1283,7 @@
       </div>
     </div>
 
-    <div id="myInfoModal" class="overlay-modal" onclick="closeModalOnBgClick(event)">
+    <div id="myInfoModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
       <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px 24px 0 0; padding: 25px 20px 40px 20px;">
         <div class="bottom-sheet-handle"></div>
         
