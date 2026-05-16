@@ -4425,48 +4425,77 @@
         oldBlockStart = null,
         oldBlockEnd = null,
       ) {
-      // 🚨 [핵심 패치] 저장 프로세스 시작 직전, 입력칸의 글씨를 멱살 잡고 풀네임으로 강제 변환!
+        // 🚨 [핵심 패치] 저장 프로세스 시작 직전, 입력칸의 글씨를 멱살 잡고 풀네임으로 강제 변환!
         try {
           if (action === "ADD") {
             let addInput = document.getElementById("add-comp");
-            if (addInput && addInput.value) addInput.value = getFullName(addInput.value);
+            if (addInput && addInput.value)
+              addInput.value = getFullName(addInput.value);
           } else if (action === "EDIT" && idx !== null) {
             let editInput = document.getElementById(`edit-comp-${idx}`);
-            if (editInput && editInput.value) editInput.value = getFullName(editInput.value);
+            if (editInput && editInput.value)
+              editInput.value = getFullName(editInput.value);
           }
-        } catch (e) { console.log("이름 변환 가로채기 방어:", e); }
+        } catch (e) {
+          console.log("이름 변환 오류", e);
+        }
 
-        // --- 여기서부터는 관리자님의 기존 코드 100% 동일 ---
-        let oldPal = "", oldBox = "";
-        const safeStr = (val) => val === "" || val == null ? "" : String(val).trim();
-        let currentIsDone = isDone === true || String(isDone) === "true";
+        let oldPal = "",
+          oldBox = "";
+        const safeStr = (val) =>
+          val === "" || val == null ? "" : String(val).trim();
+        let currentIsDone =
+          isDone === true || String(isDone) === "true";
+
         if (idx !== null) {
-          let day = oldDate === "미정" ? "pending" : parseInt(oldDate.split("-")[2], 10);
-          let item = day === "pending" ? serverData.pendingItems[idx] : serverData.monthData[day] ? serverData.monthData[day][idx] : null;
+          let day =
+            oldDate === "미정"
+              ? "pending"
+              : parseInt(oldDate.split("-")[2], 10);
+          let item =
+            day === "pending"
+              ? serverData.pendingItems[idx]
+              : serverData.monthData[day]
+                ? serverData.monthData[day][idx]
+                : null;
           if (item) {
-            oldPal = safeStr(item.pal); oldBox = safeStr(item.box);
-            currentIsDone = item.isDone === true || String(item.isDone) === "true";
+            oldPal = safeStr(item.pal);
+            oldBox = safeStr(item.box);
+            currentIsDone =
+              item.isDone === true || String(item.isDone) === "true";
           }
         }
-        let payload = { action: action, oldComp: oldComp, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal, oldBox: oldBox };
-        let confirmName = oldComp ? getFullName(oldComp.replace(/\[TASK\]/gi, "").trim()) : "";
 
+        let payload = {
+          action: action,
+          oldComp: oldComp,
+          oldDate: oldDate,
+          oldDone: currentIsDone,
+          oldPal: oldPal,
+          oldBox: oldBox,
+        };
+
+        let confirmName = oldComp
+          ? getFullName(oldComp.replace(/\[TASK\]/gi, "").trim())
+          : "";
         if (action === "DONE") {
-          if (!confirm(`✅ [${confirmName}] 일정을 완료 처리하시겠습니까?`)) return;
+          if (!confirm(`✅ [${confirmName}] 일정을 완료 처리하시겠습니까?`))
+            return;
         } else if (action === "UNDO_DONE") {
-          if (!confirm(`⏪ [${confirmName}] 일정의 완료 상태를 취소하시겠습니까?`)) return;
+          if (!confirm(`⏪ [${confirmName}] 일정의 완료 상태를 취소하시겠습니까?`))
+            return;
         }
-
-        let isTask = false; let rawComp = ""; let startDateStr = ""; let endDateStr = "";
         
+        let isTask = false;
+        let rawComp = "";
+        let startDateStr = "";
+        let endDateStr = "";
+
         if (action === "ADD") {
           isTask = document.getElementById("type-task-add").checked;
           rawComp = document.getElementById("add-comp").value.trim();
-          
-          // 🚨 [핵심 패치] 입력값이 약어든 뭐든 무조건 풀네임으로 강제 변환!
-          let finalComp = getFullName(rawComp); 
+          let finalComp = getFullName(rawComp);
           payload.newComp = isTask ? `[TASK]${finalComp}` : finalComp;
-          
           payload.newPal = document.getElementById("add-pal").value;
           payload.newBox = document.getElementById("add-box").value;
           startDateStr = document.getElementById("add-date").value || "미정";
@@ -4474,40 +4503,73 @@
           endDateStr = endNode ? endNode.value : "";
           payload.newDate = startDateStr;
           payload.newEtc = document.getElementById("add-etc").value;
-          
         } else if (action === "EDIT") {
           isTask = document.getElementById(`edit-type-task-${idx}`).checked;
           rawComp = document.getElementById(`edit-comp-${idx}`).value.trim();
-          
-          // 🚨 [핵심 패치] 수정할 때도 무조건 풀네임으로 강제 변환!
-          let finalComp = getFullName(rawComp); 
+          let finalComp = getFullName(rawComp);
           payload.newComp = isTask ? `[TASK]${finalComp}` : finalComp;
-          
           payload.newPal = document.getElementById(`edit-pal-${idx}`).value;
           payload.newBox = document.getElementById(`edit-box-${idx}`).value;
           payload.newDate = document.getElementById(`edit-date-${idx}`).value || "미정";
           let endNode = document.getElementById(`edit-${idx}-end-date`);
           endDateStr = endNode ? endNode.value : "";
           startDateStr = payload.newDate;
-          payload.newEtc = document.getElementById(`edit-etc-${idx}`).value;
+          
+          // 🚨 최종 생존 및 수정된 이력 리스트들 싹 다 긁어모아 텍스트 패킹 재조립
+          let cleanEtc = document.getElementById(`edit-etc-${idx}`).value.trim();
+          let histRows = document.querySelectorAll(`.hist-edit-row-${idx}`);
+          let histArr = [];
+          histRows.forEach(row => {
+              const dateText = row.querySelector(`.hist-date-${idx}`).innerText.trim();
+              const pVal = parseInt(row.querySelector(`.hist-pal-${idx}`).value) || 0;
+              const bVal = parseInt(row.querySelector(`.hist-box-${idx}`).value) || 0;
+              
+              if (pVal > 0 || bVal > 0) {
+                  let pStr = pVal > 0 ? `${pVal}P` : '';
+                  let bStr = bVal > 0 ? `${bVal}B` : '';
+                  let space = (pVal > 0 && bVal > 0) ? ' ' : '';
+                  histArr.push(`[${dateText} ${pStr}${space}${bStr} 추가]`);
+              }
+          });
+          let histStr = histArr.join(' ');
+          payload.newEtc = histStr !== "" ? (cleanEtc !== "" ? cleanEtc + " " + histStr : histStr) : cleanEtc;
 
-          if (tempEditColorObj && tempEditColorIdx !== null) {
+          if (tempEditColorObj && tempEditColorIdx !== null && !isTask) {
             let stdName = getFullName(rawComp);
-            companyColors[stdName] = tempEditColorObj; 
+            companyColors[stdName] = tempEditColorObj;
             customColors[stdName] = tempEditColorIdx;
-            localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
+            localStorage.setItem(
+              "GLOBAL_COMPANY_COLORS",
+              JSON.stringify(customColors),
+            );
             google.script.run.saveGlobalColor(stdName, tempEditColorIdx);
             tempEditColorObj = null;
             tempEditColorIdx = null;
           }
         }
 
-        if ((action === "ADD" || action === "EDIT") && (!payload.newComp || payload.newComp === "[TASK]")) { alert("⚠️ 업체/작업명은 필수입니다."); return; }
-        if (action === "DELETE" && !confirm(`⚠️ 정말 [${confirmName}] 일정을 영구 삭제하시겠습니까?`)) return;
-        if (action === "ADD_QTY") {
-          payload.addPal = document.getElementById(`add-q-pal-${idx}`).value;
-          payload.addBox = document.getElementById(`add-q-box-${idx}`).value;
-          if (!payload.addPal && !payload.addBox) { alert("추가할 수량을 입력하세요!"); return; }
+        if (
+          (action === "ADD" || action === "EDIT") &&
+          (!payload.newComp || payload.newComp === "[TASK]")
+        ) {
+          alert("⚠️ 업체/작업명은 필수입니다.");
+          return;
+        }
+        if (
+          action === "DELETE" &&
+          !confirm(`⚠️ 정말 [${confirmName}] 일정을 영구 삭제하시겠습니까?`)
+        )
+          return;
+
+        if (action === "ADD" || action === "EDIT") {
+          if (
+            startDateStr !== "미정" &&
+            endDateStr &&
+            endDateStr < startDateStr
+          ) {
+            alert("⚠️ 종료일은 시작일보다 빠를 수 없습니다.");
+            return;
+          }
         }
 
         // 💡 화면부터 즉시 닫기
@@ -4516,85 +4578,142 @@
 
         setTimeout(() => {
           // 🟢 1. 신규 스케줄 ADD
-          if (action === "ADD" && startDateStr !== "미정" && endDateStr && endDateStr >= startDateStr) {
-            updateLocalState("ADD", { ...payload, newDate: startDateStr, newEndDate: endDateStr }, null);
+          if (
+            action === "ADD" &&
+            startDateStr !== "미정" &&
+            endDateStr &&
+            endDateStr >= startDateStr
+          ) {
+            updateLocalState(
+              "ADD",
+              { ...payload, newDate: startDateStr, newEndDate: endDateStr },
+              null,
+            );
             renderCalendar();
-
             let sDate = new Date(startDateStr);
             let eDate = new Date(endDateStr);
             let datesToProcess = [];
             while (sDate <= eDate) {
-              datesToProcess.push(`${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, "0")}-${String(sDate.getDate()).padStart(2, "0")}`);
+              datesToProcess.push(
+                `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, "0")}-${String(sDate.getDate()).padStart(2, "0")}`,
+              );
               sDate.setDate(sDate.getDate() + 1);
             }
             datesToProcess.forEach((dateStr) => {
               let curPayload = { ...payload, newDate: dateStr };
-              google.script.run.manageWebOutboundData("ADD", curPayload, adminToken);
+              google.script.run.manageWebOutboundData(
+                "ADD",
+                curPayload,
+                adminToken,
+              );
             });
             return;
           }
 
           // 🟢 2. 간트차트 EDIT (즉시 반영 + 고스트 박멸)
-          if (action === "EDIT" && oldBlockStart && oldBlockStart !== "null") {
+          if (
+            action === "EDIT" &&
+            oldBlockStart &&
+            oldBlockStart !== "null"
+          ) {
             const optimisticPayload = {
               ...payload,
               newEndDate: endDateStr,
               oldBlockStart: oldBlockStart,
-              oldBlockEnd: oldBlockEnd
+              oldBlockEnd: oldBlockEnd,
             };
-            
             // 🚀 서버 가기 전에 0.1초 만에 화면부터 갈아버림!
             updateLocalState("EDIT", optimisticPayload, idx);
-            renderCalendar(); 
+            renderCalendar();
 
             let oldDates = [];
             if (oldBlockStart !== "미정") {
               let oldSDate = new Date(oldBlockStart);
-              let oldEDate = (oldBlockEnd && oldBlockEnd !== "null" && oldBlockEnd !== "") ? new Date(oldBlockEnd) : new Date(oldSDate);
+              let oldEDate =
+                oldBlockEnd && oldBlockEnd !== "null" && oldBlockEnd !== ""
+                  ? new Date(oldBlockEnd)
+                  : new Date(oldSDate);
               let curr = new Date(oldSDate);
-              while (curr <= oldEDate) { oldDates.push(`${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`); curr.setDate(curr.getDate() + 1); }
-            } else { oldDates.push("미정"); }
+              while (curr <= oldEDate) {
+                oldDates.push(
+                  `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`,
+                );
+                curr.setDate(curr.getDate() + 1);
+              }
+            } else {
+              oldDates.push("미정");
+            }
 
             let newDates = [];
             if (startDateStr !== "미정") {
               let newSDate = new Date(startDateStr);
-              let newEDate = endDateStr ? new Date(endDateStr) : new Date(newSDate);
+              let newEDate = endDateStr
+                ? new Date(endDateStr)
+                : new Date(newSDate);
               if (newEDate < newSDate) newEDate = new Date(newSDate);
               let curr = new Date(newSDate);
-              while (curr <= newEDate) { newDates.push(`${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`); curr.setDate(curr.getDate() + 1); }
-            } else { newDates.push("미정"); }
+              while (curr <= newEDate) {
+                newDates.push(
+                  `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`,
+                );
+                curr.setDate(curr.getDate() + 1);
+              }
+            } else {
+              newDates.push("미정");
+            }
 
             let actionsToRun = [];
             oldDates.forEach((dStr) => {
-              if (newDates.includes(dStr)) actionsToRun.push({ action: "EDIT", payload: { ...payload, newDate: dStr, oldDate: dStr } });
-              else actionsToRun.push({ action: "DELETE", payload: { ...payload, oldDate: dStr, newDate: dStr } });
+              if (newDates.includes(dStr)) {
+                actionsToRun.push({
+                  action: "EDIT",
+                  payload: { ...payload, newDate: dStr, oldDate: dStr },
+                });
+              } else {
+                actionsToRun.push({
+                  action: "DELETE",
+                  payload: { ...payload, oldDate: dStr, newDate: dStr },
+                });
+              }
             });
+
             newDates.forEach((dStr) => {
-              if (!oldDates.includes(dStr)) actionsToRun.push({ action: "ADD", payload: { ...payload, newDate: dStr } });
+              if (!oldDates.includes(dStr)) {
+                actionsToRun.push({
+                  action: "ADD",
+                  payload: { ...payload, newDate: dStr },
+                });
+              }
             });
 
             actionsToRun.forEach((act) => {
-              google.script.run.withFailureHandler(() => { goToAsync(serverData.year, serverData.month); }).manageWebOutboundData(act.action, act.payload, adminToken);
+              google.script.run
+                .withFailureHandler(() => {
+                  goToAsync(serverData.year, serverData.month);
+                })
+                .manageWebOutboundData(act.action, act.payload, adminToken);
             });
             return;
           }
 
           // 🟢 3. 하루 일정 EDIT / DONE / DELETE 등 단일 처리
-          // 🚀 역시 서버 가기 전에 즉시 화면부터 반영!
           updateLocalState(action, payload, idx);
-          renderCalendar(); 
-
+          renderCalendar();
           google.script.run
             .withSuccessHandler(function (res) {
-              if (!res.success) { showToast("❌ 서버 실패! 복구합니다.", 2500); goToAsync(serverData.year, serverData.month); }
+              if (!res.success) {
+                showToast("❌ 서버 실패! 복구합니다.", 2500);
+                goToAsync(serverData.year, serverData.month);
+              }
             })
-            .withFailureHandler((err) => {
-              showToast("❌ 통신 오류! 복구합니다.", 2500); goToAsync(serverData.year, serverData.month);
+            .withFailureHandler(function (err) {
+              showToast("❌ 통신 오류! 복구합니다.", 2500);
+              goToAsync(serverData.year, serverData.month);
             })
             .manageWebOutboundData(action, payload, adminToken);
         }, 50);
       }
-
+      
       function executeMultiAction(action) {
         // ❌ [삭제됨] if(isProcessing) { showToast('⏳ 처리 중입니다.', 1000); return; }
 
@@ -4748,18 +4867,35 @@
             }
           }
 
-          let meaningfulEtc = item.etc
-            ? item.etc
-                .replace(
-                  /\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi,
-                  "",
-                )
-                .trim()
-            : "";
+          // 🚨 [핵심 패치 1] 수량추가 히스토리만 핀셋 파싱하여 분리
+          const histRegex = /\[(\d{1,2}\/\d{1,2})\s*(?:(\d+)P)?\s*(?:(\d+)B)?\s*추가\]/g;
+          let rawEtc = item.etc || "";
+          let matches = [...rawEtc.matchAll(histRegex)];
+
+          let meaningfulEtc = rawEtc
+            .replace(
+              /\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi,
+              "",
+            )
+            .replace(histRegex, "")
+            .trim();
           let etcHtml =
             meaningfulEtc !== ""
               ? `<div class="modal-etc">📍 비고: ${meaningfulEtc}</div>`
               : "";
+
+          // 🚨 [핵심 패치 2] 분리된 이력을 별도 영역으로 조립
+          let histHtml = '';
+          if (matches.length > 0) {
+              histHtml = `<div style="margin-top: 8px; margin-bottom: 8px; background: rgba(10,132,255,0.05); border: 1px dashed rgba(10,132,255,0.3); border-radius: 8px; padding: 8px 12px;">`;
+              matches.forEach((match, i) => {
+                  let pPart = match[2] ? `${match[2]}P` : '';
+                  let bPart = match[3] ? `${match[3]}B` : '';
+                  let space = (match[2] && match[3]) ? ' ' : '';
+                  histHtml += `<div style="font-size: 0.85em; color: #0a84ff; font-weight: 800; margin-bottom: ${i === matches.length-1 ? '0' : '4px'};">↳ 추가 이력: ${match[1]} ➡️ ${pPart}${space}${bPart}</div>`;
+              });
+              histHtml += `</div>`;
+          }
 
           let iconHtml = isItemDone
             ? `<span class="done-icon" style="font-size: 13px !important; margin-right: 4px;">✅</span>`
@@ -4781,28 +4917,6 @@
 
           let badgeText = isTaskMode ? "작업 완료" : "출고 완료";
           
-         /*
-          let pCount = parseInt(item.pal) || 0;
-          let bCount = parseInt(item.box) || 0;
-          let volStr = "";
-
-          // 💡 버셀에 올리신 이미지 경로 (pallet.png, box.png)
-          // 💡 크기를 16px -> 24px로 1.5배 키우고, 높낮이를 맞추기 위해 margin-top을 살짝(-4px) 내렸습니다.
-          let imgPal = `<img src="/pallet.png" style="width:24px; height:24px; vertical-align:middle; margin-right:4px; margin-top:-4px;">`;
-          let imgBox = `<img src="/box.png" style="width:24px; height:24px; vertical-align:middle; margin-right:4px; margin-top:-4px;">`;
-          // 💡 관리자님이 요청하신 완벽한 포맷 적용
-          if (pCount > 0 && bCount > 0) {
-              volStr = `${imgPal}${pCount} <span style="font-size:0.9em; color:var(--text-sub); margin-left:4px;">(${imgBox}${bCount})</span>`;
-          } else if (pCount > 0) {
-              volStr = `${imgPal}${pCount}`;
-          } else if (bCount > 0) {
-              volStr = `${imgBox}${bCount}`;
-          } else {
-              volStr = "수량 없음";
-          }
-
-          let badgeText = isTaskMode ? "작업 완료" : "출고 완료";
-          // ... (기존 코드 유지)*/
           let stampHtml = isItemDone
             ? `<div class="status-badge"><span style="font-size: 1.1em; line-height: 1;">✔️</span> ${badgeText}</div>`
             : "";
@@ -4852,7 +4966,7 @@
                                     ${actionBtns}
                                 </div>
                                 <div class="modal-vol" style="display:flex; align-items:center;">${iconHtml}${volStr} ${addQtyBtn}</div>
-                                ${etcHtml}
+                                ${histHtml} ${etcHtml}
                             </div>
                             ${addQtyForm}
                             ${stampHtml}
@@ -4870,94 +4984,130 @@
         pal,
         box,
         etc,
-        isDone = false,
+        isDone,
         blockStartDateStr = null,
         blockEndDateStr = null,
       ) {
-        tempEditColorObj = null; // 💡 [핵심 필수 추가] 창을 열 때마다 무조건 이전 셔플 기억을 삭제!
+        tempEditColorObj = null;
         const card = document.getElementById(`modal-card-${day}-${idx}`);
+        let inputDateVal =
+          blockStartDateStr || (dateStr === "미정" ? "" : dateStr);
+        let inputEndDateVal = blockEndDateStr || "";
 
-        let inputDateVal = blockStartDateStr || (dateStr === "미정" ? "" : dateStr);
-          let inputEndDateVal = blockEndDateStr || "";
-
-          setTimeout(() => {
-              const editEndInput = document.getElementById(`edit-${idx}-end-date`);
-              if (editEndInput) {
-                  editEndInput.setAttribute("min", inputDateVal);
-                  editEndInput.min = inputDateVal;
-                  
-                  editEndInput.onfocus = function() {
-                      if (!this.value && this.min) this.value = this.min;
-                  };
-
-                  // 🚨 [아이폰 철통 방어벽 추가]
-                  editEndInput.onchange = function() {
-                      if (this.value && this.min && this.value < this.min) {
-                          alert("⚠️ 종료일은 시작일보다 빠를 수 없습니다.");
-                          this.value = this.min; // 즉시 시작일로 덮어씌움
-                      }
-                  };
+        setTimeout(() => {
+          const editEndInput = document.getElementById(`edit-${idx}-end-date`);
+          if (editEndInput) {
+            editEndInput.setAttribute("min", inputDateVal);
+            editEndInput.min = inputDateVal;
+            editEndInput.onfocus = function () {
+              if (!this.value && this.min) this.value = this.min;
+            };
+            editEndInput.onchange = function () {
+              if (this.value && this.min && this.value < this.min) {
+                alert("⚠️ 종료일은 시작일보다 빠를 수 없습니다.");
+                this.value = this.min;
               }
-          }, 50);
+            };
+          }
+        }, 50);
 
         let isExplicitTask = comp.toUpperCase().startsWith("[TASK]");
         let cleanComp = comp.replace(/\[TASK\]/gi, "").trim();
         let isTaskMode = isExplicitTask;
+        
+        // 🚨 이력 추출 및 폼 UI 생성
+        let safeEtc = (etc === 'undefined' || etc == null) ? '' : String(etc);
+        const histRegex = /\[(\d{1,2}\/\d{1,2})\s*(?:(\d+)P)?\s*(?:(\d+)B)?\s*추가\]/g;
+        let matches = [...safeEtc.matchAll(histRegex)];
+        let cleanEtc = safeEtc.replace(histRegex, '').replace(/\s{2,}/g, ' ').trim(); 
+
+        let histHtml = '';
+        if (matches.length > 0) {
+            histHtml += `<div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">수량 추가 이력 세부 제어</div>`;
+            histHtml += `<div id="hist-container-${idx}" style="background: rgba(10,132,255,0.05); border: 1px dashed rgba(10,132,255,0.3); border-radius: 8px; padding: 8px; display:flex; flex-direction:column; gap:6px;">`;
+            matches.forEach((match, i) => {
+                let pVal = match[2] || 0;
+                let bVal = match[3] || 0;
+                histHtml += `
+                <div class="hist-edit-row-${idx}" id="hist-item-${idx}-${i}" style="display:flex; gap:6px; align-items:center;">
+                    <span class="hist-date-${idx}" style="font-size:0.85em; font-weight:900; color:#0a84ff; min-width:35px;">${match[1]}</span>
+                    <input type="number" class="hist-pal-${idx} edit-input" value="${pVal}" data-old="${pVal}" oninput="onHistQtyChange(this, ${idx}, 'pal')" style="padding:6px; font-size:0.85em;" placeholder="PLT">
+                    <input type="number" class="hist-box-${idx} edit-input" value="${bVal}" data-old="${bVal}" oninput="onHistQtyChange(this, ${idx}, 'box')" style="padding:6px; font-size:0.85em;" placeholder="BOX">
+                    <button onclick="deleteHistItem(${idx}, ${i})" style="background:rgba(255,59,48,0.1); color:#ff3b30; border:none; border-radius:6px; padding:6px 10px; font-weight:bold; cursor:pointer; font-size:0.85em;">삭제</button>
+                </div>`;
+            });
+            histHtml += `</div>`;
+        }
+
         card.style.flexDirection = "";
         card.style.alignItems = "";
         card.innerHTML = `
-        <div class="edit-form" style="width: 100%; padding:0; border:none; margin-top:0;">
-          <div class="type-toggle-wrapper" style="margin-bottom: 12px; margin-top: 0;">
-            <input type="radio" id="edit-type-out-${idx}" name="edit-job-type-${idx}" value="OUT" ${!isTaskMode ? "checked" : ""} hidden onchange="toggleEndDate('edit-${idx}', false)">
-            <label for="edit-type-out-${idx}" class="type-label">출고</label>
-            <input type="radio" id="edit-type-task-${idx}" name="edit-job-type-${idx}" value="TASK" ${isTaskMode ? "checked" : ""} hidden onchange="toggleEndDate('edit-${idx}', true)">
-            <label for="edit-type-task-${idx}" class="type-label">작업</label>
-          </div>
-          
-          <div class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
-             <span>업체명 (필수)</span>
-             <button type="button" id="edit-${idx}-shuffle-btn" style="display:${isTaskMode ? 'none' : 'block'}; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:4px 10px; font-size:0.85em; cursor:pointer; font-weight:800; transition:0.2s;" onclick="shuffleColorInModal('${cleanComp}', ${idx})" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">🎨 색상 셔플</button>
-          </div>
-          <div class="input-wrapper"><input type="text" id="edit-comp-${idx}" class="edit-input" value="${getFullName(cleanComp)}" autocomplete="off"></div>
-
-          <div id="edit-${idx}-color-preview" style="display:none; margin-top:10px; padding:15px; background:rgba(0,0,0,0.1); border-radius:12px; border:1px solid var(--border-color); align-items:center; justify-content:center; gap:20px; animation: fadeIn 0.3s;">
-             <div style="text-align:center;">
-                <div style="font-size:0.75em; color:var(--text-sub); margin-bottom:6px; font-weight:bold;">현재 색상</div>
-                <div id="old-color-box-${idx}" style="width:40px; height:40px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
-             </div>
-             <span style="font-size:1.5em; margin-top:15px; color:var(--text-sub);">➡️</span>
-             <div style="text-align:center;">
-                <div style="font-size:0.75em; color:#0a84ff; margin-bottom:6px; font-weight:bold;">변경될 색상</div>
-                <div id="new-color-box-${idx}" style="width:44px; height:44px; border-radius:8px; box-shadow:0 4px 15px rgba(10,132,255,0.4); border:2px solid #0a84ff;"></div>
-             </div>
-          </div>
-          
-          <div class="form-label" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
-            <span>날짜 <span id="edit-${idx}-date-label-extra" style="display:${isTaskMode ? "inline" : "none"};">(시작일 ~ 종료일)</span></span>
-            <span style="color:#ff3b30; cursor:pointer; font-weight:800; font-size:0.85em; padding:4px 8px; background:rgba(255,59,48,0.1); border-radius:6px; transition:0.2s;" onclick="document.getElementById('edit-date-${idx}').value=''; let e = document.getElementById('edit-${idx}-end-date'); if(e) e.value='';" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'">✕ 지우기</span>
-          </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <input type="date" id="edit-date-${idx}" class="edit-input" value="${inputDateVal}" style="flex:1;">
-            <div id="edit-${idx}-end-date-group" style="display:${isTaskMode ? "flex" : "none"}; flex:1; gap:8px; align-items:center;">
-              <span style="color:var(--text-sub); font-weight:bold;">~</span>
-              <input type="date" id="edit-${idx}-end-date" class="edit-input" value="${inputEndDateVal}" style="flex:1;" placeholder="종료일">
+          <div class="edit-form" style="width: 100%; padding:0; border:none; margin-top:0;">
+            <div class="type-toggle-wrapper" style="margin-bottom: 12px; margin-top: 0;">
+              <input type="radio" id="edit-type-out-${idx}" name="edit-job-type-${idx}" value="OUT" ${!isTaskMode ? "checked" : ""} hidden onchange="toggleEndDate('edit-${idx}', false)">
+              <label for="edit-type-out-${idx}" class="type-label">출고</label>
+              <input type="radio" id="edit-type-task-${idx}" name="edit-job-type-${idx}" value="TASK" ${isTaskMode ? "checked" : ""} hidden onchange="toggleEndDate('edit-${idx}', true)">
+              <label for="edit-type-task-${idx}" class="type-label">작업</label>
             </div>
-          </div>
-          <div id="edit-${idx}-end-date-guide" style="display:${isTaskMode ? "block" : "none"}; font-size:0.75em; color:var(--text-sub); margin-top:4px; text-align:right; margin-bottom: 5px;">※ 하루 일정은 앞쪽 시작일만 입력하세요.</div>
+            
+            <div class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>업체명 (필수)</span>
+              <button type="button" id="edit-${idx}-shuffle-btn" style="display:${isTaskMode ? "none" : "block"}; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:4px 10px; font-size:0.85em; cursor:pointer; font-weight:800; transition:0.2s;" onclick="shuffleColorInModal('${cleanComp}', ${idx})" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">🎨 색상 셔플</button>
+            </div>
+            <div class="input-wrapper">
+              <input type="text" id="edit-comp-${idx}" class="edit-input" value="${getFullName(cleanComp)}" autocomplete="off">
+            </div>
+            
+            <div id="edit-${idx}-color-preview" style="display:none; margin-top:10px; padding:15px; background:rgba(0,0,0,0.1); border-radius:12px; border:1px solid var(--border-color); align-items:center; justify-content:center; gap:20px; animation: fadeIn 0.3s;">
+               <div style="text-align:center;">
+                  <div style="font-size:0.75em; color:var(--text-sub); margin-bottom:6px; font-weight:bold;">현재 색상</div>
+                  <div id="old-color-box-${idx}" style="width:40px; height:40px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
+               </div>
+               <span style="font-size:1.5em; margin-top:15px; color:var(--text-sub);">➡️</span>
+               <div style="text-align:center;">
+                  <div style="font-size:0.75em; color:#0a84ff; margin-bottom:6px; font-weight:bold;">변경될 색상</div>
+                  <div id="new-color-box-${idx}" style="width:44px; height:44px; border-radius:8px; box-shadow:0 4px 15px rgba(10,132,255,0.4); border:2px solid #0a84ff;"></div>
+               </div>
+            </div>
 
-          <div class="edit-row">
-            <div><div class="form-label">파레트 (P)</div><input type="number" id="edit-pal-${idx}" class="edit-input" placeholder="0" value="${pal == '0' ? '' : pal}"></div>
-            <div><div class="form-label">박스 (B)</div><input type="number" id="edit-box-${idx}" class="edit-input" placeholder="0" value="${box == '0' ? '' : box}"></div>
+            <div class="form-label" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+              <span>날짜 <span id="edit-${idx}-date-label-extra" style="display:${isTaskMode ? "inline" : "none"}">(시작일 ~ 종료일)</span></span>
+              <span style="color:#ff3b30; cursor:pointer; font-weight:800; font-size:0.85em; padding:4px 8px; background:rgba(255,59,48,0.1); border-radius:6px; transition:0.2s;" onclick="document.getElementById('edit-date-${idx}').value=''; let e=document.getElementById('edit-${idx}-end-date'); if(e)e.value='';" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'">✕ 지우기</span>
+            </div>
+            
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="date" id="edit-date-${idx}" class="edit-input" style="flex:1;" value="${inputDateVal}" onchange="let t=document.getElementById('edit-${idx}-end-date'); t.setAttribute('min', this.value); t.min=this.value; if(t.value && t.value < this.value) t.value=this.value;">
+              <div id="edit-${idx}-end-date-group" style="display:${isTaskMode ? "flex" : "none"}; flex:1; gap:8px; align-items:center;">
+                <span style="color:var(--text-sub); font-weight:bold;">~</span>
+                <input type="date" id="edit-${idx}-end-date" class="edit-input" style="flex:1;" placeholder="종료일" value="${inputEndDateVal}">
+              </div>
+            </div>
+            
+            <div id="edit-${idx}-end-date-guide" style="display:${isTaskMode ? "block" : "none"}; font-size:0.75em; color:var(--text-sub); margin-top:4px; text-align:right; margin-bottom:5px;">※ 하루 일정은 앞쪽 시작일만 입력하세요.</div>
+            
+            <div class="edit-row">
+              <div>
+                <div class="form-label">총 파레트 (P)</div>
+                <input type="number" id="edit-pal-${idx}" class="edit-input" placeholder="0" value="${pal == "0" ? "" : pal}">
+              </div>
+              <div>
+                <div class="form-label">총 박스 (B)</div>
+                <input type="number" id="edit-box-${idx}" class="edit-input" placeholder="0" value="${box == "0" ? "" : box}">
+              </div>
+            </div>
+            
+            ${histHtml}
+
+            <div class="form-label">비고 (메모 입력)</div>
+            <input type="text" id="edit-etc-${idx}" class="edit-input" value="${cleanEtc !== "undefined" ? cleanEtc : ""}">
+            
+            <div class="btn-row">
+              <button class="save-btn" onclick="submitCMS('EDIT', '${comp}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">💾 저장</button>
+              <button class="cancel-btn" onclick="renderCalendar(); document.getElementById('modal').style.display='none';">취소</button>
+            </div>
+            <button class="delete-btn" onclick="submitCMS('DELETE', '${comp}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">🗑️ 이 스케줄 삭제</button>
           </div>
-          <div class="form-label">비고</div>
-          <input type="text" id="edit-etc-${idx}" class="edit-input" value="${etc !== "undefined" ? etc : ""}">
-          <div class="btn-row">
-            <button class="save-btn" onclick="submitCMS('EDIT', '${comp}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">💾 저장</button>
-            <button class="cancel-btn" onclick="renderCalendar(); document.getElementById('modal').style.display='none';">취소</button>
-          </div>
-          <button class="delete-btn" onclick="submitCMS('DELETE', '${comp}', '${dateStr}', ${idx}, ${isDone})">🗑️ 이 스케줄 삭제</button>
-        </div>
-      `;
+        `;
         attachAutocomplete(`edit-comp-${idx}`);
       }
 
@@ -7253,6 +7403,39 @@ async function handleLogin() {
           } else {
               btn.style.display = 'none';
           }
+      }
+
+      // 📊 [신규] 이력 리스트 수량 변경 시 메인 수량 실시간 연동 처리 (차분 계산 방식)
+      function onHistQtyChange(input, idx, type) {
+          const mainInput = document.getElementById(type === 'pal' ? `edit-pal-${idx}` : `edit-box-${idx}`);
+          if (!mainInput) return;
+          
+          const oldVal = parseInt(input.getAttribute('data-old')) || 0;
+          const newVal = parseInt(input.value) || 0;
+          const diff = newVal - oldVal; 
+          
+          mainInput.value = Math.max(0, (parseInt(mainInput.value) || 0) + diff);
+          input.setAttribute('data-old', newVal); 
+      }
+
+      // 🗑️ [신규] 이력 리스트 개별 파기 시 메인 수량에서 완전 차감 처리
+      function deleteHistItem(idx, i) {
+          const itemEl = document.getElementById(`hist-item-${idx}-${i}`);
+          if (!itemEl) return;
+          
+          const palInput = itemEl.querySelector(`.hist-pal-${idx}`);
+          const boxInput = itemEl.querySelector(`.hist-box-${idx}`);
+          
+          const oldPal = parseInt(palInput.getAttribute('data-old')) || 0;
+          const oldBox = parseInt(boxInput.getAttribute('data-old')) || 0;
+          
+          const mainPal = document.getElementById(`edit-pal-${idx}`);
+          const mainBox = document.getElementById(`edit-box-${idx}`);
+          
+          if (mainPal) mainPal.value = Math.max(0, (parseInt(mainPal.value) || 0) - oldPal);
+          if (mainBox) mainBox.value = Math.max(0, (parseInt(mainBox.value) || 0) - oldBox);
+          
+          itemEl.remove(); 
       }
 
     </script>
