@@ -1944,7 +1944,7 @@
         openLoginModal();
       }
 
-     // 💡 [보안 패치] 생체 인증 기기 각인 시 비밀번호 로컬 암호화 보관 (비트워든 완벽 호환)
+     // 💡 [보안/UX 패치] Safari 사용자 제스처 만료 방어 + Bitwarden 완벽 호환
       async function handleBioToggleChange(checkbox) {
           if (checkbox.checked) {
               if (!window.PublicKeyCredential) {
@@ -1954,16 +1954,10 @@
               }
               
               let currentId = localStorage.getItem('admin_id') || 'admin';
-              let currentPw = prompt("생체 인증을 등록하려면 현재 비밀번호를 입력하세요.");
-              if (!currentPw) {
-                  checkbox.checked = false; 
-                  return; 
-              }
 
               try {
-                  const hashedPw = await encryptSHA256(currentPw);
-
-                  // 🚨 [핵심 패치] 비트워든이 튕겨내지 못하도록 매번 완벽한 난수(랜덤) 챌린지 생성!
+                  // 🚨 [핵심 패치 1] prompt 입력 지연으로 인한 아이폰 보안 튕김을 막기 위해,
+                  // 무조건 Face ID / Bitwarden 화면부터 가장 먼저 즉시 띄웁니다!
                   const randomChallenge = new Uint8Array(32);
                   window.crypto.getRandomValues(randomChallenge);
                   const randomUserId = new Uint8Array(16);
@@ -1974,19 +1968,37 @@
                       rp: { name: "3PL System", id: window.location.hostname },
                       user: { id: randomUserId, name: currentId, displayName: "시스템 관리자" },
                       pubKeyCredParams: [
-                          { type: "public-key", alg: -7 },  // ES256 (애플 기본)
-                          { type: "public-key", alg: -257 } // RS256 (비트워든 등 서드파티 호환)
+                          { type: "public-key", alg: -7 },  // 애플 기본 호환
+                          { type: "public-key", alg: -257 } // 서드파티 (Bitwarden) 호환
                       ],
-                      authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                      authenticatorSelection: { 
+                          authenticatorAttachment: "platform", 
+                          userVerification: "required",
+                          residentKey: "required",      // 🚨 [핵심 패치 2] 진짜 패스키(Passkey) 규격 강제
+                          requireResidentKey: true
+                      },
                       timeout: 60000
                   };
                   
+                  // 클릭하자마자 딜레이 0초로 생체 인증부터 띄움!
                   const credential = await navigator.credentials.create({ publicKey });
+                  
                   if (credential) {
+                      // 🚨 [핵심 패치 3] 생체 인증이 '무사히 성공'한 직후에 비밀번호를 물어봄 (타이밍 역전)
+                      let currentPw = prompt("✅ 기기 인증 완료! 연동할 시스템 비밀번호를 입력해 주세요.");
+                      
+                      if (!currentPw) {
+                          checkbox.checked = false; 
+                          showToast("❌ 비밀번호 입력이 취소되어 연동되지 않았습니다.", 2500);
+                          return; 
+                      }
+
+                      // 암호화 후 안전하게 저장
+                      const hashedPw = await encryptSHA256(currentPw);
                       localStorage.setItem('bio_registered', 'true');
                       localStorage.setItem('bio_id', currentId);
                       localStorage.setItem('bio_pw', hashedPw); 
-                      showToast("✅ 지문/Face ID가 등록되었습니다!", 3000);
+                      showToast("✅ 지문/Face ID가 완벽하게 등록되었습니다!", 3000);
                   } else {
                       checkbox.checked = false;
                   }
@@ -2006,7 +2018,6 @@
               }
           }
       }
-
       // (※ handleBioLogin 함수는 기존에 드린 것 그대로 유지하시면 됩니다!)
 
       // 💡 [개선] 비밀번호 눈알 토글 로직
