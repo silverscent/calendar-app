@@ -119,11 +119,42 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // 👥 B. 관리자 목록 조회
+            // 👤 관리자 리스트 조회 (🚨 기존 GET_ADMIN_LIST를 이걸로 교체! status 컬럼을 가져와야 함)
             else if (action === 'GET_ADMIN_LIST') {
                 try {
-                    const [rows] = await pool.query("SELECT admin_id, admin_name, role FROM admins WHERE status = 'ACTIVE' ORDER BY id ASC");
+                    // status 값을 가져와야 잠겼는지 활성 상태인지 프론트에서 구분 가능
+                    const [rows] = await pool.query("SELECT admin_id, admin_name, role, status FROM admins ORDER BY created_at ASC");
                     return res.status(200).json({ success: true, list: rows });
+                } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
+            }
+
+            // ♻️ 관리자 계정 복구 (LOCKED -> ACTIVE)
+            else if (action === 'REACTIVATE_ADMIN') {
+                try {
+                    const { id } = data;
+                    const currentAdmin = payload.admin_id || 'SYSTEM'; 
+                    await pool.query("UPDATE admins SET status = 'ACTIVE' WHERE admin_id = ?", [id]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'REACTIVATE_ADMIN', ?)", [currentAdmin, `관리자 계정 활성화 복구: ${id}`]);
+                    return res.status(200).json({ success: true });
+                } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
+            }
+
+            // 💥 관리자 계정 완전 삭제 (DB에서 영구 파기)
+            else if (action === 'HARD_DELETE_ADMIN') {
+                try {
+                    const { id } = data;
+                    const currentAdmin = payload.admin_id || 'SYSTEM'; 
+                    
+                    if (id === 'admin' || id === 'silverscent') {
+                        return res.status(200).json({ success: false, msg: '마스터 계정은 파기할 수 없습니다.' });
+                    }
+                    if (id === currentAdmin) {
+                        return res.status(200).json({ success: false, msg: '현재 접속 중인 본인 계정은 삭제할 수 없습니다.' });
+                    }
+
+                    await pool.query("DELETE FROM admins WHERE admin_id = ?", [id]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'HARD_DELETE_ADMIN', ?)", [currentAdmin, `관리자 계정 DB 완전 파기: ${id}`]);
+                    return res.status(200).json({ success: true });
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 

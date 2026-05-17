@@ -7078,7 +7078,7 @@ async function handleLogin() {
           })._call({ source: 'vercel', action: 'CREATE_ADMIN', data: { id, name, pw: hashedPw }, admin_id: localStorage.getItem('admin_id') });
       }
 
-      // 2. 계정 리스트 동적 빌드
+      // 2. 계정 리스트 동적 빌드 (LOCKED 상태 시각적 분리 및 버튼 교체 엔진 탑재)
       function refreshAdminList() {
           const container = document.getElementById('masterAdminListContainer');
           if (!container) return;
@@ -7092,30 +7092,64 @@ async function handleLogin() {
               container.innerHTML = "";
               res.list.forEach(item => {
                   const card = document.createElement('div');
-                  card.style = "display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid var(--border-color); padding:14px 16px; border-radius:14px; box-sizing:border-box;";
-                  
+                  const isLocked = item.status === 'LOCKED';
                   const isMaster = item.admin_id.toLowerCase() === 'admin' || item.admin_id.toLowerCase() === 'silverscent';
                   
-                  // 기존 액션 버튼(비번초기화, 삭제) 영역 유지
-                  const actionArea = isMaster ? 
-                      `<span style='color:#0a84ff; font-size:0.85em; font-weight:800;'>🔒 System Admin</span>` : 
-                      `<button onclick="resetAdminPassword('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,159,10,0.1); border:1px solid #ff9f0a; color:#ff9f0a; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer; margin-right:5px;'>비번초기화</button>
-                       <button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>삭제</button>`;
-          
-                  // 🚨 여기에 📡 접속확인(showAdminConnInfo) 버튼만 안전하게 삽입!
+                  // 🚨 잠긴 계정은 배경을 붉은스름하게 바꾸고 투명도를 낮춤
+                  card.style = `display:flex; justify-content:space-between; align-items:center; background:${isLocked ? 'rgba(255,59,48,0.05)' : 'var(--card-bg)'}; border:1px solid ${isLocked ? 'rgba(255,59,48,0.2)' : 'var(--border-color)'}; padding:14px 16px; border-radius:14px; box-sizing:border-box; ${isLocked ? 'opacity:0.85;' : ''}`;
+                  
+                  let actionArea = "";
+                  if (isMaster) {
+                      actionArea = `<span style='color:#0a84ff; font-size:0.85em; font-weight:800;'>🔒 System Admin</span>`;
+                  } else if (isLocked) {
+                      // 🚨 잠긴 계정 전용 버튼: [복구] / [완전삭제]
+                      actionArea = `
+                          <button onclick="reactivateAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(52,199,89,0.1); border:1px solid #34c759; color:#34c759; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer; margin-right:5px;'>♻️ 복구</button>
+                          <button onclick="hardDeleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:6px 10px; border-radius:8px; font-weight:900; font-size:0.85em; cursor:pointer;'>완전삭제</button>
+                      `;
+                  } else {
+                      // 🟢 정상 계정 전용 버튼: [비번초기화] / [삭제(차단)]
+                      actionArea = `
+                          <button onclick="resetAdminPassword('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,159,10,0.1); border:1px solid #ff9f0a; color:#ff9f0a; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer; margin-right:5px;'>비번초기화</button>
+                          <button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>삭제</button>
+                      `;
+                  }
+
+                  const statusBadge = isLocked ? `<span style="font-size:0.7em; color:#ff3b30; border:1px solid #ff3b30; padding:2px 4px; border-radius:4px; margin-left:6px; font-weight:bold;">차단됨</span>` : "";
+
                   card.innerHTML = `
                       <div style="flex:1;">
-                          <div style='font-weight:900; color:var(--text-main); font-size:1.02em; display:flex; align-items:center; gap:6px;'>
-                              ${item.admin_name} <span style='font-size:0.85em; font-weight:500; color:var(--text-sub);'>(${item.admin_id})</span>
+                          <div style='font-weight:900; color:${isLocked ? 'var(--text-sub)' : 'var(--text-main)'}; font-size:1.02em; display:flex; align-items:center; gap:6px; ${isLocked ? 'text-decoration:line-through;' : ''}'>
+                              ${item.admin_name} <span style='font-size:0.85em; font-weight:500;'>(${item.admin_id})</span> ${statusBadge}
                               <button onclick="showAdminConnInfo('${item.admin_id}', '${item.admin_name}')" style="background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:2px 8px; font-size:0.75em; cursor:pointer; font-weight:900; white-space:nowrap; margin-left:4px;">📡 접속확인</button>
                           </div>
                           <div style='font-size:0.8em; color:var(--text-sub); margin-top:4px;'>등급: ${item.role === 'SYSTEM' ? 'System Admin' : '일반 관리자'}</div>
                       </div>
-                      <div style='flex-shrink:0;'>${actionArea}</div>
+                      <div style='flex-shrink:0; display:flex; gap:6px;'>${actionArea}</div>
                   `;
                   container.appendChild(card);
               });
           })._call({ source: 'vercel', action: 'GET_ADMIN_LIST' });
+      }
+
+      // ♻️ 계정 복구(활성화) 실행 함수
+      function reactivateAdminAccount(id, name) {
+          if (!confirm(`[${name}(${id})] 계정을 다시 활성화(ACTIVE) 복구하시겠습니까?`)) return;
+          showToast("⏳ 계정 복구 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) { showToast("✅ 관리자 계정이 활성화되었습니다.", 2000); refreshAdminList(); } 
+              else { showToast(`❌ 복구 실패: ${res.msg}`, 3000); }
+          })._call({ source: 'vercel', action: 'REACTIVATE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') });
+      }
+
+      // 💥 계정 완전 삭제 실행 함수
+      function hardDeleteAdminAccount(id, name) {
+          if (!confirm(`🚨 최후 경고: [${name}(${id})] 계정을 데이터베이스에서 완전히 삭제(Hard Delete)합니까?\n이 작업은 되돌릴 수 없으며 접속 기록 외 모든 정보가 파기됩니다!`)) return;
+          showToast("💥 계정 영구 파기 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) { showToast("🗑️ 계정이 DB에서 완전히 파기되었습니다.", 2000); refreshAdminList(); } 
+              else { showToast(`❌ 삭제 실패: ${res.msg}`, 3000); }
+          })._call({ source: 'vercel', action: 'HARD_DELETE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') });
       }
 
       // 🔑 비밀번호 초기화 실행 함수
