@@ -143,11 +143,11 @@ module.exports = async function(req, res) {
                         return res.status(200).json({ success: false, msg: '현재 접속 중인 본인 계정은 삭제할 수 없습니다.' });
                     }
 
-                    // 🛠️ [해결 완료] DB ENUM 규칙에 맞춰 상태를 'INACTIVE'로 변경! (흔적은 남기고 권한만 박탈)
-                    await pool.query("UPDATE admins SET status = 'INACTIVE' WHERE admin_id = ?", [id]);
+                    // 🛠️ [정답 반영] DB ENUM 규칙에 정확히 맞춰서 상태를 'LOCKED'로 변경!
+                    await pool.query("UPDATE admins SET status = 'LOCKED' WHERE admin_id = ?", [id]);
                     
-                    // 📜 로그 기록 (글자수 제한 방어를 위해 'DEL_ADMIN'으로 축약)
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DEL_ADMIN', ?)", [currentAdmin, `관리자 계정 차단(INACTIVE): ${id}`]);
+                    // 📜 로그 기록
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DELETE_ADMIN', ?)", [currentAdmin, `관리자 계정 차단 및 잠금: ${id}`]);
                     
                     return res.status(200).json({ success: true });
                 } catch (e) { 
