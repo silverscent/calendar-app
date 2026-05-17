@@ -127,26 +127,27 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // 🗑️ C. 관리자 계정 삭제 (권한 회수 + 방어막 보강)
+            // 🗑️ C. 관리자 계정 삭제 (권한 회수 - 완벽한 소프트 삭제 유지)
             else if (action === 'DELETE_ADMIN') {
                 try {
                     const { id } = data;
-                    // 🚨 [보강 1] 프론트엔드에서 보낸 내(실행자) ID를 정확하게 추출 (로그 기록 에러 방지)
                     const currentAdmin = payload.admin_id || 'SYSTEM'; 
 
-                    // 방어막 A: 최상위 마스터 계정 보호
+                    // 🚨 방어막 1: 마스터 계정 절대 삭제 불가
                     if (id === 'admin' || id === 'silverscent') {
-                        return res.status(200).json({ success: false, msg: '마스터 계정은 보안상 복구가 불가능하여 파기할 수 없습니다.' });
+                        return res.status(200).json({ success: false, msg: '마스터 계정은 보안상 파기할 수 없습니다.' });
                     }
                     
-                    // 🚨 [보강 2] 방어막 B: 자기 자신 삭제(자폭) 원천 차단
+                    // 🚨 방어막 2: 자기 자신(현재 로그인한 계정) 자폭 방지
                     if (id === currentAdmin) {
-                        return res.status(200).json({ success: false, msg: '현재 로그인하여 사용 중인 본인 계정은 삭제할 수 없습니다.' });
+                        return res.status(200).json({ success: false, msg: '현재 접속 중인 본인 계정은 삭제할 수 없습니다.' });
                     }
 
-                    // 관리자님 오리지널 로직 (소프트 딜리트)
-                    await pool.query("UPDATE admins SET status = 'DELETE' WHERE admin_id = ?", [id]);
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DELETE_ADMIN', ?)", [currentAdmin, `관리자 계정 차단 및 삭제: ${id}`]);
+                    // 🛠️ [해결 완료] DB ENUM 규칙에 맞춰 상태를 'INACTIVE'로 변경! (흔적은 남기고 권한만 박탈)
+                    await pool.query("UPDATE admins SET status = 'INACTIVE' WHERE admin_id = ?", [id]);
+                    
+                    // 📜 로그 기록 (글자수 제한 방어를 위해 'DEL_ADMIN'으로 축약)
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DEL_ADMIN', ?)", [currentAdmin, `관리자 계정 차단(INACTIVE): ${id}`]);
                     
                     return res.status(200).json({ success: true });
                 } catch (e) { 
