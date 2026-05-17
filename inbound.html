@@ -1218,7 +1218,7 @@
           <button class="size-btn" id="btnL" onclick="changeSize('L')">A+</button>
           
           <div style="width:1px; background:var(--border-color); margin:0 2px;"></div>
-          <button class="size-btn" id="btnHolidayToggle" onclick="toggleHoliday()" style="font-weight:900; color:#ff3b30;">🏖️ 휴일 ON</button>
+          <button class="size-btn" id="btnHolidayToggle" onclick="toggleHoliday()" style="font-weight:900; color:#ff3b30;">🏖️ ON</button>
         </div>
         
         <div class="action-row-right">
@@ -1656,7 +1656,7 @@
           
           const btn = document.getElementById('btnHolidayToggle');
           if (btn) {
-              btn.innerHTML = isShowHoliday ? '🏖️ 휴일 ON' : '🏖️ OFF';
+              btn.innerHTML = isShowHoliday ? '🏖️ ON' : '🏖️ OFF';
               btn.style.color = isShowHoliday ? '#ff3b30' : 'var(--text-sub)';
           }
           renderCalendar(); 
