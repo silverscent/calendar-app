@@ -297,27 +297,27 @@
         color: var(--sat-color);
       }
 
-      /* 💡 [4번 요구사항] 달력 요일 헤더 세련된 디자인 (기본 다크모드 베이스) */
-      .calendar-container .grid-row:first-child {
+      /* 💡 달력 요일 헤더 세련된 디자인 (그라데이션 + 파란 밑줄 하나만 딱!) */
+      .calendar-container > .grid-row:first-child {
         background: linear-gradient(180deg, #2a2c30 0%, #1e1f22 100%);
-        border-bottom: 2px solid #0a84ff; /* 하단 엣지 포인트 컬러 */
+        border-bottom: 2px solid #0a84ff; /* 🚨 하단 엣지 하나만 적용 */
       }
-      .calendar-container .grid-row:first-child .day-header {
-        background: transparent !important; /* 배경색 투명으로 빼서 그라데이션 적용 */
+      .calendar-container > .grid-row:first-child .day-header {
+        background: transparent !important;
         font-size: 0.85em;
         padding: 14px 0;
         letter-spacing: 1.5px;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.5); /* 글씨가 또렷하게 뜨도록 음영 처리 */
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
         border: none;
       }
       
-      /* 💡 라이트 모드일 때의 요일 헤더 디자인 */
-      body.light-mode .calendar-container .grid-row:first-child {
+      /* 라이트 모드일 때의 요일 헤더 디자인 */
+      body.light-mode .calendar-container > .grid-row:first-child {
         background: linear-gradient(180deg, #ffffff 0%, #eef2f5 100%);
         border-bottom: 2px solid #0a84ff;
       }
-      body.light-mode .calendar-container .grid-row:first-child .day-header {
-        text-shadow: none; /* 라이트모드에선 깔끔하게 텍스트만! */
+      body.light-mode .calendar-container > .grid-row:first-child .day-header {
+        text-shadow: none;
         font-weight: 900;
       }
 
@@ -4586,16 +4586,16 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           })._call({ source: 'vercel', action: 'DELETE_RAW_ROW_DIRECT', rowId: rowId, type: currentType, admin_id: localStorage.getItem('admin_id') });
       }
 
-      // 💡 [보안/디버깅 강화] 마스터 권한 판별 인터락 및 콘솔 트래킹 엔진
+      // 💡 [보안/디버깅 강화] 마스터 권한 판별 인터락 (localStorage + sessionStorage 동시 검사)
       function checkMasterAuthButtonVisibility() {
           const btn = document.getElementById('masterDashboardBtn');
           if (!btn) return;
           
-          let isAdminActive = localStorage.getItem('isAdmin') === 'true' || localStorage.getItem('is_admin') === 'true';
-          let adminId = localStorage.getItem('admin_id') || '';
-          let role = localStorage.getItem('admin_role') || '';
+          // 🚨 [핵심 패치] 자동로그인(ON/OFF) 상태에 따라 저장 위치가 다르므로 양쪽 모두 검사!
+          let isAdminActive = localStorage.getItem('isAdmin') === 'true' || sessionStorage.getItem('isAdmin') === 'true';
+          let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id') || '';
+          let role = localStorage.getItem('admin_role') || sessionStorage.getItem('admin_role') || '';
           
-          // 🚨 [핵심 패치] 'silverscent' 계정이거나 권한이 'SYSTEM'이면 무조건 마스터로 인정!
           const isMasterUser = adminId.toLowerCase() === 'admin' || 
                                adminId.toLowerCase() === 'silverscent' ||
                                role.toUpperCase().includes('SUPER') || 
