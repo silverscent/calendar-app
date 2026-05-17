@@ -4085,10 +4085,25 @@ async function handleLogin() {
               </style>`;
 
               if (currentType === 'out') {
-                  // 📤 출고 테이블
+                  // 📤 출고 테이블 렌더링
                   html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 950px; table-layout: fixed;'>
                       <colgroup><col style='width: 50px;'><col style='width: 130px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'><col style='width: 100px;'><col style='width: 150px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'></colgroup>
                       <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr><th>ID</th><th>company</th><th>pal</th><th>box</th><th>out_date</th><th>etc</th><th>created_at</th><th>sort</th><th>isDone</th><th style='text-align:center;'>명령</th></tr></thead><tbody>`;
+                  
+                  // 🚨 [추가] 항상 첫 줄에 뜨는 신규 데이터 주입 폼
+                  html += `<tr style='background:rgba(52,199,89,0.08); border-bottom:2px solid #34c759;'>
+                      <td style='color:#34c759; font-weight:900; text-align:center;'>NEW</td>
+                      <td><input type="text" id="db-o-comp-new" placeholder="업체명 (필수)" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="number" id="db-o-pal-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="number" id="db-o-box-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-o-date-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-o-etc-new" placeholder="비고 입력" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td style="color:var(--text-sub); text-align:center; font-size:0.9em;">(자동 각인)</td>
+                      <td><input type="number" id="db-o-sort-new" value="999" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="number" id="db-o-done-new" value="0" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td style='text-align:center;'><button onclick="addNewRowDirectDB('out')" style="background:#34c759; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-weight:900; cursor:pointer; width:100%;">➕ 신규등록</button></td>
+                  </tr>`;
+
                   res.rows.forEach(r => {
                       html += `<tr style='border-bottom:1px solid var(--border-color);'><td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
                           <td><input type="text" id="db-o-comp-${r.id}" value="${r.company || ''}" class="db-input"></td>
@@ -4102,10 +4117,29 @@ async function handleLogin() {
                           <td style='text-align:center;'><button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button><button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button></td></tr>`;
                   });
               } else {
-                  // 📥 입고 테이블
+                  // 📥 입고 테이블 렌더링
                   html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 1350px; table-layout: fixed;'>
                       <colgroup><col style='width: 50px;'><col style='width: 130px;'><col style='width: 60px;'><col style='width: 100px;'><col style='width: 100px;'><col style='width: 80px;'><col style='width: 80px;'><col style='width: 100px;'><col style='width: 120px;'><col style='width: 140px;'><col style='width: 60px;'><col style='width: 80px;'><col style='width: 60px;'><col style='width: 120px;'></colgroup>
                       <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr><th>ID</th><th>bl_number</th><th>pallets</th><th>eta</th><th>receive_date</th><th>fwd</th><th>s_type</th><th>invoice</th><th>remarks</th><th>last_updated</th><th>sort</th><th>status</th><th>AI</th><th style='text-align:center;'>명령</th></tr></thead><tbody>`;
+                  
+                  // 🚨 [추가] 항상 첫 줄에 뜨는 신규 데이터 주입 폼
+                  html += `<tr style='background:rgba(52,199,89,0.08); border-bottom:2px solid #34c759;'>
+                      <td style='color:#34c759; font-weight:900; text-align:center;'>NEW</td>
+                      <td><input type="text" id="db-i-bl-new" placeholder="B/L번호 (필수)" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="number" id="db-i-pal-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-eta-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-date-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-fwd-new" placeholder="FWD" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-stype-new" placeholder="TYPE" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-inv-new" placeholder="INVOICE" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-rem-new" placeholder="비고 입력" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td style="color:var(--text-sub); text-align:center; font-size:0.9em;">(자동 각인)</td>
+                      <td><input type="number" id="db-i-sort-new" value="999" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-stat-new" value="입고대기" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="number" id="db-i-ai-new" value="0" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td style='text-align:center;'><button onclick="addNewRowDirectDB('in')" style="background:#34c759; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-weight:900; cursor:pointer; width:100%;">➕ 신규등록</button></td>
+                  </tr>`;
+
                   res.rows.forEach(r => {
                       html += `<tr style='border-bottom:1px solid var(--border-color);'><td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
                           <td><input type="text" id="db-i-bl-${r.id}" value="${r.bl_number || ''}" class="db-input"></td>
@@ -4142,6 +4176,50 @@ async function handleLogin() {
               page: dbCurrentPage, 
               type: currentType 
           });
+      }
+
+      // 🟢 [DB제어실 전용] 1. 신규 행 강제 주입 엔진 (누락되어 새로 추가하는 부분)
+      function addNewRowDirectDB(type) {
+          if (!confirm("입력하신 내용으로 DB에 신규 데이터를 강제 생성하시겠습니까?")) return;
+          
+          let insertData = {};
+          if (type === 'out') {
+              insertData = {
+                  company: document.getElementById('db-o-comp-new').value,
+                  pal: document.getElementById('db-o-pal-new').value,
+                  box: document.getElementById('db-o-box-new').value,
+                  outbound_date: document.getElementById('db-o-date-new').value,
+                  etc: document.getElementById('db-o-etc-new').value,
+                  sort_idx: document.getElementById('db-o-sort-new').value,
+                  isDone: document.getElementById('db-o-done-new').value
+              };
+              if (!insertData.company) { alert("⚠️ 업체명은 필수입니다."); return; }
+          } else {
+              insertData = {
+                  bl_number: document.getElementById('db-i-bl-new').value,
+                  pallets: document.getElementById('db-i-pal-new').value,
+                  eta: document.getElementById('db-i-eta-new').value,
+                  receive_date: document.getElementById('db-i-date-new').value,
+                  fwd: document.getElementById('db-i-fwd-new').value,
+                  s_type: document.getElementById('db-i-stype-new').value,
+                  invoice: document.getElementById('db-i-inv-new').value,
+                  remarks: document.getElementById('db-i-rem-new').value,
+                  sort_idx: document.getElementById('db-i-sort-new').value,
+                  status: document.getElementById('db-i-stat-new').value,
+                  is_ai_modified: document.getElementById('db-i-ai-new').value
+              };
+              if (!insertData.bl_number) { alert("⚠️ B/L 번호는 필수입니다."); return; }
+          }
+
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) {
+                  showToast("✅ 신규 데이터 DB 삽입 완료!", 2000);
+                  searchRawDatabaseRows(); // DB 화면 새로고침
+                  if (typeof renderCalendar === 'function') renderCalendar(); // 캘린더 화면도 동기화
+              } else {
+                  alert("오류 발생: " + res.msg);
+              }
+          })._call({ source: 'vercel', action: 'ADD_RAW_ROW_DIRECT', type: currentType, insertData: insertData, admin_id: localStorage.getItem('admin_id') });
       }
 
       // ✏️ 인라인 폼 데이터 취합 및 백엔드 전송

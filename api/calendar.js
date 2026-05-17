@@ -247,6 +247,27 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
+            // 🆕 [신규 추가 기능] DB 제어실에서 원본 데이터 다이렉트 주입
+            else if (action === 'ADD_RAW_ROW_DIRECT') {
+                try {
+                    if (type === 'out') {
+                        const { company, pal, box, outbound_date, etc, sort_idx, isDone } = payload.insertData;
+                        await pool.query(
+                            "INSERT INTO outbound (company, pal, box, outbound_date, etc, sort_idx, isDone) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            [company || '', pal || 0, box || 0, safeDate(outbound_date), etc || '', sort_idx || 999, isDone || 0]
+                        );
+                    } else {
+                        const { bl_number, pallets, eta, receive_date, fwd, s_type, invoice, remarks, sort_idx, status, is_ai_modified } = payload.insertData;
+                        await pool.query(
+                            "INSERT INTO inbound (bl_number, pallets, eta, receive_date, fwd, s_type, invoice, remarks, sort_idx, status, is_ai_modified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            [bl_number || '', pallets || 0, safeDate(eta), safeDate(receive_date), fwd || '', s_type || '', invoice || '', remarks || '', sort_idx || 999, status || '입고대기', is_ai_modified || 0]
+                        );
+                    }
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DB_RAW_ADD', ?)", [currentAdmin, `[DB 제어실] ${type === 'out' ? '출고' : '입고'} 신규 데이터 직접 주입`]);
+                    return res.status(200).json({ success: true });
+                } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
+            }
+
             // ✅ 1. 로그인 로직
             else if (action === 'LOGIN') {
                 try {
