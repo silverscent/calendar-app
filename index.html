@@ -2238,6 +2238,21 @@
       </div>
     </div>
 
+    <div id="bioPwConfirmModal" class="overlay-modal" style="align-items: center; padding: 20px; box-sizing: border-box; z-index: 3100;" onclick="if (event.target === this) closeBioPwModal();">
+      <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; max-width: 320px; padding: 25px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); margin-bottom: 10vh;">
+        <div style="font-size: 2.5rem; margin-bottom: 10px;">🔐</div>
+        <div style="font-size: 1.15em; font-weight: 900; color: var(--text-main); margin-bottom: 10px;">보안 인증 확인</div>
+        <div style="font-size: 0.85em; color: var(--text-sub); margin-bottom: 20px; word-break: keep-all; line-height: 1.4;">
+          안전한 패스키 발급을 위해<br>현재 계정의 비밀번호를 입력해 주세요.
+        </div>
+        <input type="password" id="bioConfirmPwInput" class="edit-input" placeholder="비밀번호 입력" style="margin-bottom: 20px; text-align: center; font-size: 1.1em;" onkeypress="if(event.key === 'Enter') executeBioRegistration()">
+        <div style="display: flex; gap: 10px;">
+          <button class="cancel-btn" style="flex: 1; padding: 14px; border-radius: 12px; background: var(--bg-color); border: 1px solid var(--border-color);" onclick="closeBioPwModal()">취소</button>
+          <button class="save-btn" style="flex: 1; padding: 14px; border-radius: 12px; font-size: 0.95em;" onclick="executeBioRegistration()">등록 진행</button>
+        </div>
+      </div>
+    </div>
+
     <div id="adminLoginModal" class="overlay-modal" style="align-items: center; padding: 20px; box-sizing: border-box;" onclick="if (event.target === this) this.style.display = 'none';">
       <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; margin-bottom: 10vh; max-width: 340px; padding: 35px 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
         
@@ -4083,67 +4098,18 @@ manageWebInboundData: function(act, data, tk) {
           openLoginModal();
       }
 
-      // 🚨 7. 생체 인증 설정 변경 (비트워든/애플 정식 패스키 규격 적용 - 흐름 최적화)
-      async function handleBioToggleChange(checkbox) {
+      // 🚨 5. 생체 인증 스위치 컨트롤 (모달 호출)
+      function handleBioToggleChange(checkbox) {
           if (checkbox.checked) {
               if (!window.PublicKeyCredential) {
                   alert("이 기기 브라우저에서는 생체 인증(WebAuthn)을 지원하지 않습니다.");
                   checkbox.checked = false;
                   return;
               }
-              
-              let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
-              
-              // 🚨 [보안 흐름 패치] prompt() 창이 먼저 뜨면 애플/브라우저 보안상 사용자의 '터치'가 끊겼다고 판단해
-              // 패스키 생성을 강제로 차단(취소)해 버립니다. 따라서 패스키 생성을 가장 먼저 호출합니다!
-              try {
-                  const challenge = new Uint8Array(32);
-                  window.crypto.getRandomValues(challenge);
-                  const userId = new Uint8Array(16);
-                  window.crypto.getRandomValues(userId);
-
-                  await navigator.credentials.create({
-                      publicKey: {
-                          challenge: challenge.buffer, // 🚨 엄격한 브라우저를 위해 .buffer 명시 필수
-                          rp: { name: "Coloplast 시스템", id: window.location.hostname },
-                          user: { id: userId.buffer, name: adminId, displayName: adminId },
-                          pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-                          authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
-                          timeout: 60000
-                      }
-                  });
-              } catch (err) {
-                  console.warn("패스키 생성 실패/취소:", err);
-                  // 에러 이름을 함께 띄워주면 디버깅하기 훨씬 좋습니다.
-                  showToast(`⚠️ 생체 인증 생성이 취소/차단되었습니다. (${err.name || '알수없음'})`, 3000);
-                  checkbox.checked = false;
-                  return;
-              }
-
-              // 🚨 패스키 기기 저장이 성공하면, 그때 시스템에 등록할 비밀번호를 물어봅니다!
-              let adminPw = prompt("✅ 기기 등록 성공!\n시스템에 최종 등록하려면 현재 계정의 비밀번호를 입력하세요.");
-              
-              if (!adminPw) {
-                  checkbox.checked = false;
-                  showToast("비밀번호 입력이 취소되어 생체 인증이 비활성화됩니다.", 2500);
-                  return;
-              }
-
-              showToast("서버 보안 검증 중...", 0);
-              const hashedPw = await encryptSHA256(adminPw);
-              
-              google.script.run.withSuccessHandler(function(res) {
-                  if (res.success) {
-                      localStorage.setItem('bio_registered', 'true');
-                      localStorage.setItem('bio_id', adminId);
-                      localStorage.setItem('bio_pw', hashedPw); 
-                      showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
-                  } else {
-                      alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.");
-                      checkbox.checked = false;
-                  }
-              }).login(adminId, hashedPw);
-
+              // 💡 구식 prompt 대신 예쁜 미니 모달을 띄워 비밀번호부터 안전하게 받아냅니다!
+              document.getElementById('bioConfirmPwInput').value = '';
+              document.getElementById('bioPwConfirmModal').style.display = 'flex';
+              setTimeout(() => document.getElementById('bioConfirmPwInput').focus(), 150);
           } else {
               let currentId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
               let bioId = localStorage.getItem('bio_id');
@@ -4163,6 +4129,60 @@ manageWebInboundData: function(act, data, tk) {
                   checkbox.checked = true; 
               }
           }
+      }
+
+      // 모달 취소 시 스위치 원상복구
+      function closeBioPwModal() {
+          document.getElementById('bioPwConfirmModal').style.display = 'none';
+          document.getElementById('toggleBioAuth').checked = false; 
+      }
+
+      // 🚨 [핵심 엔진] 버튼 클릭 시 비번 해싱 -> 패스키 발급 -> 서버 검증을 한 호흡에 처리!
+      async function executeBioRegistration() {
+          let adminPw = document.getElementById('bioConfirmPwInput').value.trim();
+          if (!adminPw) { alert("비밀번호를 입력해 주세요."); return; }
+          
+          let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
+          const hashedPw = await encryptSHA256(adminPw); // 비번 즉시 암호화
+
+          // 모달 닫기
+          document.getElementById('bioPwConfirmModal').style.display = 'none';
+
+          // 🚨 사용자가 방금 [등록 진행] 버튼을 "클릭" 했으므로, 애플/비트워든이 패스키 생성을 100% 허가함!
+          try {
+              const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
+              const userId = new Uint8Array(16); window.crypto.getRandomValues(userId);
+
+              await navigator.credentials.create({
+                  publicKey: {
+                      challenge: challenge.buffer,
+                      rp: { name: "Coloplast 시스템", id: window.location.hostname },
+                      user: { id: userId.buffer, name: adminId, displayName: adminId },
+                      pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+                      authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
+                      timeout: 60000
+                  }
+              });
+          } catch (err) {
+              console.warn("패스키 생성 실패/취소:", err);
+              showToast(`⚠️ 생체 인증 생성이 취소되었습니다.`, 2500);
+              document.getElementById('toggleBioAuth').checked = false;
+              return; // 취소했으니 쓰레기 데이터 생성 안됨!
+          }
+
+          // 🚨 기기에 패스키가 무사히 만들어졌다면, 아까 받아둔 비번으로 서버 검증!
+          showToast("서버 보안 검증 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) {
+                  localStorage.setItem('bio_registered', 'true');
+                  localStorage.setItem('bio_id', adminId);
+                  localStorage.setItem('bio_pw', hashedPw); 
+                  showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
+              } else {
+                  alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.\n(※ 기기에 방금 저장된 패스키는 무효 처리되므로 삭제 권장)");
+                  document.getElementById('toggleBioAuth').checked = false;
+              }
+          }).login(adminId, hashedPw);
       }
 
       // 🚨 8. 로그아웃 (통합 삭제 헬퍼 연동)
