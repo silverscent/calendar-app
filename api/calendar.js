@@ -158,32 +158,53 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // 🗑️ C. 관리자 계정 삭제 (권한 회수 - 완벽한 소프트 삭제 유지)
+            // 🗑️ C. 관리자 계정 비활성화 (요구사항 3번 완벽 해결)
             else if (action === 'DELETE_ADMIN') {
                 try {
                     const { id } = data;
-                    const currentAdmin = payload.admin_id || 'SYSTEM'; 
+                    const currentAdmin = payload.admin_id || 'SYSTEM'; // 현재 로그인한 사람의 세션 ID
 
-                    // 🚨 방어막 1: 마스터 계정 절대 삭제 불가
+                    // 방어막 1: 마스터 계정은 그 누구도 비활성화 불가
                     if (id === 'admin' || id === 'silverscent') {
-                        return res.status(200).json({ success: false, msg: '마스터 계정은 보안상 파기할 수 없습니다.' });
+                        return res.status(200).json({ success: false, msg: '마스터 계정은 보안상 비활성화할 수 없습니다.' });
                     }
                     
-                    // 🚨 방어막 2: 자기 자신(현재 로그인한 계정) 자폭 방지
-                    if (id === currentAdmin) {
-                        return res.status(200).json({ success: false, msg: '현재 접속 중인 본인 계정은 삭제할 수 없습니다.' });
+                    // 방어막 2: 현재 로그인 중인 '자기 자신'을 바보같이 셀프 차단하는 것만 방어!
+                    if (String(id).trim().toLowerCase() === String(currentAdmin).trim().toLowerCase()) {
+                        return res.status(200).json({ success: false, msg: '현재 접속 중인 본인 계정은 비활성화할 수 없습니다.' });
                     }
 
-                    // 🛠️ [정답 반영] DB ENUM 규칙에 정확히 맞춰서 상태를 'LOCKED'로 변경!
+                    // DB ENUM 규칙에 맞춰 상태를 'LOCKED'로 변경 (소프트 삭제)
                     await pool.query("UPDATE admins SET status = 'LOCKED' WHERE admin_id = ?", [id]);
-                    
-                    // 📜 로그 기록
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DELETE_ADMIN', ?)", [currentAdmin, `관리자 계정 차단 및 잠금: ${id}`]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DELETE_ADMIN', ?)", [currentAdmin, `관리자 계정 비활성화 처리: ${id}`]);
                     
                     return res.status(200).json({ success: true });
-                } catch (e) { 
-                    return res.status(200).json({ success: false, msg: e.message }); 
-                }
+                } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
+            }
+
+            // 🔒 [신규 추가] 6번 요구사항: 본인 비밀번호 다이렉트 변경 엔진
+            else if (action === 'CHANGE_MY_PASSWORD') {
+                try {
+                    const currentAdmin = payload.admin_id;
+                    const { currentPw, newPw } = data;
+
+                    if (!currentAdmin) return res.status(200).json({ success: false, msg: '로그인 세션이 만료되었습니다.' });
+
+                    // 1. 현재 비밀번호가 맞는지 DB 검증
+                    const [rows] = await pool.query("SELECT password_hash FROM admins WHERE admin_id = ? AND status = 'ACTIVE'", [currentAdmin]);
+                    if (rows.length === 0) return res.status(200).json({ success: false, msg: '존재하지 않거나 비활성화된 계정입니다.' });
+
+                    // 프론트엔드에서 이미 SHA-256으로 암호화해서 보낸 현재 비밀번호와 비교
+                    if (rows[0].password_hash !== currentPw) {
+                        return res.status(200).json({ success: false, msg: '현재 비밀번호가 일치하지 않습니다.' });
+                    }
+
+                    // 2. 새 비밀번호(이것도 프론트에서 암호화되어 옴)로 업데이트
+                    await pool.query("UPDATE admins SET password_hash = ? WHERE admin_id = ?", [newPw, currentAdmin]);
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CHANGE_PW', '본인 비밀번호 변경 성공')", [currentAdmin]);
+
+                    return res.status(200).json({ success: true });
+                } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
             // 🔑 관리자 비밀번호 강제 초기화

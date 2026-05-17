@@ -2280,6 +2280,15 @@
           ⚙️ 시스템 관리
         </button>
 
+        <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; margin-bottom: 24px; box-sizing: border-box;">
+            <div style="font-size: 1.05em; font-weight: 900; color: var(--text-main); margin-bottom: 12px;">🔒 비밀번호 변경</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <input type="password" id="mySettingsCurrentPw" placeholder="현재 비밀번호 입력" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: bold; box-sizing: border-box;">
+                <input type="password" id="mySettingsNewPw" placeholder="새로운 비밀번호 입력" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: bold; box-sizing: border-box;">
+                <button onclick="executeMyPasswordChange()" style="width: 100%; background: #0a84ff; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 12px rgba(10,132,255,0.2); transition: 0.2s;">비밀번호 변경 적용</button>
+            </div>
+        </div>
+
         <button onclick="document.getElementById('myInfoModal').style.display='none'; document.getElementById('logoutConfirmModal').style.display='flex';" 
                 style="width: 100%; padding: 16px; background: rgba(255, 59, 48, 0.1); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; transition: 0.2s;">
           로그아웃
@@ -2315,12 +2324,17 @@
       <div style="flex: 1; overflow-y: auto; padding: 0 20px 40px 20px; box-sizing: border-box; -webkit-overflow-scrolling: touch;">
         
         <div id="master-tab-admin-mgr" class="master-tab-content" style="box-sizing: border-box;">
-          <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; margin-bottom: 20px; box-sizing: border-box;">
-            <div style="font-weight: 900; font-size: 1.05em; margin-bottom: 15px; color: var(--text-main);">🆕 신규 어드민 계정 발급</div>
-            <input type="text" id="newAdminId" placeholder="어드민 ID" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 12px; font-weight: 800; box-sizing: border-box;">
-            <input type="text" id="newAdminName" placeholder="담당자 이름 (예: 홍길동)" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 12px; font-weight: 800; box-sizing: border-box;">
-            <input type="password" id="newAdminPw" placeholder="초기 비밀번호" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 16px; font-weight: 800; box-sizing: border-box;">
-            <button onclick="createNewAdminAccount()" style="width: 100%; padding: 15px; background: #34c759; color: #fff; border: none; border-radius: 12px; font-weight: 900; cursor: pointer; box-sizing: border-box; font-size: 1em;">계정 생성 및 활성화</button>
+          
+          <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 15px; margin-bottom: 20px; box-sizing: border-box;">
+            <button id="toggleAdminFormBtn" onclick="toggleNewAdminForm()" style="width: 100%; padding: 12px; background: rgba(10, 132, 255, 0.1); border: 1px solid #0a84ff; color: #0a84ff; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 0.95em; transition: 0.2s;">➕ 신규 어드민 계정 발급실 열기</button>
+            
+            <div id="newAdminFormContainer" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-color); animation: fadeIn 0.3s;">
+              <div style="font-weight: 900; font-size: 1.05em; margin-bottom: 15px; color: var(--text-main);">🆕 신규 어드민 계정 발급</div>
+              <input type="text" id="newAdminId" placeholder="어드민 ID" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 12px; font-weight: 800; box-sizing: border-box;">
+              <input type="text" id="newAdminName" placeholder="담당자 이름 (예: 홍길동)" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 12px; font-weight: 800; box-sizing: border-box;">
+              <input type="password" id="newAdminPw" placeholder="초기 비밀번호" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 16px; font-weight: 800; box-sizing: border-box;">
+              <button onclick="createNewAdminAccount()" style="width: 100%; padding: 15px; background: #34c759; color: #fff; border: none; border-radius: 12px; font-weight: 900; cursor: pointer; box-sizing: border-box; font-size: 1em;">계정 생성 및 활성화</button>
+            </div>
           </div>
 
           <div style="font-weight: 900; margin-bottom: 12px; color: var(--text-sub); font-size: 0.95em;">시스템 등록 어드민 목록</div>
@@ -7078,7 +7092,23 @@ async function handleLogin() {
           })._call({ source: 'vercel', action: 'CREATE_ADMIN', data: { id, name, pw: hashedPw }, admin_id: localStorage.getItem('admin_id') });
       }
 
-      // 2. 계정 리스트 동적 빌드 (LOCKED 상태 시각적 분리 및 버튼 교체 엔진 탑재)
+      // 💡 5번 요구사항: 발급 창 부드러운 토글 제어 엔진
+      function toggleNewAdminForm() {
+          const form = document.getElementById('newAdminFormContainer');
+          const btn = document.getElementById('toggleAdminFormBtn');
+          if (!form || !btn) return;
+          if (form.style.display === 'none' || !form.style.display) {
+              form.style.display = 'block';
+              btn.innerHTML = '❌ 발급 창 닫기';
+              btn.style.background = 'rgba(255,59,48,0.1)'; btn.style.color = '#ff3b30'; btn.style.borderColor = '#ff3b30';
+          } else {
+              form.style.display = 'none';
+              btn.innerHTML = '➕ 신규 어드민 계정 발급실 열기';
+              btn.style.background = 'rgba(10, 132, 255, 0.1)'; btn.style.color = '#0a84ff'; btn.style.borderColor = '#0a84ff';
+          }
+      }
+
+      // 👤 2, 4번 요구사항: 활성/비활성 완벽 분리 및 구분선 렌더링 빌더
       function refreshAdminList() {
           const container = document.getElementById('masterAdminListContainer');
           if (!container) return;
@@ -7086,50 +7116,109 @@ async function handleLogin() {
 
           google.script.run.withSuccessHandler(function(res) {
               if (!res.success || !res.list) {
-                  container.innerHTML = "<div style='color:var(--text-sub); padding:10px;'>목록 수집 실패</div>";
-                  return;
+                  container.innerHTML = "<div style='color:var(--text-sub); padding:10px;'>목록 수집 실패</div>"; return;
               }
               container.innerHTML = "";
-              res.list.forEach(item => {
+              
+              // 활성과 비활성(LOCKED) 그룹 분리
+              const activeUsers = res.list.filter(u => u.status !== 'LOCKED');
+              const lockedUsers = res.list.filter(u => u.status === 'LOCKED');
+
+              // 로우 생성 헬퍼
+              const buildCard = (item, isLocked) => {
                   const card = document.createElement('div');
-                  const isLocked = item.status === 'LOCKED';
                   const isMaster = item.admin_id.toLowerCase() === 'admin' || item.admin_id.toLowerCase() === 'silverscent';
                   
-                  // 🚨 잠긴 계정은 배경을 붉은스름하게 바꾸고 투명도를 낮춤
-                  card.style = `display:flex; justify-content:space-between; align-items:center; background:${isLocked ? 'rgba(255,59,48,0.05)' : 'var(--card-bg)'}; border:1px solid ${isLocked ? 'rgba(255,59,48,0.2)' : 'var(--border-color)'}; padding:14px 16px; border-radius:14px; box-sizing:border-box; ${isLocked ? 'opacity:0.85;' : ''}`;
+                  card.style = `display:flex; justify-content:space-between; align-items:center; background:${isLocked ? 'rgba(255,59,48,0.02)' : 'var(--card-bg)'}; border:1px solid ${isLocked ? 'rgba(255,59,48,0.15)' : 'var(--border-color)'}; padding:14px 16px; border-radius:14px; box-sizing:border-box; margin-bottom:6px; ${isLocked ? 'opacity:0.75;' : ''}`;
                   
                   let actionArea = "";
                   if (isMaster) {
                       actionArea = `<span style='color:#0a84ff; font-size:0.85em; font-weight:800;'>🔒 System Admin</span>`;
                   } else if (isLocked) {
-                      // 🚨 잠긴 계정 전용 버튼: [복구] / [완전삭제]
                       actionArea = `
                           <button onclick="reactivateAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(52,199,89,0.1); border:1px solid #34c759; color:#34c759; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer; margin-right:5px;'>♻️ 복구</button>
                           <button onclick="hardDeleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:6px 10px; border-radius:8px; font-weight:900; font-size:0.85em; cursor:pointer;'>완전삭제</button>
                       `;
                   } else {
-                      // 🟢 정상 계정 전용 버튼: [비번초기화] / [삭제(차단)]
+                      // 🚨 1번 요구사항: [삭제] 라는 단어 대신 직관적인 [비활성화] 명칭 부여
                       actionArea = `
                           <button onclick="resetAdminPassword('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,159,10,0.1); border:1px solid #ff9f0a; color:#ff9f0a; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer; margin-right:5px;'>비번초기화</button>
-                          <button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>삭제</button>
+                          <button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>비활성화</button>
                       `;
                   }
 
-                  const statusBadge = isLocked ? `<span style="font-size:0.7em; color:#ff3b30; border:1px solid #ff3b30; padding:2px 4px; border-radius:4px; margin-left:6px; font-weight:bold;">차단됨</span>` : "";
+                  const statusBadge = isLocked ? `<span style="font-size:0.7em; color:#ff3b30; border:1px solid #ff3b30; padding:2px 4px; border-radius:4px; margin-left:6px; font-weight:bold;">비활성</span>` : "";
 
                   card.innerHTML = `
                       <div style="flex:1;">
-                          <div style='font-weight:900; color:${isLocked ? 'var(--text-sub)' : 'var(--text-main)'}; font-size:1.02em; display:flex; align-items:center; gap:6px; ${isLocked ? 'text-decoration:line-through;' : ''}'>
-                              ${item.admin_name} <span style='font-size:0.85em; font-weight:500;'>(${item.admin_id})</span> ${statusBadge}
-                              <button onclick="showAdminConnInfo('${item.admin_id}', '${item.admin_name}')" style="background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:2px 8px; font-size:0.75em; cursor:pointer; font-weight:900; white-space:nowrap; margin-left:4px;">📡 접속확인</button>
+                          <div style='font-weight:900; color:${isLocked ? 'var(--text-sub)' : 'var(--text-main)'}; font-size:1.02em; display:flex; align-items:center; gap:4px; ${isLocked ? 'text-decoration:line-through;' : ''}'>
+                              ${item.admin_name} <span style='font-size:0.85em; font-weight:500; color:var(--text-sub);'>(${item.admin_id})</span> ${statusBadge}
                           </div>
                           <div style='font-size:0.8em; color:var(--text-sub); margin-top:4px;'>등급: ${item.role === 'SYSTEM' ? 'System Admin' : '일반 관리자'}</div>
                       </div>
-                      <div style='flex-shrink:0; display:flex; gap:6px;'>${actionArea}</div>
+                      <div style='flex-shrink:0; display:flex; gap:6px; align-items:center;'>
+                          <button onclick="showAdminConnInfo('${item.admin_id}', '${item.admin_name}')" style="background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:6px 10px; font-size:0.85em; cursor:pointer; font-weight:800; white-space:nowrap; margin-right:4px;">📡 접속확인</button>
+                          ${actionArea}
+                      </div>
                   `;
-                  container.appendChild(card);
-              });
+                  return card;
+              };
+
+              // ① 정상 계정 리스트 먼저 주입
+              activeUsers.forEach(u => container.appendChild(buildCard(u, false)));
+
+              // ② 4번 요구사항: 비활성 계정이 존재할 때만 중간 구분선 장착
+              if (lockedUsers.length > 0) {
+                  const divider = document.createElement('div');
+                  divider.style = "text-align:center; margin:25px 0 15px 0; font-size:0.8em; color:#ff3b30; font-weight:800; display:flex; align-items:center; gap:10px; user-select:none;";
+                  divider.innerHTML = `<div style="flex:1; border-bottom:1px dashed rgba(255,59,48,0.25)"></div> 🛑 비활성화된 관리자 계정 이력 <div style="flex:1; border-bottom:1px dashed rgba(255,59,48,0.25)"></div>`;
+                  container.appendChild(divider);
+
+                  // ③ 비활성 계정 리스트 하단 주입
+                  lockedUsers.forEach(u => container.appendChild(buildCard(u, true)));
+              }
+
           })._call({ source: 'vercel', action: 'GET_ADMIN_LIST' });
+      }
+
+      // 🛑 2번 요구사항: 비활성화 경고문구 정교화 및 전송 처리
+      function deleteAdminAccount(id, name) {
+          if (!confirm(`[확인] [${name}(${id})] 관리자 권한을 회수하고 계정을 비활성화 하시겠습니까?`)) return;
+          showToast("⏳ 권한 회수 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) { showToast("✅ 계정이 비활성화 상태로 전환되었습니다.", 2000); refreshAdminList(); } 
+              else { showToast(`❌ 처리 실패: ${res.msg}`, 3000); }
+          })._call({ source: 'vercel', action: 'DELETE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') });
+      }
+
+      // 🔒 6번 요구사항: 본인 비밀번호 실시간 변경 연동 엔진 (SHA-256 연동)
+      async function executeMyPasswordChange() {
+          const currentInput = document.getElementById('mySettingsCurrentPw');
+          const newInput = document.getElementById('mySettingsNewPw');
+          if (!currentInput || !newInput) return;
+
+          const curPw = currentInput.value.trim();
+          const newPw = newInput.value.trim();
+
+          if (!curPw || !newPw) { alert("⚠️ 현재 비밀번호와 새 비밀번호를 모두 입력하세요."); return; }
+          if (curPw === newPw) { alert("⚠️ 새 비밀번호는 현재 비밀번호와 다르게 입력해 주세요."); return; }
+          if (!confirm("정말 비밀번호를 변경하시겠습니까?")) return;
+
+          showToast("⏳ 보안 검증 및 변경 중...", 0);
+          
+          // 전송 전 양쪽 다 SHA-256 강제 해싱
+          const hashedCur = await encryptSHA256(curPw);
+          const hashedNew = await encryptSHA256(newPw);
+
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) {
+                  showToast("✅ 비밀번호 변경 완료! 다음 로그인부터 적용됩니다.", 3000);
+                  currentInput.value = ""; newInput.value = "";
+                  document.getElementById('myInfoModal').style.display = 'none'; // 성공 시 모달 닫기
+              } else {
+                  showToast(`❌ 변경 실패: ${res.msg}`, 3000);
+              }
+          })._call({ source: 'vercel', action: 'CHANGE_MY_PASSWORD', data: { currentPw: hashedCur, newPw: hashedNew }, admin_id: localStorage.getItem('admin_id') });
       }
 
       // ♻️ 계정 복구(활성화) 실행 함수
@@ -7166,25 +7255,7 @@ async function handleLogin() {
           })._call({ source: 'vercel', action: 'RESET_ADMIN_PW', data: { targetId: id, newPw: hashedPw }, admin_id: localStorage.getItem('admin_id') });
       }
 
-      // 🗑️ 관리자 계정 삭제 프론트엔드 요청
-      function deleteAdminAccount(id, name) {
-          if (!confirm(`🚨 경고: [${name}(${id})] 관리자 권한을 영구 박탈하고 삭제합니까?`)) return;
-          showToast("⏳ 계정 접근 잠금 중...", 0);
-          google.script.run.withSuccessHandler(function(res) {
-              if (res.success) { 
-                  showToast("🗑️ 관리자 계정이 폐기(차단)되었습니다.", 2000); 
-                  refreshAdminList(); 
-              } else { 
-                  showToast(`❌ 삭제 실패: ${res.msg || '알 수 없는 오류'}`, 3000); 
-              }
-          })._call({ 
-              source: 'vercel', 
-              action: 'DELETE_ADMIN', 
-              data: { id: id }, // 🚨 핵심 수정: 백엔드가 기다리는 'id' 라는 이름표로 정확히 발송!
-              admin_id: localStorage.getItem('admin_id') 
-          });
-      }
-
+    
       // 🚨 [로그 엔진 상태 변수 및 페이지 이동 함수 추가]
       let logCurrentPage = 1;
 
