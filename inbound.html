@@ -2212,7 +2212,7 @@ manageWebInboundData: function(act, data, tk) {
           }
       });
 
-      // 🚨 5. 생체 인증 설정 변경 (비트워든/애플 정식 패스키 규격 적용)
+      // 🚨 5. 생체 인증 설정 변경 (암호화 동기화 및 검증 로직 완벽 패치)
       async function handleBioToggleChange(checkbox) {
           if (checkbox.checked) {
               if (!window.PublicKeyCredential) {
@@ -2228,7 +2228,10 @@ manageWebInboundData: function(act, data, tk) {
                   return;
               }
 
-              // 👇 🚨 [핵심 패치] 비트워든, iCloud 키체인 등에게 "정식 패스키를 생성해서 저장해라" 라고 명령!
+              // 🚨 [핵심 패치 1] 저장하기 전에 비밀번호를 무조건 SHA-256으로 암호화!
+              const hashedPw = await encryptSHA256(adminPw);
+
+              // 비트워든/애플 정식 패스키 규격 발급 명령
               try {
                   const challenge = new Uint8Array(32);
                   window.crypto.getRandomValues(challenge);
@@ -2251,20 +2254,21 @@ manageWebInboundData: function(act, data, tk) {
                   checkbox.checked = false;
                   return;
               }
-              // 👆 🚨 [구간 끝] 여기까지 통과해야만 서버에 비밀번호가 맞는지 물어봅니다.
 
               showToast("서버 보안 검증 중...", 0);
-              google.script.run.withSuccessHandler(function(isValid) {
-                  if (isValid) {
+              
+              // 🚨 [핵심 패치 2] 어설픈 verifyAdminPw 대신 확실한 login API를 태워서 검증!
+              google.script.run.withSuccessHandler(function(res) {
+                  if (res.success) {
                       localStorage.setItem('bio_registered', 'true');
                       localStorage.setItem('bio_id', adminId);
-                      localStorage.setItem('bio_pw', adminPw); 
+                      localStorage.setItem('bio_pw', hashedPw); // 평문이 아닌 '암호화된 해시'를 기기에 저장!
                       showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
                   } else {
                       alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.");
                       checkbox.checked = false;
                   }
-              }).verifyAdminPw(adminPw);
+              }).login(adminId, hashedPw); // 암호화된 비밀번호로 서버에 똑똑하게 물어봄
 
           } else {
               let currentId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
@@ -2276,8 +2280,7 @@ manageWebInboundData: function(act, data, tk) {
                   return;
               }
 
-              // 해제 시 비트워든에서도 직접 지워달라고 안내 문구 추가
-              if(confirm("생체 인증 로그인을 해제하시겠습니까?\n(※ 비트워든 등 패스키 앱에 저장된 정보는 앱에서 직접 지워주세요)")) {
+              if(confirm("생체 인증 로그인을 해제하시겠습니까?\n(※ 기기에 저장된 패스키는 브라우저 설정에서 직접 지워주세요)")) {
                   localStorage.removeItem('bio_registered');
                   localStorage.removeItem('bio_id');
                   localStorage.removeItem('bio_pw');
