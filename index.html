@@ -2263,27 +2263,31 @@
           관리자 권한을 활성화하려면 로그인하세요.
         </div>
 
-        <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 12px; display: flex; align-items: center; transition: 0.3s; box-sizing: border-box; width: 100%;" 
-             onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
-             onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
-          <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0;">👤</span>
-          <input type="text" id="adminIdInput" style="flex: 1; min-width: 0; width: 100%; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="아이디" autocomplete="username">
-        </div>
+        <form onsubmit="event.preventDefault(); handleLogin();" style="width: 100%; margin: 0; padding: 0;">
+          
+          <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 12px; display: flex; align-items: center; transition: 0.3s; box-sizing: border-box; width: 100%;" 
+               onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
+               onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
+            <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0;">👤</span>
+            <input type="text" id="adminIdInput" style="flex: 1; min-width: 0; width: 100%; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="아이디" autocomplete="username">
+          </div>
 
-        <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 28px; display: flex; align-items: center; transition: 0.3s; box-sizing: border-box; width: 100%;"
-             onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
-             onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
-          <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0;">🔑</span>
-          <input type="password" id="adminPwInput" style="flex: 1; min-width: 0; width: 100%; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="비밀번호" autocomplete="current-password" onkeypress="if(event.key === 'Enter') handleLogin()">
-          <span id="pwToggleIcon" style="font-size: 1.2em; cursor: pointer; padding: 5px; color: var(--text-sub); transition: 0.2s; flex-shrink: 0; margin-left: 4px; display: flex; align-items: center; justify-content: center;" onclick="togglePwView()" onmousedown="this.style.transform='scale(0.8)'" onmouseup="this.style.transform='scale(1)'">👁️</span>
-        </div>
+          <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 28px; display: flex; align-items: center; transition: 0.3s; box-sizing: border-box; width: 100%;"
+               onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
+               onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
+            <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0;">🔑</span>
+            <input type="password" id="adminPwInput" style="flex: 1; min-width: 0; width: 100%; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="비밀번호" autocomplete="current-password">
+            <span id="pwToggleIcon" style="font-size: 1.2em; cursor: pointer; padding: 5px; color: var(--text-sub); transition: 0.2s; flex-shrink: 0; margin-left: 4px; display: flex; align-items: center; justify-content: center;" onclick="togglePwView()" onmousedown="this.style.transform='scale(0.8)'" onmouseup="this.style.transform='scale(1)'">👁️</span>
+          </div>
 
-        <div style="display: flex; gap: 12px;">
-          <button class="cancel-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: var(--bg-color); border: 1px solid var(--border-color);" onclick="document.getElementById('adminLoginModal').style.display='none'">닫기</button>
-          <button onclick="handleLogin()" style="flex: 1.5; padding: 16px; background: linear-gradient(135deg, #0a84ff, #005bb5); color: #fff; border: none; border-radius: 14px; font-size: 1.05em; font-weight: 900; cursor: pointer; box-shadow: 0 6px 15px rgba(10,132,255,0.35); transition: 0.2s;" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'">
-            로그인
-          </button>
-        </div>
+          <div style="display: flex; gap: 12px;">
+            <button type="button" class="cancel-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: var(--bg-color); border: 1px solid var(--border-color);" onclick="document.getElementById('adminLoginModal').style.display='none'">닫기</button>
+            <button type="submit" style="flex: 1.5; padding: 16px; background: linear-gradient(135deg, #0a84ff, #005bb5); color: #fff; border: none; border-radius: 14px; font-size: 1.05em; font-weight: 900; cursor: pointer; box-shadow: 0 6px 15px rgba(10,132,255,0.35); transition: 0.2s;" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'">
+              로그인
+            </button>
+          </div>
+
+        </form>
         <button id="btnBioLogin" onclick="handleBioLogin()" style="width: 100%; margin-top: 15px; padding: 16px; background: transparent; color: var(--text-main); border: 1.5px solid var(--border-color); border-radius: 14px; font-size: 1.05em; font-weight: 900; cursor: pointer; display: none; transition: 0.2s;" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'">
            지문 / Face ID 로그인
         </button>
