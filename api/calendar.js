@@ -397,32 +397,41 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // ✅ 1. 로그인 로직
-            // ✅ 1. 로그인 로직 (접속 IP 및 기기/브라우저 추적 패치)
+            // ✅ 1. 로그인 로직 (대소문자 무시 + 비활성화 분기 처리 패치)
             else if (action === 'LOGIN') {
                 try {
                     const { id, pw } = data; 
-                    const [rows] = await pool.query("SELECT admin_id, password_hash, admin_name, role FROM admins WHERE admin_id = ? AND status = 'ACTIVE'", [id]);
+                    
+                    // 🚨 [2번 요구사항] 대소문자 구분 없이(LOWER) DB에서 계정 검색
+                    const [rows] = await pool.query("SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = LOWER(?)", [id]);
 
-                    if (rows.length === 0 || rows[0].password_hash !== pw) {
+                    if (rows.length === 0) {
                         return res.status(200).json({ success: false, msg: '아이디 또는 비밀번호가 틀립니다.' });
                     }
 
                     const user = rows[0];
+
+                    // 🚨 [1번 요구사항] 비활성화된 계정이면 비밀번호 맞는지 볼 필요도 없이 전용 메시지 리턴
+                    if (user.status === 'LOCKED') {
+                        return res.status(200).json({ success: false, msg: '비활성화된 계정입니다. 관리자에게 문의하세요.' });
+                    }
+
+                    // 비밀번호 검증
+                    if (user.password_hash !== pw) {
+                        return res.status(200).json({ success: false, msg: '아이디 또는 비밀번호가 틀립니다.' });
+                    }
                     
-                    // 🚨 [보안] Vercel 환경에서 IP 및 User-Agent 추출 엔진
+                    // [이하 기존 IP 및 기기 추적 로직 유지]
                     let ip = req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'IP 알수없음';
-                    if (ip.includes(',')) ip = ip.split(',')[0]; // 프록시 통과 시 첫 번째가 진짜 IP
+                    if (ip.includes(',')) ip = ip.split(',')[0]; 
                     const ua = req.headers['user-agent'] || '';
                     
-                    // 기기(OS) 판별
                     let os = 'PC';
                     if (/android/i.test(ua)) os = 'Android';
                     else if (/ipad|iphone|ipod/i.test(ua)) os = 'iOS';
                     else if (/mac os/i.test(ua)) os = 'Mac';
                     else if (/windows/i.test(ua)) os = 'Windows';
                     
-                    // 브라우저 판별
                     let browser = '알수없음';
                     if (/edg/i.test(ua)) browser = 'Edge';
                     else if (/chrome/i.test(ua)) browser = 'Chrome';
@@ -433,7 +442,6 @@ module.exports = async function(req, res) {
 
                     const connInfo = `[접속성공] IP: ${ip} | 기기: ${os} | 브라우저: ${browser}`;
                     
-                    // 로그인 성공 시 보안 로그에 접속 정보 각인
                     await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'LOGIN', ?)", [user.admin_id, connInfo]);
 
                     return res.status(200).json({ success: true, admin_id: user.admin_id, role: user.role, name: user.admin_name });

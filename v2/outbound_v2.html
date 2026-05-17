@@ -267,6 +267,30 @@
         color: var(--sat-color);
       }
 
+      /* 💡 [4번 요구사항] 달력 요일 헤더 세련된 디자인 (기본 다크모드 베이스) */
+      .calendar-container .grid-row:first-child {
+        background: linear-gradient(180deg, #2a2c30 0%, #1e1f22 100%);
+        border-bottom: 2px solid #0a84ff; /* 하단 엣지 포인트 컬러 */
+      }
+      .calendar-container .grid-row:first-child .day-header {
+        background: transparent !important; /* 배경색 투명으로 빼서 그라데이션 적용 */
+        font-size: 0.85em;
+        padding: 14px 0;
+        letter-spacing: 1.5px;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5); /* 글씨가 또렷하게 뜨도록 음영 처리 */
+        border: none;
+      }
+      
+      /* 💡 라이트 모드일 때의 요일 헤더 디자인 */
+      body.light-mode .calendar-container .grid-row:first-child {
+        background: linear-gradient(180deg, #ffffff 0%, #eef2f5 100%);
+        border-bottom: 2px solid #0a84ff;
+      }
+      body.light-mode .calendar-container .grid-row:first-child .day-header {
+        text-shadow: none; /* 라이트모드에선 깔끔하게 텍스트만! */
+        font-weight: 900;
+      }
+
       .day-cell {
         background: var(--card-bg);
         min-height: 65px;
@@ -3894,128 +3918,140 @@ manageWebInboundData: function(act, data, tk) {
         });
       }
 
-      // 💡 [수정] 앱을 꺼도 관리자 로그인 유지 (장기 기억 및 예쁜 초록색 버튼 복구)
-      if (localStorage.getItem('isAdmin') === 'true') {
+      // =====================================================
+      // 🔒 [통합 인증 및 세션 제어 엔진]
+      // =====================================================
+
+      // 🚨 1. 인증 데이터 통합 저장/삭제 헬퍼 (localStorage vs sessionStorage 자동 분배)
+      function saveAuthData(id, role, isSave) {
+          const isAuto = localStorage.getItem('auto_login') !== 'false';
+          const targetStorage = isAuto ? localStorage : sessionStorage;
+          const otherStorage = isAuto ? sessionStorage : localStorage;
+
+          if (isSave) {
+              otherStorage.removeItem('isAdmin'); otherStorage.removeItem('admin_id'); otherStorage.removeItem('admin_role');
+              targetStorage.setItem('isAdmin', 'true');
+              targetStorage.setItem('admin_id', id);
+              targetStorage.setItem('admin_role', role);
+          } else {
+              localStorage.removeItem('isAdmin'); localStorage.removeItem('admin_id'); localStorage.removeItem('admin_role');
+              sessionStorage.removeItem('isAdmin'); sessionStorage.removeItem('admin_id'); sessionStorage.removeItem('admin_role');
+          }
+      }
+
+      // 🚨 2. 자동 로그인 토글 스위치 
+      function handleAutoLoginToggle(checkbox) {
+          const id = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
+          const role = localStorage.getItem('admin_role') || sessionStorage.getItem('admin_role');
+          
+          if (checkbox.checked) {
+              localStorage.setItem('auto_login', 'true');
+              if (id) saveAuthData(id, role, true);
+              showToast("자동 로그인 기능이 켜졌습니다.", 1500);
+          } else {
+              localStorage.setItem('auto_login', 'false');
+              if (id) saveAuthData(id, role, true); // 세션스토리지로 이사
+              showToast("앱 종료 시 자동으로 로그아웃됩니다.", 1500);
+          }
+      }
+
+      // 🚨 3. 앱 종료 시 자동로그인 OFF 상태면 권한 파기
+      window.addEventListener('beforeunload', () => {
+          if (localStorage.getItem('auto_login') === 'false') {
+              saveAuthData(null, null, false);
+          }
+      });
+
+      // 🚨 4. 앱 실행 시 초기화 로직 (sessionStorage까지 검사하도록 수정 완료)
+      if (localStorage.getItem('isAdmin') === 'true' || sessionStorage.getItem('isAdmin') === 'true') {
           window.isAdmin = true;
           isAdmin = true;
           
           const actions = document.getElementById("adminActions");
           if (actions) actions.style.display = "flex";
-          const fab = document.getElementById("fabBtn"); // 출고 전용 + 버튼
+          const fab = document.getElementById("fabBtn"); 
           if (fab) fab.style.display = "flex";
 
-          // 초록색 관리자 버튼으로 변신! (이 4줄만 남기면 끝입니다)
-            const btn = document.getElementById("adminBtn");
-            if (btn) {
-                btn.innerHTML = '🔓 관리자';
-                btn.className = 'admin-btn unlocked'; 
-                btn.removeAttribute("style"); 
-            }
-            // 👇 🚨 [추가] 마스터 계정일 때 제어실 진입 버튼을 은밀하게 활성화하는 인터락 스위치
-          if (typeof checkMasterAuthButtonVisibility === 'function') {
-              checkMasterAuthButtonVisibility();
+          const btn = document.getElementById("adminBtn");
+          if (btn) {
+              btn.innerHTML = '🔓 관리자';
+              btn.className = 'admin-btn unlocked'; 
+              btn.removeAttribute("style"); 
           }
+          if (typeof checkMasterAuthButtonVisibility === 'function') checkMasterAuthButtonVisibility();
       } else {
           window.isAdmin = false;
           isAdmin = false;
       }
 
-      // 💡 [신규] 수동 로그인 모달창을 띄우는 헬퍼 함수
+      // 🚨 5. 수동 로그인 모달창 띄우기
       function openLoginModal() {
-        document.getElementById('adminPwInput').value = ''; 
-        let idInput = document.getElementById('adminIdInput');
-        if (idInput) idInput.value = ''; 
-        
-        const bioBtn = document.getElementById('btnBioLogin');
-        if (bioBtn) bioBtn.style.display = localStorage.getItem('bio_registered') === 'true' ? 'block' : 'none';
+          document.getElementById('adminPwInput').value = ''; 
+          let idInput = document.getElementById('adminIdInput');
+          if (idInput) idInput.value = ''; 
+          
+          const bioBtn = document.getElementById('btnBioLogin');
+          if (bioBtn) bioBtn.style.display = localStorage.getItem('bio_registered') === 'true' ? 'block' : 'none';
 
-        document.getElementById('adminLoginModal').style.display = 'flex';
-        setTimeout(() => { if(idInput) idInput.focus(); else document.getElementById('adminPwInput').focus(); }, 150);
+          document.getElementById('adminLoginModal').style.display = 'flex';
+          setTimeout(() => { if(idInput) idInput.focus(); else document.getElementById('adminPwInput').focus(); }, 150);
       }
 
-    // =====================================================
-      // 🔒 [완성본] 권한에 따른 프로필 모달 및 생체인증 토글 함수
-      // =====================================================
+      // 🚨 6. 권한에 따른 프로필 모달 및 생체인증 토글 함수
       function toggleAdmin() {
-        if(isAdmin) {
-          let savedId = localStorage.getItem('admin_id') || '관리자';
-          let savedRole = localStorage.getItem('admin_role'); 
-          
-          document.getElementById('myInfoAdminId').innerText = `ID: ${savedId}`;
-          
-          const roleTextElem = document.getElementById('myInfoAdminRole');
-          const iconElem = document.getElementById('myInfoAdminIcon');
-          
-          const isMasterUser = savedId.toLowerCase() === 'admin' || 
-                               savedId.toLowerCase() === 'silverscent' ||
-                               (savedRole && (savedRole.toUpperCase().includes('SUPER') || 
-                                              savedRole.toUpperCase().includes('MASTER') ||
-                                              savedRole.toUpperCase().includes('SYSTEM')));
+          if(isAdmin) {
+              let savedId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id') || '관리자';
+              let savedRole = localStorage.getItem('admin_role') || sessionStorage.getItem('admin_role'); 
+              
+              document.getElementById('myInfoAdminId').innerText = `ID: ${savedId}`;
+              
+              const roleTextElem = document.getElementById('myInfoAdminRole');
+              const iconElem = document.getElementById('myInfoAdminIcon');
+              
+              const isMasterUser = savedId.toLowerCase() === 'admin' || 
+                                   savedId.toLowerCase() === 'silverscent' ||
+                                   (savedRole && (savedRole.toUpperCase().includes('SUPER') || 
+                                                  savedRole.toUpperCase().includes('MASTER') ||
+                                                  savedRole.toUpperCase().includes('SYSTEM')));
 
-          // 🚨 2번 요구사항: 권한에 따른 아이콘 색상 완벽 분리!
-          if(iconElem) {
-              iconElem.innerText = '🧑‍💻';
-              if (isMasterUser) {
-                  iconElem.style.background = 'linear-gradient(135deg, #0a84ff, #005bb5)';
-                  iconElem.style.boxShadow = '0 4px 10px rgba(10, 132, 255, 0.3)';
-              } else {
-                  iconElem.style.background = 'linear-gradient(135deg, #34c759, #28a745)';
-                  iconElem.style.boxShadow = '0 4px 10px rgba(52, 199, 89, 0.3)';
+              if(iconElem) {
+                  iconElem.innerText = '🧑‍💻';
+                  if (isMasterUser) {
+                      iconElem.style.background = 'linear-gradient(135deg, #0a84ff, #005bb5)';
+                      iconElem.style.boxShadow = '0 4px 10px rgba(10, 132, 255, 0.3)';
+                  } else {
+                      iconElem.style.background = 'linear-gradient(135deg, #34c759, #28a745)';
+                      iconElem.style.boxShadow = '0 4px 10px rgba(52, 199, 89, 0.3)';
+                  }
               }
+
+              if (isMasterUser) {
+                  roleTextElem.innerText = 'System Administrator';
+                  roleTextElem.style.color = '#0a84ff'; 
+              } else {
+                  roleTextElem.innerText = '일반 관리자';
+                  roleTextElem.style.color = 'var(--text-main)'; 
+              }
+
+              let isBioRegistered = localStorage.getItem('bio_registered') === 'true' && localStorage.getItem('bio_id') === savedId;
+              document.getElementById('toggleBioAuth').checked = isBioRegistered;
+              
+              let isAutoLogin = localStorage.getItem('auto_login') !== 'false'; 
+              document.getElementById('toggleAutoLogin').checked = isAutoLogin;
+              
+              document.getElementById('pwChangeFormContainer').style.display = 'none';
+
+              document.getElementById('myInfoModal').style.display = 'flex';
+              return;
           }
-
-          if (isMasterUser) {
-              roleTextElem.innerText = 'System Administrator';
-              roleTextElem.style.color = '#0a84ff'; 
-          } else {
-              roleTextElem.innerText = '일반 관리자';
-              roleTextElem.style.color = 'var(--text-main)'; 
+          
+          if (localStorage.getItem('bio_registered') === 'true' && window.PublicKeyCredential) {
+              handleBioLogin(); return; 
           }
-
-          let isBioRegistered = localStorage.getItem('bio_registered') === 'true' && localStorage.getItem('bio_id') === savedId;
-          document.getElementById('toggleBioAuth').checked = isBioRegistered;
-          
-          // 🚨 4번 요구사항: 자동 로그인 토글 상태 불러오기
-          let isAutoLogin = localStorage.getItem('auto_login') !== 'false'; // 기본값은 켜짐
-          document.getElementById('toggleAutoLogin').checked = isAutoLogin;
-          
-          // 비밀번호 폼은 열 때마다 항상 닫힌 상태로 초기화
-          document.getElementById('pwChangeFormContainer').style.display = 'none';
-
-          document.getElementById('myInfoModal').style.display = 'flex';
-          return;
-        }
-        
-        if (localStorage.getItem('bio_registered') === 'true' && window.PublicKeyCredential) {
-            handleBioLogin(); return; 
-        }
-        openLoginModal();
+          openLoginModal();
       }
 
-      // 🚨 4번 요구사항: 자동 로그인 설정 저장 함수 추가 (아무 빈 곳에 넣으세요)
-      function handleAutoLoginToggle(checkbox) {
-          if (checkbox.checked) {
-              localStorage.setItem('auto_login', 'true');
-              showToast("자동 로그인 기능이 켜졌습니다.", 1500);
-          } else {
-              localStorage.setItem('auto_login', 'false');
-              showToast("앱 종료 시 자동으로 로그아웃됩니다.", 1500);
-          }
-      }
-
-      // 🚨 4번 요구사항: 사용자가 앱을 닫을 때 자동로그인이 꺼져있다면 권한 파기
-      window.addEventListener('beforeunload', () => {
-          if (localStorage.getItem('auto_login') === 'false') {
-              localStorage.removeItem('isAdmin');
-              localStorage.removeItem('is_admin');
-              localStorage.removeItem('admin_id');
-              localStorage.removeItem('admin_role');
-          }
-      });
-
-      // =====================================================
-      // 🔒 [완성본] 생체 인증 등록 및 해제 통제 함수
-      // =====================================================
+      // 🚨 7. 생체 인증 등록 및 해제 통제 함수
       function handleBioToggleChange(checkbox) {
           if (checkbox.checked) {
               if (!window.PublicKeyCredential) {
@@ -4023,8 +4059,7 @@ manageWebInboundData: function(act, data, tk) {
                   checkbox.checked = false;
                   return;
               }
-              // 등록 절차
-              let adminId = localStorage.getItem('admin_id');
+              let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
               let adminPw = prompt("생체 인증을 등록하려면 현재 로그인된 계정의 비밀번호를 다시 한번 입력하세요.");
               
               if (!adminPw) {
@@ -4046,13 +4081,12 @@ manageWebInboundData: function(act, data, tk) {
               }).verifyAdminPw(adminPw);
 
           } else {
-              let currentId = localStorage.getItem('admin_id');
+              let currentId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
               let bioId = localStorage.getItem('bio_id');
               
-              // 🚨 [정밀 패치] 내 계정으로 등록된 생체인증이 아니라면 마스터의 정보를 지우지 못하게 차단
               if (localStorage.getItem('bio_registered') === 'true' && currentId !== bioId) {
                   showToast("⚠️ 본인 계정으로 등록된 생체 인증 정보가 아닙니다.", 2500);
-                  checkbox.checked = false; // 강제로 다시 끔 처리
+                  checkbox.checked = false; 
                   return;
               }
 
@@ -4067,26 +4101,14 @@ manageWebInboundData: function(act, data, tk) {
           }
       }
 
-      // (※ handleBioLogin 함수는 기존에 드린 것 그대로 유지하시면 됩니다!)
-      // 💡 [신규] 진짜로 로그아웃을 실행하는 함수
+      // 🚨 8. 로그아웃 (통합 삭제 헬퍼 연동)
       function executeLogout() {
           document.getElementById('logoutConfirmModal').style.display = 'none';
-          
           isAdmin = false; 
           window.isAdmin = false;
-          
-          // 시스템 설정(테마 등)은 살리고 권한 찌꺼기만 핀포인트로 파괴!
-          localStorage.removeItem('isAdmin');
-          localStorage.removeItem('is_admin');
-          localStorage.removeItem('admin_id');
-          localStorage.removeItem('admin_role');
-          localStorage.removeItem('admin_token'); 
-          sessionStorage.clear();
-          
-          // UI를 완벽하게 초기화하기 위해 페이지 새로고침
+          saveAuthData(null, null, false); // 모든 스토리지에서 완벽 파괴
           location.reload(); 
       }
-
      
 
       let isMultiMode = false;
@@ -6804,11 +6826,9 @@ async function handleLogin() {
         }
 
         if (res.success) {
-            window.isAdmin = true; isAdmin = true; 
-            localStorage.setItem('isAdmin', 'true');
-            localStorage.setItem('is_admin', 'true');
-            localStorage.setItem('admin_id', res.admin_id);
-            localStorage.setItem('admin_role', res.role);
+    window.isAdmin = true; isAdmin = true; 
+    saveAuthData(res.admin_id, res.role, true); // 👈 🚨 통합 헬퍼로 변경!
+    // ... 이하 동일
 
             const btn = document.getElementById("adminBtn");
             if (btn) {
@@ -6978,11 +6998,9 @@ async function handleLogin() {
                       
                       google.script.run.withSuccessHandler(function(res) {
                           if (res.success) {
-                              window.isAdmin = true; isAdmin = true; 
-                              localStorage.setItem('isAdmin', 'true');
-                              localStorage.setItem('is_admin', 'true');
-                              localStorage.setItem('admin_id', res.admin_id);
-                              localStorage.setItem('admin_role', res.role);
+    window.isAdmin = true; isAdmin = true; 
+    saveAuthData(res.admin_id, res.role, true); // 👈 🚨 통합 헬퍼로 변경!
+    // ... 이하 동일
                               
                               const btn = document.getElementById("adminBtn");
                               if (btn) { btn.innerHTML = '🔓 관리자'; btn.className = 'admin-btn unlocked'; btn.removeAttribute("style"); }
