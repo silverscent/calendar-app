@@ -93,28 +93,36 @@
         align-items: center;
       }
 
-      /* 🌟 앱 브랜딩 타이틀 바 */
+      /* 🌟 앱 브랜딩 타이틀 바 (여백 다이어트 & 우측 컨트롤 통합) */
       .app-branding-header {
         display: flex;
         align-items: center;
-        justify-content: center;
-        padding-bottom: 12px;
-        margin-bottom: 12px;
-        border-bottom: 1px dashed rgba(128, 128, 128, 0.25); /* 은은한 점선 구분선 */
+        justify-content: space-between; /* 🚨 로고는 좌측, 버튼은 우측으로 쫙 밀어냅니다 */
+        padding-bottom: 6px; /* 위아래 여백 대폭 축소 */
+        margin-bottom: 8px;  /* 위아래 여백 대폭 축소 */
+        border-bottom: 1px dashed rgba(128, 128, 128, 0.25);
+      }
+      .branding-left {
+        display: flex;
+        align-items: center;
       }
       .branding-logo {
-        width: 22px;
-        height: 22px;
-        margin-right: 8px;
-        border-radius: 6px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.15); /* 로고가 살짝 떠보이는 입체감 */
+        width: 18px; /* 로고 살짝 축소하여 정렬 */
+        height: 18px;
+        margin-right: 6px;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         object-fit: cover;
       }
       .branding-title {
         font-weight: 900;
-        font-size: 1.15em;
-        color: var(--text-main);
+        font-size: 1.05em; /* 텍스트 살짝 축소 */
+        color: var(--text-main); /* 다크모드일 땐 기본 흰색 계열 유지 */
         letter-spacing: -0.5px;
+      }
+      /* 🚨 라이트 모드일 때만 파비콘의 '어두운 네이비 블루' 적용 */
+      body.light-mode .branding-title {
+        color: #002b5e; 
       }
 
       .title-area {
@@ -1834,7 +1842,7 @@
     <div class="top-wrapper">
       <div class="app-branding-header">
         <img src="/favicon.png" alt="Logo" class="branding-logo">
-        <span class="branding-title">Coloplast 출고캘린더</span>
+        <span class="branding-title">Coloplast 입고캘린더</span>
       </div>
       <div class="top-row">
         <div class="title-area">
@@ -1843,7 +1851,7 @@
           </button>
           
           <button class="title-btn" onclick="openPicker()" style="display:flex; align-items:center; justify-content:center; gap:4px;">
-            🚚 <span id="calTitle"></span> 
+            📥 <span id="calTitle"></span> 
             <span class="drop-icon" style="display:flex; align-items:center; margin-left: 2px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </span>
@@ -1855,39 +1863,26 @@
         </div>
         <div class="controls-area">
           <button class="theme-toggle" onclick="toggleTheme()">☀️</button>
-          <button class="admin-btn" id="adminBtn" onclick="toggleAdmin()">
-            🔒 잠김
-          </button>
+          <button class="admin-btn" id="adminBtn" onclick="toggleAdmin()">🔒 잠김</button>
         </div>
       </div>
       <div class="top-row">
         <div class="size-toggle">
-          <button class="size-btn" id="btnS" onclick="changeSize('S')">
-            A-
-          </button>
-          <button class="size-btn active" id="btnM" onclick="changeSize('M')">
-            A
-          </button>
-          <button class="size-btn" id="btnL" onclick="changeSize('L')">
-            A+
-          </button>
+          <button class="size-btn" id="btnS" onclick="changeSize('S')">A-</button>
+          <button class="size-btn active" id="btnM" onclick="changeSize('M')">A</button>
+          <button class="size-btn" id="btnL" onclick="changeSize('L')">A+</button>
         </div>
-
         <div class="action-row-right">
-          <button class="info-btn" id="compInfoBtn" onclick="openCompListModal()">ℹ️</button>
-          
-          <div class="sync-area" id="syncArea" style="display: flex">
+          <button class="ocr-btn" onclick="showLastOcrImage()">📄 최근OCR 🖼️</button>
+          <div class="sync-area" id="syncArea">
             <span class="sync-time" id="lastSyncTime"></span>
-            <button class="sync-btn" onclick="navMonth(0)" title="수동 동기화">
-              🔄
-            </button>
+            <button class="sync-btn" onclick="navMonth(0)" title="수동 동기화">🔄</button>
           </div>
-          <div class="admin-actions" id="adminActions">
-            <button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">
-              ☑️ 다중 선택
-            </button>
           </div>
-        </div>
+      </div>
+      
+      <div class="admin-actions" id="adminActions" style="justify-content: flex-end; margin-top: 4px;">
+        <button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
       </div>
     </div>
 
