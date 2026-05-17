@@ -1841,9 +1841,16 @@
 
     <div class="top-wrapper">
       <div class="app-branding-header">
-        <img src="/favicon.png" alt="Logo" class="branding-logo">
-        <span class="branding-title">Coloplast 입고캘린더</span>
+        <div class="branding-left">
+          <img src="/favicon.png" alt="Logo" class="branding-logo">
+          <span class="branding-title">Coloplast 출고캘린더</span>
+        </div>
+        <div class="controls-area">
+          <button class="theme-toggle" onclick="toggleTheme()">☀️</button>
+          <button class="admin-btn" id="adminBtn" onclick="toggleAdmin()">🔒 잠김</button>
+        </div>
       </div>
+
       <div class="top-row">
         <div class="title-area">
           <button class="nav-arrow" style="display:flex; align-items:center; justify-content:center; padding: 6px 12px;" onclick="navMonth(-1)">
@@ -1851,7 +1858,7 @@
           </button>
           
           <button class="title-btn" onclick="openPicker()" style="display:flex; align-items:center; justify-content:center; gap:4px;">
-            📥 <span id="calTitle"></span> 
+            🚚 <span id="calTitle"></span> 
             <span class="drop-icon" style="display:flex; align-items:center; margin-left: 2px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </span>
@@ -1861,28 +1868,25 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </button>
         </div>
-        <div class="controls-area">
-          <button class="theme-toggle" onclick="toggleTheme()">☀️</button>
-          <button class="admin-btn" id="adminBtn" onclick="toggleAdmin()">🔒 잠김</button>
-        </div>
-      </div>
-      <div class="top-row">
+
         <div class="size-toggle">
           <button class="size-btn" id="btnS" onclick="changeSize('S')">A-</button>
           <button class="size-btn active" id="btnM" onclick="changeSize('M')">A</button>
           <button class="size-btn" id="btnL" onclick="changeSize('L')">A+</button>
         </div>
+      </div>
+
+      <div class="top-row" style="justify-content: flex-end;">
         <div class="action-row-right">
-          <button class="ocr-btn" onclick="showLastOcrImage()">📄 최근OCR 🖼️</button>
-          <div class="sync-area" id="syncArea">
+          <button class="info-btn" id="compInfoBtn" onclick="openCompListModal()">ℹ️</button>
+          <div class="sync-area" id="syncArea" style="display: flex">
             <span class="sync-time" id="lastSyncTime"></span>
             <button class="sync-btn" onclick="navMonth(0)" title="수동 동기화">🔄</button>
           </div>
+          <div class="admin-actions" id="adminActions">
+            <button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
           </div>
-      </div>
-      
-      <div class="admin-actions" id="adminActions" style="justify-content: flex-end; margin-top: 4px;">
-        <button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
+        </div>
       </div>
     </div>
 
