@@ -4083,7 +4083,7 @@ manageWebInboundData: function(act, data, tk) {
           openLoginModal();
       }
 
-           // 🚨 7. 생체 인증 설정 변경 (암호화 동기화 및 검증 로직 완벽 패치)
+      // 🚨 7. 생체 인증 설정 변경 (비트워든/애플 정식 패스키 규격 적용 - 흐름 최적화)
       async function handleBioToggleChange(checkbox) {
           if (checkbox.checked) {
               if (!window.PublicKeyCredential) {
@@ -4091,18 +4091,11 @@ manageWebInboundData: function(act, data, tk) {
                   checkbox.checked = false;
                   return;
               }
-              let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
-              let adminPw = prompt("생체 인증을 등록하려면 현재 로그인된 계정의 비밀번호를 다시 한번 입력하세요.");
               
-              if (!adminPw) {
-                  checkbox.checked = false;
-                  return;
-              }
-
-              // 🚨 [핵심 패치 1] 저장하기 전에 비밀번호를 무조건 SHA-256으로 암호화!
-              const hashedPw = await encryptSHA256(adminPw);
-
-              // 비트워든/애플 정식 패스키 규격 발급 명령
+              let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
+              
+              // 🚨 [보안 흐름 패치] prompt() 창이 먼저 뜨면 애플/브라우저 보안상 사용자의 '터치'가 끊겼다고 판단해
+              // 패스키 생성을 강제로 차단(취소)해 버립니다. 따라서 패스키 생성을 가장 먼저 호출합니다!
               try {
                   const challenge = new Uint8Array(32);
                   window.crypto.getRandomValues(challenge);
@@ -4111,35 +4104,45 @@ manageWebInboundData: function(act, data, tk) {
 
                   await navigator.credentials.create({
                       publicKey: {
-                          challenge: challenge,
+                          challenge: challenge.buffer, // 🚨 엄격한 브라우저를 위해 .buffer 명시 필수
                           rp: { name: "Coloplast 시스템", id: window.location.hostname },
-                          user: { id: userId, name: adminId, displayName: adminId },
+                          user: { id: userId.buffer, name: adminId, displayName: adminId },
                           pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-                          authenticatorSelection: { userVerification: "required" },
+                          authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
                           timeout: 60000
                       }
                   });
               } catch (err) {
-                  console.warn("패스키 저장 취소됨:", err);
-                  showToast("⚠️ 패스키 저장이 취소/실패하여 생체 인증을 켤 수 없습니다.", 2500);
+                  console.warn("패스키 생성 실패/취소:", err);
+                  // 에러 이름을 함께 띄워주면 디버깅하기 훨씬 좋습니다.
+                  showToast(`⚠️ 생체 인증 생성이 취소/차단되었습니다. (${err.name || '알수없음'})`, 3000);
                   checkbox.checked = false;
                   return;
               }
 
-              showToast("서버 보안 검증 중...", 0);
+              // 🚨 패스키 기기 저장이 성공하면, 그때 시스템에 등록할 비밀번호를 물어봅니다!
+              let adminPw = prompt("✅ 기기 등록 성공!\n시스템에 최종 등록하려면 현재 계정의 비밀번호를 입력하세요.");
               
-              // 🚨 [핵심 패치 2] 어설픈 verifyAdminPw 대신 확실한 login API를 태워서 검증!
+              if (!adminPw) {
+                  checkbox.checked = false;
+                  showToast("비밀번호 입력이 취소되어 생체 인증이 비활성화됩니다.", 2500);
+                  return;
+              }
+
+              showToast("서버 보안 검증 중...", 0);
+              const hashedPw = await encryptSHA256(adminPw);
+              
               google.script.run.withSuccessHandler(function(res) {
                   if (res.success) {
                       localStorage.setItem('bio_registered', 'true');
                       localStorage.setItem('bio_id', adminId);
-                      localStorage.setItem('bio_pw', hashedPw); // 평문이 아닌 '암호화된 해시'를 기기에 저장!
+                      localStorage.setItem('bio_pw', hashedPw); 
                       showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
                   } else {
                       alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.");
                       checkbox.checked = false;
                   }
-              }).login(adminId, hashedPw); // 암호화된 비밀번호로 서버에 똑똑하게 물어봄
+              }).login(adminId, hashedPw);
 
           } else {
               let currentId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
