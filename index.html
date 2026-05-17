@@ -4083,8 +4083,8 @@ manageWebInboundData: function(act, data, tk) {
           openLoginModal();
       }
 
-      // 🚨 7. 생체 인증 등록 및 해제 통제 함수
-      function handleBioToggleChange(checkbox) {
+     // 🚨 7. 생체 인증 설정 변경 (비트워든/애플 정식 패스키 규격 적용)
+      async function handleBioToggleChange(checkbox) {
           if (checkbox.checked) {
               if (!window.PublicKeyCredential) {
                   alert("이 기기 브라우저에서는 생체 인증(WebAuthn)을 지원하지 않습니다.");
@@ -4099,13 +4099,38 @@ manageWebInboundData: function(act, data, tk) {
                   return;
               }
 
-              showToast("보안 검증 중...", 0);
+              // 👇 🚨 [핵심 패치] 비트워든, iCloud 키체인 등에게 "정식 패스키를 생성해서 저장해라" 라고 명령!
+              try {
+                  const challenge = new Uint8Array(32);
+                  window.crypto.getRandomValues(challenge);
+                  const userId = new Uint8Array(16);
+                  window.crypto.getRandomValues(userId);
+
+                  await navigator.credentials.create({
+                      publicKey: {
+                          challenge: challenge,
+                          rp: { name: "Coloplast 시스템", id: window.location.hostname },
+                          user: { id: userId, name: adminId, displayName: adminId },
+                          pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+                          authenticatorSelection: { userVerification: "required" },
+                          timeout: 60000
+                      }
+                  });
+              } catch (err) {
+                  console.warn("패스키 저장 취소됨:", err);
+                  showToast("⚠️ 패스키 저장이 취소/실패하여 생체 인증을 켤 수 없습니다.", 2500);
+                  checkbox.checked = false;
+                  return;
+              }
+              // 👆 🚨 [구간 끝] 여기까지 통과해야만 서버에 비밀번호가 맞는지 물어봅니다.
+
+              showToast("서버 보안 검증 중...", 0);
               google.script.run.withSuccessHandler(function(isValid) {
                   if (isValid) {
                       localStorage.setItem('bio_registered', 'true');
                       localStorage.setItem('bio_id', adminId);
                       localStorage.setItem('bio_pw', adminPw); 
-                      showToast("✅ 생체 인증이 기기에 등록되었습니다.", 2000);
+                      showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
                   } else {
                       alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.");
                       checkbox.checked = false;
@@ -4122,7 +4147,8 @@ manageWebInboundData: function(act, data, tk) {
                   return;
               }
 
-              if(confirm("생체 인증 로그인을 해제하시겠습니까?")) {
+              // 해제 시 비트워든에서도 직접 지워달라고 안내 문구 추가
+              if(confirm("생체 인증 로그인을 해제하시겠습니까?\n(※ 비트워든 등 패스키 앱에 저장된 정보는 앱에서 직접 지워주세요)")) {
                   localStorage.removeItem('bio_registered');
                   localStorage.removeItem('bio_id');
                   localStorage.removeItem('bio_pw');
