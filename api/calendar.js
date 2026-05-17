@@ -107,11 +107,18 @@ module.exports = async function(req, res) {
             const { domain, action, data, keyword, type, rowId, year, month, id, admin_id } = payload;
             const currentAdmin = admin_id || 'system';
 
-            // 👇 🚨 [여기에 추가!] 글로벌 세션 방어막: 매 요청마다 계정 차단 여부 검사 (로그인 액션은 제외)
-            if (admin_id && action !== 'LOGIN') {
+            // 🚨 [강화된 글로벌 세션 방어막] 데이터 조작/조회 시 무조건 권한 철저히 검증!
+            const secureActions = ['ADD', 'EDIT', 'DELETE', 'DONE', 'UNDO_DONE', 'ADD_QTY', 'UPDATE_ORDER', 'MULTI_DELETE', 'MULTI_DONE', 'MULTI_UNDO_DONE', 'CREATE_ADMIN', 'DELETE_ADMIN', 'REACTIVATE_ADMIN', 'HARD_DELETE_ADMIN', 'RESET_ADMIN_PW', 'CHANGE_MY_PASSWORD', 'UPDATE_RAW_ROW_FULL', 'ADD_RAW_ROW_DIRECT', 'DELETE_RAW_ROW_DIRECT', 'SAVE_COMP_INFO_DB', 'SAVE_GLOBAL_COLOR'];
+            
+            if (secureActions.includes(action)) {
+                // 1. ID 명찰조차 안 차고 명령을 내리면 즉시 쫓아냄 (스텔스 해킹 차단)
+                if (!admin_id) {
+                    return res.status(200).json({ success: false, forceLogout: true, msg: '로그인 세션이 만료되었거나 유효하지 않습니다.' });
+                }
+                
+                // 2. 명찰을 찼어도, DB에서 'LOCKED(차단)'된 놈이면 즉시 쫓아냄
                 const [sessionCheck] = await pool.query("SELECT status FROM admins WHERE admin_id = ?", [admin_id]);
                 if (sessionCheck.length === 0 || sessionCheck[0].status === 'LOCKED') {
-                    // 차단된 계정이면 어떤 명령이든 무시하고 '강제 로그아웃' 명령 하달
                     return res.status(200).json({ success: false, forceLogout: true, msg: '관리자에 의해 계정이 비활성화되었습니다.' });
                 }
             }

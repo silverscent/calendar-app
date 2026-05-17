@@ -1633,8 +1633,12 @@
                                   if(this._err) this._err(e); 
                               }).finally(() => setLoadingState(false));
                       },
-                      manageWebOutboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'out', action: act, data: data, token: tk }); },
-                      manageWebInboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'in', action: act, data: data, token: tk }); },
+                      manageWebOutboundData: function(act, data, tk) { 
+    this._call({ source: 'vercel', domain: 'out', action: act, data: data, token: tk, admin_id: localStorage.getItem('admin_id') }); 
+},
+manageWebInboundData: function(act, data, tk) { 
+    this._call({ source: 'vercel', domain: 'in', action: act, data: data, token: tk, admin_id: localStorage.getItem('admin_id') }); 
+},
                       verifyAdminPw: function(pw) {
                           setLoadingState(true);
                           fetch(VERCEL_API_URL, { method: 'POST', body: JSON.stringify({ source: 'vercel', domain: currentType, action: 'PING', data: {}, token: pw }) })
