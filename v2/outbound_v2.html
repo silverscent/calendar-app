@@ -267,10 +267,13 @@
         color: var(--sat-color);
       }
 
-      /* 💡 달력 요일 헤더 세련된 디자인 (그라데이션 + 파란 밑줄 하나만 딱!) */
+      /* 💡 달력 요일 헤더 세련된 디자인 (파란 밑줄 제거 + 진한 그림자 + 세로 구분선) */
       .calendar-container > .grid-row:first-child {
         background: linear-gradient(180deg, #2a2c30 0%, #1e1f22 100%);
-        border-bottom: 2px solid #0a84ff; /* 🚨 하단 엣지 하나만 적용 */
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5); /* 🚨 진한 입체 그림자 추가 */
+        position: relative; 
+        z-index: 5; /* 그림자가 아래 달력 칸 위로 예쁘게 깔리게 설정 */
+        border-bottom: none; /* 🚨 촌스러운 파란선 제거 */
       }
       .calendar-container > .grid-row:first-child .day-header {
         background: transparent !important;
@@ -279,16 +282,21 @@
         letter-spacing: 1.5px;
         text-shadow: 0 1px 2px rgba(0,0,0,0.5);
         border: none;
+        border-right: 1px solid rgba(255, 255, 255, 0.08); /* 🚨 요일 사이 세로 구분선 (다크모드) */
+      }
+      .calendar-container > .grid-row:first-child .day-header:last-child {
+        border-right: none; /* 토요일 우측 끝 선은 제거하여 깔끔하게 마감 */
       }
       
       /* 라이트 모드일 때의 요일 헤더 디자인 */
       body.light-mode .calendar-container > .grid-row:first-child {
-        background: linear-gradient(180deg, #ffffff 0%, #eef2f5 100%);
-        border-bottom: 2px solid #0a84ff;
+        background: linear-gradient(180deg, #ffffff 0%, #f4f6f9 100%);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08); /* 🚨 라이트 모드용 부드러운 그림자 */
       }
       body.light-mode .calendar-container > .grid-row:first-child .day-header {
         text-shadow: none;
         font-weight: 900;
+        border-right: 1px solid rgba(0, 0, 0, 0.06); /* 🚨 요일 사이 세로 구분선 (라이트모드) */
       }
 
       .day-cell {
