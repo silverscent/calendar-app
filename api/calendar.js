@@ -145,7 +145,7 @@ module.exports = async function(req, res) {
                     }
 
                     // 관리자님 오리지널 로직 (소프트 딜리트)
-                    await pool.query("UPDATE admins SET status = 'DELETED' WHERE admin_id = ?", [id]);
+                    await pool.query("UPDATE admins SET status = 'DELETE' WHERE admin_id = ?", [id]);
                     await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DELETE_ADMIN', ?)", [currentAdmin, `관리자 계정 차단 및 삭제: ${id}`]);
                     
                     return res.status(200).json({ success: true });
