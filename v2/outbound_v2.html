@@ -4949,12 +4949,14 @@
                 let pVal = match[2] || 0;
                 let bVal = match[3] || 0;
                 histHtml += `
-                <div class="hist-edit-row-${idx}" id="hist-item-${idx}-${i}" style="display:flex; gap:6px; align-items:center;">
-                    <span style="font-size:0.75em; background:#0a84ff; color:#fff; padding:2px 5px; border-radius:4px; font-weight:bold;">${i + 1}차</span>
-                    <span class="hist-date-${idx}" style="font-size:0.85em; font-weight:900; color:#0a84ff; min-width:30px;">${match[1]}</span>
-                    <input type="number" class="hist-pal-${idx} edit-input" value="${pVal}" data-old="${pVal}" oninput="onHistQtyChange(this, ${idx}, 'pal')" style="padding:6px; font-size:0.85em;" placeholder="PLT">
-                    <input type="number" class="hist-box-${idx} edit-input" value="${bVal}" data-old="${bVal}" oninput="onHistQtyChange(this, ${idx}, 'box')" style="padding:6px; font-size:0.85em;" placeholder="BOX">
-                    <button onclick="deleteHistItem(${idx}, ${i})" style="background:rgba(255,59,48,0.1); color:#ff3b30; border:none; border-radius:6px; padding:6px 10px; font-weight:bold; cursor:pointer; font-size:0.85em;">삭제</button>
+                <div class="hist-edit-row-${idx}" id="hist-item-${idx}-${i}" style="display:flex; gap:6px; align-items:center; width:100%;">
+                    <span style="font-size:0.75em; background:#0a84ff; color:#fff; padding:2px 5px; border-radius:4px; font-weight:bold; white-space:nowrap; flex-shrink:0;">${i + 1}차</span>
+                    <span class="hist-date-${idx}" style="font-size:0.85em; font-weight:900; color:#0a84ff; white-space:nowrap; flex-shrink:0;">${match[1]}</span>
+                    
+                    <input type="number" class="hist-pal-${idx} edit-input" value="${pVal}" data-old="${pVal}" oninput="onHistQtyChange(this, ${idx}, 'pal')" style="padding:6px; font-size:0.85em; flex:1; min-width:0; text-align:center;" placeholder="PLT">
+                    <input type="number" class="hist-box-${idx} edit-input" value="${bVal}" data-old="${bVal}" oninput="onHistQtyChange(this, ${idx}, 'box')" style="padding:6px; font-size:0.85em; flex:1; min-width:0; text-align:center;" placeholder="BOX">
+                    
+                    <button onclick="deleteHistItem(${idx}, ${i})" style="background:rgba(255,59,48,0.1); color:#ff3b30; border:none; border-radius:6px; padding:6px 10px; font-weight:bold; cursor:pointer; font-size:0.85em; white-space:nowrap; flex-shrink:0;">삭제</button>
                 </div>`;
             });
             histHtml += `</div>`;
