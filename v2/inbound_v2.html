@@ -72,6 +72,30 @@
         align-items: center;
       }
 
+      /* 🌟 앱 브랜딩 타이틀 바 */
+      .app-branding-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+        border-bottom: 1px dashed rgba(128, 128, 128, 0.25); /* 은은한 점선 구분선 */
+      }
+      .branding-logo {
+        width: 22px;
+        height: 22px;
+        margin-right: 8px;
+        border-radius: 6px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15); /* 로고가 살짝 떠보이는 입체감 */
+        object-fit: cover;
+      }
+      .branding-title {
+        font-weight: 900;
+        font-size: 1.15em;
+        color: var(--text-main);
+        letter-spacing: -0.5px;
+      }
+
       .title-area {
         display: flex;
         align-items: center;
@@ -1143,6 +1167,10 @@
     </div>
 
     <div class="top-wrapper">
+      <div class="app-branding-header">
+        <img src="/favicon.png" alt="Logo" class="branding-logo">
+        <span class="branding-title">Coloplast 입고캘린더</span>
+      </div>
       <div class="top-row">
         <div class="title-area">
           <button class="nav-arrow" style="display:flex; align-items:center; justify-content:center; padding: 6px 12px;" onclick="navMonth(-1)">
