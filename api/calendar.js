@@ -306,6 +306,7 @@ module.exports = async function(req, res) {
             }
 
             // ✅ 1. 로그인 로직
+            // ✅ 1. 로그인 로직 (접속 IP 및 기기/브라우저 추적 패치)
             else if (action === 'LOGIN') {
                 try {
                     const { id, pw } = data; 
@@ -316,13 +317,51 @@ module.exports = async function(req, res) {
                     }
 
                     const user = rows[0];
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'LOGIN', '시스템 관리자 로그인 성공')", [user.admin_id]);
+                    
+                    // 🚨 [보안] Vercel 환경에서 IP 및 User-Agent 추출 엔진
+                    let ip = req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'IP 알수없음';
+                    if (ip.includes(',')) ip = ip.split(',')[0]; // 프록시 통과 시 첫 번째가 진짜 IP
+                    const ua = req.headers['user-agent'] || '';
+                    
+                    // 기기(OS) 판별
+                    let os = 'PC';
+                    if (/android/i.test(ua)) os = 'Android';
+                    else if (/ipad|iphone|ipod/i.test(ua)) os = 'iOS';
+                    else if (/mac os/i.test(ua)) os = 'Mac';
+                    else if (/windows/i.test(ua)) os = 'Windows';
+                    
+                    // 브라우저 판별
+                    let browser = '알수없음';
+                    if (/edg/i.test(ua)) browser = 'Edge';
+                    else if (/chrome/i.test(ua)) browser = 'Chrome';
+                    else if (/safari/i.test(ua) && !/chrome/i.test(ua)) browser = 'Safari';
+                    else if (/firefox/i.test(ua)) browser = 'Firefox';
+                    else if (/kakao/i.test(ua)) browser = 'KakaoTalk';
+                    else if (/naver/i.test(ua)) browser = 'NaverApp';
+
+                    const connInfo = `[접속성공] IP: ${ip} | 기기: ${os} | 브라우저: ${browser}`;
+                    
+                    // 로그인 성공 시 보안 로그에 접속 정보 각인
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'LOGIN', ?)", [user.admin_id, connInfo]);
 
                     return res.status(200).json({ success: true, admin_id: user.admin_id, role: user.role, name: user.admin_name });
                 } catch (error) {
                     console.error("로그인 에러:", error);
                     return res.status(200).json({ success: false, msg: '로그인 처리 중 오류가 발생했습니다.' });
                 }
+            }
+            
+            // 👤 H. [신규] 특정 관리자 접속(로그인) 이력 전용 조회 엔진
+            else if (action === 'GET_ADMIN_CONN_LOGS') {
+                try {
+                    const { targetId } = data;
+                    // 최근 로그인 기록 15개를 시간 역순으로 로드
+                    const [rows] = await pool.query(
+                        "SELECT description, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at FROM admin_audit_logs WHERE admin_id = ? AND action_type = 'LOGIN' ORDER BY id DESC LIMIT 15",
+                        [targetId]
+                    );
+                    return res.status(200).json({ success: true, logs: rows });
+                } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
             
             // ✅ 2. 시스템 및 OCR 로직들 (원본 100% 유지)

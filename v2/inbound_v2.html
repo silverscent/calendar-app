@@ -1339,6 +1339,17 @@
       </div>
     </div>
 
+    <div id="adminConnModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:99999; justify-content:center; align-items:center; backdrop-filter:blur(3px);">
+        <div style="background:var(--bg-color); width:90%; max-width:400px; border-radius:16px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 id="adminConnTitle" style="color:var(--text-main); margin:0;">접속 이력</h3>
+                <button onclick="document.getElementById('adminConnModal').style.display='none'" style="background:transparent; border:none; color:var(--text-sub); font-size:1.5em; cursor:pointer;">&times;</button>
+            </div>
+            <div id="adminConnList" style="max-height:400px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
+                </div>
+        </div>
+    </div>
+
     <div id="masterDashboardModal" style="position: fixed; top: 0; left: 100%; width: 100%; height: 100%; background: var(--bg-color); transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1); z-index: 2500; display: flex; flex-direction: column; box-sizing: border-box; padding-top: env(safe-area-inset-top); overflow: hidden;">
       
       <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid var(--border-color); background: var(--header-bg); box-sizing: border-box; flex-shrink: 0;">
@@ -3869,6 +3880,34 @@ async function handleLogin() {
           return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
       }
       
+      // 📡 특정 관리자 접속 정보 팝업 엔진
+      function showAdminConnInfo(adminId, adminName) {
+          const modal = document.getElementById('adminConnModal');
+          const list = document.getElementById('adminConnList');
+          document.getElementById('adminConnTitle').innerText = `[${adminName}] 접속 이력`;
+          list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--text-sub); font-weight:bold;'>접속망 트래킹 중... ⏳</div>";
+          modal.style.display = 'flex';
+
+          google.script.run.withSuccessHandler(function(res) {
+              if (!res.success || !res.logs || res.logs.length === 0) {
+                  list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--text-sub);'>최근 기록이 없습니다.</div>";
+                  return;
+              }
+              let html = "";
+              res.logs.forEach(log => {
+                  let timeStr = new Date(log.created_at).toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+                  let cleanDesc = log.description.replace('[접속성공] ', ''); // 중복 문구 제거
+                  
+                  html += `
+                  <div style="background:var(--card-bg); border:1px solid var(--border-color); border-radius:8px; padding:10px; font-size:0.85em;">
+                      <div style="color:#0a84ff; font-weight:900; margin-bottom:6px;">⏱️ ${timeStr}</div>
+                      <div style="color:var(--text-main); line-height:1.4; word-break:keep-all;">${cleanDesc}</div>
+                  </div>`;
+              });
+              list.innerHTML = html;
+          })._call({ source: 'vercel', action: 'GET_ADMIN_CONN_LOGS', data: { targetId: adminId } });
+      }
+
 // =====================================================
       // 👑 시스템 관리 (Admin Operations Pipeline) 엔진
       // =====================================================
@@ -3970,15 +4009,20 @@ async function handleLogin() {
                   card.style = "display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid var(--border-color); padding:14px 16px; border-radius:14px; box-sizing:border-box;";
                   
                   const isMaster = item.admin_id.toLowerCase() === 'admin' || item.admin_id.toLowerCase() === 'silverscent';
-                  // 기존 actionArea 렌더링 부분을 아래 코드로 교체
+                  
+                  // 기존 액션 버튼(비번초기화, 삭제) 영역 유지
                   const actionArea = isMaster ? 
                       `<span style='color:#0a84ff; font-size:0.85em; font-weight:800;'>🔒 System Admin</span>` : 
                       `<button onclick="resetAdminPassword('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,159,10,0.1); border:1px solid #ff9f0a; color:#ff9f0a; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer; margin-right:5px;'>비번초기화</button>
                        <button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>삭제</button>`;
-
+          
+                  // 🚨 여기에 📡 접속확인(showAdminConnInfo) 버튼만 안전하게 삽입!
                   card.innerHTML = `
-                      <div>
-                          <div style='font-weight:900; color:var(--text-main); font-size:1.02em;'>${item.admin_name} <span style='font-size:0.85em; font-weight:500; color:var(--text-sub);'>(${item.admin_id})</span></div>
+                      <div style="flex:1;">
+                          <div style='font-weight:900; color:var(--text-main); font-size:1.02em; display:flex; align-items:center; gap:6px;'>
+                              ${item.admin_name} <span style='font-size:0.85em; font-weight:500; color:var(--text-sub);'>(${item.admin_id})</span>
+                              <button onclick="showAdminConnInfo('${item.admin_id}', '${item.admin_name}')" style="background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:2px 8px; font-size:0.75em; cursor:pointer; font-weight:900; white-space:nowrap; margin-left:4px;">📡 접속확인</button>
+                          </div>
                           <div style='font-size:0.8em; color:var(--text-sub); margin-top:4px;'>등급: ${item.role === 'SYSTEM' ? 'System Admin' : '일반 관리자'}</div>
                       </div>
                       <div style='flex-shrink:0;'>${actionArea}</div>
