@@ -202,9 +202,13 @@ module.exports = async function(req, res) {
                     const offset = (page - 1) * limit;
                     const filterCol = payload.filterCol || 'all'; 
                     
-                    // 🚨 정렬 변수 안전하게 수신 (SQL 인젝션 방지)
+                    // 🚨 정렬 변수 안전하게 수신
                     const sortCol = /^[a-zA-Z0-9_]+$/.test(payload.sortCol) ? payload.sortCol : 'id';
                     const sortDir = payload.sortDir === 'ASC' ? 'ASC' : 'DESC';
+
+                    // 🚨 [숫자 정렬 핵심 패치] 텍스트로 저장된 숫자 컬럼들을 진짜 숫자로 변환(CAST)하여 정렬!
+                    const numericCols = ['id', 'pal', 'box', 'sort_idx', 'isDone', 'pallets', 'is_ai_modified'];
+                    const orderClause = numericCols.includes(sortCol) ? `CAST(${sortCol} AS SIGNED)` : sortCol;
                     
                     let rows = []; let countRows = [];
                     let queryStr = ""; let countQueryStr = "";
@@ -224,7 +228,8 @@ module.exports = async function(req, res) {
                             queryStr += whereStr; countQueryStr += whereStr;
                             countParams = [...params];
                         }
-                        queryStr += ` ORDER BY ${sortCol} ${sortDir} LIMIT ? OFFSET ?`;
+                        // 🚨 수정된 orderClause 적용
+                        queryStr += ` ORDER BY ${orderClause} ${sortDir} LIMIT ? OFFSET ?`;
                         params.push(limit, offset);
                     } else {
                         queryStr = "SELECT id, bl_number, pallets, eta, receive_date, fwd, s_type, invoice, remarks, DATE_ADD(last_updated, INTERVAL 9 HOUR) AS last_updated, sort_idx, status, is_ai_modified FROM inbound";
@@ -240,7 +245,8 @@ module.exports = async function(req, res) {
                             queryStr += whereStr; countQueryStr += whereStr;
                             countParams = [...params];
                         }
-                        queryStr += ` ORDER BY ${sortCol} ${sortDir} LIMIT ? OFFSET ?`;
+                        // 🚨 수정된 orderClause 적용
+                        queryStr += ` ORDER BY ${orderClause} ${sortDir} LIMIT ? OFFSET ?`;
                         params.push(limit, offset);
                     }
                     
