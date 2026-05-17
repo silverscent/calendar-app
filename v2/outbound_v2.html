@@ -267,32 +267,30 @@
         color: var(--sat-color);
       }
 
-      /* 💡 달력 요일 헤더 세련된 디자인 (비틀어짐 완벽 해결 + 깔끔한 굵은 마감선) */
+      /* 💡 달력 요일 헤더 세련된 디자인 (얇은 높이 + 완벽 정렬 세로선 + 하단 굵은 마감선) */
       .calendar-container > .grid-row:first-child {
-        background: linear-gradient(180deg, #2a2c30 0%, #212225 100%);
-        border-bottom: 2px solid #111111; /* 🚨 그림자 대신 묵직하고 세련된 다크 라인으로 마감 */
-        box-shadow: none; /* 비틀어짐의 원인인 그림자 제거 */
+        /* 🚨 줄 배경을 투명하게 비워서 그리드 본연의 gap(세로선)이 뚫려 보이게 만듦! */
+        background: transparent; 
+        border-bottom: 2px solid #111111; /* 다크모드 하단 마감선 */
       }
       .calendar-container > .grid-row:first-child .day-header {
-        background: transparent !important;
-        font-size: 0.85em;
-        padding: 14px 0;
-        letter-spacing: 1.5px;
+        /* 🚨 배경 그라데이션을 각 요일 '칸'에만 개별적으로 칠해줍니다 */
+        background: linear-gradient(180deg, #2a2c30 0%, #212225 100%) !important;
+        font-size: 0.8em;
+        padding: 8px 0; /* 🚨 기존 14px에서 8px로 대폭 줄여 얇고 슬림하게 변경 */
+        letter-spacing: 1px;
         text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-        /* 🚨 세로선(border-right)을 제거하여 그리드 고유의 gap(1px)으로 완벽 정렬되게 복구 */
-        border: none; 
       }
       
       /* 라이트 모드일 때의 요일 헤더 디자인 */
       body.light-mode .calendar-container > .grid-row:first-child {
-        background: linear-gradient(180deg, #ffffff 0%, #f4f6f9 100%);
-        border-bottom: 2px solid #c2c8d1; /* 🚨 라이트 모드용 깔끔하고 진한 구분선 */
-        box-shadow: none;
+        background: transparent;
+        border-bottom: 2px solid #c2c8d1; /* 라이트모드 하단 마감선 */
       }
       body.light-mode .calendar-container > .grid-row:first-child .day-header {
+        background: linear-gradient(180deg, #ffffff 0%, #f4f6f9 100%) !important;
         text-shadow: none;
         font-weight: 900;
-        border: none; 
       }
 
       .day-cell {
