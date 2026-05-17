@@ -4494,15 +4494,15 @@
           let endNode = document.getElementById(`edit-${idx}-end-date`);
           endDateStr = endNode ? endNode.value : "";
           startDateStr = payload.newDate;
-          
-          let cleanEtc = document.getElementById(`edit-etc-${idx}`).value.trim();
+
+          // 🚨 [패치 4] 생존한 수량 이력 리스트를 다시 텍스트 규격으로 포장
+          let cleanEtc = document.getElementById(`edit-etc-${idx}`) ? document.getElementById(`edit-etc-${idx}`).value.trim() : "";
           let histRows = document.querySelectorAll(`.hist-edit-row-${idx}`);
           let histArr = [];
           histRows.forEach(row => {
               const dateText = row.querySelector(`.hist-date-${idx}`).innerText.trim();
               const pVal = parseInt(row.querySelector(`.hist-pal-${idx}`).value) || 0;
               const bVal = parseInt(row.querySelector(`.hist-box-${idx}`).value) || 0;
-              
               if (pVal > 0 || bVal > 0) {
                   let pStr = pVal > 0 ? `${pVal}P` : '';
                   let bStr = bVal > 0 ? `${bVal}B` : '';
@@ -4793,24 +4793,17 @@
             }
           }
 
-          // 🚨 [핵심 패치 1] 수량추가 히스토리만 핀셋 파싱하여 분리
+          // 🚨 [패치 2-1] 히스토리 분리 및 1차, 2차 뱃지 생성
           const histRegex = /\[(\d{1,2}\/\d{1,2})\s*(?:(\d+)P)?\s*(?:(\d+)B)?\s*추가\]/g;
           let rawEtc = item.etc || "";
           let matches = [...rawEtc.matchAll(histRegex)];
 
           let meaningfulEtc = rawEtc
-            .replace(
-              /\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi,
-              "",
-            )
+            .replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi, "")
             .replace(histRegex, "")
             .trim();
-          let etcHtml =
-            meaningfulEtc !== ""
-              ? `<div class="modal-etc">📍 비고: ${meaningfulEtc}</div>`
-              : "";
+          let etcHtml = meaningfulEtc !== "" ? `<div class="modal-etc">📍 비고: ${meaningfulEtc}</div>` : "";
 
-          // 🚨 [핵심 패치 2] 분리된 이력을 별도 영역으로 조립
           let histHtml = '';
           if (matches.length > 0) {
               histHtml = `<div style="margin-top: 8px; margin-bottom: 8px; background: rgba(10,132,255,0.05); border: 1px dashed rgba(10,132,255,0.3); border-radius: 8px; padding: 8px 12px;">`;
@@ -4818,7 +4811,7 @@
                   let pPart = match[2] ? `${match[2]}P` : '';
                   let bPart = match[3] ? `${match[3]}B` : '';
                   let space = (match[2] && match[3]) ? ' ' : '';
-                  histHtml += `<div style="font-size: 0.85em; color: #0a84ff; font-weight: 800; margin-bottom: ${i === matches.length-1 ? '0' : '4px'};">↳ 추가 이력: ${match[1]} ➡️ ${pPart}${space}${bPart}</div>`;
+                  histHtml += `<div style="font-size: 0.85em; color: #0a84ff; font-weight: 800; margin-bottom: ${i === matches.length-1 ? '0' : '4px'};">↳ ${i + 1}차 추가 (${match[1]}): ${pPart}${space}${bPart}</div>`;
               });
               histHtml += `</div>`;
           }
@@ -4892,7 +4885,8 @@
                                     ${actionBtns}
                                 </div>
                                 <div class="modal-vol" style="display:flex; align-items:center;">${iconHtml}${volStr} ${addQtyBtn}</div>
-                                ${histHtml} ${etcHtml}
+                                ${histHtml} 
+                                ${etcHtml}
                             </div>
                             ${addQtyForm}
                             ${stampHtml}
@@ -4941,7 +4935,7 @@
         let cleanComp = comp.replace(/\[TASK\]/gi, "").trim();
         let isTaskMode = isExplicitTask;
         
-        // 🚨 이력 추출 및 폼 UI 생성
+        // 🚨 [패치 3-1] 수정 폼에 인라인 에디팅 리스트 생성
         let safeEtc = (etc === 'undefined' || etc == null) ? '' : String(etc);
         const histRegex = /\[(\d{1,2}\/\d{1,2})\s*(?:(\d+)P)?\s*(?:(\d+)B)?\s*추가\]/g;
         let matches = [...safeEtc.matchAll(histRegex)];
@@ -4956,7 +4950,8 @@
                 let bVal = match[3] || 0;
                 histHtml += `
                 <div class="hist-edit-row-${idx}" id="hist-item-${idx}-${i}" style="display:flex; gap:6px; align-items:center;">
-                    <span class="hist-date-${idx}" style="font-size:0.85em; font-weight:900; color:#0a84ff; min-width:35px;">${match[1]}</span>
+                    <span style="font-size:0.75em; background:#0a84ff; color:#fff; padding:2px 5px; border-radius:4px; font-weight:bold;">${i + 1}차</span>
+                    <span class="hist-date-${idx}" style="font-size:0.85em; font-weight:900; color:#0a84ff; min-width:30px;">${match[1]}</span>
                     <input type="number" class="hist-pal-${idx} edit-input" value="${pVal}" data-old="${pVal}" oninput="onHistQtyChange(this, ${idx}, 'pal')" style="padding:6px; font-size:0.85em;" placeholder="PLT">
                     <input type="number" class="hist-box-${idx} edit-input" value="${bVal}" data-old="${bVal}" oninput="onHistQtyChange(this, ${idx}, 'box')" style="padding:6px; font-size:0.85em;" placeholder="BOX">
                     <button onclick="deleteHistItem(${idx}, ${i})" style="background:rgba(255,59,48,0.1); color:#ff3b30; border:none; border-radius:6px; padding:6px 10px; font-weight:bold; cursor:pointer; font-size:0.85em;">삭제</button>
@@ -4964,7 +4959,7 @@
             });
             histHtml += `</div>`;
         }
-
+        
         card.style.flexDirection = "";
         card.style.alignItems = "";
         card.innerHTML = `
@@ -7331,36 +7326,28 @@ async function handleLogin() {
           }
       }
 
-      // 📊 [신규] 이력 리스트 수량 변경 시 메인 수량 실시간 연동 처리 (차분 계산 방식)
+      // 📊 [신규 엔진] 이력 리스트 수량 변경 시 메인 수량 실시간 연동 (차분 계산 방식)
       function onHistQtyChange(input, idx, type) {
           const mainInput = document.getElementById(type === 'pal' ? `edit-pal-${idx}` : `edit-box-${idx}`);
           if (!mainInput) return;
-          
           const oldVal = parseInt(input.getAttribute('data-old')) || 0;
           const newVal = parseInt(input.value) || 0;
-          const diff = newVal - oldVal; 
-          
-          mainInput.value = Math.max(0, (parseInt(mainInput.value) || 0) + diff);
+          mainInput.value = Math.max(0, (parseInt(mainInput.value) || 0) + (newVal - oldVal));
           input.setAttribute('data-old', newVal); 
       }
 
-      // 🗑️ [신규] 이력 리스트 개별 파기 시 메인 수량에서 완전 차감 처리
+      // 🗑️ [신규 엔진] 이력 리스트 개별 파기 시 메인 수량에서 완전 차감
       function deleteHistItem(idx, i) {
           const itemEl = document.getElementById(`hist-item-${idx}-${i}`);
           if (!itemEl) return;
-          
           const palInput = itemEl.querySelector(`.hist-pal-${idx}`);
           const boxInput = itemEl.querySelector(`.hist-box-${idx}`);
-          
           const oldPal = parseInt(palInput.getAttribute('data-old')) || 0;
           const oldBox = parseInt(boxInput.getAttribute('data-old')) || 0;
-          
           const mainPal = document.getElementById(`edit-pal-${idx}`);
           const mainBox = document.getElementById(`edit-box-${idx}`);
-          
           if (mainPal) mainPal.value = Math.max(0, (parseInt(mainPal.value) || 0) - oldPal);
           if (mainBox) mainBox.value = Math.max(0, (parseInt(mainBox.value) || 0) - oldBox);
-          
           itemEl.remove(); 
       }
 
