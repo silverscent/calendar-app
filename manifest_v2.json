@@ -1,9 +1,9 @@
 {
   "id": "outbound-app-v2",          
   "name": "물류 출고 캘린더 V2",
-  "short_name": "출고 V2",
-  "start_url": "/v2/outbound_v2.html",   
-  "scope": "/v2/",
+  "short_name": "출고 캘린더 V2",
+  "start_url": "/index.html",    
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",

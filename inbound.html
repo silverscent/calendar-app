@@ -9,9 +9,9 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
 
-    <link rel="icon" type="image/png" href="favicon.png">
-    <link rel="apple-touch-icon" href="apple-touch-icon.png">
-    <link rel="manifest" href="manifest_in.json">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest_in_v2.json?v=2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
       /* 💡 눈이 편안한 다크 차콜 색상 적용 */
@@ -70,6 +70,40 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+      }
+
+      /* 🌟 1단: 앱 브랜딩 타이틀 바 (여백 및 로고 크기 조정 완료) */
+      .app-branding-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        /* 🚨 위아래 여백을 기존 12px에서 8px로 더 줄여 타이트하게 설정 */
+        padding-bottom: 8px; 
+        margin-bottom: 6px;
+        border-bottom: 1px dashed var(--border-color);
+      }
+      .branding-left {
+        display: flex;
+        align-items: center;
+      }
+      .branding-logo {
+        /* 🚨 로고 크기를 기존 18px에서 24px로 키워 시인성 확보 */
+        width: 24px; 
+        height: 24px;
+        margin-right: 8px; /* 로고와 글씨 사이 간격도 살짝 조정 */
+        border-radius: 5px; /* 크기에 맞춰 둥근 모서리 살짝 조정 */
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        object-fit: cover;
+      }
+      .branding-title {
+        font-weight: 900;
+        font-size: 1.1em; 
+        color: var(--text-main); 
+        letter-spacing: -0.5px;
+      }
+      /* 라이트 모드일 때만 파비콘의 '어두운 네이비 블루' 적용 */
+      body.light-mode .branding-title {
+        color: #002b5e; 
       }
 
       .title-area {
@@ -295,6 +329,32 @@
       }
       .day-header.sat {
         color: var(--sat-color);
+      }
+
+      /* 💡 달력 요일 헤더 세련된 디자인 (얇은 높이 + 완벽 정렬 세로선 + 하단 굵은 마감선) */
+      .calendar-container > .grid-row:first-child {
+        /* 🚨 줄 배경을 투명하게 비워서 그리드 본연의 gap(세로선)이 뚫려 보이게 만듦! */
+        background: transparent; 
+        border-bottom: 2px solid #111111; /* 다크모드 하단 마감선 */
+      }
+      .calendar-container > .grid-row:first-child .day-header {
+        /* 🚨 배경 그라데이션을 각 요일 '칸'에만 개별적으로 칠해줍니다 */
+        background: linear-gradient(180deg, #2a2c30 0%, #212225 100%) !important;
+        font-size: 0.8em;
+        padding: 8px 0; /* 🚨 기존 14px에서 8px로 대폭 줄여 얇고 슬림하게 변경 */
+        letter-spacing: 1px;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+      }
+      
+      /* 라이트 모드일 때의 요일 헤더 디자인 */
+      body.light-mode .calendar-container > .grid-row:first-child {
+        background: transparent;
+        border-bottom: 2px solid #c2c8d1; /* 라이트모드 하단 마감선 */
+      }
+      body.light-mode .calendar-container > .grid-row:first-child .day-header {
+        background: linear-gradient(180deg, #ffffff 0%, #f4f6f9 100%) !important;
+        text-shadow: none;
+        font-weight: 900;
       }
 
       .day-cell {
@@ -1089,6 +1149,17 @@
         /* 💡 입고 달력 관리자 로그인 창 센터링 픽스 */
       #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
       #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
+    
+    /* 🚀 iOS 스타일 토글 스위치 */
+      .ios-toggle { position: relative; display: inline-block; width: 50px; height: 30px; }
+      .ios-toggle input { opacity: 0; width: 0; height: 0; }
+      .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border-color); transition: .3s; border-radius: 30px; }
+      .toggle-slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+      .ios-toggle input:checked + .toggle-slider { background-color: #34c759; }
+      .ios-toggle input:checked + .toggle-slider:before { transform: translateX(20px); }
+      .ios-toggle input:disabled + .toggle-slider { opacity: 0.5; cursor: not-allowed; }
+
+      .master-tab-btn.active { background-color: var(--bg-color) !important; color: #0a84ff !important; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
     </style>
   </head>
   <body>
@@ -1106,36 +1177,54 @@
     </div>
 
     <div class="top-wrapper">
-      <div class="top-row">
-        <div class="title-area">
-          <button class="nav-arrow" onclick="navMonth(-1)">◀</button>
-          <button class="title-btn" onclick="openPicker()">
-            📥 <span id="calTitle"></span> <span class="drop-icon">▼</span>
-          </button>
-          <button class="nav-arrow" onclick="navMonth(1)">▶</button>
+      <div class="app-branding-header">
+        <div class="branding-left">
+          <img src="/apple-touch-icon.png" alt="Logo" class="branding-logo">
+          <span class="branding-title">Coloplast 입고캘린더</span>
         </div>
         <div class="controls-area">
           <button class="theme-toggle" onclick="toggleTheme()">☀️</button>
           <button class="admin-btn" id="adminBtn" onclick="toggleAdmin()">🔒 잠김</button>
         </div>
       </div>
+
+      <div class="top-row" style="margin-bottom: 6px;">
+        <div class="title-area">
+          <button class="nav-arrow" style="display:flex; align-items:center; justify-content:center; padding: 6px 12px;" onclick="navMonth(-1)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          
+          <button class="title-btn" onclick="openPicker()" style="display:flex; align-items:center; justify-content:center; gap:4px;">
+            📥 <span id="calTitle"></span> 
+            <span class="drop-icon" style="display:flex; align-items:center; margin-left: 2px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </span>
+          </button>
+          
+          <button class="nav-arrow" style="display:flex; align-items:center; justify-content:center; padding: 6px 12px;" onclick="navMonth(1)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+        
+        <div class="admin-actions" id="adminActions">
+          <button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
+        </div>
+      </div>
+      
       <div class="top-row">
         <div class="size-toggle">
           <button class="size-btn" id="btnS" onclick="changeSize('S')">A-</button>
           <button class="size-btn active" id="btnM" onclick="changeSize('M')">A</button>
           <button class="size-btn" id="btnL" onclick="changeSize('L')">A+</button>
         </div>
+        
         <div class="action-row-right">
-          <button class="ocr-btn" onclick="showLastOcrImage()">📄 최근OCR 🖼️</button>
-          <div class="sync-area" id="syncArea">
+          <button class="ocr-btn" onclick="showLastOcrImage()">최근OCR 🖼️</button>
+          <div class="sync-area" id="syncArea" style="display: flex">
             <span class="sync-time" id="lastSyncTime"></span>
             <button class="sync-btn" onclick="navMonth(0)" title="수동 동기화">🔄</button>
           </div>
-          </div>
-      </div>
-      
-      <div class="admin-actions" id="adminActions" style="justify-content: flex-end; margin-top: 4px;">
-        <button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
+        </div>
       </div>
     </div>
 
@@ -1168,9 +1257,14 @@
       <div class="pending-list" id="pendingList"></div>
     </div>
 
-    <div id="statsSummaryBar" class="stats-summary-bar" onclick="openDashboard()">
-      <div class="stats-title">📊 당월 입고 진척률</div>
-      <div class="stats-numbers"><span class="done" id="sumDonePal">0</span><span class="total">/ <span id="sumTotalPal">0</span> P</span></div>
+    <div id="statsSummaryBar" onclick="openDashboard()" style="margin-top: 15px; padding: 20px; background: var(--card-bg); border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); cursor: pointer; border: 1px solid var(--border-color); width: 100%; box-sizing: border-box;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <span style="font-weight: 800; color: var(--text-main); font-size: 1.05em;">📊 당월 <span id="statsLabelType">입고</span> 진척률</span>
+        <span style="font-weight: 900; color: #0a84ff; font-size: 1.1em;"><span id="sumDonePal">0</span> / <span id="sumTotalPal">0</span> P</span>
+      </div>
+      <div style="width: 100%; background: rgba(128,128,128,0.1); border-radius: 12px; height: 14px; overflow: hidden; position: relative;">
+        <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #0a84ff 0%, #34c759 100%); transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
+      </div>
     </div>
 
     <div class="info-footer" id="infoFooter">👆 날짜 터치: 상세내역 확인</div>
@@ -1209,25 +1303,220 @@
       </div>
     </div>
 
-    <div id="adminLoginModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
-      <div class="modal-box" onclick="event.stopPropagation()">
-        <div class="bottom-sheet-handle"></div>
-        <div class="modal-header">
-          <div class="modal-title" id="modalTitle">🔒 관리자 인증</div>
-          <button class="close-btn" onclick="document.getElementById('adminLoginModal').style.display='none'">✕</button>
+    <div id="adminLoginModal" class="overlay-modal" style="align-items: center; padding: 20px; box-sizing: border-box;" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; margin-bottom: 10vh; max-width: 340px; padding: 35px 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+        
+        <div class="modal-header" style="border: none; margin-bottom: 5px; padding-bottom: 0;">
+          <div class="modal-title" style="font-size: 1.5em; text-align: center; width: 100%; color: var(--text-main);">🔒 시스템 제어</div>
         </div>
-        <div style="margin-bottom:15px; font-size:0.95em; color:var(--text-sub); font-weight:600;">관리자 권한을 활성화하려면 비밀번호를 입력하세요.</div>
-        <div style="display:flex; align-items:center; background:var(--bg-color); border:1px solid var(--border-color); border-radius:12px; padding:0 12px; transition:0.2s;">
-          <input type="password" id="adminPwInput" style="flex:1; border:none; background:transparent; color:var(--text-main); padding:16px 5px; font-size:1.1em; outline:none; font-weight:bold;" placeholder="비밀번호">
-          <button type="button" onmousedown="event.preventDefault(); togglePwView()" ontouchstart="event.preventDefault(); togglePwView()" style="background:none; border:none; font-size:1.2em; cursor:pointer; padding:5px;">
-            <span id="pwToggleIcon">👁️</span>
+        <div style="text-align: center; font-size: 0.85em; color: var(--text-sub); margin-bottom: 30px; font-weight: 600;">
+          관리자 권한을 활성화하려면 로그인하세요.
+        </div>
+
+        <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 12px; display: flex; align-items: center; transition: 0.3s; box-sizing: border-box; width: 100%;" 
+             onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
+             onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
+          <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0;">👤</span>
+          <input type="text" id="adminIdInput" style="flex: 1; min-width: 0; width: 100%; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="아이디" autocomplete="username">
+        </div>
+
+        <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 28px; display: flex; align-items: center; transition: 0.3s; box-sizing: border-box; width: 100%;"
+             onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
+             onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
+          <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0;">🔑</span>
+          <input type="password" id="adminPwInput" style="flex: 1; min-width: 0; width: 100%; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="비밀번호" autocomplete="current-password" onkeypress="if(event.key === 'Enter') handleLogin()">
+          <span id="pwToggleIcon" style="font-size: 1.2em; cursor: pointer; padding: 5px; color: var(--text-sub); transition: 0.2s; flex-shrink: 0; margin-left: 4px; display: flex; align-items: center; justify-content: center;" onclick="togglePwView()" onmousedown="this.style.transform='scale(0.8)'" onmouseup="this.style.transform='scale(1)'">👁️</span>
+        </div>
+
+        <div style="display: flex; gap: 12px;">
+          <button class="cancel-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: var(--bg-color); border: 1px solid var(--border-color);" onclick="document.getElementById('adminLoginModal').style.display='none'">닫기</button>
+          <button onclick="handleLogin()" style="flex: 1.5; padding: 16px; background: linear-gradient(135deg, #0a84ff, #005bb5); color: #fff; border: none; border-radius: 14px; font-size: 1.05em; font-weight: 900; cursor: pointer; box-shadow: 0 6px 15px rgba(10,132,255,0.35); transition: 0.2s;" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'">
+            로그인
           </button>
         </div>
-        <button class="save-btn" style="width:100%; margin-top:20px;" onclick="submitAdminLogin()">🔓 인증하기</button>
+        <button id="btnBioLogin" onclick="handleBioLogin()" style="width: 100%; margin-top: 15px; padding: 16px; background: transparent; color: var(--text-main); border: 1.5px solid var(--border-color); border-radius: 14px; font-size: 1.05em; font-weight: 900; cursor: pointer; display: none; transition: 0.2s;" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'">
+           지문 / Face ID 로그인
+        </button>
       </div>
     </div>
 
-    <div id="dashboardModal" class="overlay-modal" style="display:none;">
+    <div id="logoutConfirmModal" class="overlay-modal" style="align-items: center; z-index: 3500; padding: 20px; box-sizing: border-box;" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; max-width: 320px; padding: 35px 25px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); margin-bottom: 10vh;">
+        <div style="font-size: 3.5rem; margin-bottom: 15px; line-height: 1;">👋</div>
+        <div style="font-size: 1.3em; font-weight: 900; color: var(--text-main); margin-bottom: 12px;">로그아웃 하시겠습니까?</div>
+        <div style="font-size: 0.9em; color: var(--text-sub); margin-bottom: 30px; line-height: 1.4; word-break: keep-all;">
+          관리자 권한이 해제되며<br>일반 읽기 모드로 전환됩니다.
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="cancel-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: var(--bg-color); border: 1px solid var(--border-color);" onclick="document.getElementById('logoutConfirmModal').style.display='none'">취소</button>
+          <button class="save-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: #ff3b30; box-shadow: 0 6px 15px rgba(255, 59, 48, 0.35);" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'" onclick="executeLogout()">로그아웃</button>
+        </div>
+      </div>
+    </div>
+
+  <div id="myInfoModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px 24px 0 0; padding: 25px 20px 40px 20px;">
+        <div class="bottom-sheet-handle"></div>
+        
+        <div class="modal-header" style="justify-content: center; border-bottom: none; margin-bottom: 5px;">
+          <div class="modal-title" style="font-size: 1.3em;">내 정보 및 설정</div>
+        </div>
+
+        <div style="display: flex; align-items: center; background: var(--bg-color); border: 1px solid var(--border-color); padding: 16px; border-radius: 16px; margin-bottom: 24px; box-sizing: border-box;">
+          <div id="myInfoAdminIcon" style="width: 50px; height: 50px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1.5em; margin-right: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); transition: 0.3s; flex-shrink: 0;">
+            🧑‍💻
+          </div>
+          <div>
+            <div id="myInfoAdminRole" style="font-size: 1.15em; font-weight: 900; color: var(--text-main); margin-bottom: 4px;">관리자</div>
+            <div style="font-size: 0.85em; font-weight: 800; color: var(--text-sub);" id="myInfoAdminId">admin_id</div>
+          </div>
+        </div>
+
+        <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 16px; overflow: hidden; margin-bottom: 15px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border-color);">
+            <div>
+              <div style="font-size: 1.05em; font-weight: 800; color: var(--text-main);">로그인 상태 유지</div>
+              <div style="font-size: 0.8em; color: var(--text-sub); margin-top: 4px;">앱을 종료해도 로그아웃되지 않습니다.</div>
+            </div>
+            <label class="ios-toggle">
+              <input type="checkbox" id="toggleAutoLogin" onchange="handleAutoLoginToggle(this)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px;">
+            <div>
+              <div style="font-size: 1.05em; font-weight: 800; color: var(--text-main);">생체 인증 (지문 / Face ID)</div>
+              <div style="font-size: 0.8em; color: var(--text-sub); margin-top: 4px;">빠르고 안전하게 시스템에 접근합니다.</div>
+            </div>
+            <label class="ios-toggle">
+              <input type="checkbox" id="toggleBioAuth" onchange="handleBioToggleChange(this)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 16px; margin-bottom: 24px; box-sizing: border-box; overflow: hidden;">
+            <button onclick="const f = document.getElementById('pwChangeFormContainer'); f.style.display = f.style.display === 'none' ? 'flex' : 'none';" style="width: 100%; padding: 16px; background: transparent; border: none; text-align: left; font-size: 1.05em; font-weight: 900; color: var(--text-main); cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <span>🔒 비밀번호 변경</span>
+                <span style="color: var(--text-sub); font-size: 0.8em;">열기/닫기 ▼</span>
+            </button>
+            <div id="pwChangeFormContainer" style="display: none; flex-direction: column; gap: 8px; padding: 0 16px 16px 16px;">
+                <input type="password" id="mySettingsCurrentPw" placeholder="현재 비밀번호 입력" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: bold; box-sizing: border-box;">
+                <input type="password" id="mySettingsNewPw" placeholder="새로운 비밀번호 입력" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: bold; box-sizing: border-box;">
+                <button onclick="executeMyPasswordChange()" style="width: 100%; background: #0a84ff; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 12px rgba(10,132,255,0.2); transition: 0.2s;">비밀번호 변경 적용</button>
+            </div>
+        </div>
+
+        <button id="masterDashboardBtn" onclick="openMasterDashboard()" style="width: 100%; padding: 16px; background: rgba(10, 132, 255, 0.1); color: #0a84ff; border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; margin-bottom: 12px; display: none; transition: 0.2s; box-sizing: border-box;">
+          ⚙️ 시스템 관리
+        </button>
+
+        <button onclick="document.getElementById('myInfoModal').style.display='none'; document.getElementById('logoutConfirmModal').style.display='flex';" style="width: 100%; padding: 16px; background: rgba(255, 59, 48, 0.1); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; transition: 0.2s;">
+          로그아웃
+        </button>
+      </div>
+    </div>
+
+    <div id="adminConnModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:99999; justify-content:center; align-items:center; backdrop-filter:blur(3px);">
+        <div style="background:var(--bg-color); width:90%; max-width:400px; border-radius:16px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 id="adminConnTitle" style="color:var(--text-main); margin:0;">접속 이력</h3>
+                <button onclick="document.getElementById('adminConnModal').style.display='none'" style="background:transparent; border:none; color:var(--text-sub); font-size:1.5em; cursor:pointer;">&times;</button>
+            </div>
+            <div id="adminConnList" style="max-height:400px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
+                </div>
+        </div>
+    </div>
+
+    <div id="masterDashboardModal" style="position: fixed; top: 0; left: 100%; width: 100%; height: 100%; background: var(--bg-color); transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1); z-index: 2500; display: flex; flex-direction: column; box-sizing: border-box; padding-top: env(safe-area-inset-top); overflow: hidden;">
+      
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid var(--border-color); background: var(--header-bg); box-sizing: border-box; flex-shrink: 0;">
+        <button onclick="closeMasterDashboard()" style="background: none; border: none; color: var(--text-main); font-size: 1.4em; cursor: pointer; padding: 0 5px;">◀</button>
+        <div style="font-size: 1.15em; font-weight: 900; color: var(--text-main);">시스템 관리</div>
+        <div style="width: 30px;"></div>
+      </div>
+
+      <div style="display: flex; background: var(--card-bg); padding: 4px; border-radius: 10px; margin: 15px 20px; border: 1px solid var(--border-color); box-sizing: border-box; flex-shrink: 0;">
+        <button class="master-tab-btn active" onclick="switchMasterTab('admin-mgr')" style="flex: 1; padding: 10px; background: none; border: none; color: var(--text-main); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.95em;">어드민 관리</button>
+        <button class="master-tab-btn" onclick="switchMasterTab('audit-log')" style="flex: 1; padding: 10px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.95em;">보안 로그</button>
+        <button class="master-tab-btn" onclick="switchMasterTab('db-mgr')" style="flex: 1; padding: 10px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.95em;">DB 제어</button>
+      </div>
+
+      <div style="flex: 1; overflow-y: auto; padding: 0 20px 40px 20px; box-sizing: border-box; -webkit-overflow-scrolling: touch;">
+        
+        <div id="master-tab-admin-mgr" class="master-tab-content" style="box-sizing: border-box;">
+          
+          <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 15px; margin-bottom: 20px; box-sizing: border-box;">
+            <button id="toggleAdminFormBtn" onclick="toggleNewAdminForm()" style="width: 100%; padding: 12px; background: rgba(10, 132, 255, 0.1); border: 1px solid #0a84ff; color: #0a84ff; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 0.95em; transition: 0.2s;">➕ 신규 어드민 계정 발급실 열기</button>
+            
+            <div id="newAdminFormContainer" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-color); animation: fadeIn 0.3s;">
+              <div style="font-weight: 900; font-size: 1.05em; margin-bottom: 15px; color: var(--text-main);">🆕 신규 어드민 계정 발급</div>
+              <input type="text" id="newAdminId" placeholder="어드민 ID" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 12px; font-weight: 800; box-sizing: border-box;">
+              <input type="text" id="newAdminName" placeholder="담당자 이름 (예: 홍길동)" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 12px; font-weight: 800; box-sizing: border-box;">
+              <input type="password" id="newAdminPw" placeholder="초기 비밀번호" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 16px; font-weight: 800; box-sizing: border-box;">
+              <button onclick="createNewAdminAccount()" style="width: 100%; padding: 15px; background: #34c759; color: #fff; border: none; border-radius: 12px; font-weight: 900; cursor: pointer; box-sizing: border-box; font-size: 1em;">계정 생성 및 활성화</button>
+            </div>
+          </div>
+
+          <div style="font-weight: 900; margin-bottom: 12px; color: var(--text-sub); font-size: 0.95em;">시스템 등록 어드민 목록</div>
+          <div id="masterAdminListContainer" style="display: flex; flex-direction: column; gap: 10px; box-sizing: border-box;"></div>
+        </div>
+
+        <div id="master-tab-audit-log" class="master-tab-content" style="display: none; box-sizing: border-box;">
+          <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; box-sizing: border-box;">
+            <select id="logMasterLimit" class="db-input" style="width: auto; padding: 10px; border-radius: 10px; font-weight: bold; background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color);" onchange="logCurrentPage=1; refreshAuditLogs();">
+              <option value="20">20줄씩 보기</option>
+              <option value="50" selected>50줄씩 보기</option>
+              <option value="100">100줄씩 보기</option>
+            </select>
+            
+            <input type="date" id="logStartDate" class="db-input" style="width: auto; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: bold; box-sizing: border-box;">
+            <span style="color: var(--text-main); font-weight: 900;">~</span>
+            <input type="date" id="logEndDate" class="db-input" style="width: auto; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: bold; box-sizing: border-box;">
+            
+            <input type="text" id="logKeyword" placeholder="🔍 ID, 액션 또는 내용 검색..." style="flex: 1; min-width: 150px; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: 800; font-size: 0.9em; box-sizing: border-box;" onkeydown="if(event.key==='Enter') { logCurrentPage=1; refreshAuditLogs(); }">
+            <button onclick="logCurrentPage=1; refreshAuditLogs();" style="background: #ff9f0a; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">검색</button>
+            <button onclick="document.getElementById('logStartDate').value=''; document.getElementById('logEndDate').value=''; document.getElementById('logKeyword').value=''; logCurrentPage=1; refreshAuditLogs();" style="background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">초기화</button>
+          </div>
+
+          <div id="masterLogTimeline" style="display: flex; flex-direction: column; gap: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 15px; box-sizing: border-box;">
+             <div style="text-align: center; color: var(--text-sub); padding: 20px;">로그 데이터를 불러오는 중...</div>
+          </div>
+
+          <div id="logMasterPaginationBar" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px;"></div>
+        </div>
+
+        <div id="master-tab-db-mgr" class="master-tab-content" style="display: none; box-sizing: border-box;">
+          <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; margin-bottom: 20px; box-sizing: border-box;">
+            <div style="font-weight: 900; color: var(--text-main); margin-bottom: 6px; font-size: 1em;">⚠️ DB 다이렉트 긴급 제어실</div>
+            <div style="font-size: 0.85em; color: var(--text-sub); line-height: 1.45;">데이터베이스 테이블의 원본 데이터를 직접 검색하여 긴급 삭제할 수 있는 위험 영역 관리 화면입니다.</div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 15px; box-sizing: border-box; flex-wrap: wrap;">
+            <select id="dbMasterFilterCol" style="padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; outline: none;">
+              <option value="all">🔍 전체 검색</option>
+              <option value="name" id="filterOptName">식별명 검색</option>
+              <option value="date" id="filterOptDate">날짜 검색</option>
+            </select>
+            
+            <select id="dbMasterLimit" onchange="dbPageResetAndSearch()" style="padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; outline: none;">
+              <option value="20">20줄씩 보기</option>
+              <option value="50">50줄씩 보기</option>
+              <option value="100">100줄씩 보기</option>
+            </select>
+
+            <input type="text" id="dbMasterSearchKeyword" placeholder="검색어 입력..." style="flex: 1; min-width: 150px; padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; box-sizing: border-box;">
+            <button onclick="dbPageResetAndSearch()" style="padding: 0 22px; background: #0a84ff; color:#fff; border:none; border-radius:12px; font-weight:900; cursor:pointer; height: 48px;">조회</button>
+          </div>
+          <div id="dbMasterRowsContainer" style="overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch; box-sizing: border-box;"></div>
+          <div id="dbMasterPaginationBar" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px; box-sizing: border-box;"></div>
+        </div>
+
+
+      </div>
+    </div>
+
+    <div id="dashboardModal" class="overlay-modal" style="display:none;" onclick="closeModalOnBgClick(event)">
       <div class="modal-box" style="max-height: 90vh;">
         <div class="bottom-sheet-handle"></div>
         <div class="modal-header" style="margin-bottom: 10px;">
@@ -1281,148 +1570,163 @@
       </div>
     </div>
 
+    
     <script>
-      // 🔗 1. 구글 웹앱 URL (입고용)
-      const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxaD9CugTvbE50_C2rR0EaSZ1MkywACeYwiYD_MuPZBZNDpjVwK1VOH31MdtxznD49k/exec";
-      const currentType = "in"; 
-      
-      const todayDateObj = new Date();
-      let isProcessing = false;
+      // ====================================================================
+      // 🚀 [Vercel 독립 생명유지장치] 구글 서버가 몰래 주던 변수들을 직접 생성!
+      // ====================================================================
+      let currentType = 'in'; // 🟢 입고 달력 (출고는 'out'으로 변경)
+      let isAdmin = false;
+      let adminToken = null;
+      let todayDateObj = new Date();
       let lastLocalUpdateTime = 0;
+      let isDarkMode = false; // 다크모드 충돌 방지
       
-// 💡 [수정] 버전을 v2에서 v3로 올리면 접속하는 모든 사람의 유령 데이터가 싹 소독됩니다.
-      // 1. 브라우저 창고(localStorage)에 'cache_wiped_v3'라는 도장이 찍혀 있는지 검사합니다.
-if (!localStorage.getItem('cache_wiped_v3')) { 
-
-    // 2. 도장이 없다면? "아, 이 사람은 v3 업데이트 이후 처음 접속했구나!" 하고 
-    //    오염된 유령 데이터 캐시를 싹 지워버립니다.
-    Object.keys(localStorage).forEach(k => { 
-        if(k.startsWith('cal_cache_') || k.startsWith('yearly_stats_cache_')) {
-            localStorage.removeItem(k); 
-        }
-    });
-    window.globalPendingItems = []; 
-
-    // 3. 🚨 [가장 중요한 부분] 대청소가 끝났으니, 브라우저 창고에 'cache_wiped_v3'라는 도장을 콱 찍어둡니다.
-    localStorage.setItem('cache_wiped_v3', 'true'); 
-}
-
-      let serverData = { year: todayDateObj.getFullYear(), month: todayDateObj.getMonth() + 1, firstDay: 0, daysInMonth: 31, monthData: {}, pendingItems: [] };
-      // 💡 [수정] 앱을 꺼도 관리자 로그인 유지
-      let adminToken = localStorage.getItem("admin_token");
-      let isAdmin = adminToken ? true : false;
-
-      // 💡 [추가] 1년 치 공휴일 전용 저장소 및 관리자
-      window.yearlyHolidays = {}; 
-
+      // 텅 빈 달력 뼈대를 미리 만들어줍니다.
+      let serverData = {
+          year: todayDateObj.getFullYear(),
+          month: todayDateObj.getMonth() + 1,
+          firstDay: new Date(todayDateObj.getFullYear(), todayDateObj.getMonth(), 1).getDay(),
+          daysInMonth: new Date(todayDateObj.getFullYear(), todayDateObj.getMonth() + 1, 0).getDate(),
+          monthData: {},
+          pendingItems: []
+      };
+      window.yearlyHolidays = {};
+      
+      // 누락되었던 공휴일 통신 함수 복구
       function checkAndFetchHolidays(year) {
           const cacheKey = `holidays_${year}`;
+          // 1. 일단 로컬 스토리지(캐시)에서 먼저 꺼내서 즉시 적용
           const cached = localStorage.getItem(cacheKey);
-          const now = Date.now();
-          const TTL = 7 * 24 * 60 * 60 * 1000;
-          // 🚨 유통기한: 7일 (밀리초)
-
-          let needsFetch = true;
           if (cached) {
-              try {
-                  const parsed = JSON.parse(cached);
-                  if (now - parsed.timestamp < TTL) {
-                      // 7일 안 지났음! 캐시(지갑)에서 바로 꺼내 씀 (0초 로딩)
-                      parsed.data.forEach(dateStr => window.yearlyHolidays[dateStr] = true);
-                      needsFetch = false;
-                      renderCalendar(); // 빨간색 칠하기
+              const parsed = JSON.parse(cached);
+              Object.assign(window.yearlyHolidays, parsed);
+              if (typeof renderCalendar === 'function') renderCalendar();
+          }
+
+          // 2. 그 뒤에 백그라운드에서 최신 데이터를 긁어와서 캐시 업데이트
+          if (!google || !google.script) return;
+          google.script.run.withSuccessHandler(res => {
+              if (res && Array.isArray(res)) {
+                  const newHolidays = {};
+                  res.forEach(item => {
+                      if (typeof item === 'object') newHolidays[item.date] = item.name;
+                      else newHolidays[item] = true;
+                  });
+                  
+                  // 캐시와 다르면 업데이트 후 다시 그리기
+                  if (JSON.stringify(newHolidays) !== cached) {
+                      localStorage.setItem(cacheKey, JSON.stringify(newHolidays));
+                      Object.assign(window.yearlyHolidays, newHolidays);
+                      if (typeof renderCalendar === 'function') renderCalendar();
                   }
-              } catch(e) {}
-          }
-
-          // 지갑에 없거나 유통기한이 지났다면? 뒤에서 몰래 서버 다녀오기!
-          if (needsFetch) {
-              google.script.run.withSuccessHandler(function(holidays) {
-                  const cacheData = { timestamp: now, data: holidays };
-                  localStorage.setItem(cacheKey, JSON.stringify(cacheData)); // 지갑 갱신
-                  holidays.forEach(dateStr => window.yearlyHolidays[dateStr] = true);
-                  renderCalendar(); // 최신 빨간날로 화면 다시 그리기
-              }).getYearlyHolidays(year);
-          }
+              }
+          }).getYearlyHolidays(year);
       }
+   // 🚀 구글 의존성 100% 삭제 + [모바일 스텔스 방어막 V2 탑재!]
+      const VERCEL_API_URL = "/api/calendar";
 
-      // 🚀 Vercel 통합 매직 어댑터 (15초 타임아웃 적용)
       const google = {
           script: {
               get run() { 
                   return {
-                      _ok: null, 
-                      _err: null,
+                      _ok: null, _err: null,
                       withSuccessHandler: function(cb) { this._ok = cb; return this; },
                       withFailureHandler: function(cb) { this._err = cb; return this; },
+                      
+                      // 🛡️ [핵심] 조용히 넘어가야 할 네트워크 에러인지 판별하는 필터
+                      _isSilentError: function(e) {
+                          if (!navigator.onLine) return true; // 폰 자체가 오프라인일 때
+                          const msg = (e.message || e.name || "").toLowerCase();
+                          return msg.includes('abort') || msg.includes('failed to fetch') || msg.includes('load failed') || msg.includes('networkerror');
+                      },
+
                       _call: function(payload) {
                           setLoadingState(true);
                           const controller = new AbortController();
                           const timeoutId = setTimeout(() => controller.abort(), 15000);
-                          fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify(payload), signal: controller.signal })
-                              .then(r => r.json()).then(d => { 
+
+                          fetch(VERCEL_API_URL, { method: 'POST', body: JSON.stringify(payload), signal: controller.signal })
+                              // ... (fetch 응답 처리 부분) ...
+.then(r => r.json()).then(d => { 
+    clearTimeout(timeoutId);
+    let finalData = typeof d === 'string' ? JSON.parse(d) : d; 
+    
+    // 🚨 [6번 요구사항] 강제 로그아웃 명령 수신 시 즉시 폭파!
+    if (finalData && finalData.forceLogout) {
+        alert(finalData.msg || "🚨 계정이 비활성화되어 로그아웃됩니다.");
+        executeLogout();
+        return;
+    }
+
+    if (finalData && finalData.error) {
+        alert("🔥 서버 에러: " + finalData.error);
+        setLoadingState(false); return;
+    }
+    if(this._ok) this._ok(finalData); 
+}).catch(e => { 
                                   clearTimeout(timeoutId);
-                                  let finalData = d;
-                                  if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
-                                  if(this._ok) this._ok(finalData); 
-                              }).catch(e => { 
-                                  clearTimeout(timeoutId);
-                                  if(this._err) this._err(e.name === 'AbortError' ? new Error('통신 지연 (15초 초과)') : e); 
-                              })
-                              .finally(() => setLoadingState(false));
-                      },
-                      getCalendarDataAsync: function(type, y, m) {
-                          setLoadingState(true);
-                          const controller = new AbortController();
-                          const timeoutId = setTimeout(() => controller.abort(), 15000);
-                          // 🚨 [동기화 버그 핀포인트 픽스] URL 끝에 '&t=${Date.now()}'를 붙여 브라우저 캐시 강제 파괴!
-                          fetch(`${GAS_API_URL}?api=true&type=${type}&year=${y}&month=${m}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
-                              .then(r => r.json()).then(d => { 
-                                  clearTimeout(timeoutId);
-                                  let finalData = typeof d === 'string' ? JSON.parse(d) : d;
-                                  if(this._ok) this._ok(finalData); 
-                              }).catch(e => { 
-                                  clearTimeout(timeoutId);
+                                  // 🚨 네트워크 기절 상태면 팝업 띄우지 않고 조용히 종료!
+                                  if (this._isSilentError(e)) { console.warn("스텔스 차단 (POST):", e.message); return; }
+                                  
+                                  alert("🔥 통신 에러: " + e.message);
                                   if(this._err) this._err(e); 
                               }).finally(() => setLoadingState(false));
                       },
-                      manageWebOutboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'out', action: act, data: data, token: tk }); },
-                      manageWebInboundData: function(act, data, tk) { this._call({ source: 'vercel', domain: 'in', action: act, data: data, token: tk }); },
+                      getCalendarDataAsync: function(type, y, m) {
+                          setLoadingState(true);
+                          fetch(`${VERCEL_API_URL}?api=true&type=${type}&year=${y}&month=${m}&t=${Date.now()}`)
+                              .then(r => r.json()).then(d => { 
+                                  if (d && d.error) {
+                                      alert("🔥 달력 로딩 에러: " + d.error);
+                                      setLoadingState(false); return;
+                                  }
+                                  if(this._ok) this._ok(d); 
+                              }).catch(e => { 
+                                  // 🚨 화면 전환 시 발생하는 찌꺼기 에러 완벽 차단!
+                                  if (this._isSilentError(e)) { console.warn("스텔스 차단 (달력로딩):", e.message); return; }
+                                  
+                                  alert("🔥 달력 통신 에러: " + e.message);
+                                  if(this._err) this._err(e); 
+                              }).finally(() => setLoadingState(false));
+                      },
+                      getYearlyStatsAsync: function(type, y) { 
+                          setLoadingState(true);
+                          fetch(`${VERCEL_API_URL}?api=true&action=yearlyStats&type=${type}&year=${y}&t=${Date.now()}`)
+                              .then(r => r.json()).then(d => { 
+                                  if (d && d.error) { alert("🔥 통계 에러: " + d.error); return; }
+                                  if(this._ok) this._ok(d); 
+                              }).catch(e => { 
+                                  // 🚨 차단!
+                                  if (this._isSilentError(e)) return;
+                                  if(this._err) this._err(e); 
+                              }).finally(() => setLoadingState(false));
+                      },
+                      manageWebOutboundData: function(act, data, tk) { 
+    this._call({ source: 'vercel', domain: 'out', action: act, data: data, token: tk, admin_id: localStorage.getItem('admin_id') }); 
+},
+manageWebInboundData: function(act, data, tk) { 
+    this._call({ source: 'vercel', domain: 'in', action: act, data: data, token: tk, admin_id: localStorage.getItem('admin_id') }); 
+},
                       verifyAdminPw: function(pw) {
                           setLoadingState(true);
-                          fetch(GAS_API_URL, { method: 'POST', body: JSON.stringify({ source: 'vercel', domain: currentType, action: 'PING', data: {}, token: pw }) })
-                              .then(r => r.json()).then(d => { 
-                                  let isValid = !(d.msg && d.msg.includes('보안'));
-                                  if(this._ok) this._ok(isValid); 
-                              }).catch(e => { if(this._err) this._err(e); })
-                              .finally(() => setLoadingState(false));
+                          fetch(VERCEL_API_URL, { method: 'POST', body: JSON.stringify({ source: 'vercel', domain: currentType, action: 'PING', data: {}, token: pw }) })
+                              .then(r => r.json()).then(d => { if(this._ok) this._ok(!(d.msg && d.msg.includes('보안'))); }).catch(e => { 
+                                  if (this._isSilentError(e)) return;
+                                  if(this._err) this._err(e); 
+                              }).finally(() => setLoadingState(false));
+                      },
+                      login: function(id, pw) { 
+                          this._call({ source: 'vercel', action: 'LOGIN', data: { id: id, pw: pw } }); 
                       },
                       getGlobalColors: function() { this._call({ source: 'vercel', action: 'GET_GLOBAL_COLORS' }); },
                       saveGlobalColor: function(c, i) { this._call({ source: 'vercel', action: 'SAVE_GLOBAL_COLOR', compName: c, colorIdx: i }); },
                       getLastOcrImageUrl: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_IMAGE' }); },
-                      
-                      // 🚨 기존 코드 마지막에 쉼표(,)를 꼭 찍어주시고 아래 줄을 추가하세요!
+                      getLastOcrData: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_DATA' }); },
                       getOcrLastTimeStr: function() { this._call({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }); },
-                      
-                      // 👇👇 [여기 추가!] 어댑터에 1년 치 공휴일 요청 버튼 장착!
                       getYearlyHolidays: function(y) { this._call({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: y }); },
-
-                      // 🚀 [개발 추가] 대시보드 통계 API 연동
-                      getYearlyStatsAsync: function(type, y) { 
-                          setLoadingState(true);
-                          const controller = new AbortController();
-                          const timeoutId = setTimeout(() => controller.abort(), 15000);
-                          fetch(`${GAS_API_URL}?api=true&action=yearlyStats&type=${type}&year=${y}&t=${Date.now()}`, { signal: controller.signal, cache: 'no-store' })
-                              .then(r => r.json()).then(d => { 
-                                  clearTimeout(timeoutId); 
-                                  let finalData = d;
-                                  if (typeof d === 'string') { try { finalData = JSON.parse(d); } catch(e) { finalData = d; } }
-                                  if(this._ok) this._ok(finalData); 
-                              }).catch(e => { 
-                                  clearTimeout(timeoutId); 
-                                  if(this._err) this._err(e); 
-                              }).finally(() => setLoadingState(false));
-                      }
+                      getCompInfoDB: function() { this._call({ source: 'vercel', action: 'GET_COMP_INFO_DB' }); },
+                      saveCompInfoDB: function(dbData) { this._call({ source: 'vercel', action: 'SAVE_COMP_INFO_DB', data: dbData }); }
                   };
               }
           }
@@ -1464,6 +1768,32 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         for (let d = 1; d <= serverData.daysInMonth; d++) {
             if (serverData.monthData[d]) { serverData.monthData[d].forEach((item, idx) => { item._rawIdx = idx; }); }
         }
+
+        // 🚨 [입고 지능형 가변 높이 엔진] - 초밀착 정렬형
+        let weekHeights = {};
+        let savedSize = localStorage.getItem('cal_fontSize') || 'M';
+        let charsPerLine = (savedSize === 'L') ? 4 : 5; // 글자 크기에 따른 줄바꿈 기준
+
+        for (let d = 1; d <= serverData.daysInMonth; d++) {
+            let wIdx = Math.floor((serverData.firstDay + d - 1) / 7);
+            if (!weekHeights[wIdx]) weekHeights[wIdx] = 'auto'; 
+
+            let dYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            let hName = window.yearlyHolidays ? window.yearlyHolidays[dYmd] : null;
+            let hasSched = serverData.monthData[d] && serverData.monthData[d].length > 0;
+
+            // 공휴일에 입고 일정이 있을 때만! 그 주차(Week)의 헤더 높이를 통일함
+            if (hName && hasSched) {
+                let linesNeeded = Math.ceil(hName.length / charsPerLine);
+                // 입고 레이아웃(1.0 + 공휴일줄)에 최적화된 수치 적용
+                let calcH = (1.0 + (linesNeeded * 0.75)).toFixed(2) + 'em';
+
+                if (weekHeights[wIdx] === 'auto' || parseFloat(weekHeights[wIdx]) < parseFloat(calcH)) {
+                    weekHeights[wIdx] = calcH;
+                }
+            }
+        }
+
         document.getElementById('calTitle').innerText = `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2,'0')}`;
         const grid = document.getElementById('calendarGrid');
         let rowHtml = '<div class="grid-row">'; let cellCount = 0;
@@ -1482,17 +1812,42 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
           let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           
-          let isHoliday = window.yearlyHolidays && window.yearlyHolidays[currentYmd] === true;
+          let holidayName = window.yearlyHolidays ? window.yearlyHolidays[currentYmd] : null;
+          let isHoliday = !!holidayName;
           let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
 
-          let dateRowHtml = `<div class="date-row"><span class="${dateClass}" style="${redStyle}">${day}</span>`;
+          let w = Math.floor((serverData.firstDay + day - 1) / 7);
+          let currentHeaderHeight = weekHeights[w];
+
+          // 일정이 없는 공휴일은 공간 절약을 위해 auto로 찰싹 붙임
+          if (isHoliday && (!dayData || dayData.length === 0)) {
+              currentHeaderHeight = 'auto';
+          }
+
+          // 🚨 [입고 2층 구조 유지] 1층(날짜/합계) + 2층(공휴일) 유지하며 height만 조절
+          let dateRowHtml = `<div class="date-row" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0px; width: 100%; height: ${currentHeaderHeight}; overflow: hidden; justify-content: flex-start; margin-bottom: 2px;">`;
+          
+          // (1층) 날짜와 총 팔레트 수
+          dateRowHtml += `<div style="display: flex; justify-content: space-between; width: 100%; align-items: center; line-height: 1.0; height: 1.1em;">`;
+          dateRowHtml += `<span class="${dateClass}" style="${redStyle}">${day}</span>`;
           if (dayData && dayData.length > 0) {
               let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
-              if (totalPallets > 0) dateRowHtml += `<span class="daily-total">${totalPallets}</span>`;
+              if (totalPallets > 0) {
+                  dateRowHtml += `<span class="daily-total" style="flex-shrink: 0; font-weight: 800; font-size: 0.75em;">${totalPallets}</span>`;
+              }
           }
           dateRowHtml += `</div>`;
-          let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
+
+          // (2층) 공휴일 이름 (전체 너비 사용)
+          if (isHoliday && typeof holidayName === 'string') {
+              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:1px; display: block; width: 100%; white-space: normal; word-break: break-all; line-height: 1.0;">${holidayName}</span>`;
+          }
+          dateRowHtml += `</div>`;
           
+          let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
+
+          // ... (이후 item-tag 렌더링 및 미정건 로직은 기존과 동일) ...
+                   
           if(dayData && dayData.length > 0) {
             dayData.forEach((item, idx) => {
               let isItemDone = item.isDone === true || String(item.isDone) === "true";
@@ -1504,6 +1859,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
               if (meaningfulEtc !== '') tagClass += " has-etc";
 
+              // 기존에 있던 AI 뱃지는 과감하게 지우고 P 글씨도 뺍니다!
               let iconHtml = isItemDone ? `<span class="done-icon">✅</span>` : '';
               let shortName = item.bl.length > 4 ? item.bl.slice(-4) : item.bl;
               if (item.bl.startsWith('발행전')) shortName = '발행전';
@@ -1685,24 +2041,37 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         let newDay = (payload.newDate && payload.newDate !== '미정') ? parseInt(payload.newDate.split('-')[2], 10) : 'pending';
         let arr = oldDay === 'pending' ? serverData.pendingItems : serverData.monthData[oldDay];
         if(!arr) return;
+
         if (action === 'EDIT') {
           let item = arr.splice(idx, 1)[0];
-          if(payload.newEtc !== undefined) item.etc = payload.newEtc;
+          
+          // 🚨 [핵심 픽스] 수정된 모든 데이터를 내 폰 화면(로컬 객체)에도 즉시 덮어씌웁니다!
+          if (payload.newBL !== undefined) {
+              item.bl = payload.newBL;
+              item.company = payload.newBL; // 시스템 호환용
+          }
+          if (payload.newPal !== undefined) item.pal = payload.newPal;
+          if (payload.newSType !== undefined) item.sType = payload.newSType;
+          if (payload.newFwd !== undefined) item.fwd = payload.newFwd;
+          if (payload.newInvoice !== undefined) item.invoice = payload.newInvoice;
+          if (payload.newEtc !== undefined) item.etc = payload.newEtc;
+
           if(newDay !== 'pending' && !serverData.monthData[newDay]) serverData.monthData[newDay] = [];
           let newArr = newDay === 'pending' ? serverData.pendingItems : serverData.monthData[newDay];
           newArr.push(item);
-        } else if (action === 'DELETE') { arr.splice(idx, 1);
-        } else if (action === 'DONE') { arr[idx].isDone = true;
-        } else if (action === 'UNDO_DONE') { arr[idx].isDone = false;
+        } else if (action === 'DELETE') { 
+            arr.splice(idx, 1);
+        } else if (action === 'DONE') { 
+            arr[idx].isDone = true;
+        } else if (action === 'UNDO_DONE') { 
+            arr[idx].isDone = false;
         }
         
-        // ... 기존 코드 유지
         lastLocalUpdateTime = Date.now();
         localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
         
-        // 👇 💡 옛날 폭파 코드 지우고 매니저 딱 1줄 호출!
         triggerStealthYearlySync(serverData.year);
-      } // <-- 함수 끝
+      }
 
       function updateMultiLocalState(action, items) {
         const norm = (v) => { let s = String(v != null ? v : "").trim(); return (s === "0" || s === "") ? "" : s; };
@@ -1710,20 +2079,21 @@ if (!localStorage.getItem('cache_wiped_v3')) {
             let day = target.dateStr === '미정' ? 'pending' : parseInt(target.dateStr.split('-')[2], 10);
             let arr = day === 'pending' ? serverData.pendingItems : serverData.monthData[day];
             if(!arr) return;
-            let idx = arr.findIndex(i => i.bl === target.bl && norm(i.pal) === norm(target.pal) && (i.isDone === true || String(i.isDone) === "true") === (target.isDone === true || String(target.isDone) === "true"));
+            // 🚨 ID가 있으면 무조건 ID로 잡고, 없으면 글자로 찾아서 확실하게 업데이트!
+            let idx = arr.findIndex(i => {
+                if (target.id && i.id === target.id) return true;
+                return i.bl === target.bl && norm(i.pal) === norm(target.pal);
+            });
             if (idx !== -1) {
                if (action === 'MULTI_DELETE') arr.splice(idx, 1);
                else if (action === 'MULTI_DONE') arr[idx].isDone = true;
                else if (action === 'MULTI_UNDO_DONE') arr[idx].isDone = false;
             }
         });
-        // ... 기존 코드 유지
         lastLocalUpdateTime = Date.now(); 
         localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
-        
-        // 👇 💡 여기도 매니저 딱 1줄 호출!
         triggerStealthYearlySync(serverData.year);
-      } // <-- 함수 끝
+      }
 
       if (isAdmin) {
         const btn = document.getElementById('adminBtn');
@@ -1731,41 +2101,193 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         document.getElementById('adminActions').style.display = 'flex';
       }
 
+
+      // =====================================================
+      // 🔒 [통합 인증 및 세션 제어 엔진] - 중복 코드 제거 및 최적화
+      // =====================================================
+
+      // 🚨 1. 인증 데이터 통합 저장/삭제 헬퍼
+      function saveAuthData(id, role, isSave) {
+          const isAuto = localStorage.getItem('auto_login') !== 'false';
+          const targetStorage = isAuto ? localStorage : sessionStorage;
+          const otherStorage = isAuto ? sessionStorage : localStorage;
+
+          if (isSave) {
+              otherStorage.removeItem('isAdmin'); otherStorage.removeItem('admin_id'); otherStorage.removeItem('admin_role');
+              targetStorage.setItem('isAdmin', 'true');
+              targetStorage.setItem('admin_id', id);
+              targetStorage.setItem('admin_role', role);
+          } else {
+              localStorage.removeItem('isAdmin'); localStorage.removeItem('admin_id'); localStorage.removeItem('admin_role');
+              sessionStorage.removeItem('isAdmin'); sessionStorage.removeItem('admin_id'); sessionStorage.removeItem('admin_role');
+          }
+      }
+
+      // 🚨 2. 수동 로그인 모달창 띄우기
+      function openLoginModal() {
+        document.getElementById('adminPwInput').value = ''; 
+        let idInput = document.getElementById('adminIdInput');
+        if (idInput) idInput.value = ''; 
+        
+        const bioBtn = document.getElementById('btnBioLogin');
+        if (bioBtn) bioBtn.style.display = localStorage.getItem('bio_registered') === 'true' ? 'block' : 'none';
+
+        document.getElementById('adminLoginModal').style.display = 'flex';
+        setTimeout(() => { if(idInput) idInput.focus(); else document.getElementById('adminPwInput').focus(); }, 150);
+      }
+
+      // 🚨 3. 권한에 따른 프로필 모달 및 세팅 토글
       function toggleAdmin() {
-        const btn = document.getElementById('adminBtn');
         if(isAdmin) {
-          isAdmin = false; localStorage.removeItem("admin_token");
-          // 💡 수정됨
-          adminToken = null;
-          btn.innerHTML = '🔒 잠김'; btn.classList.remove('unlocked');
-          document.getElementById('adminActions').style.display = 'none'; updateFooterUI();
-          showToast('🔒 일반 모드로 전환되었습니다.', 2000); return;
+          let savedId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id') || '관리자';
+          let savedRole = localStorage.getItem('admin_role') || sessionStorage.getItem('admin_role'); 
+          
+          document.getElementById('myInfoAdminId').innerText = `ID: ${savedId}`;
+          
+          const roleTextElem = document.getElementById('myInfoAdminRole');
+          const iconElem = document.getElementById('myInfoAdminIcon');
+          
+          const isMasterUser = savedId.toLowerCase() === 'admin' || 
+                               savedId.toLowerCase() === 'silverscent' ||
+                               (savedRole && (savedRole.toUpperCase().includes('SUPER') || 
+                                              savedRole.toUpperCase().includes('MASTER') ||
+                                              savedRole.toUpperCase().includes('SYSTEM')));
+
+          if(iconElem) {
+              iconElem.innerText = '🧑‍💻';
+              if (isMasterUser) {
+                  iconElem.style.background = 'linear-gradient(135deg, #0a84ff, #005bb5)';
+                  iconElem.style.boxShadow = '0 4px 10px rgba(10, 132, 255, 0.3)';
+              } else {
+                  iconElem.style.background = 'linear-gradient(135deg, #34c759, #28a745)';
+                  iconElem.style.boxShadow = '0 4px 10px rgba(52, 199, 89, 0.3)';
+              }
+          }
+
+          if (isMasterUser) {
+              roleTextElem.innerText = 'System Administrator';
+              roleTextElem.style.color = '#0a84ff'; 
+          } else {
+              roleTextElem.innerText = '일반 관리자';
+              roleTextElem.style.color = 'var(--text-main)'; 
+          }
+
+          let isBioRegistered = localStorage.getItem('bio_registered') === 'true' && localStorage.getItem('bio_id') === savedId;
+          document.getElementById('toggleBioAuth').checked = isBioRegistered;
+          
+          let isAutoLogin = localStorage.getItem('auto_login') !== 'false'; 
+          document.getElementById('toggleAutoLogin').checked = isAutoLogin;
+          
+          document.getElementById('pwChangeFormContainer').style.display = 'none';
+
+          document.getElementById('myInfoModal').style.display = 'flex';
+          return;
         }
-        document.getElementById('adminPwInput').value = ''; document.getElementById('adminLoginModal').style.display = 'flex';
-        setTimeout(() => document.getElementById('adminPwInput').focus(), 100);
+        
+        if (localStorage.getItem('bio_registered') === 'true' && window.PublicKeyCredential) {
+            handleBioLogin(); return; 
+        }
+        openLoginModal();
       }
 
-      function submitAdminLogin() {
-        let pw = document.getElementById('adminPwInput').value;
-        if(!pw) return;
-        document.getElementById('adminLoginModal').style.display = 'none'; showToast("🔒 보안 인증 중...", 0);
-        google.script.run.withSuccessHandler(function(isValid) {
-          if (isValid) {
-            isAdmin = true;
-            localStorage.setItem("admin_token", pw); // 💡 수정됨
-            adminToken = pw;
-            document.getElementById('adminBtn').innerHTML = '🔓 관리자'; document.getElementById('adminBtn').classList.add('unlocked');
-            document.getElementById('adminActions').style.display = 'flex'; updateFooterUI();
-            showToast("🔓 관리자 인증 성공!", 2000); renderCalendar();
-          } else { showToast("❌ 비밀번호가 틀렸습니다.", 2000); }
-        }).verifyAdminPw(pw);
+      // 🚨 4. 자동 로그인 토글 (스토리지 이사)
+      function handleAutoLoginToggle(checkbox) {
+          const id = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
+          const role = localStorage.getItem('admin_role') || sessionStorage.getItem('admin_role');
+          
+          if (checkbox.checked) {
+              localStorage.setItem('auto_login', 'true');
+              if (id) saveAuthData(id, role, true);
+              showToast("자동 로그인 기능이 켜졌습니다.", 1500);
+          } else {
+              localStorage.setItem('auto_login', 'false');
+              if (id) saveAuthData(id, role, true);
+              showToast("앱 종료 시 자동으로 로그아웃됩니다.", 1500);
+          }
       }
 
+      window.addEventListener('beforeunload', () => {
+          if (localStorage.getItem('auto_login') === 'false') {
+              saveAuthData(null, null, false);
+          }
+      });
+
+      // 🚨 5. 생체 인증 설정 변경
+      function handleBioToggleChange(checkbox) {
+          if (checkbox.checked) {
+              if (!window.PublicKeyCredential) {
+                  alert("이 기기 브라우저에서는 생체 인증(WebAuthn)을 지원하지 않습니다.");
+                  checkbox.checked = false;
+                  return;
+              }
+              let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
+              let adminPw = prompt("생체 인증을 등록하려면 현재 로그인된 계정의 비밀번호를 다시 한번 입력하세요.");
+              
+              if (!adminPw) {
+                  checkbox.checked = false;
+                  return;
+              }
+
+              showToast("보안 검증 중...", 0);
+              google.script.run.withSuccessHandler(function(isValid) {
+                  if (isValid) {
+                      localStorage.setItem('bio_registered', 'true');
+                      localStorage.setItem('bio_id', adminId);
+                      localStorage.setItem('bio_pw', adminPw); 
+                      showToast("✅ 생체 인증이 기기에 등록되었습니다.", 2000);
+                  } else {
+                      alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.");
+                      checkbox.checked = false;
+                  }
+              }).verifyAdminPw(adminPw);
+
+          } else {
+              let currentId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
+              let bioId = localStorage.getItem('bio_id');
+              
+              if (localStorage.getItem('bio_registered') === 'true' && currentId !== bioId) {
+                  showToast("⚠️ 본인 계정으로 등록된 생체 인증 정보가 아닙니다.", 2500);
+                  checkbox.checked = false; 
+                  return;
+              }
+
+              if(confirm("생체 인증 로그인을 해제하시겠습니까?")) {
+                  localStorage.removeItem('bio_registered');
+                  localStorage.removeItem('bio_id');
+                  localStorage.removeItem('bio_pw');
+                  showToast("🗑️ 생체 인증이 해제되었습니다.", 2000);
+              } else {
+                  checkbox.checked = true; 
+              }
+          }
+      }
+
+      // 🚨 6. 비밀번호 눈알 아이콘 토글
       function togglePwView() {
-        const input = document.getElementById('adminPwInput');
-        const icon = document.getElementById('pwToggleIcon');
-        if (input.type === 'password') { input.type = 'text'; icon.innerText = '🙈';
-        } else { input.type = 'password'; icon.innerText = '👁️'; }
+        const input = document.getElementById("adminPwInput");
+        const icon = document.getElementById("pwToggleIcon");
+        if (input.type === "password") {
+          input.type = "text";
+          icon.innerText = "🙈";
+        } else {
+          input.type = "password";
+          icon.innerText = "👁️";
+        }
+      }
+
+      // 🚨 7. 로그아웃 (통합 헬퍼 사용)
+      function executeLogout() {
+          const logoutModal = document.getElementById('logoutConfirmModal');
+          if (logoutModal) logoutModal.style.display = 'none';
+          
+          const infoModal = document.getElementById('myInfoModal');
+          if (infoModal) infoModal.style.display = 'none';
+          
+          window.isAdmin = false; 
+          isAdmin = false;
+          
+          saveAuthData(null, null, false);
+          location.reload(); 
       }
 
       let isMultiMode = false;
@@ -1946,6 +2468,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         if (targetCell && !targetCell.classList.contains("empty")) {
           let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
           // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
+          // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
           if (newDay === dragData.day && currentDropTarget && currentDropTarget.classList.contains('item-tag')) {
               let targetIdx = parseInt(currentDropTarget.getAttribute('data-raw-idx'));
               if (!isNaN(targetIdx)) {
@@ -1962,8 +2485,19 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   serverData.customOrderFlags = serverData.customOrderFlags || {};
                   serverData.customOrderFlags[dragData.day] = true;
 
+                  // 🚨 [패치 4] Vercel 서버로 순서표 전송! (이게 빠져서 새로고침 시 튕겼음!)
+                  let orderPayload = { dailyOrders: {} };
+                  let dStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+                  orderPayload.dailyOrders[dStr] = [];
+                  arr.forEach((it, i) => {
+                      it.sortIdx = i; // 로컬 반영
+                      orderPayload.dailyOrders[dStr].push({ id: it.id || null, company: it.bl, pal: String(it.pal || "").trim(), sortIdx: i });
+                  });
+
                   localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
                   renderCalendar();
+                  
+                  google.script.run.manageWebInboundData("UPDATE_ORDER", orderPayload, adminToken);
                   return;
               }
           }
@@ -1986,7 +2520,11 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       }
 
       function executeMove(item, oldDateStr, newDateStr, idx) {
-        let payload = { action: 'EDIT', oldBL: item.bl, oldDate: oldDateStr, oldDone: item.isDone, oldPal: String(item.pal||""), newDate: newDateStr, newEtc: item.etc };
+        let payload = { 
+            action: 'EDIT', id: item.id, 
+            oldBL: item.bl, oldDate: oldDateStr, oldDone: item.isDone, oldPal: String(item.pal||""), 
+            newDate: newDateStr, newBL: item.bl, newPal: item.pal, newSType: item.sType, newFwd: item.fwd, newInvoice: item.invoice, newEtc: item.etc 
+        };
         updateLocalState('EDIT', payload, idx); renderCalendar(); 
         google.script.run.withSuccessHandler(res => {
           if(!res.success) { showToast('❌ 서버 저장 실패! 데이터를 다시 불러옵니다.', 2000); goToAsync(serverData.year, serverData.month); }
@@ -2005,7 +2543,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           const safeStr = (val) => (val === "" || val == null) ? "" : String(val).trim();
           let existingIdx = selectedItems.findIndex(i => i.key === itemKey);
           if (existingIdx > -1) { selectedItems.splice(existingIdx, 1); el.classList.remove('multi-selected'); }
-          else { selectedItems.push({ key: itemKey, bl: bl, dateStr: dateStr, isDone: isItemDone, pal: safeStr(item.pal) });
+          // 기존 코드 덮어쓰기
+          else { selectedItems.push({ key: itemKey, id: item.id, bl: bl, dateStr: dateStr, isDone: isItemDone, pal: safeStr(item.pal) });
           el.classList.add('multi-selected'); }
           document.getElementById('selCount').innerText = selectedItems.length; return;
         }
@@ -2017,18 +2556,29 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
       function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = false) {
         let oldPal = "";
+        let itemId = null; // 🚨 ID 변수 추가
         const safeStr = (val) => (val === "" || val == null) ? "" : String(val).trim();
         let currentIsDone = isDone === true || String(isDone) === "true";
         if (idx !== null) {
           let day = oldDate === '미정' ? 'pending' : parseInt(oldDate.split('-')[2], 10);
           let item = day === 'pending' ? serverData.pendingItems[idx] : (serverData.monthData[day] ? serverData.monthData[day][idx] : null);
-          if (item) { oldPal = safeStr(item.pal); currentIsDone = item.isDone === true || String(item.isDone) === "true"; }
+          if (item) { 
+              oldPal = safeStr(item.pal); 
+              currentIsDone = item.isDone === true || String(item.isDone) === "true"; 
+              itemId = item.id; // 🚨 ID 획득!
+          }
         }
-        let payload = { action: action, oldBL: oldBL, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal };
+        
+        let payload = { action: action, id: itemId, oldBL: oldBL, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal };
         if (action === 'DONE') { if (!confirm(`✅ [${oldBL}] 입고를 완료 처리하시겠습니까?`)) return; }
         else if (action === 'UNDO_DONE') { if (!confirm(`⏪ [${oldBL}] 입고 완료 상태를 취소하시겠습니까?`)) return; }
         else if (action === 'DELETE') { if (!confirm(`⚠️ 정말 [${oldBL}] 입고 스케줄을 영구 삭제하시겠습니까?`)) return; }
         else if (action === 'EDIT') {
+            payload.newBL = document.getElementById(`edit-bl-${idx}`).value;
+            payload.newPal = document.getElementById(`edit-pal-${idx}`).value;
+            payload.newSType = document.getElementById(`edit-stype-${idx}`).value;
+            payload.newFwd = document.getElementById(`edit-fwd-${idx}`).value;
+            payload.newInvoice = document.getElementById(`edit-invoice-${idx}`).value;
             payload.newDate = document.getElementById(`edit-date-${idx}`).value || "미정";
             payload.newEtc = document.getElementById(`edit-etc-${idx}`).value;
         }
@@ -2075,10 +2625,12 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           let isItemDone = item.isDone === true || String(item.isDone) === "true";
           let typeIcon = item.sType === 'SEA' ? '🚢' : '✈️';
           
-          // 💡 [핵심] 해상/항공에 맞춰 파스텔 배경색 지정
           let isAir = item.sType === 'AIR';
           let pastelBg = isAir ? '#ff7eff' : '#26e2fd';
-          let iconOpacity = isItemDone ? '0.8' : '1'; // 완료된 건은 흐리게
+          let iconOpacity = isItemDone ? '0.8' : '1';
+
+          // 🚨 상세보기 창에만 예쁜 AI 알약 뱃지 장착!
+          //let aiBadgeHtml = item.isAi ? `<span style="background:rgba(10,132,255,0.1); color:#0a84ff; border:1px solid rgba(10,132,255,0.3); padding:2px 6px; border-radius:8px; font-size:0.75em; font-weight:900; margin-left:8px; vertical-align:middle;">🤖 AI수정됨</span>` : '';
 
           let actionBtns = '';
           if (isAdmin) {
@@ -2107,78 +2659,209 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       function openEditForm(day, idx, bl, dateStr, pal, etc) {
         const card = document.getElementById(`modal-card-${day}-${idx}`);
         let inputDateVal = dateStr === '미정' ? '' : dateStr;
+        let item = day === 'pending' ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
+        
+        let sType = item.sType || ''; let fwd = item.fwd || ''; let invoice = item.invoice || '';
+
         card.style.flexDirection = ''; card.style.alignItems = '';
+        // 🚨 폼 레이블(글자) 위아래 여백을 줘서 인풋창에 절대 안 겹치게 만듭니다!
         card.innerHTML = `
           <div class="edit-form" style="width: 100%; padding:0; border:none; margin-top:0;">
-            <div class="form-label" style="font-size:1em; color:#0a84ff; margin-bottom:5px;">📦 B/L: ${bl}</div>
+            <div class="form-label" style="margin-bottom: 6px; margin-top: 5px;">📦 B/L 번호</div>
+            <input type="text" id="edit-bl-${idx}" class="edit-input" value="${bl}">
             
-            <div class="type-toggle-wrapper" style="display:none; margin-bottom: 12px; margin-top: 0;">
-              <input type="radio" id="edit-type-in-${idx}" name="edit-job-type-${idx}" value="IN" checked hidden>
-              <label for="edit-type-in-${idx}" class="type-label">입고</label>
+            <div style="display:flex; gap:10px;">
+              <div style="flex:1;">
+                <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">수량 (PAL)</div>
+                <input type="number" id="edit-pal-${idx}" class="edit-input" value="${pal}">
+              </div>
+              <div style="flex:1;">
+                <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">운송 타입</div>
+                <select id="edit-stype-${idx}" class="edit-input" style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a0a0a0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E'); background-repeat: no-repeat; background-position: right 15px top 50%; background-size: 10px auto;">
+                  <option value="SEA" ${sType === 'SEA' ? 'selected' : ''}>🚢 해상 (SEA)</option>
+                  <option value="AIR" ${sType === 'AIR' ? 'selected' : ''}>✈️ 항공 (AIR)</option>
+                </select>
+              </div>
             </div>
 
-            <div class="form-label" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
-              <span>날짜</span>
-              <span style="color:#ff3b30; cursor:pointer; font-weight:800; font-size:0.85em; padding:4px 8px; background:rgba(255,59,48,0.1); border-radius:6px; transition:0.2s;" onclick="document.getElementById('edit-date-${idx}').value='';" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'">✕ 지우기 (대기열 이동)</span>
+            <div style="display:flex; gap:10px;">
+              <div style="flex:1;">
+                <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">포워더 (FWD)</div>
+                <input type="text" id="edit-fwd-${idx}" class="edit-input" value="${fwd}">
+              </div>
+              <div style="flex:1;">
+                <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">인보이스</div>
+                <input type="text" id="edit-invoice-${idx}" class="edit-input" value="${invoice}">
+              </div>
+            </div>
+
+            <div class="form-label" style="margin-bottom: 6px; margin-top: 10px; display:flex; justify-content:space-between; align-items:center;">
+              <span>입고일 (날짜)</span>
+              <span style="color:#ff3b30; cursor:pointer; font-weight:800; font-size:0.85em; padding:4px 8px; background:rgba(255,59,48,0.1); border-radius:6px; transition:0.2s;" onclick="document.getElementById('edit-date-${idx}').value='';" onmousedown="this.style.transform='scale(0.9)'" onmouseup="this.style.transform='scale(1)'">✕ 미정(대기)으로 변경</span>
             </div>
             <input type="date" id="edit-date-${idx}" class="edit-input" value="${inputDateVal}">
 
-            <div class="form-label" style="margin-top:5px;">비고 (메모 입력)</div>
+            <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">비고 (메모 입력)</div>
             <input type="text" id="edit-etc-${idx}" class="edit-input" value="${etc !== 'undefined' ? etc : ''}">
-            <div class="btn-row">
+            
+            <div class="btn-row" style="margin-top: 15px; padding-bottom: 10px;">
               <button class="save-btn" onclick="submitCMS('EDIT', '${bl}', '${dateStr}', ${idx})">💾 저장</button>
               <button class="cancel-btn" onclick="renderCalendar(); document.getElementById('modal').style.display='none';">취소</button>
             </div>
-            <button class="delete-btn" onclick="submitCMS('DELETE', '${bl}', '${dateStr}', ${idx})">🗑️ 이 스케줄 삭제</button>
+            <button class="delete-btn" style="margin-bottom: 15px;" onclick="submitCMS('DELETE', '${bl}', '${dateStr}', ${idx})">🗑️ 이 스케줄 삭제</button>
           </div>
         `;
       }
 
-      // =====================================================
-      // 🚀 [OCR 최종 패치] 광활한 핀치 투 줌/이동 엔진 (먹통 버그 해결)
-      // =====================================================
-      let ocrTransform = { scale: 1, x: 0, y: 0 };
-      let _ocrGesturesInitialized = false; // 💡 제스처 엔진 중복 실행 방지 플래그
-      
-      function showLastOcrImage() {
-          document.getElementById('ocrImageModal').style.display = 'flex';
-          document.getElementById('ocrImageContent').innerHTML = '불러오는 중... ⏳';
-          ocrTransform = { scale: 1, x: 0, y: 0 }; // 좌표 초기화
+// =====================================================
+// 🚀 [OCR 최종 패치] 광활한 핀치 투 줌/이동 엔진 (먹통 버그 해결)
+// =====================================================
+let ocrTransform = { scale: 1, x: 0, y: 0 };
+let _ocrGesturesInitialized = false;
 
-          google.script.run.withSuccessHandler(function(url) {
-              if (url) {
-                  document.getElementById('ocrImageContent').innerHTML = `<img id="ocrImgElement" src="${url}" alt="마지막 스케줄 이미지">`;
-                  setTimeout(initOcrGestures, 100); 
-              } else {
-                  document.getElementById('ocrImageContent').innerHTML = '최근 처리된 이미지가 없거나 만료되었습니다.';
-              }
-          }).withFailureHandler(function(err) {
-              document.getElementById('ocrImageContent').innerHTML = '이미지 로딩 에러: ' + err.message;
-          }).getLastOcrImageUrl();
-      }
+function showLastOcrImage() {
+    document.getElementById('ocrImageModal').style.display = 'flex';
+    document.getElementById('ocrImageContent').innerHTML = '불러오는 중... ⏳';
+    ocrTransform = { scale: 1, x: 0, y: 0 }; 
+
+    google.script.run.withSuccessHandler(function(res) {
+        let url = (res && res.url) ? res.url : (typeof res === 'string' ? res : "");
+        if (url && url.startsWith("http")) {
+            
+            document.getElementById('ocrImageContent').innerHTML = `
+                <div style="display: flex; flex-direction: column; width: 100%; height: 80vh; max-height: 800px; overflow: hidden;">
+                    
+                    <div id="ocrImageWrapper" style="flex: 1 1 100%; position: relative; overflow: hidden; background: #e9ecef; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: center; transition: flex 0.3s ease;">
+                        
+                        <img id="ocrImgElement" src="${url}" alt="마지막 스케줄 이미지" draggable="false" style="max-width: 100%; max-height: 100%; display: block; object-fit: contain; user-select: none; -webkit-user-drag: none; -moz-user-select: none;">
+                    
+                    </div>
+                    
+                    <div style="flex: 0 0 auto; padding: 10px; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 10;">
+                        <button id="ocrVerifyBtn" onclick="loadOcrVerificationData(this)" 
+                                ontouchstart="event.stopPropagation()" 
+                                onmousedown="event.stopPropagation()" 
+                                style="padding: 12px 20px; background: #4a90e2; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; font-size: 15px;">
+                            📊 AI 파싱 데이터 대조하기
+                        </button>
+                    </div>
+                    
+                    <div id="ocrVerifyTableContainer" 
+                         ontouchstart="event.stopPropagation()" 
+                         ontouchmove="event.stopPropagation()" 
+                         ontouchend="event.stopPropagation()" 
+                         onmousedown="event.stopPropagation()" 
+                         onmousemove="event.stopPropagation()" 
+                         onwheel="event.stopPropagation()" 
+                         style="flex: 1 1 60%; overflow-y: auto; overflow-x: auto; background: #fff; display: none; padding: 0px 5px; border-top: 1px solid #eee; touch-action: pan-x pan-y; overscroll-behavior: contain;">
+                    </div>
+                </div>
+            `;
+            setTimeout(initOcrGestures, 100); 
+        } else {
+            document.getElementById('ocrImageContent').innerHTML = '<div style="color:var(--text-sub); font-weight:800;">현재 서버에 등록된 최신 이미지가 없습니다.</div>';
+        }
+    }).withFailureHandler(function(err) {
+        document.getElementById('ocrImageContent').innerHTML = '이미지 로딩 에러: ' + err.message;
+    }).getLastOcrImageUrl();
+}
+
+// 🚨 [수정된 함수] ETA 복구 및 위아래 분할 디자인 적용
+function loadOcrVerificationData(btnElement) {
+    const container = document.getElementById('ocrVerifyTableContainer');
+    const imgWrapper = document.getElementById('ocrImageWrapper');
+    
+    // 이미 표가 열려있으면 다시 닫기 (토글 기능)
+    if (container.style.display === 'block') {
+        container.style.display = 'none';
+        imgWrapper.style.flex = '1 1 100%'; // 이미지가 다시 전체 화면 차지
+        btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
+        btnElement.style.background = '#4a90e2';
+        return;
+    }
+
+    const originalText = btnElement.innerHTML;
+    btnElement.innerHTML = '데이터 불러오는 중... ⏳';
+    btnElement.disabled = true;
+    btnElement.style.background = '#ccc';
+
+    google.script.run.withSuccessHandler(function(data) {
+        // 표 닫기 버튼으로 변신
+        btnElement.innerHTML = '🔽 데이터 대조창 닫기 (전체 이미지 보기)';
+        btnElement.disabled = false;
+        btnElement.style.background = '#e74c3c';
+        
+        // 💡 윗부분 이미지는 40%만 차지하도록 줄이고, 밑에 표를 보여줍니다!
+        imgWrapper.style.flex = '1 1 40%'; 
+        
+        if (!data || data.length === 0) {
+            container.innerHTML = `<div style="margin-top:20px; background: #ffebee; border-radius: 8px; padding: 15px; text-align: center; color: #c0392b; font-weight: bold;">⚠️ 저장된 파싱 데이터가 없습니다.</div>`;
+            container.style.display = 'block';
+            return;
+        }
+
+        // ETA 추가 및 엑셀 스타일 틀 고정(sticky) 헤더
+        let tableHtml = `
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; color: #333;">
+                <thead style="background: #f8f9fa; position: sticky; top: 0; z-index: 5; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                    <tr>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap;">B/L번호</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap; color: #e74c3c;">PAL</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap;">ETA</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap;">입고일</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap;">Type</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap;">인보이스</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">비고</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        data.forEach(r => {
+            tableHtml += `
+                <tr>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd; font-weight: 800;">${r.bl || ''}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd; color: #e74c3c; font-weight: bold;">${r.pal || '0'}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.eta || ''}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd; background: #fdfbfb;">${r.inDate || '미정'}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.sType || ''}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.invoice || ''}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd; color: #555; text-align: left; font-size: 11px;">${r.etc || ''}</td>
+                </tr>
+            `;
+        });
+        
+        tableHtml += `</tbody></table>`;
+        container.innerHTML = tableHtml;
+        container.style.display = 'block';
+        
+    }).withFailureHandler(function(err) {
+        btnElement.innerHTML = originalText;
+        btnElement.disabled = false;
+        btnElement.style.background = '#4a90e2';
+        alert("데이터를 불러오지 못했습니다: " + err.message);
+    }).getLastOcrData();
+}
 
       function initOcrGestures() {
           const wrapper = document.getElementById('ocrImageWrapper');
           if (!wrapper) return;
 
-          // 💡 중복 등록 방지 (전역 변수로 1번만 세팅)
           if (_ocrGesturesInitialized) return;
           _ocrGesturesInitialized = true;
 
           let isDragging = false;
-          let startX = 0, startY = 0;
+          let lastX = 0, lastY = 0; // 🚨 기준점이 아니라 '마지막 위치' 추적으로 변경!
           let initialPinchDist = 0;
-          let ocrStartTransform = { scale: 1, x: 0, y: 0 };
+          let ocrStartScale = 1;
           
-          // 💡 매 프레임마다 '현재 살아있는' 이미지를 동적으로 찾아서 움직임! (먹통 해결 핵심)
           const updateTransform = () => {
               const currentImg = document.getElementById('ocrImgElement');
               if(currentImg) currentImg.style.transform = `translate3d(${ocrTransform.x}px, ${ocrTransform.y}px, 0) scale(${ocrTransform.scale})`;
           };
 
-          const getPinchDistance = (touches) => {
-              return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
-          };
+          const getPinchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+          const getMidpoint = (touches) => ({ x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 });
 
           wrapper.addEventListener('touchstart', (e) => {
               if (e.target.closest('.close-btn')) return;
@@ -2186,47 +2869,72 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               
               if (e.touches.length === 1) {
                   isDragging = true;
-                  startX = e.touches[0].clientX - ocrTransform.x;
-                  startY = e.touches[0].clientY - ocrTransform.y;
+                  lastX = e.touches[0].clientX;
+                  lastY = e.touches[0].clientY;
               } else if (e.touches.length === 2) {
                   isDragging = false;
                   initialPinchDist = getPinchDistance(e.touches);
-                  ocrStartTransform = { ...ocrTransform };
+                  ocrStartScale = ocrTransform.scale;
+                  const mid = getMidpoint(e.touches);
+                  lastX = mid.x;
+                  lastY = mid.y;
               }
           }, { passive: false });
+
           wrapper.addEventListener('touchmove', (e) => {
               e.preventDefault();
               if (e.touches.length === 1 && isDragging) {
-                  ocrTransform.x = e.touches[0].clientX - startX;
-                  ocrTransform.y = e.touches[0].clientY - startY;
+                  // ☝️ 한 손가락 이동: 움직인 만큼만 더해줌
+                  ocrTransform.x += e.touches[0].clientX - lastX;
+                  ocrTransform.y += e.touches[0].clientY - lastY;
+                  lastX = e.touches[0].clientX;
+                  lastY = e.touches[0].clientY;
                   requestAnimationFrame(updateTransform);
               } else if (e.touches.length === 2) {
+                  // ✌️ 두 손가락 줌(Zoom) + 이동(Pan) 완벽 동시 적용!
                   const currentDist = getPinchDistance(e.touches);
-                  const scaleDiff = currentDist / initialPinchDist;
-                  ocrTransform.scale = Math.max(1, Math.min(ocrStartTransform.scale * scaleDiff, 6)); 
+                  ocrTransform.scale = Math.max(1, Math.min(ocrStartScale * (currentDist / initialPinchDist), 6)); 
+                  
+                  const mid = getMidpoint(e.touches);
+                  // 🚨 확대 중에도 두 손가락 중심점이 움직인 만큼만 화면 좌표에 더해줍니다 (헛돌기 버그 해결)
+                  ocrTransform.x += mid.x - lastX;
+                  ocrTransform.y += mid.y - lastY;
+                  lastX = mid.x;
+                  lastY = mid.y;
+                  
                   requestAnimationFrame(updateTransform);
               }
           }, { passive: false });
+
           wrapper.addEventListener('touchend', (e) => {
-              if (e.touches.length < 2) initialPinchDist = 0;
-              if (e.touches.length === 0) isDragging = false;
-              
-              // 축소 시 부드러운 원상복구
-              if (ocrTransform.scale <= 1) {
-                  ocrTransform = { scale: 1, x: 0, y: 0 };
-                  const currentImg = document.getElementById('ocrImgElement');
-                  if (currentImg) {
-                      currentImg.style.transition = 'transform 0.2s ease-out';
-                      updateTransform();
-                      setTimeout(() => { if(currentImg) currentImg.style.transition = 'none'; }, 200);
+              if (e.touches.length === 1) {
+                  isDragging = true;
+                  lastX = e.touches[0].clientX;
+                  lastY = e.touches[0].clientY;
+              } else if (e.touches.length === 0) {
+                  isDragging = false;
+                  if (ocrTransform.scale <= 1) {
+                      ocrTransform = { scale: 1, x: 0, y: 0 };
+                      const currentImg = document.getElementById('ocrImgElement');
+                      if (currentImg) {
+                          currentImg.style.transition = 'transform 0.2s ease-out';
+                          updateTransform();
+                          setTimeout(() => { if(currentImg) currentImg.style.transition = 'none'; }, 200);
+                      }
                   }
               }
           });
+
+          // PC 마우스용
           wrapper.addEventListener('mousedown', (e) => {
-              isDragging = true; startX = e.clientX - ocrTransform.x; startY = e.clientY - ocrTransform.y;
+              isDragging = true; lastX = e.clientX; lastY = e.clientY;
           });
           wrapper.addEventListener('mousemove', (e) => {
-              if (!isDragging) return; ocrTransform.x = e.clientX - startX; ocrTransform.y = e.clientY - startY; requestAnimationFrame(updateTransform);
+              if (!isDragging) return; 
+              ocrTransform.x += e.clientX - lastX; 
+              ocrTransform.y += e.clientY - lastY; 
+              lastX = e.clientX; lastY = e.clientY; 
+              requestAnimationFrame(updateTransform);
           });
           window.addEventListener('mouseup', () => { isDragging = false; });
           wrapper.addEventListener('wheel', (e) => {
@@ -2245,7 +2953,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         if(e.target === document.getElementById('dashboardModal')) document.getElementById('dashboardModal').style.display = 'none';
       }
 
-      let isDarkMode = false;
+      
       function toggleTheme() { const body = document.body;
         const themeBtn = document.querySelector('.theme-toggle'); if (isDarkMode) { body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; localStorage.setItem('cal_theme', 'light');
         } else { body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; localStorage.setItem('cal_theme', 'dark');
@@ -2259,7 +2967,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       // 🚀 [스텔스 자동 동기화 엔진] (귀신 데이터 & 가짜 토스트 완벽 차단)
       // =====================================================
       function silentBackgroundSync() {
-        if (isDragging || activeRequests > 0) return;
+        // 🚨 스마트폰 네트워크가 기절해 있거나 끄고 켤 때, 드래그 중일 때는 무조건 스킵!
+        if (!navigator.onLine || isDragging || activeRequests > 0) return;
         let modal = document.getElementById('modal');
         let addModal = document.getElementById('addModal');
         let ocrModal = document.getElementById('ocrImageModal');
@@ -2319,8 +3028,9 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       // 📊 [개발 추가] 입고 통계 대시보드 스크립트 모음
       // =====================================================
       window.dashMode = 'month';
-      window.dashYear = new Date().getFullYear();
+      window.dashYear = new Date().getFullYear(); // 월간용 년도
       window.dashMonth = new Date().getMonth() + 1;
+      window.dashYearlyYear = new Date().getFullYear(); // 🚨 연간 전용 년도 (완벽 분리!)
       let yearlyCache = {};
       let mainChartIns = null;
       let shareChartIns = null;
@@ -2332,24 +3042,54 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               let rawName = String(it.bl || it.company || "").trim();
               if (!rawName || rawName === "미정") return;
               tPal += parseInt(it.pal) || 0;
-              if (it.isDone === true || String(it.isDone) === "true") dPal += parseInt(it.pal) || 0;
+              // 🚨 입고(status='완료') 또는 출고(isDone=true) 로직을 모두 커버하여 완벽하게 카운트합니다!
+              if (it.isDone === true || String(it.isDone) === "true" || it.status === "완료") dPal += parseInt(it.pal) || 0;
           };
-          // ✅ [수정 후] (pendingItems 처리 줄 삭제 또는 주석 처리)
-      for (let d = 1; d <= serverData.daysInMonth; d++) { if (serverData.monthData[d]) serverData.monthData[d].forEach(process); }
-      // if (serverData.pendingItems) serverData.pendingItems.forEach(process); 🚨 미정 데이터 제외
+          
+          // 미정 데이터 제외하고 날짜 확정된 데이터만 계산 (기존 로직 완벽 유지)
+          for (let d = 1; d <= serverData.daysInMonth; d++) { 
+              if (serverData.monthData[d]) serverData.monthData[d].forEach(process); 
+          }
           
           let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
           let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
+
+          // 🚀 [V2 게이지 바 애니메이션 로직 탑재] 계산된 숫자를 바탕으로 즉시 게이지를 채웁니다.
+          const barEl = document.getElementById('progressBar');
+          if (barEl) {
+              let percent = tPal === 0 ? 0 : Math.round((dPal / tPal) * 100);
+              setTimeout(() => { 
+                  barEl.style.width = `${percent}%`; 
+                  if (percent === 100 && tPal > 0) {
+                      barEl.style.background = 'linear-gradient(90deg, #34c759 0%, #30d158 100%)';
+                  } else {
+                      barEl.style.background = 'linear-gradient(90deg, #0a84ff 0%, #34c759 100%)';
+                  }
+              }, 100); 
+          }
       }
 
-      
+      function openDashboard() {
+          window.dashYear = serverData.year;
+          window.dashMonth = serverData.month;
+          window.dashYearlyYear = serverData.year; 
+          window.dashCurrentData = serverData; 
+          document.getElementById('dashboardModal').style.display = 'flex';
+          setTimeout(renderDashCharts, 100);
+      }
 
       function setDashMode(mode) {
           window.dashMode = mode;
           document.getElementById('btnDashMonth').classList.toggle('active', mode === 'month');
           document.getElementById('btnDashYear').classList.toggle('active', mode === 'year');
-          if (mode === 'year' && !yearlyCache[window.dashYear]) fetchYearlyAndRender();
-          else renderDashCharts();
+          
+          // 🚨 [5번 해결] 탭 바꿀 때마다 각자의 독립된 년도/월 데이터로 강제 리프레시!
+          if (mode === 'year') {
+              if (!yearlyCache[window.dashYearlyYear]) fetchYearlyAndRender();
+              else renderDashCharts();
+          } else {
+              fetchDashMonthAndRender(); 
+          }
       }
 
       function navDashDate(offset) {
@@ -2359,80 +3099,114 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               else if (window.dashMonth < 1) { window.dashMonth = 12; window.dashYear--; }
               fetchDashMonthAndRender();
           } else {
-              window.dashYear += offset;
+              window.dashYearlyYear += offset; // 🚨 연간 모드는 연간용 년도만 움직임
               fetchYearlyAndRender();
           }
       }
 
       function fetchDashMonthAndRender() {
-          // 💡 달력 넘기는 부분은 짧게, 서브타이틀은 길게!
           document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
           let sub = document.getElementById('dashSubTitleText');
           if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약 (조회중)`;
           
-          // ... (아래 캐시 조회 등 기존 코드 유지) ...
           let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
           let cached = localStorage.getItem(cacheKey);
-          
+          let oldSig = null; // 🚨 [방어막 지문]
+
           if (cached) { 
-              try { window.dashCurrentData = JSON.parse(cached); renderDashCharts(); } catch(e) {} 
-          } else {
+              try { 
+                  window.dashCurrentData = JSON.parse(cached); 
+                  // 로컬 캐시 알맹이 지문
+                  oldSig = JSON.stringify(window.dashCurrentData.monthData || {}) + JSON.stringify(window.dashCurrentData.pendingItems || []);
+                  renderDashCharts(); 
+              } catch(e) {} 
+          } 
+          else {
               window.dashCurrentData = { monthData: {}, pendingItems: [] };
               renderDashCharts();
               document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
               document.getElementById('dashAvg').innerText = "⏳";
           }
-          
-          google.script.run
-              .withSuccessHandler(res => {
-                  let finalData = typeof res === 'string' ? JSON.parse(res) : res;
-                  window.dashCurrentData = finalData;
-                  localStorage.setItem(cacheKey, JSON.stringify(finalData));
-                  if (window.dashMode === 'month') renderDashCharts();
-              })
-              .withFailureHandler(err => { if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
-              .getCalendarDataAsync(currentType, window.dashYear, window.dashMonth);
+
+          // 🚀 Vercel API 백그라운드 호출 (기존 래퍼 사용)
+          google.script.run.withSuccessHandler(res => {
+              let finalData = typeof res === 'string' ? JSON.parse(res) : res;
+              
+              // 🚨 Vercel 서버에서 온 새 데이터 지문
+              let newSig = JSON.stringify(finalData.monthData || {}) + JSON.stringify(finalData.pendingItems || []);
+
+              // 🛡️ [스마트 방어막] 지문이 완벽히 동일하면?
+              if (oldSig === newSig) {
+                  localStorage.setItem(cacheKey, JSON.stringify(finalData)); // 캐시만 조용히 갱신
+                  let subTxt = document.getElementById('dashSubTitleText');
+                  if (subTxt) subTxt.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`; // '(조회중)' 글씨만 제거
+                  return; // ⛔ 2차 렌더링 스킵!
+              }
+
+              // 지문이 다르면 정상적으로 차트를 다시 그림
+              window.dashCurrentData = finalData;
+              localStorage.setItem(cacheKey, JSON.stringify(finalData));
+              if (window.dashMode === 'month') {
+                  let subTxt = document.getElementById('dashSubTitleText');
+                  if (subTxt) subTxt.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
+                  renderDashCharts();
+              }
+          }).withFailureHandler(err => { 
+              if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; 
+          }).getCalendarDataAsync(currentType, window.dashYear, window.dashMonth);
       }
 
       function fetchYearlyAndRender() {
-          // 💡 연간은 화살표 사이에 년도만!
-          document.getElementById('dashTitleText').innerText = `${window.dashYear}년`;
+          document.getElementById('dashTitleText').innerText = `${window.dashYearlyYear}년`;
           let sub = document.getElementById('dashSubTitleText');
-          if (sub) sub.innerText = `${window.dashYear}년 연간 요약 (조회중)`;
+          if (sub) sub.innerText = `${window.dashYearlyYear}년 연간 요약 (조회중)`;
           
-          // ... (아래 캐시 조회 등 기존 코드 유지) ...
-          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYear}`;
+          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYearlyYear}`;
           let cached = localStorage.getItem(cacheKey);
-          
+          let oldSig = null; // 🚨 [방어막 지문]
+
           if (cached) { 
-              try { yearlyCache[window.dashYear] = JSON.parse(cached); renderDashCharts(); } catch(e) {} 
-          } else {
+              try { 
+                  yearlyCache[window.dashYearlyYear] = JSON.parse(cached); 
+                  let yData = yearlyCache[window.dashYearlyYear];
+                  oldSig = JSON.stringify(yData.monthly || []) + JSON.stringify(yData.comp || {});
+                  renderDashCharts(); 
+              } catch(e) {} 
+          } 
+          else {
               let dummyArr = [];
               for(let i=0; i<12; i++) dummyArr.push({pal:0, box:0, details:{}});
-              yearlyCache[window.dashYear] = { year: window.dashYear, monthly: dummyArr, comp: {} };
+              yearlyCache[window.dashYearlyYear] = { year: window.dashYearlyYear, monthly: dummyArr, comp: {} };
               renderDashCharts();
               document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
               document.getElementById('dashAvg').innerText = "⏳";
           }
-          
-          google.script.run
-              .withSuccessHandler(res => {
-                  yearlyCache[res.year] = res; localStorage.setItem(cacheKey, JSON.stringify(res)); 
-                  if (window.dashMode === 'year' && window.dashYear === res.year) renderDashCharts();
-              })
-              .withFailureHandler(err => { if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; })
-              .getYearlyStatsAsync(currentType, window.dashYear);
+
+          // 🚀 Vercel API 백그라운드 호출
+          google.script.run.withSuccessHandler(res => {
+              let newSig = JSON.stringify(res.monthly || []) + JSON.stringify(res.comp || {});
+
+              if (oldSig === newSig) {
+                  yearlyCache[res.year] = res; 
+                  localStorage.setItem(cacheKey, JSON.stringify(res)); 
+                  let subTxt = document.getElementById('dashSubTitleText');
+                  if (subTxt) subTxt.innerText = `${window.dashYearlyYear}년 연간 요약`;
+                  return; // ⛔ 차트 2차 렌더링 스킵!
+              }
+
+              yearlyCache[res.year] = res; 
+              localStorage.setItem(cacheKey, JSON.stringify(res)); 
+              if (window.dashMode === 'year' && window.dashYearlyYear === res.year) {
+                  let subTxt = document.getElementById('dashSubTitleText');
+                  if (subTxt) subTxt.innerText = `${window.dashYearlyYear}년 연간 요약`;
+                  renderDashCharts();
+              }
+          }).withFailureHandler(err => { 
+              if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; 
+          }).getYearlyStatsAsync(currentType, window.dashYearlyYear);
       }
 
-      function openDashboard() {
-          window.dashYear = serverData.year;
-          window.dashMonth = serverData.month;
-          window.dashCurrentData = serverData; 
-          document.getElementById('dashboardModal').style.display = 'flex';
-          setTimeout(renderDashCharts, 100);
-      }
-
- // 1. 도넛 가운데에 정보 띄우기 (풀네임 적용 및 글자 짤림 완벽 방어)
+      // 1. 도넛 가운데에 정보 띄우기 플러그인 유지
       const pieCenterTextPlugin = {
           id: 'pieCenterText',
           beforeDraw(chart) {
@@ -2441,51 +3215,35 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               const centerX = chart.chartArea.left + chart.chartArea.width / 2;
               const centerY = chart.chartArea.top + chart.chartArea.height / 2;
 
-              ctx.save();
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
+              ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
               if (window.activePieIndex !== null) {
                   const idx = window.activePieIndex;
                   const data = chart.data.datasets[0].data;
                   const colors = chart.data.datasets[0].backgroundColor;
-                  
-                  // 🚨 [핵심] 차트 데이터에서 '풀네임'을 바로 가져옴
                   const fullNames = chart.data.fullNames; 
                   const displayName = fullNames ? fullNames[idx] : chart.data.labels[idx];
-                  
                   const totalSum = data.reduce((a, b) => a + b, 0);
                   const percent = ((data[idx] / totalSum) * 100).toFixed(1);
-                  // 💡 입고는 기본적으로 팔레트(P) 단위이므로 P로 고정!
                   const unitStr = 'P';
 
-                  // 1️⃣ 업체명 (폰트 사이즈 플렉서블 + 장평 강제 조절)
                   ctx.font = "bold 15px -apple-system, sans-serif";
                   ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff";
                   
-                  // 글씨가 너무 길면 폰트 사이즈를 단계별로 줄여서 삐져나가지 않게 방어
                   let textWidth = ctx.measureText(displayName).width;
-                  if (textWidth > 100) {
-                      ctx.font = "bold 11px -apple-system, sans-serif";
-                  } else if (textWidth > 80) {
-                      ctx.font = "bold 13px -apple-system, sans-serif";
-                  }
+                  if (textWidth > 100) ctx.font = "bold 11px -apple-system, sans-serif";
+                  else if (textWidth > 80) ctx.font = "bold 13px -apple-system, sans-serif";
                   
-                  // 🚨 4번째 파라미터(100)를 주면, 너비가 100px을 초과할 경우 브라우저가 글자 폭(장평)을 
-                  // 좁게 압축해서라도 밖으로 튀어나가지 않게 100% 방어해 줍니다.
                   ctx.fillText(displayName, centerX, centerY - 22, 100);
 
-                  // 2️⃣ 퍼센트 (가장 크게!)
                   ctx.font = "900 26px -apple-system, sans-serif";
                   ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
                   ctx.fillText(`${percent}%`, centerX, centerY + 6);
 
-                  // 3️⃣ 수량 (크기 키움)
                   ctx.font = "bold 15px -apple-system, sans-serif";
                   ctx.fillStyle = "gray";
                   ctx.fillText(`(${data[idx]}${unitStr})`, centerX, centerY + 30);
               } else {
-                  // 🚨 [패치] 기본 문구는 작은 폰에서도 안 짤리도록 예쁘게 두 줄로 쪼갬!
                   ctx.font = "bold 14px -apple-system, sans-serif";
                   ctx.fillStyle = "gray";
                   ctx.fillText("👆 조각을", centerX, centerY - 10);
@@ -2517,7 +3275,7 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                       const x = centerX + Math.cos(midAngle) * r; const y = centerY + Math.sin(midAngle) * r;
                       ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                       ctx.font = isActive ? "bold 13px -apple-system, sans-serif" : "13px -apple-system, sans-serif";
-                      ctx.fillStyle = isActive ? "#111" : "rgba(128,128,128,0.5)"; // 파스텔톤이라 글씨 검정색
+                      ctx.fillStyle = isActive ? "#111" : "rgba(128,128,128,0.5)";
                       ctx.fillText(labels[index], x, y - 6);
                       ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
                       ctx.fillText(`${percent}%`, x, y + 8); ctx.restore();
@@ -2562,7 +3320,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
       Chart.unregister(pieCenterTextPlugin, pieHybridLabelPlugin); 
       Chart.register(pieCenterTextPlugin, pieHybridLabelPlugin);
 
-      // 📊 [입고 전용 파스텔톤 적용] 통계 엔진
       function renderDashCharts() {
           Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
           Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
@@ -2575,7 +3332,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           const includePending = document.getElementById('includePendingCheck')?.checked;
 
           if (window.dashMode === 'month') {
-              // 💡 월별 타이틀 분리
               document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
               let sub = document.getElementById('dashSubTitleText');
               if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
@@ -2608,24 +3364,25 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   if (includePending && window.dashCurrentData.pendingItems) window.dashCurrentData.pendingItems.forEach(it => process(it, null));
               }
           } else {
-              // 💡 연간 타이틀 분리
-              document.getElementById('dashTitleText').innerText = `${window.dashYear}년`;
+              // 🚨 [연간 차트 뻗음 버그 완벽 해결]
+              document.getElementById('dashTitleText').innerText = `${window.dashYearlyYear}년`;
               let sub = document.getElementById('dashSubTitleText');
-              if (sub) sub.innerText = `${window.dashYear}년 연간 요약`;
+              if (sub) sub.innerText = `${window.dashYearlyYear}년 연간 요약`;
               for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
               
-              let yData = yearlyCache[window.dashYear];
+              let yData = yearlyCache[window.dashYearlyYear];
               if (yData) {
                   for (let i = 0; i < 12; i++) {
                       let mData = yData.monthly[i] || {};
                       let details = mData.details || {};
                       
-                      let mSea = details['🚢 해상 (SEA)'] || 0;
-                      let mAir = details['✈️ 항공 (AIR)'] || 0;
+                      // 객체에서 .pal 수량을 명확하게 꺼내옵니다!
+                      let mSea = details['🚢 해상 (SEA)'] ? details['🚢 해상 (SEA)'].pal : 0;
+                      let mAir = details['✈️ 항공 (AIR)'] ? details['✈️ 항공 (AIR)'].pal : 0;
+                      
                       seaData[i] = mSea; airData[i] = mAir; 
                       totalQty += parseInt(mData.pal) || 0;
                       
-                      // 💡 [버그 픽스] 연간 모드에서도 barDetails에 값을 넣어줍니다!
                       barDetails[i]['🚢 해상 (SEA)'] = mSea;
                       barDetails[i]['✈️ 항공 (AIR)'] = mAir;
                   }
@@ -2634,7 +3391,6 @@ if (!localStorage.getItem('cache_wiped_v3')) {
                   compMap = { '🚢 해상 (SEA)': ySea, '✈️ 항공 (AIR)': yAir };
               }
 
-              // 💡 연간 모드 미정건 합산
               if (includePending && window.dashCurrentData && window.dashCurrentData.pendingItems) {
                   window.dashCurrentData.pendingItems.forEach(it => {
                       let clean = String(it.bl || "").trim();
@@ -2680,6 +3436,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
               document.getElementById("dashDaysDetail").innerText = `(${divider}개월 평균 / 일평균: 약 ${avgDaily})`;
           }
 // 상단 카드 정보 업데이트 (기존 코드와 동일...)
+
+
 // 💡 스와이프(Hover) 선택을 위한 전역 공유 변수 할당
           window.dashSeaData = seaData;
           window.dashAirData = airData;
@@ -2880,6 +3638,9 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           });
       }
 
+
+    
+
       // =====================================================
       // 🚨 [패치] 바탕화면(빈 공간) 클릭 시 막대/파이차트 하이라이트 동시 해제
       // =====================================================
@@ -2903,10 +3664,37 @@ if (!localStorage.getItem('cache_wiped_v3')) {
           }
       });
 
-      // 🚀 [앱 초기화] 
+ // 🚀 [앱 초기화] 
       window.addEventListener('DOMContentLoaded', () => {
         
+        // 🚨 세션 스토리지까지 함께 체크하도록 OR(||) 조건 추가!
+        if (localStorage.getItem('isAdmin') === 'true' || sessionStorage.getItem('isAdmin') === 'true') {
+            window.isAdmin = true;
+            isAdmin = true;
+            
+            // 초록색 관리자 버튼으로 변신! (이 4줄만 남기면 끝입니다)
+            const btn = document.getElementById("adminBtn");
+            if (btn) {
+                btn.innerHTML = '🔓 관리자';
+                btn.className = 'admin-btn unlocked'; 
+                btn.removeAttribute("style"); 
+            }
+            
+            const actions = document.getElementById("adminActions");
+            if (actions) actions.style.display = "flex";
+            
+            if (typeof updateFooterUI === 'function') updateFooterUI();
+            // 👇 🚨여기에 딱 꽂아주시면 됩니다!
+        if (typeof checkMasterAuthButtonVisibility === 'function') {
+            checkMasterAuthButtonVisibility();
+        }
+        } else {
+            window.isAdmin = false;
+            isAdmin = false;
+        }
+        
         const savedTheme = localStorage.getItem('cal_theme') || 'light';
+        // ... (아래부터는 기존 코드 그대로 유지) ...
         const themeBtn = document.querySelector('.theme-toggle');
         if (savedTheme === 'light') { document.body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; } else { document.body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; }
         const savedSize = localStorage.getItem('cal_fontSize') || 'M'; changeSize(savedSize);
@@ -2944,7 +3732,8 @@ if (!localStorage.getItem('cache_wiped_v3')) {
         let fetchStartTime = Date.now();
 
         // 💡 OCR 통신도 백그라운드로 안전하게 요청
-        google.script.run.withSuccessHandler(function(timeStr) {
+        google.script.run.withSuccessHandler(function(res) {
+            let timeStr = (res && res.time) ? res.time : (typeof res === 'string' ? res : "최근 처리내역 없음");
             const el = document.getElementById('ocrTimeText');
             if(el) el.innerText = timeStr;
         }).getOcrLastTimeStr();
@@ -2969,10 +3758,900 @@ if (!localStorage.getItem('cache_wiped_v3')) {
 
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('sw.js')
+          navigator.serviceWorker.register('/sw.js')
             .then(reg => console.log('서비스 워커 등록 성공!', reg.scope))
             .catch(err => console.log('서비스 워커 등록 실패:', err));
         });
+      }
+
+async function handleLogin() {
+    const idElem = document.getElementById('adminIdInput');
+    const pwElem = document.getElementById('adminPwInput');
+    if (!idElem || !pwElem) return;
+    const id = idElem.value.trim();
+    const pw = pwElem.value.trim();
+    if (!id || !pw) {
+        showToast("⚠️ 아이디와 비밀번호를 모두 입력하세요.", 2000);
+        return;
+    }
+
+    // 🚨 [UX 패치] 버튼 중복 터치 방지 및 로딩 표시
+    const loginBtn = document.querySelector('#adminLoginModal button[onclick="handleLogin()"]');
+    let originalBtnText = "로그인";
+    if (loginBtn) {
+        originalBtnText = loginBtn.innerHTML;
+        loginBtn.innerHTML = '⏳ 확인 중...';
+        loginBtn.style.pointerEvents = 'none'; 
+        loginBtn.style.opacity = '0.7';
+    }
+
+    // 🛡️ [보안 패치] 네트워크로 전송하기 전 비밀번호를 즉시 SHA-256 암호화
+    const hashedPw = await encryptSHA256(pw);
+
+    google.script.run.withSuccessHandler(function(res) {
+        if (loginBtn) {
+            loginBtn.innerHTML = originalBtnText;
+            loginBtn.style.pointerEvents = 'auto';
+            loginBtn.style.opacity = '1';
+        }
+
+        if (res.success) {
+    window.isAdmin = true; isAdmin = true; 
+    saveAuthData(res.admin_id, res.role, true); // 👈 🚨 통합 헬퍼로 변경!
+    // ... 이하 동일
+
+            const btn = document.getElementById("adminBtn");
+            if (btn) {
+                btn.innerHTML = '🔓 관리자';
+                btn.className = 'admin-btn unlocked'; 
+                btn.removeAttribute("style"); 
+            }
+
+            const actions = document.getElementById('adminActions');
+            if (actions) actions.style.display = 'flex';
+            
+            const fab = document.getElementById("fabBtn");
+            if (fab) fab.style.display = "flex";
+
+            document.getElementById('adminLoginModal').style.display = 'none';
+            showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
+            if (typeof renderCalendar === 'function') renderCalendar(); 
+            if (typeof updateFooterUI === 'function') updateFooterUI();
+            // handleLogin() 및 handleBioLogin() 함수 내 res.success 블록 하단에 각각 추가
+              if (typeof checkMasterAuthButtonVisibility === 'function') {
+                  checkMasterAuthButtonVisibility();
+              }
+            idElem.value = ''; pwElem.value = '';
+        } else {
+            showToast(`❌ ${res.msg}`, 2500);
+        }
+    }).withFailureHandler(function(err) {
+        if (loginBtn) {
+            loginBtn.innerHTML = originalBtnText;
+            loginBtn.style.pointerEvents = 'auto';
+            loginBtn.style.opacity = '1';
+        }
+        showToast(`❌ 통신 오류가 발생했습니다.`, 2500);
+    }).login(id, hashedPw); // 🛡️ 평문 대신 암호화된 텍스트 전송!
+}
+
+// =====================================================
+      // 🚀 [네이티브 앱 감성 V3] 모달 스와이프(내려 닫기) 통합 엔진
+      // =====================================================
+      let swipeModalVars = {
+          activeBox: null, activeModal: null, startY: 0, currentY: 0, isDragging: false, startTime: 0
+      };
+
+      function initNativeBottomSheet() {
+          document.querySelectorAll('.overlay-modal').forEach(modal => {
+              const box = modal.querySelector('.modal-box');
+              if (!box) return;
+
+              // 🚨 핵심: 쪼그만 손잡이뿐만 아니라 헤더 전체 가로 영역을 타겟으로 잡음
+              const handle = box.querySelector('.bottom-sheet-handle');
+              const header = box.querySelector('.modal-header');
+
+              const startDrag = (e) => {
+                  // 인풋창이나 버튼을 누른 경우는 텍스트 입력/클릭을 위해 드래그 무시
+                  if (e.target && ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(e.target.tagName)) return;
+                  
+                  // 모달 내용물이 아래로 스크롤되어 있는 상태면 드래그 무시 (맨 위일 때만 닫기 허용)
+                  if (box.scrollTop > 5) return; 
+
+                  swipeModalVars.activeBox = box;
+                  swipeModalVars.activeModal = modal;
+                  swipeModalVars.startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                  swipeModalVars.currentY = swipeModalVars.startY;
+                  swipeModalVars.isDragging = true;
+                  swipeModalVars.startTime = Date.now();
+                  
+                  // 드래그 중에는 부드럽게 손가락을 따라오도록 트랜지션 해제
+                  box.style.transition = 'none';
+              };
+
+              const attach = (el) => {
+                  if (!el) return;
+                  el.addEventListener('touchstart', startDrag, { passive: true });
+                  el.addEventListener('mousedown', startDrag);
+                  el.style.cursor = 'grab';
+              };
+
+              // 손잡이, 헤더, 그리고 모달창의 맨 윗부분 빈 공간을 모두 드래그 패드로 지정!
+              attach(handle);
+              attach(header);
+              box.addEventListener('touchstart', (e) => { if(e.target === box) startDrag(e); }, { passive: true });
+              box.addEventListener('mousedown', (e) => { if(e.target === box) startDrag(e); });
+          });
+
+          // 🚨 드래그 중인 손가락/마우스 움직임은 화면 전체(document)에서 절대 안 놓치고 캐치!
+          const moveDrag = (e) => {
+              if (!swipeModalVars.isDragging || !swipeModalVars.activeBox) return;
+              let clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+              let diff = clientY - swipeModalVars.startY;
+
+              // 아래로 당길 때만 작동 (위로 올리면 고무줄처럼 튕기지 않고 단단하게 버팀)
+              if (diff > 0) {
+                  if (e.cancelable) e.preventDefault(); // 브라우저 자체 스크롤 락 (화면 딸려 올라감 방지)
+                  swipeModalVars.activeBox.style.transform = `translateY(${diff}px)`;
+                  swipeModalVars.currentY = clientY;
+              }
+          };
+
+          const endDrag = (e) => {
+              if (!swipeModalVars.isDragging || !swipeModalVars.activeBox) return;
+              swipeModalVars.isDragging = false;
+
+              let diff = swipeModalVars.currentY - swipeModalVars.startY;
+              let velocity = diff / (Date.now() - swipeModalVars.startTime); // 손가락 튕기는 속도 계산
+              let box = swipeModalVars.activeBox;
+              let modal = swipeModalVars.activeModal;
+
+              // 손을 떼는 순간 쫀득한 스프링 애니메이션 복구
+              box.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+              // 속도가 빠르게 휙! 내리거나 (0.5), 절반 이상(120px) 푹 내렸으면 닫기
+              if (velocity > 0.5 || diff > 120) {
+                  box.style.transform = 'translateY(100%)';
+                  setTimeout(() => {
+                      modal.style.display = 'none';
+                      box.style.transform = ''; // 다음번 열릴 때를 위해 원상복구
+                  }, 300);
+              } else {
+                  // 살짝 내리다 말았으면 다시 제자리로 튕겨 올라감
+                  box.style.transform = 'translateY(0)';
+                  setTimeout(() => { box.style.transform = ''; }, 300);
+              }
+              
+              swipeModalVars.activeBox = null;
+              swipeModalVars.activeModal = null;
+          };
+
+          // 글로벌 이벤트 리스너 부착
+          document.addEventListener('touchmove', moveDrag, { passive: false });
+          document.addEventListener('touchend', endDrag);
+          document.addEventListener('touchcancel', endDrag);
+          document.addEventListener('mousemove', moveDrag, { passive: false });
+          document.addEventListener('mouseup', endDrag);
+      }
+
+      // 🚀 페이지가 로드되면 독립적으로 네이티브 스와이프 엔진 즉시 가동!
+      window.addEventListener('DOMContentLoaded', initNativeBottomSheet);
+
+      // 💡 [개선] Face ID 실패/취소 시 수동 로그인 창으로 자연스럽게 안내 (Fallback)
+      async function handleBioLogin() {
+          if (!window.PublicKeyCredential) {
+              openLoginModal();
+              return;
+          }
+
+          try {
+              // 🚨 [핵심 패치] 로그인할 때도 똑같이 랜덤 챌린지를 생성해야 비트워든이 의심하지 않음
+              const randomChallenge = new Uint8Array(32);
+              window.crypto.getRandomValues(randomChallenge);
+
+              const publicKey = {
+                  challenge: randomChallenge,
+                  rpId: window.location.hostname,
+                  userVerification: "required",
+                  timeout: 60000
+              };
+              
+              const assertion = await navigator.credentials.get({ publicKey });
+              
+              if (assertion) {
+                  const savedId = localStorage.getItem('bio_id');
+                  const savedPw = localStorage.getItem('bio_pw'); 
+                  
+                  if (savedId && savedPw) {
+                      document.getElementById('adminLoginModal').style.display = 'none';
+                      showToast("🔒 생체 인증 성공! 서버 확인 중...", 0);
+                      
+                      google.script.run.withSuccessHandler(function(res) {
+                          if (res.success) {
+    window.isAdmin = true; isAdmin = true; 
+    saveAuthData(res.admin_id, res.role, true); // 👈 🚨 통합 헬퍼로 변경!
+    // ... 이하 동일
+                              
+                              const btn = document.getElementById("adminBtn");
+                              if (btn) { btn.innerHTML = '🔓 관리자'; btn.className = 'admin-btn unlocked'; btn.removeAttribute("style"); }
+                              
+                              const actions = document.getElementById('adminActions');
+                              if (actions) actions.style.display = 'flex';
+                              const fab = document.getElementById("fabBtn");
+                              if (fab) fab.style.display = "flex";
+                              
+                              showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
+                              if (typeof renderCalendar === 'function') renderCalendar(); 
+                              if (typeof updateFooterUI === 'function') updateFooterUI();
+                          } else {
+                              showToast("❌ 서버 인증 실패. 비밀번호가 변경되었을 수 있습니다.", 2500);
+                              openLoginModal(); 
+                          }
+                      }).login(savedId, savedPw); 
+                  }
+              }
+          } catch (err) {
+              console.log("생체 인증 취소됨:", err);
+              openLoginModal();
+          }
+      }
+
+      // =====================================================
+      // 🛡️ [보안 강화] 내장 브라우저 Web Crypto 기반 SHA-256 해시 엔진
+      // =====================================================
+      async function encryptSHA256(message) {
+          const msgBuffer = new TextEncoder().encode(message);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+      
+      // 📡 특정 관리자 접속 정보 팝업 엔진
+      function showAdminConnInfo(adminId, adminName) {
+          const modal = document.getElementById('adminConnModal');
+          const list = document.getElementById('adminConnList');
+          document.getElementById('adminConnTitle').innerText = `[${adminName}] 접속 이력`;
+          list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--text-sub); font-weight:bold;'>접속망 트래킹 중... ⏳</div>";
+          modal.style.display = 'flex';
+
+          google.script.run.withSuccessHandler(function(res) {
+              if (!res.success || !res.logs || res.logs.length === 0) {
+                  list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--text-sub);'>최근 기록이 없습니다.</div>";
+                  return;
+              }
+              let html = "";
+              res.logs.forEach(log => {
+                  let rawDate = log.created_at || '';
+let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') : rawDate;
+                  let cleanDesc = log.description.replace('[접속성공] ', ''); // 중복 문구 제거
+                  
+                  html += `
+                  <div style="background:var(--card-bg); border:1px solid var(--border-color); border-radius:8px; padding:10px; font-size:0.85em;">
+                      <div style="color:#0a84ff; font-weight:900; margin-bottom:6px;">⏱️ ${timeStr}</div>
+                      <div style="color:var(--text-main); line-height:1.4; word-break:keep-all;">${cleanDesc}</div>
+                  </div>`;
+              });
+              list.innerHTML = html;
+          })._call({ source: 'vercel', action: 'GET_ADMIN_CONN_LOGS', data: { targetId: adminId } });
+      }
+
+// =====================================================
+      // 👑 시스템 관리 (Admin Operations Pipeline) 엔진
+      // =====================================================
+      // 제어실 오픈 시 모드에 따라 필터 글씨를 강제로 직관적으로 세팅해 주는 인터락
+      function openMasterDashboard() {
+          let role = localStorage.getItem('admin_role') || '';
+          let adminId = localStorage.getItem('admin_id') || '';
+          
+          const isMasterUser = adminId.toLowerCase() === 'admin' || 
+                               adminId.toLowerCase() === 'silverscent' ||
+                               role.toUpperCase().includes('SUPER') || 
+                               role.toUpperCase().includes('MASTER') ||
+                               role.toUpperCase().includes('SYSTEM');
+
+          if (!isMasterUser) {
+              alert("🚨 접근 거부: 최상위 시스템 관리자 계정이 아닙니다.");
+              return;
+          }
+          
+          // 각 모드(입고/출고)에 맞게 명칭 변경
+          setTimeout(() => {
+              const nameOpt = document.getElementById('filterOptName');
+              const dateOpt = document.getElementById('filterOptDate');
+              if(nameOpt && dateOpt) {
+                  if(currentType === 'out') {
+                      nameOpt.innerText = "🏢 거래처명 검색 (company)";
+                      dateOpt.innerText = "📅 출고일자 검색 (out_date)";
+                  } else {
+                      nameOpt.innerText = "📄 B/L 번호 검색 (bl_number)";
+                      dateOpt.innerText = "📅 입고일자 검색 (receive_date)";
+                  }
+              }
+          }, 100);
+
+          document.getElementById('masterDashboardModal').style.transform = 'translateX(-100%)';
+          switchMasterTab('admin-mgr');
+          refreshAdminList();
+      }
+
+      function closeMasterDashboard() {
+          document.getElementById('masterDashboardModal').style.transform = 'translateX(0)';
+      }
+
+      function switchMasterTab(tabId) {
+          document.querySelectorAll('.master-tab-content').forEach(el => el.style.display = 'none');
+          document.querySelectorAll('.master-tab-btn').forEach(btn => btn.classList.remove('active'));
+          
+          document.getElementById(`master-tab-${tabId}`).style.display = 'block';
+          const activeBtn = Array.from(document.querySelectorAll('.master-tab-btn')).find(b => b.getAttribute('onclick').includes(tabId));
+          if (activeBtn) activeBtn.classList.add('active');
+
+          if (tabId === 'audit-log') refreshAuditLogs();
+          if (tabId === 'db-mgr') searchRawDatabaseRows();
+      }
+
+      // 1. 계정 추가 실행
+      async function createNewAdminAccount() {
+          const id = document.getElementById('newAdminId').value.trim();
+          const name = document.getElementById('newAdminName').value.trim();
+          const pw = document.getElementById('newAdminPw').value.trim();
+
+          if (!id || !name || !pw) {
+              showToast("⚠️ 모든 항목을 빠짐없이 입력하세요.", 2000);
+              return;
+          }
+
+          if (!confirm(`[${name}(${id})] 계정을 신규 운영 관리자로 등록합니까?`)) return;
+
+          const hashedPw = await encryptSHA256(pw); // 전송 전 암호화 인터셉트
+
+          showToast("⏳ 원격 데이터베이스 동기화 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) {
+                  showToast("✅ 신규 관리자 계정이 활성화되었습니다.", 2000);
+                  document.getElementById('newAdminId').value = '';
+                  document.getElementById('newAdminName').value = '';
+                  document.getElementById('newAdminPw').value = '';
+                  refreshAdminList();
+              } else {
+                  showToast(`❌ 오류: ${res.msg}`, 2500);
+              }
+          })._call({ source: 'vercel', action: 'CREATE_ADMIN', data: { id, name, pw: hashedPw }, admin_id: localStorage.getItem('admin_id') });
+      }
+
+      // 💡 5번 요구사항: 발급 창 부드러운 토글 제어 엔진
+      function toggleNewAdminForm() {
+          const form = document.getElementById('newAdminFormContainer');
+          const btn = document.getElementById('toggleAdminFormBtn');
+          if (!form || !btn) return;
+          if (form.style.display === 'none' || !form.style.display) {
+              form.style.display = 'block';
+              btn.innerHTML = '❌ 발급 창 닫기';
+              btn.style.background = 'rgba(255,59,48,0.1)'; btn.style.color = '#ff3b30'; btn.style.borderColor = '#ff3b30';
+          } else {
+              form.style.display = 'none';
+              btn.innerHTML = '➕ 신규 어드민 계정 발급실 열기';
+              btn.style.background = 'rgba(10, 132, 255, 0.1)'; btn.style.color = '#0a84ff'; btn.style.borderColor = '#0a84ff';
+          }
+      }
+
+      // 👤 2, 4번 요구사항: 활성/비활성 완벽 분리 및 구분선 렌더링 빌더
+      function refreshAdminList() {
+          const container = document.getElementById('masterAdminListContainer');
+          if (!container) return;
+          container.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:15px; font-weight:800;'>보안 세션 확인 중...</div>";
+
+          google.script.run.withSuccessHandler(function(res) {
+              if (!res.success || !res.list) {
+                  container.innerHTML = "<div style='color:var(--text-sub); padding:10px;'>목록 수집 실패</div>"; return;
+              }
+              container.innerHTML = "";
+              
+              // 활성과 비활성(LOCKED) 그룹 분리
+              const activeUsers = res.list.filter(u => u.status !== 'LOCKED');
+              const lockedUsers = res.list.filter(u => u.status === 'LOCKED');
+
+              // 로우 생성 헬퍼 (5번 요구사항: 모바일 찌그러짐 방지 2단 레이아웃)
+              const buildCard = (item, isLocked) => {
+                  const card = document.createElement('div');
+                  const isMaster = item.admin_id.toLowerCase() === 'admin' || item.admin_id.toLowerCase() === 'silverscent';
+                  
+                  card.style = `display:flex; flex-direction:column; gap:10px; background:${isLocked ? 'rgba(255,59,48,0.02)' : 'var(--card-bg)'}; border:1px solid ${isLocked ? 'rgba(255,59,48,0.15)' : 'var(--border-color)'}; padding:14px; border-radius:14px; box-sizing:border-box; margin-bottom:6px; ${isLocked ? 'opacity:0.75;' : ''}`;
+                  
+                  let actionArea = "";
+                  if (isMaster) {
+                      actionArea = `<span style='color:#0a84ff; font-size:0.85em; font-weight:800;'>🔒 System Admin</span>`;
+                  } else if (isLocked) {
+                      actionArea = `
+                          <button onclick="reactivateAdminAccount('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(52,199,89,0.1); border:1px solid #34c759; color:#34c759; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>♻️ 복구</button>
+                          <button onclick="hardDeleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:8px; border-radius:8px; font-weight:900; font-size:0.85em; cursor:pointer;'>완전삭제</button>
+                      `;
+                  } else {
+                      actionArea = `
+                          <button onclick="resetAdminPassword('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(255,159,10,0.1); border:1px solid #ff9f0a; color:#ff9f0a; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>비번초기화</button>
+                          <button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>비활성화</button>
+                      `;
+                  }
+
+                  const statusBadge = isLocked ? `<span style="font-size:0.7em; color:#ff3b30; border:1px solid #ff3b30; padding:2px 4px; border-radius:4px; font-weight:bold;">비활성</span>` : "";
+
+                  card.innerHTML = `
+                      <div style="display:flex; justify-content:space-between; align-items:flex-start; width:100%;">
+                          <div>
+                              <div style='font-weight:900; color:${isLocked ? 'var(--text-sub)' : 'var(--text-main)'}; font-size:1.02em; display:flex; align-items:center; gap:6px; ${isLocked ? 'text-decoration:line-through;' : ''}'>
+                                  ${item.admin_name} <span style='font-size:0.85em; font-weight:500; color:var(--text-sub);'>(${item.admin_id})</span> ${statusBadge}
+                              </div>
+                              <div style='font-size:0.8em; color:var(--text-sub); margin-top:4px;'>등급: ${item.role === 'SYSTEM' ? 'System Admin' : '일반 관리자'}</div>
+                          </div>
+                          <button onclick="showAdminConnInfo('${item.admin_id}', '${item.admin_name}')" style="flex-shrink:0; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:6px 10px; font-size:0.8em; cursor:pointer; font-weight:900; white-space:nowrap;">📡 접속확인</button>
+                      </div>
+                      <div style='display:flex; width:100%; gap:8px; margin-top:4px;'>${actionArea}</div>
+                  `;
+                  return card;
+              };
+
+              // ① 정상 계정 리스트 먼저 주입
+              activeUsers.forEach(u => container.appendChild(buildCard(u, false)));
+
+              // ② 4번 요구사항: 비활성 계정이 존재할 때만 중간 구분선 장착
+              if (lockedUsers.length > 0) {
+                  const divider = document.createElement('div');
+                  divider.style = "text-align:center; margin:25px 0 15px 0; font-size:0.8em; color:#ff3b30; font-weight:800; display:flex; align-items:center; gap:10px; user-select:none;";
+                  divider.innerHTML = `<div style="flex:1; border-bottom:1px dashed rgba(255,59,48,0.25)"></div> 🛑 비활성화된 관리자 계정 이력 <div style="flex:1; border-bottom:1px dashed rgba(255,59,48,0.25)"></div>`;
+                  container.appendChild(divider);
+
+                  // ③ 비활성 계정 리스트 하단 주입
+                  lockedUsers.forEach(u => container.appendChild(buildCard(u, true)));
+              }
+
+          })._call({ source: 'vercel', action: 'GET_ADMIN_LIST' });
+      }
+
+      // 🛑 2번 요구사항: 비활성화 경고문구 정교화 및 전송 처리
+      function deleteAdminAccount(id, name) {
+          if (!confirm(`[확인] [${name}(${id})] 관리자 권한을 회수하고 계정을 비활성화 하시겠습니까?`)) return;
+          showToast("⏳ 권한 회수 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) { showToast("✅ 계정이 비활성화 상태로 전환되었습니다.", 2000); refreshAdminList(); } 
+              else { showToast(`❌ 처리 실패: ${res.msg}`, 3000); }
+          })._call({ source: 'vercel', action: 'DELETE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') });
+      }
+
+      // 🔒 6번 요구사항: 본인 비밀번호 실시간 변경 연동 엔진 (SHA-256 연동)
+      async function executeMyPasswordChange() {
+          const currentInput = document.getElementById('mySettingsCurrentPw');
+          const newInput = document.getElementById('mySettingsNewPw');
+          if (!currentInput || !newInput) return;
+
+          const curPw = currentInput.value.trim();
+          const newPw = newInput.value.trim();
+
+          if (!curPw || !newPw) { alert("⚠️ 현재 비밀번호와 새 비밀번호를 모두 입력하세요."); return; }
+          if (curPw === newPw) { alert("⚠️ 새 비밀번호는 현재 비밀번호와 다르게 입력해 주세요."); return; }
+          if (!confirm("정말 비밀번호를 변경하시겠습니까?")) return;
+
+          showToast("⏳ 보안 검증 및 변경 중...", 0);
+          
+          // 전송 전 양쪽 다 SHA-256 강제 해싱
+          const hashedCur = await encryptSHA256(curPw);
+          const hashedNew = await encryptSHA256(newPw);
+
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) {
+                  showToast("✅ 비밀번호 변경 완료! 다음 로그인부터 적용됩니다.", 3000);
+                  currentInput.value = ""; newInput.value = "";
+                  document.getElementById('myInfoModal').style.display = 'none'; // 성공 시 모달 닫기
+              } else {
+                  showToast(`❌ 변경 실패: ${res.msg}`, 3000);
+              }
+          })._call({ source: 'vercel', action: 'CHANGE_MY_PASSWORD', data: { currentPw: hashedCur, newPw: hashedNew }, admin_id: localStorage.getItem('admin_id') });
+      }
+
+
+      // ♻️ 계정 복구(활성화) 실행 함수
+      function reactivateAdminAccount(id, name) {
+          if (!confirm(`[${name}(${id})] 계정을 다시 활성화(ACTIVE) 복구하시겠습니까?`)) return;
+          showToast("⏳ 계정 복구 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) { showToast("✅ 관리자 계정이 활성화되었습니다.", 2000); refreshAdminList(); } 
+              else { showToast(`❌ 복구 실패: ${res.msg}`, 3000); }
+          })._call({ source: 'vercel', action: 'REACTIVATE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') });
+      }
+
+      // 💥 계정 완전 삭제 실행 함수
+      function hardDeleteAdminAccount(id, name) {
+          if (!confirm(`🚨 최후 경고: [${name}(${id})] 계정을 데이터베이스에서 완전히 삭제(Hard Delete)합니까?\n이 작업은 되돌릴 수 없으며 접속 기록 외 모든 정보가 파기됩니다!`)) return;
+          showToast("💥 계정 영구 파기 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) { showToast("🗑️ 계정이 DB에서 완전히 파기되었습니다.", 2000); refreshAdminList(); } 
+              else { showToast(`❌ 삭제 실패: ${res.msg}`, 3000); }
+          })._call({ source: 'vercel', action: 'HARD_DELETE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') });
+      }
+      
+      // 🔑 비밀번호 초기화 실행 함수
+      async function resetAdminPassword(id, name) {
+          const newPw = prompt(`[${name}(${id})] 계정의 새로운 비밀번호를 입력하세요:`);
+          if (!newPw || newPw.trim() === '') return;
+          if (!confirm(`정말 해당 계정의 비밀번호를 변경하시겠습니까?`)) return;
+
+          const hashedPw = await encryptSHA256(newPw); 
+          showToast("⏳ 비밀번호 변경 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) showToast("✅ 비밀번호가 성공적으로 초기화되었습니다.", 2000);
+              else showToast(`❌ 오류: ${res.msg}`, 2500);
+          })._call({ source: 'vercel', action: 'RESET_ADMIN_PW', data: { targetId: id, newPw: hashedPw }, admin_id: localStorage.getItem('admin_id') });
+      }
+
+
+      // 🚨 [로그 엔진 상태 변수 및 페이지 이동 함수 추가]
+      let logCurrentPage = 1;
+
+      function changeLogPage(dir) {
+          logCurrentPage += dir;
+          refreshAuditLogs();
+      }
+
+      // 📜 3. 감사 로그 수집 및 서버 기반 검색 엔진 (페이지네이션 연동)
+      function refreshAuditLogs() {
+          const timeline = document.getElementById('masterLogTimeline');
+          const pager = document.getElementById('logMasterPaginationBar');
+          if (!timeline) return;
+
+          const startDate = document.getElementById('logStartDate') ? document.getElementById('logStartDate').value : '';
+          const endDate = document.getElementById('logEndDate') ? document.getElementById('logEndDate').value : '';
+          const keyword = document.getElementById('logKeyword') ? document.getElementById('logKeyword').value.trim() : '';
+          const limit = document.getElementById('logMasterLimit') ? document.getElementById('logMasterLimit').value : 50;
+
+          timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:15px; font-weight:800;'>보안 로그 동기화 및 검색 중...</div>";
+          if (pager) pager.innerHTML = "";
+
+          google.script.run.withSuccessHandler(function(res) {
+              if (!res.success || !res.logs || res.logs.length === 0) {
+                  timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:20px;'>검색 조건에 맞는 감사 로그가 없습니다.</div>";
+                  return;
+              }
+              
+              timeline.innerHTML = "";
+              
+              res.logs.forEach(log => {
+                  const item = document.createElement('div');
+                  item.className = 'audit-log-item'; 
+                  item.style = "padding-bottom:12px; border-bottom:1px solid var(--border-color); font-size:0.9em; box-sizing:border-box; margin-bottom:10px;";
+                  
+                  let rawDate = log.created_at || '';
+// "2026-05-18 13:45:00" 형태에서 년도(2026-)와 초(:00)를 떼어내고 "05.18 13:45"로 깔끔하게 포장
+let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') : rawDate;
+
+                  item.innerHTML = `
+                      <div style='display:flex; justify-content:space-between; margin-bottom:4px;'>
+                          <span style='font-weight:900; color:#0a84ff;'>ID: ${log.admin_id}</span>
+                          <span style='font-size:0.85em; color:var(--text-sub);'>${dateStr}</span>
+                      </div>
+                      <div style='color:var(--text-main); font-weight:700;'>액션: <span style='color:var(--sun-color);'>${log.action_type}</span></div>
+                      <div style='color:var(--text-sub); font-size:0.88em; margin-top:2px; word-break:break-all;'>내역: ${log.description}</div>
+                  `;
+                  timeline.appendChild(item);
+              });
+
+              // 🆕 하단 페이지네이션 바 (이전/다음) 렌더링
+              if (pager && res.totalPages > 1) {
+                  let pageHtml = `<button onclick="changeLogPage(-1)" ${res.page === 1 ? 'disabled' : ''} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">◀ 이전</button>`;
+                  pageHtml += `<span style="color:var(--text-main); font-weight:900; font-size:1em;">${res.page} <span style="color:var(--text-sub); font-weight:normal;">/ ${res.totalPages}</span> <span style="font-size:0.85em; color:var(--text-sub); font-weight:normal; margin-left:5px;">(총 ${res.totalCount}건)</span></span>`;
+                  pageHtml += `<button onclick="changeLogPage(1)" ${res.page === res.totalPages ? 'disabled' : ''} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">다음 ▶</button>`;
+                  pager.innerHTML = pageHtml;
+              }
+
+          })._call({ 
+              source: 'vercel', 
+              action: 'GET_AUDIT_LOGS', 
+              startDate: startDate, 
+              endDate: endDate, 
+              keyword: keyword,
+              limit: Number(limit),
+              page: logCurrentPage
+          });
+      }
+      // 🚨 DB 페이지네이션 관리 상태 변수
+      let dbCurrentPage = 1;
+
+      // 검색어나 줄 수가 바뀔 때 무조건 1페이지로 리셋하고 검색하는 함수
+      function dbPageResetAndSearch() {
+          dbCurrentPage = 1; 
+          searchRawDatabaseRows();
+      }
+
+      // 페이지 이동(이전/다음) 트리거 함수
+      function changeDbPage(direction) {
+          dbCurrentPage += direction;
+          searchRawDatabaseRows();
+      }
+
+      // 🚨 [정렬 엔진 상태 변수 및 헬퍼 함수]
+      let dbSortCol = 'id';
+      let dbSortDir = 'DESC';
+
+      function setDbSort(col) {
+          if (dbSortCol === col) {
+              dbSortDir = dbSortDir === 'ASC' ? 'DESC' : 'ASC'; // 같은 컬럼 누르면 방향 전환
+          } else {
+              dbSortCol = col;
+              dbSortDir = 'ASC'; // 새 컬럼은 오름차순부터
+          }
+          dbCurrentPage = 1; // 정렬이 바뀌면 1페이지로 리셋
+          searchRawDatabaseRows();
+      }
+
+      function getSortIcon(col) {
+          if (dbSortCol !== col) return "↕️";
+          return dbSortDir === 'ASC' ? "🔼" : "🔽";
+      }
+
+      // 🗄️ 고도화된 DB 제어실 렌더링 (전체 컬럼 + 페이지네이션 + 열 정렬 기능)
+      function searchRawDatabaseRows() {
+          const keyword = document.getElementById('dbMasterSearchKeyword').value.trim();
+          const filterCol = document.getElementById('dbMasterFilterCol').value;
+          const limit = document.getElementById('dbMasterLimit').value; // 몇 줄씩 볼지
+          const container = document.getElementById('dbMasterRowsContainer');
+          const pager = document.getElementById('dbMasterPaginationBar');
+          
+          if (!container) return;
+          container.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:25px; font-weight:800;'>실시간 데이터 파싱 중...</div>";
+          if (pager) pager.innerHTML = "";
+
+          google.script.run.withSuccessHandler(function(res) {
+              if (!res.success || !res.rows || res.rows.length === 0) {
+                  container.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:25px;'>데이터가 없습니다.</div>";
+                  return;
+              }
+              
+              let html = `<style>
+                  .db-input { width: 100%; padding: 6px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; box-sizing: border-box; font-size: 0.85em; }
+                  .db-btn-save { background: rgba(52,199,89,0.1); border: 1px solid #34c759; color: #34c759; border-radius: 6px; padding: 5px 10px; font-size: 0.85em; font-weight: 900; cursor: pointer; margin-right: 4px; }
+                  .db-btn-del { background: rgba(255,59,48,0.1); border: 1px solid #ff3b30; color: #ff3b30; border-radius: 6px; padding: 5px 10px; font-size: 0.85em; font-weight: 900; cursor: pointer; }
+              </style>`;
+
+              // 🚨 정렬 기능이 탑재된 헤더(th) 자동 생성기
+              const th = (col, name) => `<th onclick="setDbSort('${col}')" style="cursor:pointer; user-select:none; white-space:nowrap;" title="클릭하여 정렬">${name} <span style="font-size:0.8em">${getSortIcon(col)}</span></th>`;
+
+              if (currentType === 'out') {
+                  // 📤 출고 테이블 렌더링
+                  html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 950px; table-layout: fixed;'>
+                      <colgroup><col style='width: 60px;'><col style='width: 130px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'><col style='width: 100px;'><col style='width: 150px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'></colgroup>
+                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr>
+                          ${th('id', 'ID')} ${th('company', 'company')} ${th('pal', 'pal')} ${th('box', 'box')} ${th('outbound_date', 'out_date')} ${th('etc', 'etc')} ${th('created_at', 'created_at')} ${th('sort_idx', 'sort')} ${th('isDone', 'isDone')} <th style='text-align:center;'>명령</th>
+                      </tr></thead><tbody>`;
+                  
+                  // 항상 첫 줄에 뜨는 신규 데이터 주입 폼
+                  html += `<tr style='background:rgba(52,199,89,0.08); border-bottom:2px solid #34c759;'>
+                      <td style='color:#34c759; font-weight:900; text-align:center;'>NEW</td>
+                      <td><input type="text" id="db-o-comp-new" placeholder="업체명 (필수)" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="number" id="db-o-pal-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="number" id="db-o-box-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-o-date-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-o-etc-new" placeholder="비고 입력" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td style="color:var(--text-sub); text-align:center; font-size:0.9em;">(자동 각인)</td>
+                      <td><input type="number" id="db-o-sort-new" value="999" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="number" id="db-o-done-new" value="0" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td style='text-align:center;'><button onclick="addNewRowDirectDB('out')" style="background:#34c759; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-weight:900; cursor:pointer; width:100%;">➕ 신규등록</button></td>
+                  </tr>`;
+
+                  res.rows.forEach(r => {
+                      html += `<tr style='border-bottom:1px solid var(--border-color);'><td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
+                          <td><input type="text" id="db-o-comp-${r.id}" value="${r.company || ''}" class="db-input"></td>
+                          <td><input type="number" id="db-o-pal-${r.id}" value="${r.pal || 0}" class="db-input"></td>
+                          <td><input type="number" id="db-o-box-${r.id}" value="${r.box || 0}" class="db-input"></td>
+                          <td><input type="text" id="db-o-date-${r.id}" value="${r.outbound_date || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-o-etc-${r.id}" value="${r.etc || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-o-cre-${r.id}" value="${r.created_at || ''}" class="db-input"></td>
+                          <td><input type="number" id="db-o-sort-${r.id}" value="${r.sort_idx || 0}" class="db-input"></td>
+                          <td><input type="number" id="db-o-done-${r.id}" value="${r.isDone || 0}" class="db-input"></td>
+                          <td style='text-align:center;'><button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button><button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button></td></tr>`;
+                  });
+              } else {
+                  // 📥 입고 테이블 렌더링
+                  html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 1350px; table-layout: fixed;'>
+                      <colgroup><col style='width: 60px;'><col style='width: 130px;'><col style='width: 60px;'><col style='width: 100px;'><col style='width: 100px;'><col style='width: 80px;'><col style='width: 80px;'><col style='width: 100px;'><col style='width: 120px;'><col style='width: 140px;'><col style='width: 60px;'><col style='width: 80px;'><col style='width: 60px;'><col style='width: 120px;'></colgroup>
+                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr>
+                          ${th('id', 'ID')} ${th('bl_number', 'bl_number')} ${th('pallets', 'pallets')} ${th('eta', 'eta')} ${th('receive_date', 'receive_date')} ${th('fwd', 'fwd')} ${th('s_type', 's_type')} ${th('invoice', 'invoice')} ${th('remarks', 'remarks')} ${th('last_updated', 'last_updated')} ${th('sort_idx', 'sort')} ${th('status', 'status')} ${th('is_ai_modified', 'AI')} <th style='text-align:center;'>명령</th>
+                      </tr></thead><tbody>`;
+                  
+                  // 항상 첫 줄에 뜨는 신규 데이터 주입 폼
+                  html += `<tr style='background:rgba(52,199,89,0.08); border-bottom:2px solid #34c759;'>
+                      <td style='color:#34c759; font-weight:900; text-align:center;'>NEW</td>
+                      <td><input type="text" id="db-i-bl-new" placeholder="B/L번호 (필수)" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="number" id="db-i-pal-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-eta-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-date-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-fwd-new" placeholder="FWD" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-stype-new" placeholder="TYPE" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-inv-new" placeholder="INVOICE" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-rem-new" placeholder="비고 입력" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td style="color:var(--text-sub); text-align:center; font-size:0.9em;">(자동 각인)</td>
+                      <td><input type="number" id="db-i-sort-new" value="999" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="text" id="db-i-stat-new" value="입고대기" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td><input type="number" id="db-i-ai-new" value="0" class="db-input" style="border:1px solid #34c759;"></td>
+                      <td style='text-align:center;'><button onclick="addNewRowDirectDB('in')" style="background:#34c759; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-weight:900; cursor:pointer; width:100%;">➕ 신규등록</button></td>
+                  </tr>`;
+
+                  res.rows.forEach(r => {
+                      html += `<tr style='border-bottom:1px solid var(--border-color);'><td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
+                          <td><input type="text" id="db-i-bl-${r.id}" value="${r.bl_number || ''}" class="db-input"></td>
+                          <td><input type="number" id="db-i-pal-${r.id}" value="${r.pallets || 0}" class="db-input"></td>
+                          <td><input type="text" id="db-i-eta-${r.id}" value="${r.eta || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-date-${r.id}" value="${r.receive_date || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-fwd-${r.id}" value="${r.fwd || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-stype-${r.id}" value="${r.s_type || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-inv-${r.id}" value="${r.invoice || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-rem-${r.id}" value="${r.remarks || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-upd-${r.id}" value="${r.last_updated || ''}" class="db-input"></td>
+                          <td><input type="number" id="db-i-sort-${r.id}" value="${r.sort_idx || 0}" class="db-input"></td>
+                          <td><input type="text" id="db-i-stat-${r.id}" value="${r.status || ''}" class="db-input"></td>
+                          <td><input type="number" id="db-i-ai-${r.id}" value="${r.is_ai_modified || 0}" class="db-input"></td>
+                          <td style='text-align:center;'><button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button><button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button></td></tr>`;
+                  });
+              }
+              html += `</tbody></table>`;
+              container.innerHTML = html;
+
+              // 하단 페이지네이션 바 (이전/다음) 렌더링
+              if (pager && res.totalPages > 1) {
+                  let pageHtml = `<button onclick="changeDbPage(-1)" ${res.page === 1 ? 'disabled' : ''} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">◀ 이전</button>`;
+                  pageHtml += `<span style="color:var(--text-main); font-weight:900; font-size:1em;">${res.page} <span style="color:var(--text-sub); font-weight:normal;">/ ${res.totalPages}</span> <span style="font-size:0.85em; color:var(--text-sub); font-weight:normal; margin-left:5px;">(총 ${res.totalCount}건)</span></span>`;
+                  pageHtml += `<button onclick="changeDbPage(1)" ${res.page === res.totalPages ? 'disabled' : ''} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">다음 ▶</button>`;
+                  pager.innerHTML = pageHtml;
+              }
+          })._call({ 
+              source: 'vercel', 
+              action: 'GET_RAW_DB_ROWS', 
+              keyword: keyword, 
+              filterCol: filterCol, 
+              limit: Number(limit), 
+              page: dbCurrentPage, 
+              sortCol: dbSortCol, // 🚨 서버로 정렬 타겟 발송
+              sortDir: dbSortDir, // 🚨 오름/내림차순 발송
+              type: currentType 
+          });
+      }
+
+      // 🟢 [DB제어실 전용] 1. 신규 행 강제 주입 엔진 (누락되어 새로 추가하는 부분)
+      function addNewRowDirectDB(type) {
+          if (!confirm("입력하신 내용으로 DB에 신규 데이터를 강제 생성하시겠습니까?")) return;
+          
+          let insertData = {};
+          if (type === 'out') {
+              insertData = {
+                  company: document.getElementById('db-o-comp-new').value,
+                  pal: document.getElementById('db-o-pal-new').value,
+                  box: document.getElementById('db-o-box-new').value,
+                  outbound_date: document.getElementById('db-o-date-new').value,
+                  etc: document.getElementById('db-o-etc-new').value,
+                  sort_idx: document.getElementById('db-o-sort-new').value,
+                  isDone: document.getElementById('db-o-done-new').value
+              };
+              if (!insertData.company) { alert("⚠️ 업체명은 필수입니다."); return; }
+          } else {
+              insertData = {
+                  bl_number: document.getElementById('db-i-bl-new').value,
+                  pallets: document.getElementById('db-i-pal-new').value,
+                  eta: document.getElementById('db-i-eta-new').value,
+                  receive_date: document.getElementById('db-i-date-new').value,
+                  fwd: document.getElementById('db-i-fwd-new').value,
+                  s_type: document.getElementById('db-i-stype-new').value,
+                  invoice: document.getElementById('db-i-inv-new').value,
+                  remarks: document.getElementById('db-i-rem-new').value,
+                  sort_idx: document.getElementById('db-i-sort-new').value,
+                  status: document.getElementById('db-i-stat-new').value,
+                  is_ai_modified: document.getElementById('db-i-ai-new').value
+              };
+              if (!insertData.bl_number) { alert("⚠️ B/L 번호는 필수입니다."); return; }
+          }
+
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) {
+                  showToast("✅ 신규 데이터 DB 삽입 완료!", 2000);
+                  searchRawDatabaseRows(); // DB 화면 새로고침
+                  if (typeof renderCalendar === 'function') renderCalendar(); // 캘린더 화면도 동기화
+              } else {
+                  alert("오류 발생: " + res.msg);
+              }
+          })._call({ source: 'vercel', action: 'ADD_RAW_ROW_DIRECT', type: currentType, insertData: insertData, admin_id: localStorage.getItem('admin_id') });
+      }
+
+      // ✏️ 인라인 폼 데이터 취합 및 백엔드 전송
+      function saveFullRowDB(id) {
+          let updateData = { rowId: id };
+          
+          if (currentType === 'out') {
+              updateData.company = document.getElementById(`db-o-comp-${id}`).value.trim();
+              updateData.pal = Number(document.getElementById(`db-o-pal-${id}`).value.trim() || 0);
+              updateData.box = Number(document.getElementById(`db-o-box-${id}`).value.trim() || 0);
+              updateData.outbound_date = document.getElementById(`db-o-date-${id}`).value.trim();
+              updateData.etc = document.getElementById(`db-o-etc-${id}`).value.trim();
+              updateData.created_at = document.getElementById(`db-o-cre-${id}`).value.trim();
+              updateData.sort_idx = Number(document.getElementById(`db-o-sort-${id}`).value.trim() || 0);
+              updateData.isDone = Number(document.getElementById(`db-o-done-${id}`).value.trim() || 0);
+          } else {
+              updateData.bl_number = document.getElementById(`db-i-bl-${id}`).value.trim();
+              updateData.pallets = Number(document.getElementById(`db-i-pal-${id}`).value.trim() || 0);
+              updateData.eta = document.getElementById(`db-i-eta-${id}`).value.trim();
+              updateData.receive_date = document.getElementById(`db-i-date-${id}`).value.trim();
+              updateData.fwd = document.getElementById(`db-i-fwd-${id}`).value.trim();
+              updateData.s_type = document.getElementById(`db-i-stype-${id}`).value.trim();
+              updateData.invoice = document.getElementById(`db-i-inv-${id}`).value.trim();
+              updateData.remarks = document.getElementById(`db-i-rem-${id}`).value.trim();
+              updateData.last_updated = document.getElementById(`db-i-upd-${id}`).value.trim();
+              updateData.sort_idx = Number(document.getElementById(`db-i-sort-${id}`).value.trim() || 0);
+              updateData.status = document.getElementById(`db-i-stat-${id}`).value.trim();
+              updateData.is_ai_modified = Number(document.getElementById(`db-i-ai-${id}`).value.trim() || 0);
+          }
+
+          if (!confirm(`[ID: ${id}] 변경된 모든 컬럼 데이터를 덮어쓰시겠습니까?`)) return;
+
+          showToast("⏳ DB 동기화 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) {
+                  showToast("✅ 원본 데이터 업데이트 완료", 2000);
+                  searchRawDatabaseRows();
+                  if (typeof renderCalendar === 'function') renderCalendar();
+              } else {
+                  showToast("❌ 실패: " + res.msg, 2500);
+              }
+          })._call({ source: 'vercel', action: 'UPDATE_RAW_ROW_FULL', updateData: updateData, type: currentType, admin_id: localStorage.getItem('admin_id') });
+      }
+
+      // ✏️ DB 로우 식별명 다이렉트 수정
+      function editRowDirectFromDB(rowId, oldName) {
+          let newName = prompt(`[ID: ${rowId}] 새로운 거래처명 또는 B/L 번호를 입력하세요:`, oldName);
+          if (!newName || newName.trim() === '' || newName === oldName) return;
+          
+          showToast("⏳ 원본 데이터 수정 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) {
+                  showToast("✅ 수정 완료!", 2000);
+                  searchRawDatabaseRows();
+                  if (typeof renderCalendar === 'function') renderCalendar();
+              } else {
+                  showToast("❌ 수정 실패", 2000);
+              }
+          })._call({ source: 'vercel', action: 'UPDATE_RAW_ROW_DIRECT', rowId: rowId, type: currentType, newName: newName.trim(), admin_id: localStorage.getItem('admin_id') });
+      }
+
+      function deleteRowDirectFromDB(rowId) {
+          if (!confirm(`⚠️ [초긴급 경고]\n데이터베이스 일련번호 [ID: ${rowId}] 로우를 영구 파기합니까?\n달력 동기화 데이터 꼬임 현상을 정밀 강제 수정할 때만 실행하세요.`)) return;
+          
+          showToast("💥 DB 로우 레벨 파괴 중...", 0);
+          google.script.run.withSuccessHandler(function(res) {
+              if (res.success) {
+                  showToast("✅ 원본 로우 파기 완료", 2000);
+                  searchRawDatabaseRows();
+                  if (typeof renderCalendar === 'function') renderCalendar(); // 메인 달력 자동 동기화 갱신 트리거
+              } else {
+                  showToast("❌ 명령 거부됨", 2000);
+              }
+          })._call({ source: 'vercel', action: 'DELETE_RAW_ROW_DIRECT', rowId: rowId, type: currentType, admin_id: localStorage.getItem('admin_id') });
+      }
+
+      // 💡 [보안/디버깅 강화] 마스터 권한 판별 인터락 (localStorage + sessionStorage 동시 검사)
+      function checkMasterAuthButtonVisibility() {
+          const btn = document.getElementById('masterDashboardBtn');
+          if (!btn) return;
+          
+          // 🚨 [핵심 패치] 자동로그인(ON/OFF) 상태에 따라 저장 위치가 다르므로 양쪽 모두 검사!
+          let isAdminActive = localStorage.getItem('isAdmin') === 'true' || sessionStorage.getItem('isAdmin') === 'true';
+          let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id') || '';
+          let role = localStorage.getItem('admin_role') || sessionStorage.getItem('admin_role') || '';
+          
+          const isMasterUser = adminId.toLowerCase() === 'admin' || 
+                               adminId.toLowerCase() === 'silverscent' ||
+                               role.toUpperCase().includes('SUPER') || 
+                               role.toUpperCase().includes('MASTER') ||
+                               role.toUpperCase().includes('SYSTEM');
+
+          if (isAdminActive && isMasterUser) {
+              btn.style.display = 'block';
+          } else {
+              btn.style.display = 'none';
+          }
       }
     </script>
   </body>

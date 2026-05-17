@@ -1,9 +1,9 @@
 {
   "id": "inbound-app-v2",           
   "name": "물류 입고 캘린더 V2",
-  "short_name": "입고 V2",
-  "start_url": "/v2/inbound_v2.html", 
-  "scope": "/v2/",
+  "short_name": "입고 캘린더 V2",
+  "start_url": "/inbound.html",  
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",
