@@ -93,24 +93,26 @@
         align-items: center;
       }
 
-      /* 🌟 1단: 앱 브랜딩 타이틀 바 (다크/라이트 완벽 대응 및 점선 마감) */
+      /* 🌟 1단: 앱 브랜딩 타이틀 바 (여백 및 로고 크기 조정 완료) */
       .app-branding-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding-bottom: 12px;
+        /* 🚨 위아래 여백을 기존 12px에서 8px로 더 줄여 타이트하게 설정 */
+        padding-bottom: 8px; 
         margin-bottom: 6px;
-        border-bottom: 1px dashed var(--border-color); /* 테마에 맞춰 변하는 점선 */
+        border-bottom: 1px dashed var(--border-color);
       }
       .branding-left {
         display: flex;
         align-items: center;
       }
       .branding-logo {
-        width: 18px; 
-        height: 18px;
-        margin-right: 6px;
-        border-radius: 4px;
+        /* 🚨 로고 크기를 기존 18px에서 24px로 키워 시인성 확보 */
+        width: 24px; 
+        height: 24px;
+        margin-right: 8px; /* 로고와 글씨 사이 간격도 살짝 조정 */
+        border-radius: 5px; /* 크기에 맞춰 둥근 모서리 살짝 조정 */
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         object-fit: cover;
       }
@@ -120,7 +122,7 @@
         color: var(--text-main); 
         letter-spacing: -0.5px;
       }
-      /* 🚨 라이트 모드일 때만 파비콘의 '어두운 네이비 블루' 적용 */
+      /* 라이트 모드일 때만 파비콘의 '어두운 네이비 블루' 적용 */
       body.light-mode .branding-title {
         color: #002b5e; 
       }
@@ -1842,7 +1844,7 @@
     <div class="top-wrapper">
       <div class="app-branding-header">
         <div class="branding-left">
-          <img src="/favicon.png" alt="Logo" class="branding-logo">
+          <img src="/apple-touch-icon.png" alt="Logo" class="branding-logo">
           <span class="branding-title">Coloplast 출고캘린더</span>
         </div>
         <div class="controls-area">
