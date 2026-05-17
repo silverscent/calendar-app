@@ -2242,7 +2242,7 @@
         </div>
 
         <div style="display: flex; align-items: center; background: var(--bg-color); border: 1px solid var(--border-color); padding: 16px; border-radius: 16px; margin-bottom: 24px; box-sizing: border-box;">
-          <div id="myInfoAdminIcon" style="width: 50px; height: 50px; background: linear-gradient(135deg, #0a84ff, #005bb5); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1.5em; margin-right: 15px; box-shadow: 0 4px 10px rgba(10,132,255,0.3); transition: 0.3s; flex-shrink: 0;">
+          <div id="myInfoAdminIcon" style="width: 50px; height: 50px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1.5em; margin-right: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); transition: 0.3s; flex-shrink: 0;">
             🧑‍💻
           </div>
           <div>
@@ -2251,14 +2251,14 @@
           </div>
         </div>
 
-        <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 16px; overflow: hidden; margin-bottom: 24px;">
+        <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 16px; overflow: hidden; margin-bottom: 15px;">
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border-color);">
             <div>
               <div style="font-size: 1.05em; font-weight: 800; color: var(--text-main);">로그인 상태 유지</div>
               <div style="font-size: 0.8em; color: var(--text-sub); margin-top: 4px;">앱을 종료해도 로그아웃되지 않습니다.</div>
             </div>
             <label class="ios-toggle">
-              <input type="checkbox" id="toggleAutoLogin" checked disabled>
+              <input type="checkbox" id="toggleAutoLogin" onchange="handleAutoLoginToggle(this)">
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -2275,22 +2275,23 @@
           </div>
         </div>
 
-        <button id="masterDashboardBtn" onclick="openMasterDashboard()" 
-                style="width: 100%; padding: 16px; background: rgba(10, 132, 255, 0.1); color: #0a84ff; border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; margin-bottom: 12px; display: none; transition: 0.2s; box-sizing: border-box;">
-          ⚙️ 시스템 관리
-        </button>
-
-        <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; margin-bottom: 24px; box-sizing: border-box;">
-            <div style="font-size: 1.05em; font-weight: 900; color: var(--text-main); margin-bottom: 12px;">🔒 비밀번호 변경</div>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 16px; margin-bottom: 24px; box-sizing: border-box; overflow: hidden;">
+            <button onclick="const f = document.getElementById('pwChangeFormContainer'); f.style.display = f.style.display === 'none' ? 'flex' : 'none';" style="width: 100%; padding: 16px; background: transparent; border: none; text-align: left; font-size: 1.05em; font-weight: 900; color: var(--text-main); cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <span>🔒 비밀번호 변경</span>
+                <span style="color: var(--text-sub); font-size: 0.8em;">열기/닫기 ▼</span>
+            </button>
+            <div id="pwChangeFormContainer" style="display: none; flex-direction: column; gap: 8px; padding: 0 16px 16px 16px;">
                 <input type="password" id="mySettingsCurrentPw" placeholder="현재 비밀번호 입력" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: bold; box-sizing: border-box;">
                 <input type="password" id="mySettingsNewPw" placeholder="새로운 비밀번호 입력" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: bold; box-sizing: border-box;">
                 <button onclick="executeMyPasswordChange()" style="width: 100%; background: #0a84ff; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 12px rgba(10,132,255,0.2); transition: 0.2s;">비밀번호 변경 적용</button>
             </div>
         </div>
 
-        <button onclick="document.getElementById('myInfoModal').style.display='none'; document.getElementById('logoutConfirmModal').style.display='flex';" 
-                style="width: 100%; padding: 16px; background: rgba(255, 59, 48, 0.1); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; transition: 0.2s;">
+        <button id="masterDashboardBtn" onclick="openMasterDashboard()" style="width: 100%; padding: 16px; background: rgba(10, 132, 255, 0.1); color: #0a84ff; border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; margin-bottom: 12px; display: none; transition: 0.2s; box-sizing: border-box;">
+          ⚙️ 시스템 관리
+        </button>
+
+        <button onclick="document.getElementById('myInfoModal').style.display='none'; document.getElementById('logoutConfirmModal').style.display='flex';" style="width: 100%; padding: 16px; background: rgba(255, 59, 48, 0.1); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; transition: 0.2s;">
           로그아웃
         </button>
       </div>
@@ -2543,17 +2544,24 @@
                           const timeoutId = setTimeout(() => controller.abort(), 15000);
 
                           fetch(VERCEL_API_URL, { method: 'POST', body: JSON.stringify(payload), signal: controller.signal })
-                              .then(r => r.json()).then(d => { 
-                                  clearTimeout(timeoutId);
-                                  let finalData = d;
-                                  try { if (typeof d === 'string') finalData = JSON.parse(d); } catch(e) {}
-                                  
-                                  if (finalData && finalData.error) {
-                                      alert("🔥 서버 에러: " + finalData.error);
-                                      setLoadingState(false); return;
-                                  }
-                                  if(this._ok) this._ok(finalData); 
-                              }).catch(e => { 
+                              // ... (fetch 응답 처리 부분) ...
+.then(r => r.json()).then(d => { 
+    clearTimeout(timeoutId);
+    let finalData = typeof d === 'string' ? JSON.parse(d) : d; 
+    
+    // 🚨 [6번 요구사항] 강제 로그아웃 명령 수신 시 즉시 폭파!
+    if (finalData && finalData.forceLogout) {
+        alert(finalData.msg || "🚨 계정이 비활성화되어 로그아웃됩니다.");
+        executeLogout();
+        return;
+    }
+
+    if (finalData && finalData.error) {
+        alert("🔥 서버 에러: " + finalData.error);
+        setLoadingState(false); return;
+    }
+    if(this._ok) this._ok(finalData); 
+}).catch(e => { 
                                   clearTimeout(timeoutId);
                                   // 🚨 네트워크 기절 상태면 팝업 띄우지 않고 조용히 종료!
                                   if (this._isSilentError(e)) { console.warn("스텔스 차단 (POST):", e.message); return; }
@@ -3934,41 +3942,72 @@
           const roleTextElem = document.getElementById('myInfoAdminRole');
           const iconElem = document.getElementById('myInfoAdminIcon');
           
-          if(iconElem) {
-              iconElem.innerText = '🧑‍💻';
-              iconElem.style.background = 'linear-gradient(135deg, #0a84ff, #005bb5)';
-              iconElem.style.boxShadow = '0 4px 10px rgba(10, 132, 255, 0.3)';
-          }
-
           const isMasterUser = savedId.toLowerCase() === 'admin' || 
                                savedId.toLowerCase() === 'silverscent' ||
                                (savedRole && (savedRole.toUpperCase().includes('SUPER') || 
                                               savedRole.toUpperCase().includes('MASTER') ||
                                               savedRole.toUpperCase().includes('SYSTEM')));
 
+          // 🚨 2번 요구사항: 권한에 따른 아이콘 색상 완벽 분리!
+          if(iconElem) {
+              iconElem.innerText = '🧑‍💻';
+              if (isMasterUser) {
+                  iconElem.style.background = 'linear-gradient(135deg, #0a84ff, #005bb5)';
+                  iconElem.style.boxShadow = '0 4px 10px rgba(10, 132, 255, 0.3)';
+              } else {
+                  iconElem.style.background = 'linear-gradient(135deg, #34c759, #28a745)';
+                  iconElem.style.boxShadow = '0 4px 10px rgba(52, 199, 89, 0.3)';
+              }
+          }
+
           if (isMasterUser) {
               roleTextElem.innerText = 'System Administrator';
               roleTextElem.style.color = '#0a84ff'; 
           } else {
-              roleTextElem.innerText = '관리자';
+              roleTextElem.innerText = '일반 관리자';
               roleTextElem.style.color = 'var(--text-main)'; 
           }
 
-          // 🚨 [정밀 패치] 생체인증 켜짐 여부는 현재 내 ID와 등록된 생체 ID가 일치할 때만 TRUE 처리
-          let isBioRegistered = localStorage.getItem('bio_registered') === 'true' && 
-                                localStorage.getItem('bio_id') === savedId;
+          let isBioRegistered = localStorage.getItem('bio_registered') === 'true' && localStorage.getItem('bio_id') === savedId;
           document.getElementById('toggleBioAuth').checked = isBioRegistered;
           
+          // 🚨 4번 요구사항: 자동 로그인 토글 상태 불러오기
+          let isAutoLogin = localStorage.getItem('auto_login') !== 'false'; // 기본값은 켜짐
+          document.getElementById('toggleAutoLogin').checked = isAutoLogin;
+          
+          // 비밀번호 폼은 열 때마다 항상 닫힌 상태로 초기화
+          document.getElementById('pwChangeFormContainer').style.display = 'none';
+
           document.getElementById('myInfoModal').style.display = 'flex';
           return;
         }
         
         if (localStorage.getItem('bio_registered') === 'true' && window.PublicKeyCredential) {
-            handleBioLogin();
-            return; 
+            handleBioLogin(); return; 
         }
         openLoginModal();
       }
+
+      // 🚨 4번 요구사항: 자동 로그인 설정 저장 함수 추가 (아무 빈 곳에 넣으세요)
+      function handleAutoLoginToggle(checkbox) {
+          if (checkbox.checked) {
+              localStorage.setItem('auto_login', 'true');
+              showToast("자동 로그인 기능이 켜졌습니다.", 1500);
+          } else {
+              localStorage.setItem('auto_login', 'false');
+              showToast("앱 종료 시 자동으로 로그아웃됩니다.", 1500);
+          }
+      }
+
+      // 🚨 4번 요구사항: 사용자가 앱을 닫을 때 자동로그인이 꺼져있다면 권한 파기
+      window.addEventListener('beforeunload', () => {
+          if (localStorage.getItem('auto_login') === 'false') {
+              localStorage.removeItem('isAdmin');
+              localStorage.removeItem('is_admin');
+              localStorage.removeItem('admin_id');
+              localStorage.removeItem('admin_role');
+          }
+      });
 
       // =====================================================
       // 🔒 [완성본] 생체 인증 등록 및 해제 통제 함수
@@ -6995,7 +7034,8 @@ async function handleLogin() {
               }
               let html = "";
               res.logs.forEach(log => {
-                  let timeStr = new Date(log.created_at).toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+                  let rawDate = log.created_at || '';
+let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') : rawDate;
                   let cleanDesc = log.description.replace('[접속성공] ', ''); // 중복 문구 제거
                   
                   html += `
@@ -7124,42 +7164,41 @@ async function handleLogin() {
               const activeUsers = res.list.filter(u => u.status !== 'LOCKED');
               const lockedUsers = res.list.filter(u => u.status === 'LOCKED');
 
-              // 로우 생성 헬퍼
+              // 로우 생성 헬퍼 (5번 요구사항: 모바일 찌그러짐 방지 2단 레이아웃)
               const buildCard = (item, isLocked) => {
                   const card = document.createElement('div');
                   const isMaster = item.admin_id.toLowerCase() === 'admin' || item.admin_id.toLowerCase() === 'silverscent';
                   
-                  card.style = `display:flex; justify-content:space-between; align-items:center; background:${isLocked ? 'rgba(255,59,48,0.02)' : 'var(--card-bg)'}; border:1px solid ${isLocked ? 'rgba(255,59,48,0.15)' : 'var(--border-color)'}; padding:14px 16px; border-radius:14px; box-sizing:border-box; margin-bottom:6px; ${isLocked ? 'opacity:0.75;' : ''}`;
+                  card.style = `display:flex; flex-direction:column; gap:10px; background:${isLocked ? 'rgba(255,59,48,0.02)' : 'var(--card-bg)'}; border:1px solid ${isLocked ? 'rgba(255,59,48,0.15)' : 'var(--border-color)'}; padding:14px; border-radius:14px; box-sizing:border-box; margin-bottom:6px; ${isLocked ? 'opacity:0.75;' : ''}`;
                   
                   let actionArea = "";
                   if (isMaster) {
                       actionArea = `<span style='color:#0a84ff; font-size:0.85em; font-weight:800;'>🔒 System Admin</span>`;
                   } else if (isLocked) {
                       actionArea = `
-                          <button onclick="reactivateAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(52,199,89,0.1); border:1px solid #34c759; color:#34c759; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer; margin-right:5px;'>♻️ 복구</button>
-                          <button onclick="hardDeleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:6px 10px; border-radius:8px; font-weight:900; font-size:0.85em; cursor:pointer;'>완전삭제</button>
+                          <button onclick="reactivateAdminAccount('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(52,199,89,0.1); border:1px solid #34c759; color:#34c759; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>♻️ 복구</button>
+                          <button onclick="hardDeleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:8px; border-radius:8px; font-weight:900; font-size:0.85em; cursor:pointer;'>완전삭제</button>
                       `;
                   } else {
-                      // 🚨 1번 요구사항: [삭제] 라는 단어 대신 직관적인 [비활성화] 명칭 부여
                       actionArea = `
-                          <button onclick="resetAdminPassword('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,159,10,0.1); border:1px solid #ff9f0a; color:#ff9f0a; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer; margin-right:5px;'>비번초기화</button>
-                          <button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:6px 10px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>비활성화</button>
+                          <button onclick="resetAdminPassword('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(255,159,10,0.1); border:1px solid #ff9f0a; color:#ff9f0a; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>비번초기화</button>
+                          <button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>비활성화</button>
                       `;
                   }
 
-                  const statusBadge = isLocked ? `<span style="font-size:0.7em; color:#ff3b30; border:1px solid #ff3b30; padding:2px 4px; border-radius:4px; margin-left:6px; font-weight:bold;">비활성</span>` : "";
+                  const statusBadge = isLocked ? `<span style="font-size:0.7em; color:#ff3b30; border:1px solid #ff3b30; padding:2px 4px; border-radius:4px; font-weight:bold;">비활성</span>` : "";
 
                   card.innerHTML = `
-                      <div style="flex:1;">
-                          <div style='font-weight:900; color:${isLocked ? 'var(--text-sub)' : 'var(--text-main)'}; font-size:1.02em; display:flex; align-items:center; gap:4px; ${isLocked ? 'text-decoration:line-through;' : ''}'>
-                              ${item.admin_name} <span style='font-size:0.85em; font-weight:500; color:var(--text-sub);'>(${item.admin_id})</span> ${statusBadge}
+                      <div style="display:flex; justify-content:space-between; align-items:flex-start; width:100%;">
+                          <div>
+                              <div style='font-weight:900; color:${isLocked ? 'var(--text-sub)' : 'var(--text-main)'}; font-size:1.02em; display:flex; align-items:center; gap:6px; ${isLocked ? 'text-decoration:line-through;' : ''}'>
+                                  ${item.admin_name} <span style='font-size:0.85em; font-weight:500; color:var(--text-sub);'>(${item.admin_id})</span> ${statusBadge}
+                              </div>
+                              <div style='font-size:0.8em; color:var(--text-sub); margin-top:4px;'>등급: ${item.role === 'SYSTEM' ? 'System Admin' : '일반 관리자'}</div>
                           </div>
-                          <div style='font-size:0.8em; color:var(--text-sub); margin-top:4px;'>등급: ${item.role === 'SYSTEM' ? 'System Admin' : '일반 관리자'}</div>
+                          <button onclick="showAdminConnInfo('${item.admin_id}', '${item.admin_name}')" style="flex-shrink:0; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:6px 10px; font-size:0.8em; cursor:pointer; font-weight:900; white-space:nowrap;">📡 접속확인</button>
                       </div>
-                      <div style='flex-shrink:0; display:flex; gap:6px; align-items:center;'>
-                          <button onclick="showAdminConnInfo('${item.admin_id}', '${item.admin_name}')" style="background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:6px 10px; font-size:0.85em; cursor:pointer; font-weight:800; white-space:nowrap; margin-right:4px;">📡 접속확인</button>
-                          ${actionArea}
-                      </div>
+                      <div style='display:flex; width:100%; gap:8px; margin-top:4px;'>${actionArea}</div>
                   `;
                   return card;
               };
@@ -7291,7 +7330,9 @@ async function handleLogin() {
                   item.className = 'audit-log-item'; 
                   item.style = "padding-bottom:12px; border-bottom:1px solid var(--border-color); font-size:0.9em; box-sizing:border-box; margin-bottom:10px;";
                   
-                  let dateStr = new Date(log.created_at).toLocaleString('ko-KR');
+                  let rawDate = log.created_at || '';
+// "2026-05-18 13:45:00" 형태에서 년도(2026-)와 초(:00)를 떼어내고 "05.18 13:45"로 깔끔하게 포장
+let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') : rawDate;
 
                   item.innerHTML = `
                       <div style='display:flex; justify-content:space-between; margin-bottom:4px;'>

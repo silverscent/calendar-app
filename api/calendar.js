@@ -107,6 +107,16 @@ module.exports = async function(req, res) {
             const { domain, action, data, keyword, type, rowId, year, month, id, admin_id } = payload;
             const currentAdmin = admin_id || 'system';
 
+            // 👇 🚨 [여기에 추가!] 글로벌 세션 방어막: 매 요청마다 계정 차단 여부 검사 (로그인 액션은 제외)
+            if (admin_id && action !== 'LOGIN') {
+                const [sessionCheck] = await pool.query("SELECT status FROM admins WHERE admin_id = ?", [admin_id]);
+                if (sessionCheck.length === 0 || sessionCheck[0].status === 'LOCKED') {
+                    // 차단된 계정이면 어떤 명령이든 무시하고 '강제 로그아웃' 명령 하달
+                    return res.status(200).json({ success: false, forceLogout: true, msg: '관리자에 의해 계정이 비활성화되었습니다.' });
+                }
+            }
+            // 👆 🚨 [추가 끝]
+
             // 🆕 A. 신규 관리자 계정 추가
             if (action === 'CREATE_ADMIN') {
                 try {
