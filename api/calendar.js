@@ -148,21 +148,49 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-           // 📜 D. 보안 감사 로그 타임라인 로드 (날짜 범위 + 키워드 검색 엔진 탑재)
+           // 📜 D. 보안 감사 로그 타임라인 로드 (페이지네이션 + 날짜 범위 + 키워드 검색 엔진 탑재)
             else if (action === 'GET_AUDIT_LOGS') {
                 try {
                     const { startDate, endDate, keyword } = payload;
+                    const limit = parseInt(payload.limit) || 50;
+                    const page = parseInt(payload.page) || 1;
+                    const offset = (page - 1) * limit;
+
                     let queryStr = "SELECT admin_id, action_type, description, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at FROM admin_audit_logs WHERE 1=1";
+                    let countQueryStr = "SELECT COUNT(*) as cnt FROM admin_audit_logs WHERE 1=1";
                     let params = [];
-                    
-                    // 한국 시간(KST)을 기준으로 검색하기 위해 UTC 시간에 -9시간을 역연산하여 DB 검색
-                    if (startDate) { queryStr += " AND created_at >= DATE_SUB(?, INTERVAL 9 HOUR)"; params.push(startDate + ' 00:00:00'); }
-                    if (endDate) { queryStr += " AND created_at <= DATE_SUB(?, INTERVAL 9 HOUR)"; params.push(endDate + ' 23:59:59'); }
-                    if (keyword) { queryStr += " AND (admin_id LIKE ? OR description LIKE ?)"; params.push(`%${keyword}%`, `%${keyword}%`); }
-                    
-                    queryStr += " ORDER BY id DESC LIMIT 500"; // 넉넉하게 500개 스캔
-                    const [rows] = await pool.query(queryStr, params);
-                    return res.status(200).json({ success: true, logs: rows });
+
+                    if (startDate) { 
+                        const subClause = " AND created_at >= DATE_SUB(?, INTERVAL 9 HOUR)";
+                        queryStr += subClause; countQueryStr += subClause; 
+                        params.push(startDate + ' 00:00:00'); 
+                    }
+                    if (endDate) { 
+                        const subClause = " AND created_at <= DATE_SUB(?, INTERVAL 9 HOUR)";
+                        queryStr += subClause; countQueryStr += subClause; 
+                        params.push(endDate + ' 23:59:59'); 
+                    }
+                    if (keyword) { 
+                        // 🚨 [패치] admin_id, description 뿐만 아니라 action_type(액션)까지 검색 대상에 포함!
+                        const subClause = " AND (admin_id LIKE ? OR description LIKE ? OR action_type LIKE ?)";
+                        queryStr += subClause; countQueryStr += subClause; 
+                        params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`); 
+                    }
+
+                    queryStr += " ORDER BY id DESC LIMIT ? OFFSET ?";
+                    let queryParams = [...params, limit, offset];
+
+                    const [rows] = await pool.query(queryStr, queryParams);
+                    const [countRows] = await pool.query(countQueryStr, params);
+                    const totalCount = countRows[0].cnt;
+
+                    return res.status(200).json({ 
+                        success: true, 
+                        logs: rows,
+                        totalCount: totalCount,
+                        page: page,
+                        totalPages: Math.ceil(totalCount / limit)
+                    });
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 

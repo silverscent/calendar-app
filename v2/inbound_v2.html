@@ -1370,18 +1370,26 @@
 
         <div id="master-tab-audit-log" class="master-tab-content" style="display: none; box-sizing: border-box;">
           <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; box-sizing: border-box;">
+            <select id="logMasterLimit" class="db-input" style="width: auto; padding: 10px; border-radius: 10px; font-weight: bold; background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color);" onchange="logCurrentPage=1; refreshAuditLogs();">
+              <option value="20">20줄씩 보기</option>
+              <option value="50" selected>50줄씩 보기</option>
+              <option value="100">100줄씩 보기</option>
+            </select>
+            
             <input type="date" id="logStartDate" class="db-input" style="width: auto; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: bold; box-sizing: border-box;">
             <span style="color: var(--text-main); font-weight: 900;">~</span>
             <input type="date" id="logEndDate" class="db-input" style="width: auto; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: bold; box-sizing: border-box;">
             
-            <input type="text" id="logKeyword" placeholder="🔍 ID 또는 수정 내용 검색..." style="flex: 1; min-width: 150px; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: 800; font-size: 0.9em; box-sizing: border-box;" onkeydown="if(event.key==='Enter') refreshAuditLogs()">
-            <button onclick="refreshAuditLogs()" style="background: #ff9f0a; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">검색</button>
-            <button onclick="document.getElementById('logStartDate').value=''; document.getElementById('logEndDate').value=''; document.getElementById('logKeyword').value=''; refreshAuditLogs();" style="background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">초기화</button>
+            <input type="text" id="logKeyword" placeholder="🔍 ID, 액션 또는 내용 검색..." style="flex: 1; min-width: 150px; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: 800; font-size: 0.9em; box-sizing: border-box;" onkeydown="if(event.key==='Enter') { logCurrentPage=1; refreshAuditLogs(); }">
+            <button onclick="logCurrentPage=1; refreshAuditLogs();" style="background: #ff9f0a; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">검색</button>
+            <button onclick="document.getElementById('logStartDate').value=''; document.getElementById('logEndDate').value=''; document.getElementById('logKeyword').value=''; logCurrentPage=1; refreshAuditLogs();" style="background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">초기화</button>
           </div>
 
           <div id="masterLogTimeline" style="display: flex; flex-direction: column; gap: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 15px; box-sizing: border-box; max-height: 500px; overflow-y: auto;">
              <div style="text-align: center; color: var(--text-sub); padding: 20px;">로그 데이터를 불러오는 중...</div>
           </div>
+
+          <div id="logMasterPaginationBar" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px;"></div>
         </div>
 
         <div id="master-tab-db-mgr" class="master-tab-content" style="display: none; box-sizing: border-box;">
@@ -4007,17 +4015,27 @@ async function handleLogin() {
           })._call({ source: 'vercel', action: 'DELETE_ADMIN', data: { id }, admin_id: localStorage.getItem('admin_id') });
       }
 
-      // 📜 3. 감사 로그 수집 및 서버 기반 검색 엔진 (기존 refresh + filter 완벽 통합)
+      // 🚨 [로그 엔진 상태 변수 및 페이지 이동 함수 추가]
+      let logCurrentPage = 1;
+
+      function changeLogPage(dir) {
+          logCurrentPage += dir;
+          refreshAuditLogs();
+      }
+
+      // 📜 3. 감사 로그 수집 및 서버 기반 검색 엔진 (페이지네이션 연동)
       function refreshAuditLogs() {
           const timeline = document.getElementById('masterLogTimeline');
+          const pager = document.getElementById('logMasterPaginationBar');
           if (!timeline) return;
 
-          // 🚨 새로 추가된 날짜 및 키워드 검색값 가져오기 (없으면 빈칸 처리)
           const startDate = document.getElementById('logStartDate') ? document.getElementById('logStartDate').value : '';
           const endDate = document.getElementById('logEndDate') ? document.getElementById('logEndDate').value : '';
           const keyword = document.getElementById('logKeyword') ? document.getElementById('logKeyword').value.trim() : '';
+          const limit = document.getElementById('logMasterLimit') ? document.getElementById('logMasterLimit').value : 50;
 
           timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:15px; font-weight:800;'>보안 로그 동기화 및 검색 중...</div>";
+          if (pager) pager.innerHTML = "";
 
           google.script.run.withSuccessHandler(function(res) {
               if (!res.success || !res.logs || res.logs.length === 0) {
@@ -4027,7 +4045,6 @@ async function handleLogin() {
               
               timeline.innerHTML = "";
               
-              // 💡 관리자님의 순정 UI/UX 디자인 100% 보존
               res.logs.forEach(log => {
                   const item = document.createElement('div');
                   item.className = 'audit-log-item'; 
@@ -4045,9 +4062,25 @@ async function handleLogin() {
                   `;
                   timeline.appendChild(item);
               });
-          })._call({ source: 'vercel', action: 'GET_AUDIT_LOGS', startDate: startDate, endDate: endDate, keyword: keyword });
-      }
 
+              // 🆕 하단 페이지네이션 바 (이전/다음) 렌더링
+              if (pager && res.totalPages > 1) {
+                  let pageHtml = `<button onclick="changeLogPage(-1)" ${res.page === 1 ? 'disabled' : ''} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">◀ 이전</button>`;
+                  pageHtml += `<span style="color:var(--text-main); font-weight:900; font-size:1em;">${res.page} <span style="color:var(--text-sub); font-weight:normal;">/ ${res.totalPages}</span> <span style="font-size:0.85em; color:var(--text-sub); font-weight:normal; margin-left:5px;">(총 ${res.totalCount}건)</span></span>`;
+                  pageHtml += `<button onclick="changeLogPage(1)" ${res.page === res.totalPages ? 'disabled' : ''} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">다음 ▶</button>`;
+                  pager.innerHTML = pageHtml;
+              }
+
+          })._call({ 
+              source: 'vercel', 
+              action: 'GET_AUDIT_LOGS', 
+              startDate: startDate, 
+              endDate: endDate, 
+              keyword: keyword,
+              limit: Number(limit),
+              page: logCurrentPage
+          });
+      }
       // 🚨 DB 페이지네이션 관리 상태 변수
       let dbCurrentPage = 1;
 
