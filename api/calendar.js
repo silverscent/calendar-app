@@ -148,15 +148,25 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // 📜 D. 보안 감사 로그 타임라인 로드
+           // 📜 D. 보안 감사 로그 타임라인 로드 (날짜 범위 + 키워드 검색 엔진 탑재)
             else if (action === 'GET_AUDIT_LOGS') {
                 try {
-                    const [rows] = await pool.query("SELECT admin_id, action_type, description, created_at FROM admin_audit_logs ORDER BY id DESC LIMIT 50");
+                    const { startDate, endDate, keyword } = payload;
+                    let queryStr = "SELECT admin_id, action_type, description, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at FROM admin_audit_logs WHERE 1=1";
+                    let params = [];
+                    
+                    // 한국 시간(KST)을 기준으로 검색하기 위해 UTC 시간에 -9시간을 역연산하여 DB 검색
+                    if (startDate) { queryStr += " AND created_at >= DATE_SUB(?, INTERVAL 9 HOUR)"; params.push(startDate + ' 00:00:00'); }
+                    if (endDate) { queryStr += " AND created_at <= DATE_SUB(?, INTERVAL 9 HOUR)"; params.push(endDate + ' 23:59:59'); }
+                    if (keyword) { queryStr += " AND (admin_id LIKE ? OR description LIKE ?)"; params.push(`%${keyword}%`, `%${keyword}%`); }
+                    
+                    queryStr += " ORDER BY id DESC LIMIT 500"; // 넉넉하게 500개 스캔
+                    const [rows] = await pool.query(queryStr, params);
                     return res.status(200).json({ success: true, logs: rows });
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // 🗄️ E. DB 다이렉트 조회 (페이지네이션 및 직관적 필터, KST 시간보정 적용)
+            // 🗄️ E. DB 다이렉트 조회 (페이지네이션 + 검색 + 오름/내림차순 정렬 엔진)
             else if (action === 'GET_RAW_DB_ROWS') {
                 try {
                     const limit = parseInt(payload.limit) || 20; 
@@ -164,17 +174,17 @@ module.exports = async function(req, res) {
                     const offset = (page - 1) * limit;
                     const filterCol = payload.filterCol || 'all'; 
                     
-                    let rows = [];
-                    let countRows = [];
-                    let queryStr = "";
-                    let countQueryStr = "";
-                    let params = [];
-                    let countParams = [];
+                    // 🚨 정렬 변수 안전하게 수신 (SQL 인젝션 방지)
+                    const sortCol = /^[a-zA-Z0-9_]+$/.test(payload.sortCol) ? payload.sortCol : 'id';
+                    const sortDir = payload.sortDir === 'ASC' ? 'ASC' : 'DESC';
+                    
+                    let rows = []; let countRows = [];
+                    let queryStr = ""; let countQueryStr = "";
+                    let params = []; let countParams = [];
 
                     if (type === 'out') {
                         queryStr = "SELECT id, company, pal, box, outbound_date, etc, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at, sort_idx, isDone FROM outbound";
                         countQueryStr = "SELECT COUNT(*) as cnt FROM outbound";
-                        
                         let whereClauses = [];
                         if (keyword) {
                             if (filterCol === 'name') { whereClauses.push("company LIKE ?"); params.push(`%${keyword}%`); }
@@ -186,12 +196,11 @@ module.exports = async function(req, res) {
                             queryStr += whereStr; countQueryStr += whereStr;
                             countParams = [...params];
                         }
-                        queryStr += " ORDER BY id DESC LIMIT ? OFFSET ?";
+                        queryStr += ` ORDER BY ${sortCol} ${sortDir} LIMIT ? OFFSET ?`;
                         params.push(limit, offset);
                     } else {
                         queryStr = "SELECT id, bl_number, pallets, eta, receive_date, fwd, s_type, invoice, remarks, DATE_ADD(last_updated, INTERVAL 9 HOUR) AS last_updated, sort_idx, status, is_ai_modified FROM inbound";
                         countQueryStr = "SELECT COUNT(*) as cnt FROM inbound";
-                        
                         let whereClauses = [];
                         if (keyword) {
                             if (filterCol === 'name') { whereClauses.push("bl_number LIKE ?"); params.push(`%${keyword}%`); }
@@ -203,7 +212,7 @@ module.exports = async function(req, res) {
                             queryStr += whereStr; countQueryStr += whereStr;
                             countParams = [...params];
                         }
-                        queryStr += " ORDER BY id DESC LIMIT ? OFFSET ?";
+                        queryStr += ` ORDER BY ${sortCol} ${sortDir} LIMIT ? OFFSET ?`;
                         params.push(limit, offset);
                     }
                     

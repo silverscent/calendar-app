@@ -1369,11 +1369,19 @@
         </div>
 
         <div id="master-tab-audit-log" class="master-tab-content" style="display: none; box-sizing: border-box;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; box-sizing: border-box; gap: 8px;">
-            <input type="text" id="logFilterInput" onkeyup="filterAuditLogs()" placeholder="🔍 ID 또는 액션 검색..." style="flex: 1; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: 800; font-size: 0.9em; box-sizing: border-box;">
-            <button onclick="refreshAuditLogs()" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px 14px; border-radius: 10px; font-size: 0.9em; font-weight: 800; cursor: pointer; white-space: nowrap;">새로고침</button>
+          <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; box-sizing: border-box;">
+            <input type="date" id="logStartDate" class="db-input" style="width: auto; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: bold; box-sizing: border-box;">
+            <span style="color: var(--text-main); font-weight: 900;">~</span>
+            <input type="date" id="logEndDate" class="db-input" style="width: auto; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: bold; box-sizing: border-box;">
+            
+            <input type="text" id="logKeyword" placeholder="🔍 ID 또는 수정 내용 검색..." style="flex: 1; min-width: 150px; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: 800; font-size: 0.9em; box-sizing: border-box;" onkeydown="if(event.key==='Enter') refreshAuditLogs()">
+            <button onclick="refreshAuditLogs()" style="background: #ff9f0a; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">검색</button>
+            <button onclick="document.getElementById('logStartDate').value=''; document.getElementById('logEndDate').value=''; document.getElementById('logKeyword').value=''; refreshAuditLogs();" style="background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">초기화</button>
           </div>
-          <div id="masterLogTimeline" style="display: flex; flex-direction: column; gap: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 15px; box-sizing: border-box;"></div>
+
+          <div id="masterLogTimeline" style="display: flex; flex-direction: column; gap: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 15px; box-sizing: border-box; max-height: 500px; overflow-y: auto;">
+             <div style="text-align: center; color: var(--text-sub); padding: 20px;">로그 데이터를 불러오는 중...</div>
+          </div>
         </div>
 
         <div id="master-tab-db-mgr" class="master-tab-content" style="display: none; box-sizing: border-box;">
@@ -3999,24 +4007,32 @@ async function handleLogin() {
           })._call({ source: 'vercel', action: 'DELETE_ADMIN', data: { id }, admin_id: localStorage.getItem('admin_id') });
       }
 
-      // 3. 감사 로그 수집
+      // 📜 3. 감사 로그 수집 및 서버 기반 검색 엔진 (기존 refresh + filter 완벽 통합)
       function refreshAuditLogs() {
           const timeline = document.getElementById('masterLogTimeline');
           if (!timeline) return;
-          timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:15px; font-weight:800;'>보안 로그 동기화 중...</div>";
+
+          // 🚨 새로 추가된 날짜 및 키워드 검색값 가져오기 (없으면 빈칸 처리)
+          const startDate = document.getElementById('logStartDate') ? document.getElementById('logStartDate').value : '';
+          const endDate = document.getElementById('logEndDate') ? document.getElementById('logEndDate').value : '';
+          const keyword = document.getElementById('logKeyword') ? document.getElementById('logKeyword').value.trim() : '';
+
+          timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:15px; font-weight:800;'>보안 로그 동기화 및 검색 중...</div>";
 
           google.script.run.withSuccessHandler(function(res) {
               if (!res.success || !res.logs || res.logs.length === 0) {
-                  timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:20px;'>수집된 감사 로그 타임라인이 비어있습니다.</div>";
+                  timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:20px;'>검색 조건에 맞는 감사 로그가 없습니다.</div>";
                   return;
               }
+              
               timeline.innerHTML = "";
-              // 기존 refreshAuditLogs 내부의 item 렌더링 부분에 클래스 추가
+              
+              // 💡 관리자님의 순정 UI/UX 디자인 100% 보존
               res.logs.forEach(log => {
                   const item = document.createElement('div');
-                  item.className = 'audit-log-item'; // 🚨 이거 꼭 추가!
-                  item.style = "padding-bottom:12px; border-bottom:1px solid var(--border-color); font-size:0.9em; box-sizing:border-box;";
-                  // ... 이하 동일
+                  item.className = 'audit-log-item'; 
+                  item.style = "padding-bottom:12px; border-bottom:1px solid var(--border-color); font-size:0.9em; box-sizing:border-box; margin-bottom:10px;";
+                  
                   let dateStr = new Date(log.created_at).toLocaleString('ko-KR');
 
                   item.innerHTML = `
@@ -4029,20 +4045,7 @@ async function handleLogin() {
                   `;
                   timeline.appendChild(item);
               });
-          })._call({ source: 'vercel', action: 'GET_AUDIT_LOGS' });
-      }
-
-      // 🔍 로그 실시간 라이브 필터링 엔진
-      function filterAuditLogs() {
-          const keyword = document.getElementById('logFilterInput').value.toLowerCase();
-          const items = document.querySelectorAll('.audit-log-item');
-          items.forEach(item => {
-              if (item.innerText.toLowerCase().includes(keyword)) {
-                  item.style.display = 'block';
-              } else {
-                  item.style.display = 'none';
-              }
-          });
+          })._call({ source: 'vercel', action: 'GET_AUDIT_LOGS', startDate: startDate, endDate: endDate, keyword: keyword });
       }
 
       // 🚨 DB 페이지네이션 관리 상태 변수
@@ -4060,7 +4063,27 @@ async function handleLogin() {
           searchRawDatabaseRows();
       }
 
-      // 🗄️ 고도화된 DB 제어실 렌더링 (전체 컬럼 + 페이지네이션)
+      // 🚨 [정렬 엔진 상태 변수 및 헬퍼 함수]
+      let dbSortCol = 'id';
+      let dbSortDir = 'DESC';
+
+      function setDbSort(col) {
+          if (dbSortCol === col) {
+              dbSortDir = dbSortDir === 'ASC' ? 'DESC' : 'ASC'; // 같은 컬럼 누르면 방향 전환
+          } else {
+              dbSortCol = col;
+              dbSortDir = 'ASC'; // 새 컬럼은 오름차순부터
+          }
+          dbCurrentPage = 1; // 정렬이 바뀌면 1페이지로 리셋
+          searchRawDatabaseRows();
+      }
+
+      function getSortIcon(col) {
+          if (dbSortCol !== col) return "↕️";
+          return dbSortDir === 'ASC' ? "🔼" : "🔽";
+      }
+
+      // 🗄️ 고도화된 DB 제어실 렌더링 (전체 컬럼 + 페이지네이션 + 열 정렬 기능)
       function searchRawDatabaseRows() {
           const keyword = document.getElementById('dbMasterSearchKeyword').value.trim();
           const filterCol = document.getElementById('dbMasterFilterCol').value;
@@ -4084,13 +4107,18 @@ async function handleLogin() {
                   .db-btn-del { background: rgba(255,59,48,0.1); border: 1px solid #ff3b30; color: #ff3b30; border-radius: 6px; padding: 5px 10px; font-size: 0.85em; font-weight: 900; cursor: pointer; }
               </style>`;
 
+              // 🚨 정렬 기능이 탑재된 헤더(th) 자동 생성기
+              const th = (col, name) => `<th onclick="setDbSort('${col}')" style="cursor:pointer; user-select:none; white-space:nowrap;" title="클릭하여 정렬">${name} <span style="font-size:0.8em">${getSortIcon(col)}</span></th>`;
+
               if (currentType === 'out') {
                   // 📤 출고 테이블 렌더링
                   html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 950px; table-layout: fixed;'>
-                      <colgroup><col style='width: 50px;'><col style='width: 130px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'><col style='width: 100px;'><col style='width: 150px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'></colgroup>
-                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr><th>ID</th><th>company</th><th>pal</th><th>box</th><th>out_date</th><th>etc</th><th>created_at</th><th>sort</th><th>isDone</th><th style='text-align:center;'>명령</th></tr></thead><tbody>`;
+                      <colgroup><col style='width: 60px;'><col style='width: 130px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'><col style='width: 100px;'><col style='width: 150px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'></colgroup>
+                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr>
+                          ${th('id', 'ID')} ${th('company', 'company')} ${th('pal', 'pal')} ${th('box', 'box')} ${th('outbound_date', 'out_date')} ${th('etc', 'etc')} ${th('created_at', 'created_at')} ${th('sort_idx', 'sort')} ${th('isDone', 'isDone')} <th style='text-align:center;'>명령</th>
+                      </tr></thead><tbody>`;
                   
-                  // 🚨 [추가] 항상 첫 줄에 뜨는 신규 데이터 주입 폼
+                  // 항상 첫 줄에 뜨는 신규 데이터 주입 폼
                   html += `<tr style='background:rgba(52,199,89,0.08); border-bottom:2px solid #34c759;'>
                       <td style='color:#34c759; font-weight:900; text-align:center;'>NEW</td>
                       <td><input type="text" id="db-o-comp-new" placeholder="업체명 (필수)" class="db-input" style="border:1px solid #34c759;"></td>
@@ -4119,10 +4147,12 @@ async function handleLogin() {
               } else {
                   // 📥 입고 테이블 렌더링
                   html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 1350px; table-layout: fixed;'>
-                      <colgroup><col style='width: 50px;'><col style='width: 130px;'><col style='width: 60px;'><col style='width: 100px;'><col style='width: 100px;'><col style='width: 80px;'><col style='width: 80px;'><col style='width: 100px;'><col style='width: 120px;'><col style='width: 140px;'><col style='width: 60px;'><col style='width: 80px;'><col style='width: 60px;'><col style='width: 120px;'></colgroup>
-                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr><th>ID</th><th>bl_number</th><th>pallets</th><th>eta</th><th>receive_date</th><th>fwd</th><th>s_type</th><th>invoice</th><th>remarks</th><th>last_updated</th><th>sort</th><th>status</th><th>AI</th><th style='text-align:center;'>명령</th></tr></thead><tbody>`;
+                      <colgroup><col style='width: 60px;'><col style='width: 130px;'><col style='width: 60px;'><col style='width: 100px;'><col style='width: 100px;'><col style='width: 80px;'><col style='width: 80px;'><col style='width: 100px;'><col style='width: 120px;'><col style='width: 140px;'><col style='width: 60px;'><col style='width: 80px;'><col style='width: 60px;'><col style='width: 120px;'></colgroup>
+                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr>
+                          ${th('id', 'ID')} ${th('bl_number', 'bl_number')} ${th('pallets', 'pallets')} ${th('eta', 'eta')} ${th('receive_date', 'receive_date')} ${th('fwd', 'fwd')} ${th('s_type', 's_type')} ${th('invoice', 'invoice')} ${th('remarks', 'remarks')} ${th('last_updated', 'last_updated')} ${th('sort_idx', 'sort')} ${th('status', 'status')} ${th('is_ai_modified', 'AI')} <th style='text-align:center;'>명령</th>
+                      </tr></thead><tbody>`;
                   
-                  // 🚨 [추가] 항상 첫 줄에 뜨는 신규 데이터 주입 폼
+                  // 항상 첫 줄에 뜨는 신규 데이터 주입 폼
                   html += `<tr style='background:rgba(52,199,89,0.08); border-bottom:2px solid #34c759;'>
                       <td style='color:#34c759; font-weight:900; text-align:center;'>NEW</td>
                       <td><input type="text" id="db-i-bl-new" placeholder="B/L번호 (필수)" class="db-input" style="border:1px solid #34c759;"></td>
@@ -4160,7 +4190,7 @@ async function handleLogin() {
               html += `</tbody></table>`;
               container.innerHTML = html;
 
-              // 🆕 하단 페이지네이션 바 (이전/다음) 렌더링
+              // 하단 페이지네이션 바 (이전/다음) 렌더링
               if (pager && res.totalPages > 1) {
                   let pageHtml = `<button onclick="changeDbPage(-1)" ${res.page === 1 ? 'disabled' : ''} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">◀ 이전</button>`;
                   pageHtml += `<span style="color:var(--text-main); font-weight:900; font-size:1em;">${res.page} <span style="color:var(--text-sub); font-weight:normal;">/ ${res.totalPages}</span> <span style="font-size:0.85em; color:var(--text-sub); font-weight:normal; margin-left:5px;">(총 ${res.totalCount}건)</span></span>`;
@@ -4174,6 +4204,8 @@ async function handleLogin() {
               filterCol: filterCol, 
               limit: Number(limit), 
               page: dbCurrentPage, 
+              sortCol: dbSortCol, // 🚨 서버로 정렬 타겟 발송
+              sortDir: dbSortDir, // 🚨 오름/내림차순 발송
               type: currentType 
           });
       }
