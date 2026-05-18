@@ -108,24 +108,99 @@ module.exports = async function(req, res) {
             const currentAdmin = admin_id || 'system';
 
             // 🚨 [강화된 글로벌 세션 방어막] 데이터 조작/조회 시 무조건 권한 철저히 검증!
-            const secureActions = ['ADD', 'EDIT', 'DELETE', 'DONE', 'UNDO_DONE', 'ADD_QTY', 'UPDATE_ORDER', 'MULTI_DELETE', 'MULTI_DONE', 'MULTI_UNDO_DONE', 'CREATE_ADMIN', 'DELETE_ADMIN', 'REACTIVATE_ADMIN', 'HARD_DELETE_ADMIN', 'RESET_ADMIN_PW', 'CHANGE_MY_PASSWORD', 'UPDATE_RAW_ROW_FULL', 'ADD_RAW_ROW_DIRECT', 'DELETE_RAW_ROW_DIRECT', 'SAVE_COMP_INFO_DB', 'SAVE_GLOBAL_COLOR'];
+            const secureActions = ['ADD', 'EDIT', 'DELETE', 'DONE', 'UNDO_DONE', 'ADD_QTY', 'UPDATE_ORDER', 'MULTI_DELETE', 'MULTI_DONE', 'MULTI_UNDO_DONE', 'CREATE_ADMIN', 'DELETE_ADMIN', 'REACTIVATE_ADMIN', 'HARD_DELETE_ADMIN', 'RESET_ADMIN_PW', 'CHANGE_MY_PASSWORD', 'UPDATE_RAW_ROW_FULL', 'ADD_RAW_ROW_DIRECT', 'DELETE_RAW_ROW_DIRECT', 'SAVE_COMP_INFO_DB', 'SAVE_GLOBAL_COLOR', 'GET_ALL_CONN_LOGS']; 
+            // 👆 맨 끝에 'GET_ALL_CONN_LOGS' 추가 완료
             
+            // ... (기존 코드)
             if (secureActions.includes(action)) {
-                // 1. ID 명찰조차 안 차고 명령을 내리면 즉시 쫓아냄 (스텔스 해킹 차단)
-                if (!admin_id) {
-                    return res.status(200).json({ success: false, forceLogout: true, msg: '로그인 세션이 만료되었거나 유효하지 않습니다.' });
-                }
-                
-                // 2. 명찰을 찼어도, DB에서 'LOCKED(차단)'된 놈이면 즉시 쫓아냄
+                if (!admin_id) { return res.status(200).json({ success: false, forceLogout: true, msg: '로그인 세션이 만료되었거나 유효하지 않습니다.' }); }
                 const [sessionCheck] = await pool.query("SELECT status FROM admins WHERE admin_id = ?", [admin_id]);
-                if (sessionCheck.length === 0 || sessionCheck[0].status === 'LOCKED') {
-                    return res.status(200).json({ success: false, forceLogout: true, msg: '관리자에 의해 계정이 비활성화되었습니다.' });
+                if (sessionCheck.length === 0 || sessionCheck[0].status === 'LOCKED') { return res.status(200).json({ success: false, forceLogout: true, msg: '관리자에 의해 계정이 비활성화되었습니다.' }); }
+            }
+            // 👆 기존 방어막 종료 부분
+
+            // 👇 🚨 [신규 1] 사이트 접속 트래킹 저장 (GUEST, AUTO_LOGIN) 👇
+            if (action === 'LOG_SITE_ACCESS') {
+                try {
+                    // 접속자 IP 추출 (프록시 환경 고려)
+                    let ip = req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'IP 알수없음';
+                    if (ip.includes(',')) ip = ip.split(',')[0]; 
+                    
+                    const { admin_id, access_type, description } = payload;
+                    
+                    // 기존 admin_audit_logs 테이블을 그대로 활용!
+                    await pool.query(
+                        "INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, ?, ?, ?)", 
+                        [admin_id || 'GUEST', access_type || 'GUEST', description || '사이트 접속', ip]
+                    );
+                    return res.status(200).json({ success: true });
+                } catch (e) {
+                    console.error("접속 로그 기록 에러:", e);
+                    return res.status(200).json({ success: false, msg: e.message });
                 }
             }
-            // 👆 🚨 [추가 끝]
+
+            // 👇 🚨 [신규 3] 로그아웃 기록 저장 👇
+            else if (action === 'LOG_LOGOUT') {
+                try {
+                    let ip = req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'IP 알수없음';
+                    if (ip.includes(',')) ip = ip.split(',')[0]; 
+                    
+                    const { admin_id } = payload;
+                    
+                    if (admin_id) {
+                        await pool.query(
+                            "INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, 'LOGOUT', '시스템에서 정상적으로 로그아웃했습니다.', ?)", 
+                            [admin_id, ip]
+                        );
+                    }
+                    return res.status(200).json({ success: true });
+                } catch (e) {
+                    console.error("로그아웃 기록 에러:", e);
+                    return res.status(200).json({ success: false, msg: e.message });
+                }
+            }
+
+            // 👇 🚨 [신규 2] 전체 접속 로그만 쏙 뽑아오는 조회 엔진 👇
+            else if (action === 'GET_ALL_CONN_LOGS') {
+                try {
+                    const limit = parseInt(payload.limit) || 100;
+                    const page = parseInt(payload.page) || 1;
+                    const offset = (page - 1) * limit;
+                    const keyword = payload.keyword || '';
+
+                    // 💡 핵심: 기존 테이블에서 로그인/접속 관련 로그만 필터링해서 가져옴
+                    let queryStr = "SELECT admin_id, action_type, description, ip_address, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at FROM admin_audit_logs WHERE action_type IN ('LOGIN', 'AUTO_LOGIN', 'GUEST', 'LOGOUT')";
+                    let countQueryStr = "SELECT COUNT(*) as cnt FROM admin_audit_logs WHERE action_type IN ('LOGIN', 'AUTO_LOGIN', 'GUEST', 'LOGOUT')";
+                    let params = [];
+
+                    if (keyword) {
+                        const subClause = " AND (admin_id LIKE ? OR action_type LIKE ? OR description LIKE ?)";
+                        queryStr += subClause; countQueryStr += subClause;
+                        params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+                    }
+
+                    queryStr += " ORDER BY id DESC LIMIT ? OFFSET ?";
+                    let queryParams = [...params, limit, offset];
+
+                    const [rows] = await pool.query(queryStr, queryParams);
+                    const [countRows] = await pool.query(countQueryStr, params);
+                    const totalCount = countRows[0].cnt;
+
+                    return res.status(200).json({
+                        success: true,
+                        logs: rows,
+                        totalCount: totalCount,
+                        page: page,
+                        totalPages: Math.ceil(totalCount / limit)
+                    });
+                } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
+            }
+            // 👆 ---------------------------------------------------- 👆
 
             // 🆕 A. 신규 관리자 계정 추가
-            if (action === 'CREATE_ADMIN') {
+            else if (action === 'CREATE_ADMIN') {
+            // ... (기존 코드 계속)
                 try {
                     const { id, name, pw } = data;
                     const [exist] = await pool.query("SELECT admin_id FROM admins WHERE admin_id = ?", [id]);
@@ -442,7 +517,10 @@ module.exports = async function(req, res) {
 
                     const connInfo = `[접속성공] IP: ${ip} | 기기: ${os} | 브라우저: ${browser}`;
                     
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'LOGIN', ?)", [user.admin_id, connInfo]);
+                    // (기존) await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'LOGIN', ?)", [user.admin_id, connInfo]);
+                    
+                    // 🛠️ (수정 후) IP 컬럼을 포함하여 저장!
+                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, 'LOGIN', ?, ?)", [user.admin_id, connInfo, ip]);
 
                     return res.status(200).json({ success: true, admin_id: user.admin_id, role: user.role, name: user.admin_name });
                 } catch (error) {

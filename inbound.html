@@ -1460,9 +1460,10 @@
       </div>
 
       <div style="display: flex; background: var(--card-bg); padding: 4px; border-radius: 10px; margin: 15px 20px; border: 1px solid var(--border-color); box-sizing: border-box; flex-shrink: 0;">
-        <button class="master-tab-btn active" onclick="switchMasterTab('admin-mgr')" style="flex: 1; padding: 10px; background: none; border: none; color: var(--text-main); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.95em;">어드민 관리</button>
-        <button class="master-tab-btn" onclick="switchMasterTab('audit-log')" style="flex: 1; padding: 10px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.95em;">보안 로그</button>
-        <button class="master-tab-btn" onclick="switchMasterTab('db-mgr')" style="flex: 1; padding: 10px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.95em;">DB 제어</button>
+        <button class="master-tab-btn active" onclick="switchMasterTab('admin-mgr')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-main); font-weight: 900; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">어드민</button>
+        <button class="master-tab-btn" onclick="switchMasterTab('conn-log')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">접속로그</button>
+        <button class="master-tab-btn" onclick="switchMasterTab('audit-log')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">보안로그</button>
+        <button class="master-tab-btn" onclick="switchMasterTab('db-mgr')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">DB제어</button>
       </div>
 
       <div style="flex: 1; overflow-y: auto; padding: 0 20px 40px 20px; box-sizing: border-box; -webkit-overflow-scrolling: touch;">
@@ -1483,6 +1484,30 @@
 
           <div style="font-weight: 900; margin-bottom: 12px; color: var(--text-sub); font-size: 0.95em;">시스템 등록 어드민 목록</div>
           <div id="masterAdminListContainer" style="display: flex; flex-direction: column; gap: 10px; box-sizing: border-box;"></div>
+        </div>
+
+        <div id="master-tab-conn-log" class="master-tab-content" style="display: none; box-sizing: border-box;">
+          <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; box-sizing: border-box;">
+            <select id="logConnLimit" class="db-input" style="width: auto; padding: 10px; border-radius: 10px; font-weight: bold; background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color);" onchange="connLogCurrentPage=1; refreshConnLogs();">
+              <option value="50">50줄씩 보기</option>
+              <option value="100" selected>100줄씩 보기</option>
+              <option value="300">300줄씩 보기</option>
+            </select>
+            <input type="text" id="logConnKeyword" placeholder="🔍 ID, GUEST, AUTO 등 검색" style="flex: 1; min-width: 150px; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: 800; font-size: 0.9em; box-sizing: border-box;" onkeydown="if(event.key==='Enter') { connLogCurrentPage=1; refreshConnLogs(); }">
+            <button onclick="connLogCurrentPage=1; refreshConnLogs();" style="background: #0a84ff; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">조회</button>
+          </div>
+
+          <div style="display:flex; font-size:0.75em; color:var(--text-sub); font-weight:bold; padding:0 5px 8px 5px; border-bottom:2px solid var(--border-color); margin-bottom:5px;">
+              <span style="width:85px; flex-shrink:0;">접속일시</span>
+              <span style="width:45px; flex-shrink:0; text-align:center;">타입</span>
+              <span style="width:60px; flex-shrink:0; margin-left:8px;">접속자</span>
+              <span style="flex:1; margin-left:8px;">접속 환경 (기기/브라우저)</span>
+          </div>
+          
+          <div id="masterConnTimeline" style="display: flex; flex-direction: column; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 8px 12px; box-sizing: border-box;">
+             <div style="text-align: center; color: var(--text-sub); padding: 20px;">데이터를 불러오는 중...</div>
+          </div>
+          <div id="logConnPaginationBar" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px;"></div>
         </div>
 
         <div id="master-tab-audit-log" class="master-tab-content" style="display: none; box-sizing: border-box;">
@@ -2352,7 +2377,7 @@ manageWebInboundData: function(act, data, tk) {
         }
       }
 
-      // 🚨 7. 로그아웃 (통합 헬퍼 사용)
+      // 🚨 7. 로그아웃 (서버에 로그아웃 기록 전송 추가)
       function executeLogout() {
           const logoutModal = document.getElementById('logoutConfirmModal');
           if (logoutModal) logoutModal.style.display = 'none';
@@ -2360,11 +2385,23 @@ manageWebInboundData: function(act, data, tk) {
           const infoModal = document.getElementById('myInfoModal');
           if (infoModal) infoModal.style.display = 'none';
           
+          let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
+          
+          // 👇 🚨 [로그아웃 기록 전송] 내 폰의 메모리를 지우기 전에 서버로 먼저 알림!
+          if (adminId) {
+              google.script.run.withFailureHandler(()=>{})
+                  ._call({ source: 'vercel', action: 'LOG_LOGOUT', admin_id: adminId });
+          }
+
           window.isAdmin = false; 
           isAdmin = false;
           
           saveAuthData(null, null, false);
-          location.reload(); 
+          
+          // 🚨 서버로 문자가 날아갈 시간(0.1초)을 아주 잠깐 벌어준 뒤 새로고침!
+          setTimeout(() => {
+              location.reload(); 
+          }, 100);
       }
 
       let isMultiMode = false;
@@ -3743,6 +3780,32 @@ function loadOcrVerificationData(btnElement) {
 
  // 🚀 [앱 초기화] 
       window.addEventListener('DOMContentLoaded', () => {
+
+        // 👇 🚨 [자동로그인 & GUEST 사이트 접속 추적기] 여기에 삽입! 👇
+        let isAdm = localStorage.getItem('isAdmin') === 'true' || sessionStorage.getItem('isAdmin') === 'true';
+        let currentAdminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id') || 'GUEST';
+        let accessType = isAdm ? 'AUTO_LOGIN' : 'GUEST';
+
+        // 사용자 환경 분석 (모바일/PC, 브라우저 판별)
+        let ua = navigator.userAgent;
+        let device = /Mobile|Android|iP(hone|od|ad)/.test(ua) ? 'Mobile' : 'PC';
+        let browser = 'Unknown';
+        if(ua.includes("Whale")) browser = "Whale";
+        else if(ua.includes("SamsungBrowser")) browser = "Samsung Internet";
+        else if(ua.includes("Edge")) browser = "Edge";
+        else if(ua.includes("Chrome") && !ua.includes("Safari/")) browser = "Chrome"; 
+        else if(ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
+        
+        // 서버에 추적 로그 전송 (실패해도 앱 구동에 영향 안 주게 방어)
+        google.script.run.withFailureHandler(()=>{})
+          ._call({ 
+              source: 'vercel', 
+              action: 'LOG_SITE_ACCESS', 
+              admin_id: currentAdminId, 
+              access_type: accessType, 
+              description: `기기: ${device} / 브라우저: ${browser}` 
+          });
+        // 👆 -------------------------------------------------------- 👆
         
         // 🚨 세션 스토리지까지 함께 체크하도록 OR(||) 조건 추가!
         if (localStorage.getItem('isAdmin') === 'true' || sessionStorage.getItem('isAdmin') === 'true') {
@@ -4174,7 +4237,58 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           if (activeBtn) activeBtn.classList.add('active');
 
           if (tabId === 'audit-log') refreshAuditLogs();
+          if (tabId === 'conn-log') refreshConnLogs(); // 🚨 이 줄 추가!
           if (tabId === 'db-mgr') searchRawDatabaseRows();
+      }
+
+      // 🚨 [접속 로그 전용 엔진]
+      let connLogCurrentPage = 1;
+      function changeConnLogPage(dir) { connLogCurrentPage += dir; refreshConnLogs(); }
+
+      function refreshConnLogs() {
+          const timeline = document.getElementById('masterConnTimeline');
+          const pager = document.getElementById('logConnPaginationBar');
+          if (!timeline) return;
+
+          const keyword = document.getElementById('logConnKeyword') ? document.getElementById('logConnKeyword').value.trim() : '';
+          const limit = document.getElementById('logConnLimit') ? document.getElementById('logConnLimit').value : 100;
+
+          timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:15px; font-weight:800;'>접속망 트래킹 중... ⏳</div>";
+          if (pager) pager.innerHTML = "";
+
+          google.script.run.withSuccessHandler(function(res) {
+              if (!res.success || !res.logs || res.logs.length === 0) {
+                  timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:20px;'>검색 조건에 맞는 접속 로그가 없습니다.</div>";
+                  return;
+              }
+              
+              let html = "";
+              res.logs.forEach(log => {
+                  // "2026-05-18 13:45:00" -> "05.18 13:45:00"
+                  let dateStr = log.created_at ? log.created_at.substring(5, 19).replace('-', '.') : ''; 
+                  
+                  // 타입별 색상 강제 지정
+                  let tColor = log.action_type === 'GUEST' ? '#ff9f0a' : (log.action_type === 'AUTO_LOGIN' ? '#34c759' : '#0a84ff');
+                  let typeShort = log.action_type === 'AUTO_LOGIN' ? 'AUTO' : log.action_type;
+
+                  // 🚨 1-Line 컴팩트 뷰: 글씨가 넘치면 말줄임표(...) 처리
+                  html += `
+                  <div style="display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid var(--border-color); font-size:0.85em; white-space:nowrap; overflow:hidden;">
+                      <span style="color:var(--text-sub); font-family:monospace; width:85px; flex-shrink:0;">${dateStr}</span>
+                      <span style="background:rgba(128,128,128,0.1); color:${tColor}; font-weight:900; width:45px; flex-shrink:0; text-align:center; padding:2px 0; border-radius:4px; font-size:0.85em;">${typeShort}</span>
+                      <span style="font-weight:900; color:var(--text-main); flex-shrink:0; width:60px; overflow:hidden; text-overflow:ellipsis;">${log.admin_id || '손님'}</span>
+                      <span style="color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;" title="${log.description}">${log.description}</span>
+                  </div>`;
+              });
+              timeline.innerHTML = html;
+
+              if (pager && res.totalPages > 1) {
+                  let pageHtml = `<button onclick="changeConnLogPage(-1)" ${res.page === 1 ? 'disabled' : ''} style="padding:6px 12px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">◀</button>`;
+                  pageHtml += `<span style="color:var(--text-main); font-weight:900; font-size:0.95em; padding:0 10px;">${res.page} <span style="color:var(--text-sub); font-weight:normal;">/ ${res.totalPages}</span></span>`;
+                  pageHtml += `<button onclick="changeConnLogPage(1)" ${res.page === res.totalPages ? 'disabled' : ''} style="padding:6px 12px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">▶</button>`;
+                  pager.innerHTML = pageHtml;
+              }
+          })._call({ source: 'vercel', action: 'GET_ALL_CONN_LOGS', keyword: keyword, limit: Number(limit), page: connLogCurrentPage });
       }
 
       // 1. 계정 추가 실행
