@@ -4282,13 +4282,22 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
               });
               timeline.innerHTML = html;
 
+              // ... (위쪽 코드는 그대로 유지) ...
+          
               if (pager && res.totalPages > 1) {
                   let pageHtml = `<button onclick="changeConnLogPage(-1)" ${res.page === 1 ? 'disabled' : ''} style="padding:6px 12px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">◀</button>`;
                   pageHtml += `<span style="color:var(--text-main); font-weight:900; font-size:0.95em; padding:0 10px;">${res.page} <span style="color:var(--text-sub); font-weight:normal;">/ ${res.totalPages}</span></span>`;
                   pageHtml += `<button onclick="changeConnLogPage(1)" ${res.page === res.totalPages ? 'disabled' : ''} style="padding:6px 12px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">▶</button>`;
                   pager.innerHTML = pageHtml;
               }
-          })._call({ source: 'vercel', action: 'GET_ALL_CONN_LOGS', keyword: keyword, limit: Number(limit), page: connLogCurrentPage });
+          })._call({ 
+              source: 'vercel', 
+              action: 'GET_ALL_CONN_LOGS', 
+              keyword: keyword, 
+              limit: Number(limit), 
+              page: connLogCurrentPage,
+              admin_id: localStorage.getItem('admin_id') // 👇🚨 이 한 줄을 반드시 추가해 주세요! 🚨👇
+          });
       }
 
       // 1. 계정 추가 실행

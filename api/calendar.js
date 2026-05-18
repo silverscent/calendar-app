@@ -317,8 +317,9 @@ module.exports = async function(req, res) {
                     const page = parseInt(payload.page) || 1;
                     const offset = (page - 1) * limit;
 
-                    let queryStr = "SELECT admin_id, action_type, description, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at FROM admin_audit_logs WHERE 1=1";
-                    let countQueryStr = "SELECT COUNT(*) as cnt FROM admin_audit_logs WHERE 1=1";
+                    // 👇 🚨 이렇게 바꿔주시면 접속/로그인 기록은 보안 로그에 절대 나타나지 않습니다! 🚨 👇
+                    let queryStr = "SELECT admin_id, action_type, description, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at FROM admin_audit_logs WHERE action_type NOT IN ('LOGIN', 'AUTO_LOGIN', 'GUEST', 'LOGOUT')";
+                    let countQueryStr = "SELECT COUNT(*) as cnt FROM admin_audit_logs WHERE action_type NOT IN ('LOGIN', 'AUTO_LOGIN', 'GUEST', 'LOGOUT')";
                     let params = [];
 
                     if (startDate) { 
