@@ -1497,15 +1497,18 @@
             <button onclick="connLogCurrentPage=1; refreshConnLogs();" style="background: #0a84ff; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">조회</button>
           </div>
 
-          <div style="display:flex; font-size:0.75em; color:var(--text-sub); font-weight:bold; padding:0 5px 8px 5px; border-bottom:2px solid var(--border-color); margin-bottom:5px;">
-              <span style="width:85px; flex-shrink:0;">접속일시</span>
-              <span style="width:45px; flex-shrink:0; text-align:center;">타입</span>
-              <span style="width:60px; flex-shrink:0; margin-left:8px;">접속자</span>
-              <span style="flex:1; margin-left:8px;">접속 환경 (기기/브라우저)</span>
-          </div>
-          
-          <div id="masterConnTimeline" style="display: flex; flex-direction: column; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 8px 12px; box-sizing: border-box;">
-             <div style="text-align: center; color: var(--text-sub); padding: 20px;">데이터를 불러오는 중...</div>
+          <div style="width: 100%; overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px 12px; box-sizing: border-box; -webkit-overflow-scrolling: touch;">
+              <div style="min-width: 750px;"> <div style="display:flex; font-size:0.8em; color:var(--text-sub); font-weight:bold; padding:0 5px 8px 5px; border-bottom:2px solid var(--border-color); margin-bottom:5px;">
+                      <span style="width:110px; flex-shrink:0;">접속일시</span>
+                      <span style="width:50px; flex-shrink:0; text-align:center;">타입</span>
+                      <span style="width:80px; flex-shrink:0; margin-left:8px;">접속자</span>
+                      <span style="flex:1; margin-left:12px;">접속 환경 (IP / 기기 / 브라우저)</span>
+                  </div>
+                  
+                  <div id="masterConnTimeline" style="display: flex; flex-direction: column;">
+                     <div style="text-align: center; color: var(--text-sub); padding: 20px;">데이터를 불러오는 중...</div>
+                  </div>
+              </div>
           </div>
           <div id="logConnPaginationBar" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px;"></div>
         </div>
@@ -3786,16 +3789,18 @@ function loadOcrVerificationData(btnElement) {
         let currentAdminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id') || 'GUEST';
         let accessType = isAdm ? 'AUTO_LOGIN' : 'GUEST';
 
-        // 사용자 환경 분석 (모바일/PC, 브라우저 판별)
-        let ua = navigator.userAgent;
-        let device = /Mobile|Android|iP(hone|od|ad)/.test(ua) ? 'Mobile' : 'PC';
+        // 사용자 환경 분석 (모바일/PC, 카카오/네이버/크롬/사파리 완벽 판별)
+        let ua = navigator.userAgent.toLowerCase();
+        let device = /mobile|android|iphone|ipad|ipod/.test(ua) ? 'Mobile' : 'PC';
         let browser = 'Unknown';
-        if(ua.includes("Whale")) browser = "Whale";
-        else if(ua.includes("SamsungBrowser")) browser = "Samsung Internet";
-        else if(ua.includes("Edge")) browser = "Edge";
-        else if(ua.includes("Chrome") && !ua.includes("Safari/")) browser = "Chrome"; 
-        else if(ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
-        
+        if (ua.includes("whale")) browser = "Whale";
+        else if (ua.includes("samsungbrowser")) browser = "Samsung Internet";
+        else if (ua.includes("edg")) browser = "Edge";
+        else if (ua.includes("kakaotalk") || ua.includes("kakao")) browser = "KakaoTalk"; // 카톡 인앱 브라우저
+        else if (ua.includes("naver")) browser = "Naver App"; // 네이버 인앱 브라우저
+        else if (ua.includes("chrome") && !ua.includes("edg")) browser = "Chrome"; 
+        else if (ua.includes("safari") && !ua.includes("chrome")) browser = "Safari";
+        else if (ua.includes("firefox")) browser = "Firefox";
         // 서버에 추적 로그 전송 (실패해도 앱 구동에 영향 안 주게 방어)
         google.script.run.withFailureHandler(()=>{})
           ._call({ 
@@ -4264,20 +4269,24 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
               
               let html = "";
               res.logs.forEach(log => {
-                  // "2026-05-18 13:45:00" -> "05.18 13:45:00"
                   let dateStr = log.created_at ? log.created_at.substring(5, 19).replace('-', '.') : ''; 
-                  
-                  // 타입별 색상 강제 지정
                   let tColor = log.action_type === 'GUEST' ? '#ff9f0a' : (log.action_type === 'AUTO_LOGIN' ? '#34c759' : '#0a84ff');
                   let typeShort = log.action_type === 'AUTO_LOGIN' ? 'AUTO' : log.action_type;
 
-                  // 🚨 1-Line 컴팩트 뷰: 글씨가 넘치면 말줄임표(...) 처리
+                  // 🚨 [IP 복원 패치] 자동로그인/GUEST 설명란에 IP가 없으면 강제로 붙여줌! (과거 데이터 호환)
+                  let desc = log.description || '';
+                  let ipStr = log.ip_address || 'IP알수없음';
+                  if (!desc.includes("IP:")) {
+                      desc = `IP: ${ipStr} | ${desc}`;
+                  }
+
+                  // 🚨 말줄임표(ellipsis)를 완전히 해제해서 긴 내용이 스크롤되어 다 보이게 변경!
                   html += `
-                  <div style="display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid var(--border-color); font-size:0.85em; white-space:nowrap; overflow:hidden;">
-                      <span style="color:var(--text-sub); font-family:monospace; width:85px; flex-shrink:0;">${dateStr}</span>
-                      <span style="background:rgba(128,128,128,0.1); color:${tColor}; font-weight:900; width:45px; flex-shrink:0; text-align:center; padding:2px 0; border-radius:4px; font-size:0.85em;">${typeShort}</span>
-                      <span style="font-weight:900; color:var(--text-main); flex-shrink:0; width:60px; overflow:hidden; text-overflow:ellipsis;">${log.admin_id || '손님'}</span>
-                      <span style="color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;" title="${log.description}">${log.description}</span>
+                  <div style="display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid var(--border-color); font-size:0.9em; white-space:nowrap;">
+                      <span style="color:var(--text-sub); font-family:monospace; width:110px; flex-shrink:0;">${dateStr}</span>
+                      <span style="background:rgba(128,128,128,0.1); color:${tColor}; font-weight:900; width:50px; flex-shrink:0; text-align:center; padding:3px 0; border-radius:4px; font-size:0.85em;">${typeShort}</span>
+                      <span style="font-weight:900; color:var(--text-main); flex-shrink:0; width:80px; margin-left:8px;">${log.admin_id || '손님'}</span>
+                      <span style="color:var(--text-sub); flex:1; margin-left:12px;">${desc}</span>
                   </div>`;
               });
               timeline.innerHTML = html;

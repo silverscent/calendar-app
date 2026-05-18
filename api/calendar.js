@@ -128,10 +128,12 @@ module.exports = async function(req, res) {
                     
                     const { admin_id, access_type, description } = payload;
                     
-                    // 기존 admin_audit_logs 테이블을 그대로 활용!
+                    // 👉 description에 수동 로그인처럼 IP를 강제로 붙여버리자!
+                    let finalDesc = `IP: ${ip} | ${description}`;
+
                     await pool.query(
                         "INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, ?, ?, ?)", 
-                        [admin_id || 'GUEST', access_type || 'GUEST', description || '사이트 접속', ip]
+                        [admin_id || 'GUEST', access_type || 'GUEST', finalDesc, ip]
                     );
                     return res.status(200).json({ success: true });
                 } catch (e) {
