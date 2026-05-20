@@ -1290,6 +1290,15 @@
           <div class="modal-title" style="font-size: 1.1em;">📄 최근 스케쥴 이미지 <span style="font-size:0.7em; color:var(--text-sub); font-weight:normal;">(두 손가락 확대/이동)</span></div>
           <button class="close-btn" onclick="document.getElementById('ocrImageModal').style.display = 'none'">✕</button>
         </div>
+        <div style="padding: 0 15px 10px 15px;">
+    <button onclick="toggleRawOcrView()" style="width: 100%; background: var(--border-color); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; font-weight: bold; cursor: pointer; font-size: 0.9em;">
+        📄 Raw 파싱 텍스트 보기
+    </button>
+</div>
+
+<div id="raw-ocr-textarea-container" style="display: none; padding: 0 15px 15px 15px; width: 100%; box-sizing: border-box;">
+    <textarea id="rawOcrTextArea" readonly style="width: 100%; height: 150px; background: #1e1e1e; color: #00ff00; border: 1px solid var(--border-color); border-radius: 10px; padding: 10px; font-family: monospace; font-size: 0.8em; resize: vertical; box-sizing: border-box;"></textarea>
+</div>
         <div id="ocrImageWrapper">
           <div id="ocrImageContent">로딩 중... ⏳</div>
         </div>
@@ -2883,15 +2892,13 @@ function showLastOcrImage() {
     }).getLastOcrImageUrl();
 }
 
-// 🚨 [수정된 함수] ETA 복구 및 위아래 분할 디자인 적용
 function loadOcrVerificationData(btnElement) {
     const container = document.getElementById('ocrVerifyTableContainer');
     const imgWrapper = document.getElementById('ocrImageWrapper');
     
-    // 이미 표가 열려있으면 다시 닫기 (토글 기능)
     if (container.style.display === 'block') {
         container.style.display = 'none';
-        imgWrapper.style.flex = '1 1 100%'; // 이미지가 다시 전체 화면 차지
+        imgWrapper.style.flex = '1 1 100%';
         btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
         btnElement.style.background = '#4a90e2';
         return;
@@ -2900,64 +2907,62 @@ function loadOcrVerificationData(btnElement) {
     const originalText = btnElement.innerHTML;
     btnElement.innerHTML = '데이터 불러오는 중... ⏳';
     btnElement.disabled = true;
-    btnElement.style.background = '#ccc';
 
-    google.script.run.withSuccessHandler(function(data) {
-        // 표 닫기 버튼으로 변신
-        btnElement.innerHTML = '🔽 데이터 대조창 닫기 (전체 이미지 보기)';
-        btnElement.disabled = false;
-        btnElement.style.background = '#e74c3c';
-        
-        // 💡 윗부분 이미지는 40%만 차지하도록 줄이고, 밑에 표를 보여줍니다!
-        imgWrapper.style.flex = '1 1 40%'; 
-        
-        if (!data || data.length === 0) {
-            container.innerHTML = `<div style="margin-top:20px; background: #ffebee; border-radius: 8px; padding: 15px; text-align: center; color: #c0392b; font-weight: bold;">⚠️ 저장된 파싱 데이터가 없습니다.</div>`;
-            container.style.display = 'block';
-            return;
-        }
+    // 💡 여기서 실제 데이터를 가져오도록 연결
+    google.script.run
+      .withSuccessHandler(function(data) {
+          currentRawOcrString = JSON.stringify(data, null, 2); 
+          
+          btnElement.innerHTML = '🔽 데이터 대조창 닫기 (전체 이미지 보기)';
+          btnElement.disabled = false;
+          btnElement.style.background = '#e74c3c';
+          imgWrapper.style.flex = '1 1 40%';
+          
+          if (!data || data.length === 0) {
+              container.innerHTML = `<div style="padding:20px; text-align:center; color:red;">⚠️ 데이터가 없습니다.</div>`;
+              container.style.display = 'block';
+              return;
+          }
 
-        // ETA 추가 및 엑셀 스타일 틀 고정(sticky) 헤더
-        let tableHtml = `
+          let tableHtml = `
             <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; color: #333;">
-                <thead style="background: #f8f9fa; position: sticky; top: 0; z-index: 5; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                <thead>
                     <tr>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap;">B/L번호</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap; color: #e74c3c;">PAL</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap;">ETA</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap;">입고일</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap;">Type</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd; white-space: nowrap;">인보이스</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">B/L번호</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">PAL</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">ETA</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">입고일</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">Fwd</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">Type</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">인보이스</th>
                         <th style="padding: 8px 4px; border: 1px solid #ddd;">비고</th>
                     </tr>
                 </thead>
-                <tbody>
-        `;
-        
-        data.forEach(r => {
-            tableHtml += `
+                <tbody>`;
+          
+          data.forEach(r => {
+              tableHtml += `
                 <tr>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd; font-weight: 800;">${r.bl || ''}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd; color: #e74c3c; font-weight: bold;">${r.pal || '0'}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.eta || ''}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd; background: #fdfbfb;">${r.inDate || '미정'}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.sType || ''}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.invoice || ''}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd; color: #555; text-align: left; font-size: 11px;">${r.etc || ''}</td>
-                </tr>
-            `;
-        });
-        
-        tableHtml += `</tbody></table>`;
-        container.innerHTML = tableHtml;
-        container.style.display = 'block';
-        
-    }).withFailureHandler(function(err) {
-        btnElement.innerHTML = originalText;
-        btnElement.disabled = false;
-        btnElement.style.background = '#4a90e2';
-        alert("데이터를 불러오지 못했습니다: " + err.message);
-    }).getLastOcrData();
+                    <td style="padding: 6px; border: 1px solid #ddd;">${r.bl || ''}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${r.pal || '0'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${r.eta || ''}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${r.inDate || '미정'}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${r.fwd || ''}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${r.sType || ''}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${r.invoice || ''}</td>
+                    <td style="padding: 6px; border: 1px solid #ddd;">${r.etc || ''}</td>
+                </tr>`;
+          });
+          tableHtml += `</tbody></table>`;
+          container.innerHTML = tableHtml;
+          container.style.display = 'block';
+      })
+      .withFailureHandler(function(err) {
+          btnElement.innerHTML = originalText;
+          btnElement.disabled = false;
+          alert("로드 실패: " + err.message);
+      })
+      .getLastOcrData(); // 이 함수가 Vercel의 action: 'GET_LAST_OCR_DATA'를 부르도록 엔진이 연결되어 있어야 합니다.
 }
 
       function initOcrGestures() {
@@ -4872,6 +4877,24 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
               btn.style.display = 'none';
           }
       }
+
+      // 🚨 [전역 변수] 원본 텍스트 보관용
+let currentRawOcrString = "";
+
+// 📄 Raw 값 보기 토글 함수
+function toggleRawOcrView() {
+    const container = document.getElementById('raw-ocr-textarea-container');
+    const area = document.getElementById('rawOcrTextArea');
+    if (!container || !area) return;
+
+    if (container.style.display === 'none') {
+        area.value = currentRawOcrString || "가져온 Raw 데이터가 존재하지 않습니다.";
+        container.style.display = 'block';
+    } else {
+        container.style.display = 'none';
+    }
+}
+
     </script>
   </body>
 </html>
