@@ -2896,6 +2896,7 @@ function loadOcrVerificationData(btnElement) {
     const container = document.getElementById('ocrVerifyTableContainer');
     const imgWrapper = document.getElementById('ocrImageWrapper');
     
+    // 이미 열려있으면 닫기
     if (container.style.display === 'block') {
         container.style.display = 'none';
         imgWrapper.style.flex = '1 1 100%';
@@ -2904,65 +2905,70 @@ function loadOcrVerificationData(btnElement) {
         return;
     }
 
-    const originalText = btnElement.innerHTML;
     btnElement.innerHTML = '데이터 불러오는 중... ⏳';
     btnElement.disabled = true;
 
-    // 💡 여기서 실제 데이터를 가져오도록 연결
+    // 💡 핵심: 서버에서 데이터를 받아오는 함수를 직접 호출합니다.
     google.script.run
-      .withSuccessHandler(function(data) {
-          currentRawOcrString = JSON.stringify(data, null, 2); 
-          
-          btnElement.innerHTML = '🔽 데이터 대조창 닫기 (전체 이미지 보기)';
-          btnElement.disabled = false;
-          btnElement.style.background = '#e74c3c';
-          imgWrapper.style.flex = '1 1 40%';
-          
-          if (!data || data.length === 0) {
-              container.innerHTML = `<div style="padding:20px; text-align:center; color:red;">⚠️ 데이터가 없습니다.</div>`;
-              container.style.display = 'block';
-              return;
-          }
+        .withSuccessHandler(function(data) {
+            // 1. 데이터가 있는지 확인
+            if (!data || (Array.isArray(data) && data.length === 0)) {
+                alert("⚠️ 저장된 파싱 데이터가 없습니다.");
+                btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
+                btnElement.disabled = false;
+                return;
+            }
 
-          let tableHtml = `
-            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; color: #333;">
-                <thead>
+            // 2. Raw 텍스트를 전역 변수에 강제로 저장 (버튼용)
+            // data 자체가 배열이라면 JSON 문자열로 변환하여 저장
+            currentRawOcrString = JSON.stringify(data, null, 2); 
+            
+            // 3. UI 업데이트
+            btnElement.innerHTML = '🔽 데이터 대조창 닫기 (전체 이미지 보기)';
+            btnElement.disabled = false;
+            btnElement.style.background = '#e74c3c';
+            imgWrapper.style.flex = '1 1 40%';
+            
+            // 4. 테이블 렌더링
+            let tableHtml = `
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; color: #333;">
+                    <thead style="background: #f8f9fa; position: sticky; top: 0; z-index: 5;">
+                        <tr>
+                            <th style="padding: 8px 4px; border: 1px solid #ddd;">B/L번호</th>
+                            <th style="padding: 8px 4px; border: 1px solid #ddd;">PAL</th>
+                            <th style="padding: 8px 4px; border: 1px solid #ddd;">ETA</th>
+                            <th style="padding: 8px 4px; border: 1px solid #ddd;">입고일</th>
+                            <th style="padding: 8px 4px; border: 1px solid #ddd;">Fwd</th>
+                            <th style="padding: 8px 4px; border: 1px solid #ddd;">Type</th>
+                            <th style="padding: 8px 4px; border: 1px solid #ddd;">인보이스</th>
+                            <th style="padding: 8px 4px; border: 1px solid #ddd;">비고</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            
+            data.forEach(r => {
+                tableHtml += `
                     <tr>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">B/L번호</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">PAL</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">ETA</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">입고일</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">Fwd</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">Type</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">인보이스</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">비고</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-          
-          data.forEach(r => {
-              tableHtml += `
-                <tr>
-                    <td style="padding: 6px; border: 1px solid #ddd;">${r.bl || ''}</td>
-                    <td style="padding: 6px; border: 1px solid #ddd;">${r.pal || '0'}</td>
-                    <td style="padding: 6px; border: 1px solid #ddd;">${r.eta || ''}</td>
-                    <td style="padding: 6px; border: 1px solid #ddd;">${r.inDate || '미정'}</td>
-                    <td style="padding: 6px; border: 1px solid #ddd;">${r.fwd || ''}</td>
-                    <td style="padding: 6px; border: 1px solid #ddd;">${r.sType || ''}</td>
-                    <td style="padding: 6px; border: 1px solid #ddd;">${r.invoice || ''}</td>
-                    <td style="padding: 6px; border: 1px solid #ddd;">${r.etc || ''}</td>
-                </tr>`;
-          });
-          tableHtml += `</tbody></table>`;
-          container.innerHTML = tableHtml;
-          container.style.display = 'block';
-      })
-      .withFailureHandler(function(err) {
-          btnElement.innerHTML = originalText;
-          btnElement.disabled = false;
-          alert("로드 실패: " + err.message);
-      })
-      .getLastOcrData(); // 이 함수가 Vercel의 action: 'GET_LAST_OCR_DATA'를 부르도록 엔진이 연결되어 있어야 합니다.
+                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.bl || ''}</td>
+                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.pal || '0'}</td>
+                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.eta || ''}</td>
+                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.inDate || '미정'}</td>
+                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.fwd || ''}</td>
+                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.sType || ''}</td>
+                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.invoice || ''}</td>
+                        <td style="padding: 6px 4px; border: 1px solid #ddd; text-align: left;">${r.etc || ''}</td>
+                    </tr>`;
+            });
+            tableHtml += `</tbody></table>`;
+            container.innerHTML = tableHtml;
+            container.style.display = 'block';
+        })
+        .withFailureHandler(function(err) {
+            btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
+            btnElement.disabled = false;
+            alert("서버 연결 실패: " + err.message);
+        })
+        .getLastOcrData(); // 이 함수가 실제 데이터를 가져와야 합니다.
 }
 
       function initOcrGestures() {
