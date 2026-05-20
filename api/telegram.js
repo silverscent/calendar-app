@@ -775,7 +775,8 @@ module.exports = async function handler(req, res) {
                 if (isTest) { await sendTgMsg(chatId, resultHeader + resultList + `\n💡 (완벽하다면 /ocr 로 확정하세요)`); return res.status(200).send('OK'); }
 
                 let updateCount = 0; let insertCount = 0;
-                // 👇 🚨 [AI 폭주 방어막] AI가 친절하게 '미정'을 넣었더라도 DB에 넣기 전에 가차 없이 잘라냅니다.
+
+                // 👇 🚨 [AI 폭주 방어막] 여기서 미정, ? 등 쓰레기값을 전부 null(빈칸)로 분쇄합니다.
                 const makeSafeDate = (val) => {
                     if (!val) return null;
                     let s = String(val).trim();
@@ -783,17 +784,37 @@ module.exports = async function handler(req, res) {
                     return s.replace(/\//g, '-'); 
                 };
                 // 👆 -------------------------------------------------------------
+
                 for (const r of finalRows) {
-                    let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, ''); let pal = parseInt(r.pal) || 0; let inDate = r.inDate || null; let fwd = r.fwd || '';
-                    let sType = String(r.sType || '').toUpperCase(); let invoice = r.invoice || ''; let etc = r.etc || ''; let eta = r.eta || null; let isAiVal = aiSuccess ? 1 : 0; 
+                    let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, ''); 
+                    let pal = parseInt(r.pal) || 0; 
+                    
+                    let inDate = makeSafeDate(r.inDate); // 👈 🚨 방어막 1
+                    let eta = makeSafeDate(r.eta);       // 👈 🚨 방어막 2
+                    
+                    let fwd = r.fwd || '';
+                    let sType = String(r.sType || '').toUpperCase(); 
+                    let invoice = r.invoice || ''; 
+                    let etc = r.etc || ''; 
+                    let isAiVal = aiSuccess ? 1 : 0; 
+
                     let exist = []; if (invoice) { [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]); }
                     if (exist.length === 0 && bl !== '발행전' && bl !== '') { [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]); }
 
-                    if (exist.length > 0) { await pool.query(`UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`, [bl, pal, inDate, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id]); updateCount++; } 
-                    else { await pool.query(`INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, ?)`, [bl, pal, inDate, sType, fwd, invoice, eta, etc, isAiVal]); insertCount++; }
+                    if (exist.length > 0) { 
+                        await pool.query(`UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`, 
+                        [bl, pal, inDate, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id]); 
+                        updateCount++; 
+                    } 
+                    else { 
+                        await pool.query(`INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, ?)`, 
+                        [bl, pal, inDate, sType, fwd, invoice, eta, etc, isAiVal]); 
+                        insertCount++; 
+                    }
                 }
-                await sendTgMsg(chatId, resultHeader + resultList + `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건)`);
-
+                
+                // 👇 🚨 배포 성공 여부를 확인하기 위해 텔레그램 응답 메시지에 표시를 남깁니다. 👇
+                await sendTgMsg(chatId, resultHeader + resultList + `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건) [🛡️V2 방어막 작동중]`);
                 try {
                     const currentKeys = finalRows.map(r => String(r.bl || '').replace(/[\s•·\-\*]/g, ''));
                     const [pendingRowsInDb] = await pool.query(`SELECT bl_number, pallets FROM inbound WHERE status = '입고대기' AND (receive_date IS NULL OR receive_date = '미정')`);
