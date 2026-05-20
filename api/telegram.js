@@ -775,6 +775,14 @@ module.exports = async function handler(req, res) {
                 if (isTest) { await sendTgMsg(chatId, resultHeader + resultList + `\n💡 (완벽하다면 /ocr 로 확정하세요)`); return res.status(200).send('OK'); }
 
                 let updateCount = 0; let insertCount = 0;
+                // 👇 🚨 [AI 폭주 방어막] AI가 친절하게 '미정'을 넣었더라도 DB에 넣기 전에 가차 없이 잘라냅니다.
+                const makeSafeDate = (val) => {
+                    if (!val) return null;
+                    let s = String(val).trim();
+                    if (!/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(s)) return null;
+                    return s.replace(/\//g, '-'); 
+                };
+                // 👆 -------------------------------------------------------------
                 for (const r of finalRows) {
                     let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, ''); let pal = parseInt(r.pal) || 0; let inDate = r.inDate || null; let fwd = r.fwd || '';
                     let sType = String(r.sType || '').toUpperCase(); let invoice = r.invoice || ''; let etc = r.etc || ''; let eta = r.eta || null; let isAiVal = aiSuccess ? 1 : 0; 
