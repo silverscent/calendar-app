@@ -852,94 +852,56 @@ module.exports = async function handler(req, res) {
 // 🧠 로컬 정규식 파싱 엔진
 // =================================================================
 function parseOcrLinesLocal(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  
-  const cleanBL = v => String(v).replace(/[\s•·\-\*]/g, '');
-  const isBL = v => /^(DSV|BUD|S)\d{6,10}$/i.test(cleanBL(v)) || cleanBL(v).includes('발행전'); 
-  
-  // 🚨 [수정] 수량 인식 강화: 숫자가 1~3자리이고 뒤에 점(.)이 붙어도 PAL로 인식
-  const isPal = v => /^\d{1,3}\.?$/.test(v); 
-  
-  const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v); 
-  const isSType = v => /^(AIR|SEA)$/i.test(v); 
-  const isFwd = v => /^[A-Za-z]+$/i.test(v) && !isSType(v); 
-  
-  // 🚨 [수정] 인보이스 인식 강화: 숫자 7-8자리 또는 PI-XXXX-XXXX 형식 모두 수용
-  const isInvoice = v => /^\d{7,8}$/.test(v) || /^PI-\d{4}-\d{4}$/i.test(v); 
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const cleanBL = v => String(v).replace(/[\s•·\-\*]/g, '');
+    const isBL = v => /^(DSV|BUD|S)\d{6,8}$/i.test(cleanBL(v)) || cleanBL(v) === '발행전';
+    const isPal = v => /^\d{1,3}$/.test(v); 
+    const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v); 
+    const isSType = v => /^(AIR|SEA)$/i.test(v);
+    const isFwd = v => /^[A-Za-z]+$/.test(v) && !isSType(v); 
+    const isInvoice = v => /^\d{7,8}$/.test(v); 
 
-  const rows = []; 
-  let orphanInvoices = [];
-  let orphanEtc = [];
-  let activeRowIndex = 0; 
-
-  const tokens = [];
-  for (let i = 0; i < lines.length; i++) {
-      let raw = lines[i];
-      if (/^(안녕하세요|B\/?L|PAL|ETA|3PL\s*입고|Fwd|S\.?Type|Invoice|ETC|Free time)/i.test(raw)) continue;
-      
-      // 🚨 [수정] 데이터를 조각낼 때, 숫자와 문자가 붙어있어도 쪼개지도록 처리
-      // 예: "172026-06-08" -> "17"과 "2026-06-08"을 분리
-      let processedRaw = raw.replace(/([0-9])([A-Za-z])/g, '$1 $2')
-                            .replace(/([A-Za-z])([0-9])/g, '$1 $2');
-                            
-      const parts = processedRaw.split(/\s+/);
-      tokens.push(...parts);
-  }
-
-  // 2차 패스: 스마트 분배 및 엑스레이 적출
-  for (let raw of tokens) {
-      if (isBL(raw)) {
-          // ... 기존 행 분리 로직 유지 ...
-          if (rows.length > 0) {
-              let lastRow = rows[rows.length - 1];
-              let hasData = lastRow.pal || lastRow.eta || lastRow.inDate || lastRow.sType || lastRow.fwd || lastRow.invoices.length > 0;
-              if (hasData) {
-                  rows.push({ bl: cleanBL(raw), pal: '', eta: '', inDate: '', fwd: '', sType: '', invoices: [...orphanInvoices], etc: [...orphanEtc] });
-                  activeRowIndex = rows.length - 1; 
-                  orphanInvoices = []; orphanEtc = [];
-                  continue;
-              }
-          }
-          rows.push({ bl: cleanBL(raw), pal: '', eta: '', inDate: '', fwd: '', sType: '', invoices: [...orphanInvoices], etc: [...orphanEtc] });
-          orphanInvoices = []; orphanEtc = [];
-          continue; 
-      } 
-      
-      // ... (B/L 등장 전 고아 데이터 처리 로직 동일) ...
-      if (rows.length === 0) {
-          // 인보이스 패턴이 강화되었으므로 여기서 잘 잡음
-          if (isInvoice(raw)) orphanInvoices.push(raw);
-          else orphanEtc.push(raw);
-          continue;
-      }
-
-      let assigned = false;
-      let curr = activeRowIndex;
-      
-      while (curr < rows.length) {
-          // 🚨 수량 할당 로직: raw 값이 "17." 같은 형태여도 parseInt로 잘 처리함
-          if (isPal(raw)) {
-              if (!rows[curr].pal) { rows[curr].pal = parseInt(raw); activeRowIndex = curr; assigned = true; break; }
-          } else if (isDate(raw)) {
-              if (!rows[curr].eta) { rows[curr].eta = raw; activeRowIndex = curr; assigned = true; break; }
-              else if (!rows[curr].inDate) { rows[curr].inDate = raw; activeRowIndex = curr; assigned = true; break; }
-          } else if (isSType(raw)) {
-              if (!rows[curr].sType) { rows[curr].sType = raw.toUpperCase(); activeRowIndex = curr; assigned = true; break; }
-          } else if (isFwd(raw)) {
-              if (!rows[curr].fwd) { rows[curr].fwd = raw; activeRowIndex = curr; assigned = true; break; }
-          } else {
-              break; 
-          }
-          curr++;
-      }
-
-      if (!assigned) {
-          if (isInvoice(raw)) {
-              rows[activeRowIndex].invoices.push(raw);
-          } else {
-              rows[activeRowIndex].etc.push(raw);
-          }
-      }
-  } 
-  return rows.map(r => ({ bl: r.bl, pal: Number(r.pal) || 0, eta: r.eta || '', inDate: r.inDate || '', fwd: r.fwd || '', sType: r.sType || '', invoice: r.invoices.join(', '), etc: r.etc.join(' ') }));
+    const rows = []; let orphanInvoices = []; let orphanEtc = []; let activeRowIndex = 0; const tokens = [];
+    for (let i = 0; i < lines.length; i++) {
+        let raw = lines[i];
+        if (/^(안녕하세요|B\/?L|PAL|ETA|3PL\s*입고|Fwd|S\.?Type|Invoice|ETC|Free time)/i.test(raw)) continue;
+        if (!isBL(raw) && raw.includes(' ')) {
+            const parts = raw.split(/\s+/);
+            const strongTokens = parts.filter(p => isDate(p) || isSType(p) || isInvoice(p) || isBL(p));
+            if (strongTokens.length > 0 && parts.length <= 5) { tokens.push(...parts); continue; }
+        }
+        tokens.push(raw);
+    }
+    for (let raw of tokens) {
+        if (isBL(raw)) {
+            if (rows.length > 0) {
+                let lastRow = rows[rows.length - 1];
+                let hasData = lastRow.pal || lastRow.eta || lastRow.inDate || lastRow.sType || lastRow.fwd || lastRow.invoices.length > 0;
+                if (hasData) { rows.push({ bl: cleanBL(raw), pal: '', eta: '', inDate: '', fwd: '', sType: '', invoices: [...orphanInvoices], etc: [...orphanEtc] }); activeRowIndex = rows.length - 1; orphanInvoices = []; orphanEtc = []; continue; }
+            }
+            rows.push({ bl: cleanBL(raw), pal: '', eta: '', inDate: '', fwd: '', sType: '', invoices: [...orphanInvoices], etc: [...orphanEtc] }); orphanInvoices = []; orphanEtc = []; continue; 
+        } 
+        if (rows.length === 0) {
+            let invMatch = raw.match(/\b\d{7,8}\b/g);
+            if (invMatch && !isDate(raw)) { invMatch.forEach(inv => orphanInvoices.push(inv)); let cleanEtc = raw.replace(/\b\d{7,8}\b/g, '').replace(/\s{2,}/g, ' ').trim(); if (cleanEtc) orphanEtc.push(cleanEtc); } 
+            else if (isInvoice(raw)) { orphanInvoices.push(raw); } else { orphanEtc.push(raw); }
+            continue;
+        }
+        let assigned = false; let curr = activeRowIndex;
+        while (curr < rows.length) {
+            if (isPal(raw)) { if (!rows[curr].pal) { rows[curr].pal = raw; activeRowIndex = curr; assigned = true; break; } } 
+            else if (isDate(raw)) { if (!rows[curr].eta) { rows[curr].eta = raw; activeRowIndex = curr; assigned = true; break; } else if (!rows[curr].inDate) { rows[curr].inDate = raw; activeRowIndex = curr; assigned = true; break; } } 
+            else if (isSType(raw)) { if (!rows[curr].sType) { rows[curr].sType = raw.toUpperCase(); activeRowIndex = curr; assigned = true; break; } } 
+            else if (isFwd(raw)) { if (!rows[curr].fwd) { rows[curr].fwd = raw; activeRowIndex = curr; assigned = true; break; } } else { break; } curr++;
+        }
+        if (!assigned) {
+            if (isInvoice(raw)) { rows[activeRowIndex].invoices.push(raw); } 
+            else if (!isPal(raw) && !isDate(raw) && !isSType(raw) && !isFwd(raw)) {
+                let invMatch = raw.match(/\b\d{7,8}\b/g);
+                if (invMatch) { invMatch.forEach(inv => rows[activeRowIndex].invoices.push(inv)); let cleanEtc = raw.replace(/\b\d{7,8}\b/g, '').replace(/\s{2,}/g, ' ').trim(); if (cleanEtc) rows[activeRowIndex].etc.push(cleanEtc); } 
+                else { rows[activeRowIndex].etc.push(raw); }
+            } else { rows[activeRowIndex].etc.push(raw); }
+        }
+    } 
+    return rows.map(r => ({ bl: r.bl, pal: Number(r.pal) || 0, eta: r.eta || '', inDate: r.inDate || '', fwd: r.fwd || '', sType: r.sType || '', invoice: r.invoices.join(', '), etc: r.etc.join(' ') }));
 }
