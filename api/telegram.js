@@ -836,10 +836,10 @@ module.exports = async function handler(req, res) {
                 await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonUrl, jsonUrl]);
                 await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
                 await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonDataStr, jsonDataStr]);
-                // 🎯 [여기에 삽입하세요!] ------------------------------------------------------------
-                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_RAW', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [extractedText, extractedText]);
-                // ----------------------------------------------------------------------------------
+                // extractedText를 JSON 규격에 맞는 문자열 형태로 변환하여 보냅니다.
+                const jsonRawStr = JSON.stringify(extractedText); 
 
+                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_RAW', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonRawStr, jsonRawStr]);
                 return res.status(200).send('OK');
             }
         } 
