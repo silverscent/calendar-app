@@ -475,62 +475,143 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // ✅ 1. 로그인 로직 (대소문자 무시 + 비활성화 분기 처리 패치)
-            else if (action === 'LOGIN') {
-                try {
-                    const { id, pw } = data; 
-                    
-                    // 🚨 [2번 요구사항] 대소문자 구분 없이(LOWER) DB에서 계정 검색
-                    const [rows] = await pool.query("SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = LOWER(?)", [id]);
+           // ✅ 로그인 로직 (보안 완성형 + 기기 추적 + 최근 로그인 일시 업데이트 완전 통합 패치)
+else if (action === 'LOGIN') {
+    try {
+        const { id, pw } = data; // 프론트엔드에서 전송된 ID와 암호 해시값
+        
+        // 1. IP 추출 및 프록시 환경 정제 (안전한 다중 인프라 대응)
+        let ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.connection?.remoteAddress || 'IP 알수없음';
+        if (ip.includes(',')) {
+            ip = ip.split(',')[0].trim();
+        }
 
-                    if (rows.length === 0) {
-                        return res.status(200).json({ success: false, msg: '아이디 또는 비밀번호가 틀립니다.' });
-                    }
+        // 2. 기기 및 브라우저 정보 분석 (기존의 상세 기기 추적 기능)
+        const ua = req.headers['user-agent'] || '';
+        let os = 'PC';
+        if (/android/i.test(ua)) os = 'Android';
+        else if (/ipad|iphone|ipod/i.test(ua)) os = 'iOS';
+        else if (/mac os/i.test(ua)) os = 'Mac';
+        else if (/windows/i.test(ua)) os = 'Windows';
+        
+        let browser = '알수없음';
+        if (/edg/i.test(ua)) browser = 'Edge';
+        else if (/chrome/i.test(ua)) browser = 'Chrome';
+        else if (/safari/i.test(ua) && !/chrome/i.test(ua)) browser = 'Safari';
+        else if (/firefox/i.test(ua)) browser = 'Firefox';
+        else if (/kakao/i.test(ua)) browser = 'KakaoTalk';
+        else if (/naver/i.test(ua)) browser = 'NaverApp';
 
-                    const user = rows[0];
+        const connInfoBase = `기기: ${os} | 브라우저: ${browser}`;
 
-                    // 🚨 [1번 요구사항] 비활성화된 계정이면 비밀번호 맞는지 볼 필요도 없이 전용 메시지 리턴
-                    if (user.status === 'LOCKED') {
-                        return res.status(200).json({ success: false, msg: '비활성화된 계정입니다. 관리자에게 문의하세요.' });
-                    }
+        // [보안 1단계] 최근 10분간 해당 IP와 ID 조합으로 실패한 이력 카운트 조회
+        const [failCountRows] = await pool.query(
+            `SELECT COUNT(*) as cnt FROM admin_audit_logs 
+             WHERE ip_address = ? AND LOWER(admin_id) = LOWER(?) AND action_type = 'LOGIN_FAILED' 
+               AND created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)`,
+            [ip, id]
+        );
+        const failCount = failCountRows[0].cnt;
 
-                    // 비밀번호 검증
-                    if (user.password_hash !== pw) {
-                        return res.status(200).json({ success: false, msg: '아이디 또는 비밀번호가 틀립니다.' });
-                    }
+        // [보안 2단계] 5회 이상 연속 실패로 해당 ID-IP 조합이 잠긴 상태인 경우
+        if (failCount >= 5) {
+            // 👑 최고관리자 마스터 스텔스 비상 패스 가동
+            if (id.toLowerCase() === 'admin') {
+                const [masterCheck] = await pool.query(
+                    "SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = 'admin'", 
+                    []
+                );
+                
+                // 계정이 존재하고, 비밀번호 해시가 일치하며, 활성화 상태인 경우 잠금 우회 통과
+                if (masterCheck.length > 0 && masterCheck[0].password_hash === pw && masterCheck[0].status === 'ACTIVE') {
                     
-                    // [이하 기존 IP 및 기기 추적 로직 유지]
-                    let ip = req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'IP 알수없음';
-                    if (ip.includes(',')) ip = ip.split(',')[0]; 
-                    const ua = req.headers['user-agent'] || '';
-                    
-                    let os = 'PC';
-                    if (/android/i.test(ua)) os = 'Android';
-                    else if (/ipad|iphone|ipod/i.test(ua)) os = 'iOS';
-                    else if (/mac os/i.test(ua)) os = 'Mac';
-                    else if (/windows/i.test(ua)) os = 'Windows';
-                    
-                    let browser = '알수없음';
-                    if (/edg/i.test(ua)) browser = 'Edge';
-                    else if (/chrome/i.test(ua)) browser = 'Chrome';
-                    else if (/safari/i.test(ua) && !/chrome/i.test(ua)) browser = 'Safari';
-                    else if (/firefox/i.test(ua)) browser = 'Firefox';
-                    else if (/kakao/i.test(ua)) browser = 'KakaoTalk';
-                    else if (/naver/i.test(ua)) browser = 'NaverApp';
+                    // 🕒 [추가] 마스터 계정 최근 로그인 일시 업데이트
+                    await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [masterCheck[0].admin_id]);
 
-                    const connInfo = `[접속성공] IP: ${ip} | 기기: ${os} | 브라우저: ${browser}`;
+                    // 마스터패스 성공 로그 기록
+                    const connInfo = `[👑 마스터패스 성공] IP: ${ip} | ${connInfoBase}`;
+                    await pool.query(
+                        "INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_SUCCESS', ?)",
+                        [ip, masterCheck[0].admin_id, connInfo]
+                    );
                     
-                    // (기존) await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'LOGIN', ?)", [user.admin_id, connInfo]);
-                    
-                    // 🛠️ (수정 후) IP 컬럼을 포함하여 저장!
-                    await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, 'LOGIN', ?, ?)", [user.admin_id, connInfo, ip]);
-
-                    return res.status(200).json({ success: true, admin_id: user.admin_id, role: user.role, name: user.admin_name });
-                } catch (error) {
-                    console.error("로그인 에러:", error);
-                    return res.status(200).json({ success: false, msg: '로그인 처리 중 오류가 발생했습니다.' });
+                    return res.status(200).json({ 
+                        success: true, 
+                        admin_id: masterCheck[0].admin_id, 
+                        name: masterCheck[0].admin_name, 
+                        role: masterCheck[0].role,
+                        msg: "비상 우회 통로로 안전하게 로그인되었습니다."
+                    });
                 }
             }
+
+            // 일반 계정이거나 마스터 암호가 틀린 경우 원천 차단
+            return res.status(200).json({ 
+                success: false, 
+                msg: "⚠️ 비밀번호 5회 실패로 로그인이 임시 제한되었습니다. 10분 후 다시 시도하세요." 
+            });
+        }
+
+        // [보안 3단계] 일반 검증 흐름 (대소문자 무시 및 컬럼명 유지)
+        const [rows] = await pool.query(
+            "SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = LOWER(?)", 
+            [id]
+        );
+
+        // ID가 존재하지 않는 경우 처리
+        if (rows.length === 0) {
+            await pool.query(
+                "INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_FAILED', ?)",
+                [ip, id, `[존재하지 않는 ID 로그인 시도] IP: ${ip} | ${connInfoBase}`]
+            );
+            return res.status(200).json({ success: false, msg: '아이디 또는 비밀번호가 틀립니다.' });
+        }
+
+        const user = rows[0];
+
+        // 비활성화 계정은 비밀번호 검증 전 즉시 전용 메시지 리턴
+        if (user.status === 'LOCKED') {
+            return res.status(200).json({ success: false, msg: '비활성화된 계정입니다. 관리자에게 문의하세요.' });
+        }
+
+        // 비밀번호 해시 검증
+        if (user.password_hash === pw) {
+            
+            // 🕒 [추가] 일반 계정 최근 로그인 일시 업데이트
+            await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [user.admin_id]);
+
+            // 로그인 성공 로그 기록
+            const connInfo = `[접속성공] IP: ${ip} | ${connInfoBase}`;
+            await pool.query(
+                "INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_SUCCESS', ?)",
+                [ip, user.admin_id, connInfo]
+            );
+
+            return res.status(200).json({ 
+                success: true, 
+                admin_id: user.admin_id, 
+                name: user.admin_name, 
+                role: user.role 
+            });
+        } else {
+            // 비밀번호 실패 로그 기록 -> 이 데이터가 쌓여 10분간 자동 잠금을 제어합니다.
+            const connInfo = `[비밀번호 틀림] IP: ${ip} | ${connInfoBase}`;
+            await pool.query(
+                "INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_FAILED', ?)",
+                [ip, user.admin_id, connInfo]
+            );
+
+            return res.status(200).json({ 
+                success: false, 
+                msg: `❌ 비밀번호가 일치하지 않습니다. (현재 10분 내 연속 실패: ${failCount + 1}회 / 5회 실패 시 10분간 자동 잠금)` 
+            });
+        }
+
+    } catch (error) {
+        console.error("🔥 로그인 내부 처리 오류:", error);
+        return res.status(200).json({ success: false, msg: '로그인 처리 중 오류가 발생했습니다.' });
+    }
+}
             
             // 👤 H. [신규] 특정 관리자 접속(로그인) 이력 전용 조회 엔진
             else if (action === 'GET_ADMIN_CONN_LOGS') {
