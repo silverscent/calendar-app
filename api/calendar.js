@@ -865,24 +865,43 @@ else if (action === 'LOGIN') {
                 return res.status(200).json({ success: true, msg: '작업 완료' });
             } 
             // 🎯 [여기서부터 복사해서 새로 붙여넣으세요!] -----------------------------------------
-else if (action === 'GET_LAST_OCR_DATA' || action === 'getLastOcrData') {
+            else if (action === 'GET_LAST_OCR_DATA' || action === 'getLastOcrData') {
     try {
         const [rows] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'LAST_OCR_DATA'");
         const [rawRows] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'LAST_OCR_RAW'");
 
         const parsedDataStr = rows[0] ? rows[0].setting_value : "[]";
-        
-        // 🎯 중요: DB에 JSON 형태로 저장된 텍스트이므로 parseJSON을 거쳐서 따옴표를 벗겨낸 순수 텍스트로 만듭니다.
-        const rawDataStr = rawRows[0] ? parseJSON(rawRows[0].setting_value) : "가져온 Raw 데이터가 존재하지 않습니다.";
+        let rawDataStr = rawRows[0] ? rawRows[0].setting_value : "";
 
+        // 🎯 [핵심 버그 수정 포인트] 
+        // 텔레그램에서 JSON.stringify()로 감싸서 넣었기 때문에 앞뒤에 붙은 큰따옴표(")와 
+        // 줄바꿈 이스케이프(\n)를 안전하게 정형화해주어야 합니다.
+        if (rawDataStr) {
+            try {
+                // 저장된 값이 JSON 형태의 문자열("...텍스트...")이므로 풀어서 순수 글자로 복원합니다.
+                rawDataStr = JSON.parse(rawDataStr); 
+            } catch(e) {
+                // 만약 일반 텍스트 상태로 들어가 있더라도 에러 없이 털어내도록 방어막을 칩니다.
+                rawDataStr = rawRows[0].setting_value; 
+            }
+        }
+
+        if (!rawDataStr) {
+            rawDataStr = "가져온 Raw 데이터가 존재하지 않습니다.";
+        }
+
+        // 프론트엔드로 최종 배달
         return res.status(200).json({
-            parsedData: parseJSON(parsedDataStr),
-            rawData: rawDataStr                  
+            parsedData: parseJSON(parsedDataStr), // 기존 파싱 배열 객체
+            rawData: rawDataStr                  // 완벽히 복원된 순수 원본 텍스트
         });
     } catch (err) {
+        console.error("OCR 데이터 조회 에러:", err);
         return res.status(500).json({ success: false, error: err.message });
     }
 }
+
+
             else {
                 const targetBL = data?.oldBL || '알수없음';
                 const newName = data?.newComp || data?.newBL;
