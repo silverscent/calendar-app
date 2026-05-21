@@ -475,7 +475,7 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-           // ✅ 로그인 로직 (보안 완성형 + 기기 추적 + 최근 로그인 일시 업데이트 완전 통합 패치)
+// ✅ 로그인 로직 (SYSTEM 권한 전용 마스터 패스 + 최근 로그인 일시 업데이트 완전 통합본)
 else if (action === 'LOGIN') {
     try {
         const { id, pw } = data; // 프론트엔드에서 전송된 ID와 암호 해시값
@@ -504,7 +504,7 @@ else if (action === 'LOGIN') {
 
         const connInfoBase = `기기: ${os} | 브라우저: ${browser}`;
 
-        // [보안 1단계] 최근 10분간 해당 IP와 ID 조합으로 실패한 이력 카운트 조회
+        // [보안 1단계] 최근 10분간 해당 IP와 ID 조합으로 실패한 이력 카운트 조회 (대소문자 무시)
         const [failCountRows] = await pool.query(
             `SELECT COUNT(*) as cnt FROM admin_audit_logs 
              WHERE ip_address = ? AND LOWER(admin_id) = LOWER(?) AND action_type = 'LOGIN_FAILED' 
@@ -515,44 +515,47 @@ else if (action === 'LOGIN') {
 
         // [보안 2단계] 5회 이상 연속 실패로 해당 ID-IP 조합이 잠긴 상태인 경우
         if (failCount >= 5) {
-            // 👑 최고관리자 마스터 스텔스 비상 패스 가동
-            if (id.toLowerCase() === 'admin') {
-                const [masterCheck] = await pool.query(
-                    "SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = 'admin'", 
-                    []
+            // 입력한 ID로 계정 정보 조회
+            const [masterCheck] = await pool.query(
+                "SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = LOWER(?)", 
+                [id]
+            );
+            
+            // 👑 오직 최고관리자('SYSTEM') 권한을 가졌고, 진짜 비밀번호를 맞췄을 때만 비상 우회 통과
+            if (
+                masterCheck.length > 0 && 
+                masterCheck[0].password_hash === pw && 
+                masterCheck[0].status === 'ACTIVE' &&
+                masterCheck[0].role === 'SYSTEM' // 👈 오직 나(SYSTEM)만 이 문을 열 수 있습니다.
+            ) {
+                
+                // 최근 로그인 일시 업데이트
+                await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [masterCheck[0].admin_id]);
+
+                // 우회 성공 로그 기록
+                const connInfo = `[👑 최고관리자 잠금 우회 성공] IP: ${ip} | ${connInfoBase}`;
+                await pool.query(
+                    "INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_SUCCESS', ?)",
+                    [ip, masterCheck[0].admin_id, connInfo]
                 );
                 
-                // 계정이 존재하고, 비밀번호 해시가 일치하며, 활성화 상태인 경우 잠금 우회 통과
-                if (masterCheck.length > 0 && masterCheck[0].password_hash === pw && masterCheck[0].status === 'ACTIVE') {
-                    
-                    // 🕒 [추가] 마스터 계정 최근 로그인 일시 업데이트
-                    await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [masterCheck[0].admin_id]);
-
-                    // 마스터패스 성공 로그 기록
-                    const connInfo = `[👑 마스터패스 성공] IP: ${ip} | ${connInfoBase}`;
-                    await pool.query(
-                        "INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_SUCCESS', ?)",
-                        [ip, masterCheck[0].admin_id, connInfo]
-                    );
-                    
-                    return res.status(200).json({ 
-                        success: true, 
-                        admin_id: masterCheck[0].admin_id, 
-                        name: masterCheck[0].admin_name, 
-                        role: masterCheck[0].role,
-                        msg: "비상 우회 통로로 안전하게 로그인되었습니다."
-                    });
-                }
+                return res.status(200).json({ 
+                    success: true, 
+                    admin_id: masterCheck[0].admin_id, 
+                    name: masterCheck[0].admin_name, 
+                    role: masterCheck[0].role,
+                    msg: "비상 우회 통로로 안전하게 로그인되었습니다."
+                });
             }
 
-            // 일반 계정이거나 마스터 암호가 틀린 경우 원천 차단
+            // 일반 관리자('ADMIN') 계정이거나 암호가 틀린 해커는 예외 없이 10분간 원천 차단
             return res.status(200).json({ 
                 success: false, 
                 msg: "⚠️ 비밀번호 5회 실패로 로그인이 임시 제한되었습니다. 10분 후 다시 시도하세요." 
             });
         }
 
-        // [보안 3단계] 일반 검증 흐름 (대소문자 무시 및 컬럼명 유지)
+        // [보안 3단계] 일반 검증 흐름 (대소문자 무시 및 기존 구조 유지)
         const [rows] = await pool.query(
             "SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = LOWER(?)", 
             [id]
@@ -577,7 +580,7 @@ else if (action === 'LOGIN') {
         // 비밀번호 해시 검증
         if (user.password_hash === pw) {
             
-            // 🕒 [추가] 일반 계정 최근 로그인 일시 업데이트
+            // 로그인 성공 시 최근 로그인 일시 업데이트
             await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [user.admin_id]);
 
             // 로그인 성공 로그 기록
