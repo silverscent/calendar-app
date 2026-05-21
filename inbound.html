@@ -2908,67 +2908,68 @@ function loadOcrVerificationData(btnElement) {
     btnElement.innerHTML = '데이터 불러오는 중... ⏳';
     btnElement.disabled = true;
 
-    // 💡 핵심: 서버에서 데이터를 받아오는 함수를 직접 호출합니다.
-    google.script.run
-        .withSuccessHandler(function(data) {
-            // 1. 데이터가 있는지 확인
-            if (!data || (Array.isArray(data) && data.length === 0)) {
-                alert("⚠️ 저장된 파싱 데이터가 없습니다.");
-                btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
-                btnElement.disabled = false;
-                return;
-            }
-
-            // 2. Raw 텍스트를 전역 변수에 강제로 저장 (버튼용)
-            // data 자체가 배열이라면 JSON 문자열로 변환하여 저장
-            currentRawOcrString = JSON.stringify(data, null, 2); 
-            
-            // 3. UI 업데이트
-            btnElement.innerHTML = '🔽 데이터 대조창 닫기 (전체 이미지 보기)';
-            btnElement.disabled = false;
-            btnElement.style.background = '#e74c3c';
-            imgWrapper.style.flex = '1 1 40%';
-            
-            // 4. 테이블 렌더링
-            let tableHtml = `
-                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; color: #333;">
-                    <thead style="background: #f8f9fa; position: sticky; top: 0; z-index: 5;">
-                        <tr>
-                            <th style="padding: 8px 4px; border: 1px solid #ddd;">B/L번호</th>
-                            <th style="padding: 8px 4px; border: 1px solid #ddd;">PAL</th>
-                            <th style="padding: 8px 4px; border: 1px solid #ddd;">ETA</th>
-                            <th style="padding: 8px 4px; border: 1px solid #ddd;">입고일</th>
-                            <th style="padding: 8px 4px; border: 1px solid #ddd;">Fwd</th>
-                            <th style="padding: 8px 4px; border: 1px solid #ddd;">Type</th>
-                            <th style="padding: 8px 4px; border: 1px solid #ddd;">인보이스</th>
-                            <th style="padding: 8px 4px; border: 1px solid #ddd;">비고</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
-            
-            data.forEach(r => {
-                tableHtml += `
-                    <tr>
-                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.bl || ''}</td>
-                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.pal || '0'}</td>
-                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.eta || ''}</td>
-                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.inDate || '미정'}</td>
-                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.fwd || ''}</td>
-                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.sType || ''}</td>
-                        <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.invoice || ''}</td>
-                        <td style="padding: 6px 4px; border: 1px solid #ddd; text-align: left;">${r.etc || ''}</td>
-                    </tr>`;
-            });
-            tableHtml += `</tbody></table>`;
-            container.innerHTML = tableHtml;
-            container.style.display = 'block';
-        })
-        .withFailureHandler(function(err) {
+   // 💡 핵심: 서버에서 데이터를 받아오는 함수를 직접 호출합니다.
+google.script.run
+    .withSuccessHandler(function(data) {
+        // 🔥 1. 데이터가 있는지 확인 (객체 내부의 parsedData 배열을 검사하도록 수정)
+        if (!data || !data.parsedData || (Array.isArray(data.parsedData) && data.parsedData.length === 0)) {
+            alert("⚠️ 저장된 파싱 데이터가 없습니다.");
             btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
             btnElement.disabled = false;
-            alert("서버 연결 실패: " + err.message);
-        })
-        .getLastOcrData(); // 이 함수가 실제 데이터를 가져와야 합니다.
+            return;
+        }
+
+        // 2. Raw 텍스트를 전역 변수에 강제로 저장 (버튼용)
+        // 🎯 서버가 새로 보내주는 순수 텍스트 원본(data.rawData)을 그대로 꽂아줍니다!
+        currentRawOcrString = data.rawData || "가져온 Raw 데이터가 존재하지 않습니다.";
+                
+        // 3. UI 업데이트
+        btnElement.innerHTML = '🔽 데이터 대조창 닫기 (전체 이미지 보기)';
+        btnElement.disabled = false;
+        btnElement.style.background = '#e74c3c';
+        imgWrapper.style.flex = '1 1 40%';
+                
+        // 4. 테이블 렌더링 시작
+        let tableHtml = `
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; color: #333;">
+                <thead style="background: #f8f9fa; position: sticky; top: 0; z-index: 5;">
+                    <tr>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">B/L번호</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">PAL</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">ETA</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">입고일</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">Fwd</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">Type</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">인보이스</th>
+                        <th style="padding: 8px 4px; border: 1px solid #ddd;">비고</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+        
+        // 🔥 4. 테이블 반복문 대상 수정 (data -> data.parsedData)
+        data.parsedData.forEach(r => {
+            tableHtml += `
+                <tr>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.bl || ''}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.pal || '0'}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.eta || ''}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.inDate || '미정'}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.fwd || ''}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.sType || ''}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.invoice || ''}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd; text-align: left;">${r.etc || ''}</td>
+                </tr>`;
+        });
+        tableHtml += `</tbody></table>`;
+        container.innerHTML = tableHtml;
+        container.style.display = 'block';
+    })
+    .withFailureHandler(function(err) {
+        btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
+        btnElement.disabled = false;
+        alert("서버 연결 실패: " + err.message);
+    })
+    .getLastOcrData();
 }
 
       function initOcrGestures() {

@@ -867,6 +867,28 @@ else if (action === 'LOGIN') {
                 }
                 return res.status(200).json({ success: true, msg: '작업 완료' });
             } 
+            // 🎯 [여기서부터 복사해서 새로 붙여넣으세요!] -----------------------------------------
+else if (action === 'GET_LAST_OCR_DATA' || action === 'getLastOcrData') {
+    try {
+        // 1. 파싱된 데이터 객체 가져오기
+        const [rows] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'LAST_OCR_DATA'");
+        // 2. 텔레그램에서 새로 저장해 줄 가공 없는 순수 텍스트 가져오기
+        const [rawRows] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'LAST_OCR_RAW'");
+
+        const parsedDataStr = rows[0] ? rows[0].setting_value : "[]";
+        const rawDataStr = rawRows[0] ? rawRows[0].setting_value : "가져온 Raw 데이터가 존재하지 않습니다.";
+
+        // 3. 프론트엔드가 사용할 수 있도록 두 데이터를 하나의 객체로 묶어서 반환
+        return res.status(200).json({
+            parsedData: parseJSON(parsedDataStr), // 기존 파싱 배열 객체
+            rawData: rawDataStr                  // 👈 우리가 보고 싶어 하던 순수 OCR 원본 글자 정보
+        });
+    } catch (err) {
+        console.error("OCR 데이터 조회 에러:", err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+}
+// ----------------------------------------------------------------------------------
             
             else {
                 const targetBL = data?.oldBL || '알수없음';
