@@ -253,21 +253,22 @@
         color: white;
         box-shadow: 0 4px 10px rgba(255, 59, 48, 0.3);
       }
-      .ocr-btn {
-        background: #0a84ff;
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 10px;
-        font-size: 0.85em;
-        font-weight: 800;
-        cursor: pointer;
-        transition: 0.2s;
-        box-shadow: 0 2px 6px rgba(10, 132, 255, 0.3);
-      }
-      .ocr-btn:active {
-        transform: scale(0.95);
-      }
+      /* 🛠️ 최근OCR 버튼을 다른 버튼들과 동일한 회색 톤으로 통일 */
+.ocr-btn {
+  background: var(--btn-bg);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 0.85em;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.2s;
+  box-shadow: none; /* 파란색 그림자 제거 */
+}
+.ocr-btn:active {
+  transform: scale(0.95);
+}
 
       .legend-bar-wrapper {
         display: flex;
