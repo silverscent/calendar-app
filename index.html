@@ -2242,19 +2242,19 @@
     </div>
 
     <div id="bioPwConfirmModal" class="overlay-modal" style="align-items: center; padding: 20px; box-sizing: border-box; z-index: 3100;" onclick="if (event.target === this) closeBioPwModal();">
-      <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; max-width: 320px; padding: 25px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); margin-bottom: 10vh;">
-        <div style="font-size: 2.5rem; margin-bottom: 10px;">🔐</div>
-        <div style="font-size: 1.15em; font-weight: 900; color: var(--text-main); margin-bottom: 10px;">보안 인증 확인</div>
-        <div style="font-size: 0.85em; color: var(--text-sub); margin-bottom: 20px; word-break: keep-all; line-height: 1.4;">
-          안전한 패스키 발급을 위해<br>현재 계정의 비밀번호를 입력해 주세요.
-        </div>
-        <input type="password" id="bioConfirmPwInput" class="edit-input" placeholder="비밀번호 입력" style="margin-bottom: 20px; text-align: center; font-size: 1.1em;" onkeypress="if(event.key === 'Enter') executeBioRegistration()">
-        <div style="display: flex; gap: 10px;">
-          <button class="cancel-btn" style="flex: 1; padding: 14px; border-radius: 12px; background: var(--bg-color); border: 1px solid var(--border-color);" onclick="closeBioPwModal()">취소</button>
-          <button class="save-btn" style="flex: 1; padding: 14px; border-radius: 12px; font-size: 0.95em;" onclick="executeBioRegistration()">등록 진행</button>
-        </div>
-      </div>
+  <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; max-width: 320px; padding: 25px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); margin-bottom: 10vh;">
+    <div style="font-size: 2.5rem; margin-bottom: 10px;">🔐</div>
+    <div style="font-size: 1.15em; font-weight: 900; color: var(--text-main); margin-bottom: 10px;">보안 인증 확인</div>
+    <div style="font-size: 0.85em; color: var(--text-sub); margin-bottom: 20px; word-break: keep-all; line-height: 1.4;">
+      안전한 패스키 발급을 위해<br>현재 계정의 비밀번호를 입력해 주세요.
     </div>
+    <input type="password" id="bioConfirmPwInput" class="edit-input" placeholder="비밀번호 입력" style="margin-bottom: 20px; text-align: center; font-size: 1.1em;">
+    <div style="display: flex; gap: 10px;">
+      <button type="button" id="bioCancelBtn" class="cancel-btn" style="flex: 1; padding: 14px; border-radius: 12px; background: var(--bg-color); border: 1px solid var(--border-color);">취소</button>
+      <button type="button" id="bioSubmitBtn" class="save-btn" style="flex: 1; padding: 14px; border-radius: 12px; font-size: 0.95em;">등록 진행</button>
+    </div>
+  </div>
+</div>
 
     <div id="adminLoginModal" class="overlay-modal" style="align-items: center; padding: 20px; box-sizing: border-box;" onclick="if (event.target === this) this.style.display = 'none';">
       <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; margin-bottom: 10vh; max-width: 340px; padding: 35px 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
@@ -4229,19 +4229,54 @@ manageWebInboundData: function(act, data, tk) {
           document.getElementById('toggleBioAuth').checked = false; 
       }
 
-      // 🚨 [핵심 엔진] iOS PWA 제스처 만료를 막기 위해 패스키 발급을 클릭 최상단으로 전면 배치!
-async function executeBioRegistration() {
-    let adminPw = document.getElementById('bioConfirmPwInput').value.trim();
+// 💡 [PWA 및 사파리 오류 원천 차단] DOM 로드 시점에 완벽하게 일대일 리스너 바인딩
+document.addEventListener("DOMContentLoaded", function() {
+    const bioSubmitBtn = document.getElementById('bioSubmitBtn');
+    const bioCancelBtn = document.getElementById('bioCancelBtn');
+    const bioPwInput = document.getElementById('bioConfirmPwInput');
+
+    if (bioSubmitBtn) {
+        bioSubmitBtn.removeEventListener('click', initBioProcess);
+        bioSubmitBtn.addEventListener('click', initBioProcess);
+    }
+    if (bioCancelBtn) {
+        bioCancelBtn.onclick = function() { closeBioPwModal(); };
+    }
+    if (bioPwInput) {
+        bioPwInput.onkeypress = function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                initBioProcess(e);
+            }
+        };
+    }
+});
+
+// 💡 [핵심 브릿지] 버튼 클릭 순간 '순수 동기 컨텍스트'를 확보하여 iOS PWA 웹앱 엔진의 제스처 제한을 즉시 해제합니다.
+async function initBioProcess(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation(); // 사파리 중복 이벤트 버블링 차단
+    }
+
+    const pwInput = document.getElementById('bioConfirmPwInput');
+    let adminPw = pwInput ? pwInput.value.trim() : '';
     if (!adminPw) { alert("비밀번호를 입력해 주세요."); return; }
-    
+
+    // 🚨 유저 제스처 토큰이 100% 살아있는 이 흐름을 그대로 패스키 엔진으로 토스합니다.
+    await executeBioRegistration(adminPw);
+}
+
+// 🚨 [패스키 핵심 제어 엔진]
+async function executeBioRegistration(adminPw) {
     let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
 
-    // 🚨 [PWA 핵심 수정] 유저 클릭 직후 어떤 await도 거치지 않고 "즉시" 패스키 창을 실행합니다.
+    // 1️⃣ PWA 우회: 어떤 비동기(await) 대기선도 만나기 전에 패스키 인증창부터 즉시 실행!
     try {
         const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
         const userId = new Uint8Array(16); window.crypto.getRandomValues(userId);
 
-        await navigator.credentials.create({
+        const credential = await navigator.credentials.create({
             publicKey: {
                 challenge: challenge.buffer,
                 rp: { name: "Coloplast 시스템", id: window.location.hostname },
@@ -4251,32 +4286,47 @@ async function executeBioRegistration() {
                 timeout: 60000
             }
         });
+
+        if (!credential) throw new Error("패스키 토큰 취득 실패");
+
     } catch (err) {
         console.warn("패스키 생성 실패/취소:", err);
         showToast(`⚠️ 생체 인증 생성이 취소되었습니다.`, 2500);
-        document.getElementById('toggleBioAuth').checked = false;
-        return; // 취소 시 프로세스 중단
+        const toggle = document.getElementById('toggleBioAuth');
+        if (toggle) toggle.checked = false;
+        return; // 취소 시 하위 검증 프로세스 전면 차단
     }
 
-    // 💡 패스키가 기기에 무사히 만들어진 '후'에 모달을 닫고 비번 해싱을 진행합니다.
-    document.getElementById('bioPwConfirmModal').style.display = 'none';
+    // 2️⃣ 패스키가 기기에 안전하게 발급 완료된 '후' 모달을 닫고 무거운 암호화 및 서버 검증을 시작합니다.
+    const modal = document.getElementById('bioPwConfirmModal');
+    if (modal) modal.style.display = 'none';
+    
     showToast("서버 보안 검증 중...", 0);
     
-    // 유저 제스처 보호 목적을 달성했으므로 이제 안심하고 무거운 암호화(await)를 수행합니다.
+    // 제스처 만료 걱정이 없어진 시점이므로 이제 안심하고 await 해싱을 처리합니다.
     const hashedPw = await encryptSHA256(adminPw); 
 
-    // 🚨 기기에 패스키가 무사히 등록되었으므로, 최종적으로 서버 검증 요청
-    google.script.run.withSuccessHandler(function(res) {
-        if (res.success) {
-            localStorage.setItem('bio_registered', 'true');
-            localStorage.setItem('bio_id', adminId);
-            localStorage.setItem('bio_pw', hashedPw); 
-            showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
-        } else {
-            alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.\n(※ 기기에 방금 저장된 패스키는 무효 처리되므로 삭제 권장)");
-            document.getElementById('toggleBioAuth').checked = false;
-        }
-    }).login(adminId, hashedPw);
+    // 3️⃣ Google Apps Script 백엔드 연동 및 로컬 환경 최종 승인
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(function(res) {
+            if (res.success) {
+                localStorage.setItem('bio_registered', 'true');
+                localStorage.setItem('bio_id', adminId);
+                localStorage.setItem('bio_pw', hashedPw); 
+                showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
+                
+                // 입력 정보 청소
+                const pwInput = document.getElementById('bioConfirmPwInput');
+                if (pwInput) pwInput.value = "";
+            } else {
+                alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.\n(※ 기기에 방금 저장된 패스키는 무효 처리되므로 삭제 권장)");
+                const toggle = document.getElementById('toggleBioAuth');
+                if (toggle) toggle.checked = false;
+            }
+        }).login(adminId, hashedPw);
+    } else {
+        showToast("⚠️ 시스템 연결에 실패했습니다.", 2500);
+    }
 }
 
       
