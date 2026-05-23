@@ -1,6 +1,9 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
+// 💡 [수정] DB 연결 풀을 최상단 전역 스코프로 이동 (커넥션 재사용으로 응답 속도 극대화)
+const pool = mysql.createPool(process.env.DATABASE_URL);
+
 module.exports = async function(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -8,7 +11,7 @@ module.exports = async function(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     try {
-        const pool = mysql.createPool(process.env.DATABASE_URL);
+        // 💡 내부의 기존 'const pool = ...' 한 줄은 지우고, pool.query 구문들은 그대로 둡니다.
 
         // ✅ 공통 함수는 안전하게 상단에 한 번만 선언
         const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
