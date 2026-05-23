@@ -4229,16 +4229,13 @@ manageWebInboundData: function(act, data, tk) {
           document.getElementById('toggleBioAuth').checked = false; 
       }
 
-// 💡 [PWA 및 사파리 오류 원천 차단] DOM 로드 시점에 완벽하게 일대일 리스너 바인딩
+// 💡 [iOS PWA 샌드박스 완벽 우회] 클릭 이벤트 몸체 내에 패스키 엔진을 직통 배치합니다.
 document.addEventListener("DOMContentLoaded", function() {
     const bioSubmitBtn = document.getElementById('bioSubmitBtn');
     const bioCancelBtn = document.getElementById('bioCancelBtn');
     const bioPwInput = document.getElementById('bioConfirmPwInput');
 
-    if (bioSubmitBtn) {
-        bioSubmitBtn.removeEventListener('click', initBioProcess);
-        bioSubmitBtn.addEventListener('click', initBioProcess);
-    }
+    // 1️⃣ 취소 버튼 및 엔터키 이벤트 바인딩
     if (bioCancelBtn) {
         bioCancelBtn.onclick = function() { closeBioPwModal(); };
     }
@@ -4246,89 +4243,89 @@ document.addEventListener("DOMContentLoaded", function() {
         bioPwInput.onkeypress = function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                initBioProcess(e);
+                if (bioSubmitBtn) bioSubmitBtn.click(); // 엔터 입력 시 등록 버튼 클릭을 강제 트리거
             }
         };
     }
-});
 
-// 💡 [핵심 브릿지] 버튼 클릭 순간 '순수 동기 컨텍스트'를 확보하여 iOS PWA 웹앱 엔진의 제스처 제한을 즉시 해제합니다.
-async function initBioProcess(e) {
-    if (e) {
-        e.preventDefault();
-        e.stopPropagation(); // 사파리 중복 이벤트 버블링 차단
-    }
-
-    const pwInput = document.getElementById('bioConfirmPwInput');
-    let adminPw = pwInput ? pwInput.value.trim() : '';
-    if (!adminPw) { alert("비밀번호를 입력해 주세요."); return; }
-
-    // 🚨 유저 제스처 토큰이 100% 살아있는 이 흐름을 그대로 패스키 엔진으로 토스합니다.
-    await executeBioRegistration(adminPw);
-}
-
-// 🚨 [패스키 핵심 제어 엔진]
-async function executeBioRegistration(adminPw) {
-    let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
-
-    // 1️⃣ PWA 우회: 어떤 비동기(await) 대기선도 만나기 전에 패스키 인증창부터 즉시 실행!
-    try {
-        const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
-        const userId = new Uint8Array(16); window.crypto.getRandomValues(userId);
-
-        const credential = await navigator.credentials.create({
-            publicKey: {
-                challenge: challenge.buffer,
-                rp: { name: "Coloplast 시스템", id: window.location.hostname },
-                user: { id: userId.buffer, name: adminId, displayName: adminId },
-                pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-                authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
-                timeout: 60000
+    // 2️⃣ [핵심] 등록 진행 버튼 클릭 리스너 세팅 (기존 리스너 완전 제거 후 단일 결합)
+    if (bioSubmitBtn) {
+        bioSubmitBtn.onclick = null; // 인라인 바인딩 커넥션 완전히 컷트
+        
+        bioSubmitBtn.addEventListener('click', async function(e) {
+            // 🚨 유저의 손가락이 화면을 누른 바로 그 실행 켄텍스트(Sync-Context) 시작점
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation(); // 사파리 중복 실행 및 이벤트 버블링 차단
             }
-        });
 
-        if (!credential) throw new Error("패스키 토큰 취득 실패");
+            // 폼 입력값 확인
+            const pwInput = document.getElementById('bioConfirmPwInput');
+            let adminPw = pwInput ? pwInput.value.trim() : '';
+            if (!adminPw) { alert("비밀번호를 입력해 주세요."); return; }
 
-    } catch (err) {
-        console.warn("패스키 생성 실패/취소:", err);
-        showToast(`⚠️ 생체 인증 생성이 취소되었습니다.`, 2500);
-        const toggle = document.getElementById('toggleBioAuth');
-        if (toggle) toggle.checked = false;
-        return; // 취소 시 하위 검증 프로세스 전면 차단
-    }
+            let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
 
-    // 2️⃣ 패스키가 기기에 안전하게 발급 완료된 '후' 모달을 닫고 무거운 암호화 및 서버 검증을 시작합니다.
-    const modal = document.getElementById('bioPwConfirmModal');
-    if (modal) modal.style.display = 'none';
-    
-    showToast("서버 보안 검증 중...", 0);
-    
-    // 제스처 만료 걱정이 없어진 시점이므로 이제 안심하고 await 해싱을 처리합니다.
-    const hashedPw = await encryptSHA256(adminPw); 
+            // 🚨 [PWA 우회 치트키] 클릭 함수 스코프 내에서 어떠한 우회 함수나 가드를 거치지 않고 
+            // `navigator.credentials.create`를 최고 선순위로 직격 호출합니다.
+            try {
+                const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
+                const userId = new Uint8Array(16); window.crypto.getRandomValues(userId);
 
-    // 3️⃣ Google Apps Script 백엔드 연동 및 로컬 환경 최종 승인
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-        google.script.run.withSuccessHandler(function(res) {
-            if (res.success) {
-                localStorage.setItem('bio_registered', 'true');
-                localStorage.setItem('bio_id', adminId);
-                localStorage.setItem('bio_pw', hashedPw); 
-                showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
-                
-                // 입력 정보 청소
-                const pwInput = document.getElementById('bioConfirmPwInput');
-                if (pwInput) pwInput.value = "";
-            } else {
-                alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.\n(※ 기기에 방금 저장된 패스키는 무효 처리되므로 삭제 권장)");
+                const credential = await navigator.credentials.create({
+                    publicKey: {
+                        challenge: challenge.buffer,
+                        rp: { name: "Coloplast 시스템", id: window.location.hostname },
+                        user: { id: userId.buffer, name: adminId, displayName: adminId },
+                        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+                        authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
+                        timeout: 60000
+                    }
+                });
+
+                if (!credential) throw new Error("패스키 토큰 취득 실패");
+
+            } catch (err) {
+                console.warn("패스키 생성 실패/취소:", err);
+                showToast(`⚠️ 생체 인증 생성이 취소되었습니다.`, 2500);
                 const toggle = document.getElementById('toggleBioAuth');
                 if (toggle) toggle.checked = false;
+                return; // 인증 실패/취소 시 프로세스 즉시 락(Lock)
             }
-        }).login(adminId, hashedPw);
-    } else {
-        showToast("⚠️ 시스템 연결에 실패했습니다.", 2500);
-    }
-}
 
+            // =======================================================================
+            // 💡 [안전지대] 기기 생체인증(FaceID/지문)이 완벽히 통과된 후 후속 절차 처리
+            // =======================================================================
+            const modal = document.getElementById('bioPwConfirmModal');
+            if (modal) modal.style.display = 'none';
+            
+            showToast("서버 보안 검증 중...", 0);
+            
+            // 무거운 암호화 연산은 이미 생체인증 세션을 안전하게 확보한 뒤에 수행하므로 지연 제약이 없습니다.
+            const hashedPw = await encryptSHA256(adminPw); 
+
+            // Google Apps Script 백엔드 전송 및 로컬 스토리지 데이터 세팅
+            if (typeof google !== 'undefined' && google.script && google.script.run) {
+                google.script.run.withSuccessHandler(function(res) {
+                    if (res.success) {
+                        localStorage.setItem('bio_registered', 'true');
+                        localStorage.setItem('bio_id', adminId);
+                        localStorage.setItem('bio_pw', hashedPw); 
+                        showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
+                        
+                        if (pwInput) pwInput.value = "";
+                    } else {
+                        alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.\n(※ 기기에 방금 저장된 패스키는 무효 처리되므로 삭제 권장)");
+                        const toggle = document.getElementById('toggleBioAuth');
+                        if (toggle) toggle.checked = false;
+                    }
+                }).login(adminId, hashedPw);
+            } else {
+                showToast("⚠️ 시스템 연결에 실패했습니다.", 2500);
+            }
+        });
+    }
+});
       
       // 🚨 8. 로그아웃 (서버에 로그아웃 기록 전송 추가)
       function executeLogout() {
