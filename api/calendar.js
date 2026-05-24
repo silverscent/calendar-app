@@ -180,7 +180,7 @@ module.exports = async function(req, res) {
                     let params = [];
 
                     if (keyword) {
-                        const subClause = " AND (admin_id LIKE ? OR action_type LIKE ? OR description LIKE ?)";
+                        const subClause = " AND (LOWER(admin_id) LIKE LOWER(?) OR LOWER(action_type) LIKE LOWER(?) OR LOWER(description) LIKE LOWER(?))";
                         queryStr += subClause; countQueryStr += subClause;
                         params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
                     }
@@ -339,7 +339,7 @@ module.exports = async function(req, res) {
                     }
                     if (keyword) { 
                         // 🚨 [패치] admin_id, description 뿐만 아니라 action_type(액션)까지 검색 대상에 포함!
-                        const subClause = " AND (admin_id LIKE ? OR description LIKE ? OR action_type LIKE ?)";
+                        const subClause = " AND (LOWER(admin_id) LIKE LOWER(?) OR LOWER(description) LIKE LOWER(?) OR LOWER(action_type) LIKE LOWER(?))";
                         queryStr += subClause; countQueryStr += subClause; 
                         params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`); 
                     }
@@ -625,7 +625,7 @@ else if (action === 'LOGIN') {
                     const { targetId } = data;
                     // 최근 로그인 기록 15개를 시간 역순으로 로드
                     const [rows] = await pool.query(
-                        "SELECT description, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at FROM admin_audit_logs WHERE admin_id = ? AND action_type = 'LOGIN' ORDER BY id DESC LIMIT 15",
+                        "SELECT description, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at FROM admin_audit_logs WHERE admin_id = ? AND action_type IN ('LOGIN', 'AUTO_LOGIN', 'LOGOUT') ORDER BY id DESC LIMIT 15",
                         [targetId]
                     );
                     return res.status(200).json({ success: true, logs: rows });
