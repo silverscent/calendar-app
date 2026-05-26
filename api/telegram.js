@@ -785,13 +785,23 @@ module.exports = async function handler(req, res) {
                 };
                 // 👆 -------------------------------------------------------------
 
-                // 🚀 [추가] DB에서 필터 가져오기 (루프 외부에서 선언!)
+                // 🚀 [1단계] 루프 시작 전 완벽한 DB 로드 (이중 인코딩 껍질 벗기기)
 let customFilters = [];
 try {
     const [fRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_ETC_FILTERS'`);
     if (fRows.length > 0) {
-        customFilters = JSON.parse(fRows[0].setting_value || '[]');
+        let rawVal = fRows[0].setting_value;
+        
+        // MySQL JSON 특성상 따옴표가 두 번 감싸져 있다면 완벽하게 배열로 깎아냅니다.
+        if (typeof rawVal === 'string') {
+            if (rawVal.startsWith('"') && rawVal.endsWith('"')) rawVal = JSON.parse(rawVal);
+            customFilters = JSON.parse(rawVal);
+        } else {
+            customFilters = rawVal;
+        }
     }
+    // 안전장치: 결과물이 배열이 아니면 빈 배열로 초기화
+    if (!Array.isArray(customFilters)) customFilters = [];
 } catch(e) {
     console.error("필터 데이터 로드 실패:", e);
 }
@@ -808,18 +818,27 @@ try {
                     let invoice = r.invoice || ''; 
                     let etc = r.etc || ''; 
 
-                    // 👇 🚨 [여기에 추가하세요!] ETC 동적 필터링 가동 구역
-                    // 1. [고정 패턴] N월 N주차, 마지막주 등 자동 증발
-                    etc = etc.replace(/\d+월\s*(첫|둘째|둘쨋|셋째|셋쨋|넷째|넷쨋|다섯|마지막)?\s*주/g, '');
+    // 1. [동적 패턴] 관리자 커스텀 필터 단어 삭제
+    customFilters.forEach(word => {
+        const cleanWord = word.trim();
+        if (cleanWord) {
+            // 정규식을 사용해 문장 내 흩어진 동일 단어를 모두 폭파합니다.
+            const regex = new RegExp(cleanWord, 'g');
+            etc = etc.replace(regex, '');
+        }
+    });
+
+    // 2. [고정 패턴] 잘 작동하던 기존 주차 삭제 로직 (유지)
+    etc = etc.replace(/\d+월\s*(첫|둘째|둘쨋|셋째|셋쨋|넷째|넷쨋|다섯|마지막)?\s*주/g, '');
+
+    // 3. [마감 청소] 양 끝의 슬래시, 대시, 쉼표, 공백 정리
+    etc = etc.replace(/^[\s\/,|_|-]+|[\s\/,|_|-]+$/g, '').replace(/\/+/g, '/').trim();
     
-                    // 2. [동적 패턴] 관리자가 등록한 단어 증발
-                    customFilters.forEach(word => {
-                    if (word && word.trim()) etc = etc.split(word).join(''); // 정규식 꼬임 방지 스플릿
-                    });
+    // 🚨 [가장 중요] 가공이 끝난 깨끗한 값을 원본 객체에 반드시 다시 덮어씌웁니다! 
+    // (이 작업을 해야 '최근OCR' 대조 화면에도 깨끗한 텍스트가 표시됩니다)
+    r.etc = etc; 
     
-                    // 3. [마감 청소] 찌꺼기 기호(/, -, 공백) 청소
-                    etc = etc.replace(/^[\s\/,|_|-]+|[\s\/,|_|-]+$/g, '').replace(/\/+/g, '/').trim();
-                    // 👆 ----------------------------------------------------
+    // ... 이하 기존 DB INSERT / UPDATE 쿼리문 유지 ...
 
                     let isAiVal = aiSuccess ? 1 : 0; 
 
