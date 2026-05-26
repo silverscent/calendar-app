@@ -785,6 +785,17 @@ module.exports = async function handler(req, res) {
                 };
                 // 👆 -------------------------------------------------------------
 
+                // 🚀 [추가] DB에서 필터 가져오기 (루프 외부에서 선언!)
+let customFilters = [];
+try {
+    const [fRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_ETC_FILTERS'`);
+    if (fRows.length > 0) {
+        customFilters = JSON.parse(fRows[0].setting_value || '[]');
+    }
+} catch(e) {
+    console.error("필터 데이터 로드 실패:", e);
+}
+
                 for (const r of finalRows) {
                     let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, ''); 
                     let pal = parseInt(r.pal) || 0; 
@@ -799,7 +810,7 @@ module.exports = async function handler(req, res) {
 
                     // 👇 🚨 [여기에 추가하세요!] ETC 동적 필터링 가동 구역
                     // 1. [고정 패턴] N월 N주차, 마지막주 등 자동 증발
-                    //etc = etc.replace(/\d+월\s*(첫|둘째|둘쨋|셋째|셋쨋|넷째|넷쨋|다섯|마지막)?\s*주/g, '');
+                    etc = etc.replace(/\d+월\s*(첫|둘째|둘쨋|셋째|셋쨋|넷째|넷쨋|다섯|마지막)?\s*주/g, '');
     
                     // 2. [동적 패턴] 관리자가 등록한 단어 증발
                     customFilters.forEach(word => {
