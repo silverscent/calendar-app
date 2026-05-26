@@ -704,6 +704,10 @@ else if (action === 'LOGIN') {
             
             else if (action === 'GET_COMP_INFO_DB') { const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`); return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {}); }
             else if (action === 'SAVE_COMP_INFO_DB') { const jsonStr = JSON.stringify(data); await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('COMP_INFO_DB', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]); return res.status(200).json({ success: true }); }
+            // 👇 🚨 [여기에 추가하세요!] OCR 동적 필터 저장/불러오기 API
+            else if (action === 'GET_OCR_FILTERS') { const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_ETC_FILTERS'`); return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : []); }
+            else if (action === 'SAVE_OCR_FILTERS') { const jsonStr = JSON.stringify(data); await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_ETC_FILTERS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]); return res.status(200).json({ success: true }); }
+            // 👆 ----------------------------------------------------
             else if (action === 'GET_GLOBAL_COLORS') { const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'GLOBAL_COMPANY_COLORS'`); return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {}); }
             else if (action === 'SAVE_GLOBAL_COLOR') { 
                 const compName = data?.compName || payload.compName;

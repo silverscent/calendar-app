@@ -796,6 +796,20 @@ module.exports = async function handler(req, res) {
                     let sType = String(r.sType || '').toUpperCase(); 
                     let invoice = r.invoice || ''; 
                     let etc = r.etc || ''; 
+
+                    // 👇 🚨 [여기에 추가하세요!] ETC 동적 필터링 가동 구역
+                    // 1. [고정 패턴] N월 N주차, 마지막주 등 자동 증발
+                    //etc = etc.replace(/\d+월\s*(첫|둘째|둘쨋|셋째|셋쨋|넷째|넷쨋|다섯|마지막)?\s*주/g, '');
+    
+                    // 2. [동적 패턴] 관리자가 등록한 단어 증발
+                    customFilters.forEach(word => {
+                    if (word && word.trim()) etc = etc.split(word).join(''); // 정규식 꼬임 방지 스플릿
+                    });
+    
+                    // 3. [마감 청소] 찌꺼기 기호(/, -, 공백) 청소
+                    etc = etc.replace(/^[\s\/,|_|-]+|[\s\/,|_|-]+$/g, '').replace(/\/+/g, '/').trim();
+                    // 👆 ----------------------------------------------------
+
                     let isAiVal = aiSuccess ? 1 : 0; 
 
                     let exist = []; if (invoice) { [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]); }

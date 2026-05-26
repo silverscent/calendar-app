@@ -1482,6 +1482,7 @@
         <button class="master-tab-btn" onclick="switchMasterTab('conn-log')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">접속로그</button>
         <button class="master-tab-btn" onclick="switchMasterTab('audit-log')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">보안로그</button>
         <button class="master-tab-btn" onclick="switchMasterTab('db-mgr')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">DB제어</button>
+        <button class="master-tab-btn" onclick="switchMasterTab('filter-mgr')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">필터관리</button>
       </div>
 
       <div style="flex: 1; overflow-y: auto; padding: 0 20px 40px 20px; box-sizing: border-box; -webkit-overflow-scrolling: touch;">
@@ -1580,6 +1581,23 @@
           <div id="dbMasterPaginationBar" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px; box-sizing: border-box;"></div>
         </div>
 
+        <div id="master-tab-filter-mgr" class="master-tab-content" style="display: none; box-sizing: border-box;">
+  <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; box-sizing: border-box;">
+    
+    <div style="font-weight: 900; margin-bottom: 15px; color: var(--text-main); font-size: 1.05em;">⚙️ OCR ETC 필터 단어 관리</div>
+    
+    <div style="display: flex; gap: 8px; margin-bottom: 20px; box-sizing: border-box;">
+      <input type="text" id="newOcrFilterWord" placeholder="제외할 단어 입력 (예: 미정, 확인요망)" style="flex: 1; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; font-size: 0.95em; box-sizing: border-box;" onkeydown="if(event.key==='Enter') addOcrFilterWord();">
+      <button onclick="addOcrFilterWord()" style="padding: 0 20px; background: #0a84ff; color: #fff; border: none; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 0.95em; flex-shrink: 0;">추가</button>
+    </div>
+
+    <div style="font-weight: 900; margin-bottom: 10px; color: var(--text-sub); font-size: 0.85em;">현재 등록된 필터</div>
+    <div id="ocrFilterBadgeContainer" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 50px; box-sizing: border-box;">
+      <div style="color: var(--text-sub); font-size: 0.85em; font-weight: 800;">데이터를 불러오는 중...</div>
+    </div>
+    
+  </div>
+</div>
 
       </div>
     </div>
@@ -4311,6 +4329,7 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           document.getElementById('masterDashboardModal').style.transform = 'translateX(-100%)';
           switchMasterTab('admin-mgr');
           refreshAdminList();
+          loadOcrFilterWords(); // 👈 🚨 이 한 줄만 추가! 창 열 때 필터 단어를 긁어옵니다.
       }
 
       function closeMasterDashboard() {
@@ -4328,6 +4347,8 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           if (tabId === 'audit-log') refreshAuditLogs();
           if (tabId === 'conn-log') refreshConnLogs(); // 🚨 이 줄 추가!
           if (tabId === 'db-mgr') searchRawDatabaseRows();
+          // 👇 🚨 이 한 줄만 추가되었습니다!
+          if (tabId === 'filter-mgr') loadOcrFilterWords();
       }
 
       // 🚨 [접속 로그 전용 엔진]
@@ -5028,6 +5049,61 @@ document.addEventListener('click', function(event) {
         }
     }
 });
+
+    // 👇 🚨 [여기에 추가하세요!] 필터 제어용 자바스크립트
+let globalOcrFilters = [];
+
+function loadOcrFilterWords() {
+    google.script.run.withSuccessHandler(function(res) {
+        globalOcrFilters = Array.isArray(res) ? res : [];
+        renderOcrFilterBadges();
+    })._call({ source: 'vercel', action: 'GET_OCR_FILTERS' });
+}
+
+function renderOcrFilterBadges() {
+    const container = document.getElementById('ocrFilterBadgeContainer');
+    if (!container) return;
+    if (globalOcrFilters.length === 0) {
+        container.innerHTML = "<div style='color:var(--text-sub); font-size:0.85em; font-weight:800;'>등록된 단어가 없습니다.</div>";
+        return;
+    }
+    
+    let html = "";
+    globalOcrFilters.forEach((word, idx) => {
+        html += `<div style="display: inline-flex; align-items: center; gap: 6px; background: var(--card-bg); color: var(--text-main); padding: 6px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 800; border: 1px solid var(--border-color); box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                    <span>${word}</span>
+                    <span onclick="removeOcrFilterWord(${idx})" style="color: #ff3b30; cursor: pointer; font-weight: 900; margin-left: 4px; padding: 0 2px; font-size: 1.1em;">✕</span>
+                 </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function addOcrFilterWord() {
+    const input = document.getElementById('newOcrFilterWord');
+    const word = input ? input.value.trim() : "";
+    if (!word) return;
+    if (globalOcrFilters.includes(word)) { showToast("이미 등록된 단어입니다.", 1500); return; }
+
+    globalOcrFilters.push(word);
+    input.value = "";
+    renderOcrFilterBadges();
+    saveOcrFilterWordsToServer();
+}
+
+function removeOcrFilterWord(idx) {
+    if (!confirm(`'${globalOcrFilters[idx]}' 단어를 필터에서 삭제하시겠습니까?`)) return;
+    globalOcrFilters.splice(idx, 1);
+    renderOcrFilterBadges();
+    saveOcrFilterWordsToServer();
+}
+
+function saveOcrFilterWordsToServer() {
+    showToast("저장 중...", 0);
+    google.script.run.withSuccessHandler(function(res) {
+        if(res.success) showToast("✅ 필터가 업데이트되었습니다.", 1500);
+    })._call({ source: 'vercel', action: 'SAVE_OCR_FILTERS', data: globalOcrFilters });
+}
+// 👆 ----------------------------------------------------
 
     </script>
   </body>
