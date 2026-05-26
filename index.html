@@ -2402,6 +2402,7 @@
         <button class="master-tab-btn" onclick="switchMasterTab('conn-log')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">접속로그</button>
         <button class="master-tab-btn" onclick="switchMasterTab('audit-log')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">보안로그</button>
         <button class="master-tab-btn" onclick="switchMasterTab('db-mgr')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">DB제어</button>
+        <button class="master-tab-btn" onclick="switchMasterTab('filter-mgr')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">필터관리</button>
       </div>
 
       <div style="flex: 1; overflow-y: auto; padding: 0 20px 40px 20px; box-sizing: border-box; -webkit-overflow-scrolling: touch;">
@@ -2499,6 +2500,24 @@
           <div id="dbMasterRowsContainer" style="overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch; box-sizing: border-box;"></div>
           <div id="dbMasterPaginationBar" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px; box-sizing: border-box;"></div>
         </div>
+
+                <div id="master-tab-filter-mgr" class="master-tab-content" style="display: none; box-sizing: border-box;">
+  <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; box-sizing: border-box;">
+    
+    <div style="font-weight: 900; margin-bottom: 15px; color: var(--text-main); font-size: 1.05em;">⚙️ OCR ETC 필터 단어 관리</div>
+    
+    <div style="display: flex; gap: 8px; margin-bottom: 20px; box-sizing: border-box;">
+      <input type="text" id="newOcrFilterWord" placeholder="제외할 단어 입력 (예: 미정, 확인요망)" style="flex: 1; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; font-size: 0.95em; box-sizing: border-box;" onkeydown="if(event.key==='Enter') addOcrFilterWord();">
+      <button onclick="addOcrFilterWord()" style="padding: 0 20px; background: #0a84ff; color: #fff; border: none; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 0.95em; flex-shrink: 0;">추가</button>
+    </div>
+
+    <div style="font-weight: 900; margin-bottom: 10px; color: var(--text-sub); font-size: 0.85em;">현재 등록된 필터</div>
+    <div id="ocrFilterBadgeContainer" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 50px; box-sizing: border-box;">
+      <div style="color: var(--text-sub); font-size: 0.85em; font-weight: 800;">데이터를 불러오는 중...</div>
+    </div>
+    
+  </div>
+</div>
 
       </div>
     </div>
@@ -7384,6 +7403,8 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           if (tabId === 'audit-log') refreshAuditLogs();
           if (tabId === 'conn-log') refreshConnLogs(); // 🚨 이 줄 추가!
           if (tabId === 'db-mgr') searchRawDatabaseRows();
+          // 👇 🚨 이 한 줄만 추가되었습니다!
+          if (tabId === 'filter-mgr') loadOcrFilterWords();
       }
 
       // 🚨 [접속 로그 전용 엔진]
