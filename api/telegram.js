@@ -675,22 +675,56 @@ module.exports = async function handler(req, res) {
             }
 
             if (isImageUpload) {
-                let fileId = null; let uniqueId = null;
-                if (message.photo && message.photo.length > 0) { const p = message.photo[message.photo.length - 1]; fileId = p.file_id; uniqueId = p.file_unique_id; } 
-                else if (message.document && message.document.mime_type?.startsWith('image/')) { fileId = message.document.file_id; uniqueId = message.document.file_unique_id; }
-                if (fileId) {
-                    const [dupRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'DUP_OPTION'`);
-                    let blockDup = (dupRows.length === 0 || !String(dupRows[0].setting_value).includes('OFF'));
-                    if (blockDup) {
-                        const [exist] = await pool.query(`SELECT 1 FROM processed_images WHERE unique_id = ?`, [uniqueId]);
-                        if (exist.length > 0) { await sendTgMsg(chatId, `⚠️ 이미 처리된 이미지입니다. (중복 차단)`); return res.status(200).send('OK'); }
-                    }
-                    const jsonData = JSON.stringify({ id: fileId, uniqueId: uniqueId });
-                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('PENDING_IMAGE_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonData, jsonData]);
-                    await sendTgMsg(chatId, "📥 이미지가 대기열에 등록되었습니다.\n\n▶️ 실제 DB 반영: /ocr\n🧪 가상 테스트: /test\n❌ 취소: /cancel");
-                    return res.status(200).send('OK');
-                }
+    let fileId = null; let uniqueId = null;
+    if (message.photo && message.photo.length > 0) { 
+        const p = message.photo[message.photo.length - 1]; 
+        fileId = p.file_id; 
+        uniqueId = p.file_unique_id; 
+    } 
+    else if (message.document && message.document.mime_type?.startsWith('image/')) { 
+        fileId = message.document.file_id; 
+        uniqueId = message.document.file_unique_id; 
+    }
+
+    if (fileId) {
+        const [dupRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'DUP_OPTION'`);
+        let blockDup = (dupRows.length === 0 || !String(dupRows[0].setting_value).includes('OFF'));
+        
+        if (blockDup) {
+            // 👇 file_unique_id 대신 실제 이미지 해시로 비교
+            const botToken = process.env.TELEGRAM_BOT_TOKEN;
+            const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
+            const fileData = await fileRes.json();
+            const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
+            
+            const imgRes = await fetch(fileUrl);
+            const imgBuffer = await imgRes.arrayBuffer();
+            
+            // 이미지 해시 계산
+            const crypto = require('crypto');
+            const imgHash = crypto.createHash('md5').update(Buffer.from(imgBuffer)).digest('hex');
+            
+            const [exist] = await pool.query(
+                `SELECT 1 FROM processed_images WHERE unique_id = ?`, [imgHash]
+            );
+            if (exist.length > 0) { 
+                await sendTgMsg(chatId, `⚠️ 이미 처리된 이미지입니다. (중복 차단)`); 
+                return res.status(200).send('OK'); 
             }
+            
+            // 해시를 PENDING에 같이 저장
+            const jsonData = JSON.stringify({ id: fileId, uniqueId: imgHash, url: fileUrl });
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('PENDING_IMAGE_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonData, jsonData]);
+            await sendTgMsg(chatId, "📥 이미지가 대기열에 등록되었습니다.\n\n▶️ 실제 DB 반영: /ocr\n🧪 가상 테스트: /test\n❌ 취소: /cancel");
+            return res.status(200).send('OK');
+        }
+
+        const jsonData = JSON.stringify({ id: fileId, uniqueId: uniqueId });
+        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('PENDING_IMAGE_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonData, jsonData]);
+        await sendTgMsg(chatId, "📥 이미지가 대기열에 등록되었습니다.\n\n▶️ 실제 DB 반영: /ocr\n🧪 가상 테스트: /test\n❌ 취소: /cancel");
+        return res.status(200).send('OK');
+    }
+}
 
            // 🛑 대기열 및 캐시 취소 기능 보강 (락 강제 해제 포함)
             if (text.startsWith('/cancel')) {
