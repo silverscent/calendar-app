@@ -744,25 +744,30 @@ module.exports = async function handler(req, res) {
                         const pData = safeGetJson(pendingRows[0].setting_value); targetFileId = pData.id; targetUniqueId = pData.uniqueId || null;
                     }
 
-                    // 2️⃣ [방어막 2] 캐싱 엔진 대조
+                   // 2️⃣ [방어막 2] 이미지 고유ID 대조 방식의 철통 캐싱 엔진
                     let useCachedData = false;
                     let finalRows = []; let extractedText = ""; let aiSuccess = false;
 
                     if (text.startsWith('/ocr') && targetUniqueId) {
                         const [cacheRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'CACHED_TEST_DATA'`);
                         if (cacheRows.length > 0 && cacheRows[0].setting_value) {
-                            const cacheData = safeGetJson(cacheRows[0].setting_value);
-                            if (cacheData.uniqueId === targetUniqueId) {
-                                finalRows = cacheData.rows;
-                                extractedText = cacheData.rawText || "";
-                                useCachedData = true; aiSuccess = true;
-                            }
+                            try {
+                                let rawCache = cacheRows[0].setting_value;
+                                // 🚨 MySQL 이중 인코딩 방어 (껍질 완벽히 까기)
+                                if (typeof rawCache === 'string' && rawCache.startsWith('"')) rawCache = JSON.parse(rawCache);
+                                const cacheData = typeof rawCache === 'string' ? JSON.parse(rawCache) : rawCache;
+                                
+                                if (cacheData && cacheData.uniqueId === targetUniqueId) {
+                                    finalRows = cacheData.rows;
+                                    useCachedData = true; aiSuccess = true;
+                                }
+                            } catch (e) { console.error("캐시 로딩 실패:", e); }
                         }
                     }
 
-                    // 🤖 AI 분석 수행
+                    // 3️⃣ AI 분석 수행 (캐시가 없거나 /test, /reparse 일 때만 실행)
                     if (!useCachedData) {
-                        await sendTgMsg(chatId, isReparse ? `🔁 이미지 재파싱을 시작합니다...` : `🔄 판독을 시작합니다...\n(이번 달 사용량: ${ocrCount + 1} / ${OCR_FREE_LIMIT_MONTHLY})`);
+                        await sendTgMsg(chatId, isReparse ? `🔁 이미지 재파싱을 시작합니다...` : `🔄 AI 판독을 시작합니다...\n(이번 달 사용량: ${ocrCount + 1} / ${OCR_FREE_LIMIT_MONTHLY})`);
                         
                         const botToken = process.env.TELEGRAM_BOT_TOKEN;
                         if (!isReparse && targetFileId) {
@@ -777,11 +782,9 @@ module.exports = async function handler(req, res) {
                         });
                         const visionData = await visionRes.json();
                         
-                        if (!isTest && !isReparse) {
-                            ocrCount++; ocrTotal++;
-                            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [ocrCount.toString(), ocrCount.toString()]);
-                            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_TOTAL_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [ocrTotal.toString(), ocrTotal.toString()]);
-                        }
+                        ocrCount++; ocrTotal++;
+                        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [ocrCount.toString(), ocrCount.toString()]);
+                        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_TOTAL_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [ocrTotal.toString(), ocrTotal.toString()]);
 
                         extractedText = visionData.responses[0]?.fullTextAnnotation?.text || "";
                         if (!extractedText) { await sendTgMsg(chatId, `⚠️ 텍스트를 찾을 수 없습니다.`); return res.status(200).send('OK'); }
@@ -802,12 +805,13 @@ module.exports = async function handler(req, res) {
                                 let aiText = geminiJson.candidates[0].content.parts[0].text.replace(/```json/gi, '').replace(/```/g, '').trim();
                                 const aiData = JSON.parse(aiText); if (Array.isArray(aiData) && aiData.length > 0) { finalRows = aiData; aiSuccess = true; }
                             }
-                        } catch (e) { await sendTgMsg(chatId, `⚠️ AI 서버 통신 오류 감지. 안전을 위해 기본 데이터로 진행합니다.`); }
+                        } catch (e) { await sendTgMsg(chatId, `⚠️ AI 서버 오류. 기본 데이터로 진행합니다.`); }
                     }
 
-                    // 🧪 [분기 1] 테스트 시 캐시 저장 후 종료
+                    // 🧪 [분기 1] /test 인 경우: 고유ID를 포함하여 안전하게 캐시 저장 후 종료
                     if (isTest) {
-                        const cacheObj = { uniqueId: targetUniqueId, rows: finalRows, rawText: extractedText };
+                        // 🚨 [핵심 수정] DB 에러를 막기 위해 수천 자의 원본 텍스트(rawText)는 버리고 핵심 데이터 배열만 깔끔하게 저장합니다.
+                        const cacheObj = { uniqueId: targetUniqueId, rows: finalRows };
                         const cacheStr = JSON.stringify(cacheObj);
                         await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('CACHED_TEST_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [cacheStr, cacheStr]);
                         
