@@ -40,11 +40,16 @@ function formatDbDateShort(dbDate) {
     return String(dbDate);
 }
 
-// 🛡️ DB JSON 안전 파싱기
+// 🛡️ DB JSON 안전 파싱기 (이중 인코딩 완벽 방어)
 function safeGetJson(val) {
     if (typeof val === 'object' && val !== null) return val;
     if (typeof val === 'string') {
-        try { return JSON.parse(val); } catch(e) {}
+        try { 
+            let parsed = JSON.parse(val);
+            // MySQL 특유의 이중 따옴표(Double Quote) 껍질을 한 번 더 벗겨냅니다.
+            if (typeof parsed === 'string') parsed = JSON.parse(parsed); 
+            return parsed;
+        } catch(e) {}
     }
     return { id: val, url: val, time: val };
 }
@@ -808,9 +813,9 @@ module.exports = async function handler(req, res) {
                         } catch (e) { await sendTgMsg(chatId, `⚠️ AI 서버 오류. 기본 데이터로 진행합니다.`); }
                     }
 
-                    // 🧪 [분기 1] /test 인 경우: 고유ID를 포함하여 안전하게 캐시 저장 후 종료
+                    // 🧪 [분기 1] 테스트 시 캐시 저장 후 종료
                     if (isTest) {
-                        // 🚨 [핵심 수정] DB 에러를 막기 위해 수천 자의 원본 텍스트(rawText)는 버리고 핵심 데이터 배열만 깔끔하게 저장합니다.
+                        // 🚨 [캐시 버그 수정] DB 에러를 막기 위해 수천 글자의 원본 텍스트는 빼고 핵심 데이터(rows)만 안전하게 저장합니다.
                         const cacheObj = { uniqueId: targetUniqueId, rows: finalRows };
                         const cacheStr = JSON.stringify(cacheObj);
                         await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('CACHED_TEST_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [cacheStr, cacheStr]);
