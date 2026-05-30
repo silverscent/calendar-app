@@ -687,206 +687,250 @@ module.exports = async function handler(req, res) {
                 }
             }
 
+           // 🛑 대기열 및 캐시 취소 기능 보강 (락 강제 해제 포함)
             if (text.startsWith('/cancel')) {
                 await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
-                await sendTgMsg(chatId, `🗑️ 대기 중인 이미지가 취소되었습니다.`); return res.status(200).send('OK');
+                await pool.query(`DELETE FROM system_settings WHERE setting_key = 'CACHED_TEST_DATA'`); 
+                await pool.query(`UPDATE system_settings SET setting_value = '0' WHERE setting_key = 'OCR_IS_RUNNING'`); // 무한 락 강제 해제 방어막
+                await sendTgMsg(chatId, `🗑️ 대기 중인 이미지와 임시 데이터가 모두 취소되었습니다.`); 
+                return res.status(200).send('OK');
             }
 
             const isTest = text.startsWith('/test'); const isReparse = text.startsWith('/reparse');
             if (text.startsWith('/ocr') || isTest || isReparse) {
-                let targetFileId = null; let targetUniqueId = null; let fullUrl = '';
-                const OCR_FREE_LIMIT_MONTHLY = 1000;
-                let currentMonthStr = String(new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"})).getMonth() + 1);
                 
-                const [mRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_MONTH'`);
-                const [cRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_COUNT'`);
-                const [tRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_TOTAL_COUNT'`);
-                
-                let dbMonth = mRows.length > 0 ? String(mRows[0].setting_value).replace(/"/g, '') : '';
-                let ocrCount = cRows.length > 0 ? parseInt(cRows[0].setting_value) || 0 : 0;
-                let ocrTotal = tRows.length > 0 ? parseInt(tRows[0].setting_value) || 0 : 0;
-
-                if (dbMonth !== currentMonthStr) {
-                    ocrCount = 0;
-                    const valMonth = JSON.stringify(currentMonthStr);
-                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_MONTH', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [valMonth, valMonth]);
-                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, ['0', '0']);
+                // 🚨 [방어막 1] 타임아웃 중복 요청 원천 차단 (40초 자동 해제 락)
+                const [lockRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_IS_RUNNING'`);
+                const nowTime = Date.now();
+                if (lockRows.length > 0 && lockRows[0].setting_value !== '0') {
+                    const lockTime = parseInt(lockRows[0].setting_value, 10) || 0;
+                    if (nowTime - lockTime < 40000) { 
+                        return res.status(200).send('OK'); 
+                    }
                 }
-                if (!isTest && !isReparse && ocrCount >= OCR_FREE_LIMIT_MONTHLY) {
-                    await sendTgMsg(chatId, `🚫 [경고] 이번 달 무료 OCR 한도 소진! API가 일시 정지됩니다.`); return res.status(200).send('OK');
-                }
+                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_IS_RUNNING', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [nowTime.toString(), nowTime.toString()]);
 
-                if (isReparse) {
-                    const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
-                    if (rows.length === 0 || !rows[0].setting_value) { await sendTgMsg(chatId, `⚠️ 재처리할 이전 이미지가 없습니다.`); return res.status(200).send('OK'); }
-                    const pData = safeGetJson(rows[0].setting_value); fullUrl = pData.url || "";
-                    targetFileId = pData.fileId || null;
-                } else {
-                    const [pendingRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
-                    if (pendingRows.length === 0 || !pendingRows[0].setting_value) { await sendTgMsg(chatId, `⚠️ 대기 중인 이미지가 없습니다.`); return res.status(200).send('OK'); }
-                    const pData = safeGetJson(pendingRows[0].setting_value); targetFileId = pData.id; targetUniqueId = pData.uniqueId || null;
-                    if (!isTest) await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
-                }
-
-                await sendTgMsg(chatId, isReparse ? `🔁 이미지 재파싱을 시작합니다...` : `🔄 판독을 시작합니다...\n(이번 달 사용량: ${ocrCount + (!isTest && !isReparse ? 1 : 0)} / ${OCR_FREE_LIMIT_MONTHLY})`);
-                
-                const botToken = process.env.TELEGRAM_BOT_TOKEN;
-                if (!isReparse && targetFileId) {
-                    const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${targetFileId}`);
-                    const fileData = await fileRes.json(); fullUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
-                }
-
-                const imgRes = await fetch(fullUrl); const imgBuffer = await imgRes.arrayBuffer(); const base64Image = Buffer.from(imgBuffer).toString('base64');
-                const visionRes = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'TEXT_DETECTION' }] }] })
-                });
-                const visionData = await visionRes.json();
-                
-                if (!isTest && !isReparse) {
-                    ocrCount++; ocrTotal++;
-                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [ocrCount.toString(), ocrCount.toString()]);
-                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_TOTAL_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [ocrTotal.toString(), ocrTotal.toString()]);
-                }
-
-                const extractedText = visionData.responses[0]?.fullTextAnnotation?.text || "";
-                if (!extractedText) { await sendTgMsg(chatId, `⚠️ 텍스트를 찾을 수 없습니다.`); return res.status(200).send('OK'); }
-
-                const parsedResult = parseOcrLinesLocal(extractedText);
-                if (parsedResult.length === 0) { await sendTgMsg(chatId, `⚠️ 인식된 데이터가 없습니다.`); return res.status(200).send('OK'); }
-
-                await sendTgMsg(chatId, `🤖 AI가 데이터를 분석 중입니다...`);
-                let finalRows = parsedResult; let aiSuccess = false;
                 try {
-                    const prompt = `너는 물류 데이터베이스 전문 AI 관리자야.\n[원본 텍스트]\n${extractedText}\n[기존 파싱 결과]\n${JSON.stringify(parsedResult)}\n\n[임무 및 규칙]\n1. 빠진 B/L 채워 넣어.\n2. 오타 수정해.\n3. '발행전'은 B/L번호에 넣어.\n4. [bl, pal, eta, inDate, fwd, sType, invoice, etc] 키를 가진 JSON 배열만 출력.`;
-                    const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.0, responseMimeType: "application/json" } })
-                    });
-                    const geminiJson = await geminiRes.json();
-                    if (geminiJson.candidates && geminiJson.candidates.length > 0) {
-                        let aiText = geminiJson.candidates[0].content.parts[0].text.replace(/```json/gi, '').replace(/```/g, '').trim();
-                        const aiData = JSON.parse(aiText); if (Array.isArray(aiData) && aiData.length > 0) { finalRows = aiData; aiSuccess = true; }
-                    }
-                } catch (e) { await sendTgMsg(chatId, `⚠️ AI 서버 통신 오류 감지. 안전을 위해 기본 데이터로 진행합니다.`); }
-
-                let resultHeader = isTest ? `🧪 [테스트] AI 교정 결과\n` : (aiSuccess ? `✨ 최종 DB 반영 완료 (AI 스마트 교정)\n` : `✅ 최종 DB 반영 완료 (기본 파싱)\n`);
-                let resultList = ""; finalRows.forEach(r => { resultList += `• ${r.bl} | ${r.pal}PAL | ${r.inDate || '미정'}\n`; });
-                if (isTest) { await sendTgMsg(chatId, resultHeader + resultList + `\n💡 (완벽하다면 /ocr 로 확정하세요)`); return res.status(200).send('OK'); }
-
-                let updateCount = 0; let insertCount = 0;
-
-                // 👇 🚨 [AI 폭주 방어막] 여기서 미정, ? 등 쓰레기값을 전부 null(빈칸)로 분쇄합니다.
-                const makeSafeDate = (val) => {
-                    if (!val) return null;
-                    let s = String(val).trim();
-                    if (!/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(s)) return null;
-                    return s.replace(/\//g, '-'); 
-                };
-                // 👆 -------------------------------------------------------------
-
-                // 🚀 [1단계] 루프 시작 전 완벽한 DB 로드 (이중 인코딩 껍질 벗기기)
-let customFilters = [];
-try {
-    const [fRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_ETC_FILTERS'`);
-    if (fRows.length > 0) {
-        let rawVal = fRows[0].setting_value;
-        
-        // MySQL JSON 특성상 따옴표가 두 번 감싸져 있다면 완벽하게 배열로 깎아냅니다.
-        if (typeof rawVal === 'string') {
-            if (rawVal.startsWith('"') && rawVal.endsWith('"')) rawVal = JSON.parse(rawVal);
-            customFilters = JSON.parse(rawVal);
-        } else {
-            customFilters = rawVal;
-        }
-    }
-    // 안전장치: 결과물이 배열이 아니면 빈 배열로 초기화
-    if (!Array.isArray(customFilters)) customFilters = [];
-} catch(e) {
-    console.error("필터 데이터 로드 실패:", e);
-}
-
-                for (const r of finalRows) {
-                    let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, ''); 
-                    let pal = parseInt(r.pal) || 0; 
+                    let targetFileId = null; let targetUniqueId = null; let fullUrl = '';
+                    const OCR_FREE_LIMIT_MONTHLY = 1000;
+                    let currentMonthStr = String(new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"})).getMonth() + 1);
                     
-                    let inDate = makeSafeDate(r.inDate); // 👈 🚨 방어막 1
-                    let eta = makeSafeDate(r.eta);       // 👈 🚨 방어막 2
+                    const [mRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_MONTH'`);
+                    const [cRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_COUNT'`);
+                    const [tRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_TOTAL_COUNT'`);
                     
-                    let fwd = r.fwd || '';
-                    let sType = String(r.sType || '').toUpperCase(); 
-                    let invoice = r.invoice || ''; 
-                    let etc = r.etc || ''; 
+                    let dbMonth = mRows.length > 0 ? String(mRows[0].setting_value).replace(/"/g, '') : '';
+                    let ocrCount = cRows.length > 0 ? parseInt(cRows[0].setting_value) || 0 : 0;
+                    let ocrTotal = tRows.length > 0 ? parseInt(tRows[0].setting_value) || 0 : 0;
 
-    // 1. [동적 패턴] 관리자 커스텀 필터 단어 삭제
-    customFilters.forEach(word => {
-        const cleanWord = word.trim();
-        if (cleanWord) {
-            // 정규식을 사용해 문장 내 흩어진 동일 단어를 모두 폭파합니다.
-            const regex = new RegExp(cleanWord, 'g');
-            etc = etc.replace(regex, '');
-        }
-    });
-
-    // 2. [고정 패턴] 잘 작동하던 기존 주차 삭제 로직 (유지)
-    etc = etc.replace(/\d+월\s*(첫|둘째|둘쨋|셋째|셋쨋|넷째|넷쨋|다섯|마지막)?\s*주/g, '');
-
-    // 3. [마감 청소] 양 끝의 슬래시, 대시, 쉼표, 공백 정리
-    etc = etc.replace(/^[\s\/,|_|-]+|[\s\/,|_|-]+$/g, '').replace(/\/+/g, '/').trim();
-    
-    // 🚨 [가장 중요] 가공이 끝난 깨끗한 값을 원본 객체에 반드시 다시 덮어씌웁니다! 
-    // (이 작업을 해야 '최근OCR' 대조 화면에도 깨끗한 텍스트가 표시됩니다)
-    r.etc = etc; 
-    
-    // ... 이하 기존 DB INSERT / UPDATE 쿼리문 유지 ...
-
-                    let isAiVal = aiSuccess ? 1 : 0; 
-
-                    let exist = []; if (invoice) { [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]); }
-                    if (exist.length === 0 && bl !== '발행전' && bl !== '') { [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]); }
-
-                    if (exist.length > 0) { 
-                        await pool.query(`UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`, 
-                        [bl, pal, inDate, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id]); 
-                        updateCount++; 
-                    } 
-                    else { 
-                        await pool.query(`INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, ?)`, 
-                        [bl, pal, inDate, sType, fwd, invoice, eta, etc, isAiVal]); 
-                        insertCount++; 
+                    if (dbMonth !== currentMonthStr) {
+                        ocrCount = 0;
+                        const valMonth = JSON.stringify(currentMonthStr);
+                        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_MONTH', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [valMonth, valMonth]);
+                        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, ['0', '0']);
                     }
+                    if (!isTest && !isReparse && ocrCount >= OCR_FREE_LIMIT_MONTHLY) {
+                        await sendTgMsg(chatId, `🚫 [경고] 이번 달 무료 OCR 한도 소진! API가 일시 정지됩니다.`); return res.status(200).send('OK');
+                    }
+
+                    if (isReparse) {
+                        const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
+                        if (rows.length === 0 || !rows[0].setting_value) { await sendTgMsg(chatId, `⚠️ 재처리할 이전 이미지가 없습니다.`); return res.status(200).send('OK'); }
+                        const pData = safeGetJson(rows[0].setting_value); fullUrl = pData.url || "";
+                        targetFileId = pData.fileId || null;
+                    } else {
+                        const [pendingRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
+                        if (pendingRows.length === 0 || !pendingRows[0].setting_value) { await sendTgMsg(chatId, `⚠️ 대기 중인 이미지가 없습니다.`); return res.status(200).send('OK'); }
+                        const pData = safeGetJson(pendingRows[0].setting_value); targetFileId = pData.id; targetUniqueId = pData.uniqueId || null;
+                    }
+
+                    // 2️⃣ [방어막 2] 캐싱 엔진 대조
+                    let useCachedData = false;
+                    let finalRows = []; let extractedText = ""; let aiSuccess = false;
+
+                    if (text.startsWith('/ocr') && targetUniqueId) {
+                        const [cacheRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'CACHED_TEST_DATA'`);
+                        if (cacheRows.length > 0 && cacheRows[0].setting_value) {
+                            const cacheData = safeGetJson(cacheRows[0].setting_value);
+                            if (cacheData.uniqueId === targetUniqueId) {
+                                finalRows = cacheData.rows;
+                                extractedText = cacheData.rawText || "";
+                                useCachedData = true; aiSuccess = true;
+                            }
+                        }
+                    }
+
+                    // 🤖 AI 분석 수행
+                    if (!useCachedData) {
+                        await sendTgMsg(chatId, isReparse ? `🔁 이미지 재파싱을 시작합니다...` : `🔄 판독을 시작합니다...\n(이번 달 사용량: ${ocrCount + 1} / ${OCR_FREE_LIMIT_MONTHLY})`);
+                        
+                        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+                        if (!isReparse && targetFileId) {
+                            const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${targetFileId}`);
+                            const fileData = await fileRes.json(); fullUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
+                        }
+
+                        const imgRes = await fetch(fullUrl); const imgBuffer = await imgRes.arrayBuffer(); const base64Image = Buffer.from(imgBuffer).toString('base64');
+                        const visionRes = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'TEXT_DETECTION' }] }] })
+                        });
+                        const visionData = await visionRes.json();
+                        
+                        if (!isTest && !isReparse) {
+                            ocrCount++; ocrTotal++;
+                            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [ocrCount.toString(), ocrCount.toString()]);
+                            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_TOTAL_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [ocrTotal.toString(), ocrTotal.toString()]);
+                        }
+
+                        extractedText = visionData.responses[0]?.fullTextAnnotation?.text || "";
+                        if (!extractedText) { await sendTgMsg(chatId, `⚠️ 텍스트를 찾을 수 없습니다.`); return res.status(200).send('OK'); }
+
+                        const parsedResult = parseOcrLinesLocal(extractedText);
+                        if (parsedResult.length === 0) { await sendTgMsg(chatId, `⚠️ 인식된 데이터가 없습니다.`); return res.status(200).send('OK'); }
+
+                        await sendTgMsg(chatId, `🤖 AI가 데이터를 분석 중입니다...`);
+                        finalRows = parsedResult;
+                        try {
+                            const prompt = `너는 물류 데이터베이스 전문 AI 관리자야.\n[원본 텍스트]\n${extractedText}\n[기존 파싱 결과]\n${JSON.stringify(parsedResult)}\n\n[임무 및 규칙]\n1. 빠진 B/L 채워 넣어.\n2. 오타 수정해.\n3. '발행전'은 B/L번호에 넣어.\n4. [bl, pal, eta, inDate, fwd, sType, invoice, etc] 키를 가진 JSON 배열만 출력.`;
+                            const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.0, responseMimeType: "application/json" } })
+                            });
+                            const geminiJson = await geminiRes.json();
+                            if (geminiJson.candidates && geminiJson.candidates.length > 0) {
+                                let aiText = geminiJson.candidates[0].content.parts[0].text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                                const aiData = JSON.parse(aiText); if (Array.isArray(aiData) && aiData.length > 0) { finalRows = aiData; aiSuccess = true; }
+                            }
+                        } catch (e) { await sendTgMsg(chatId, `⚠️ AI 서버 통신 오류 감지. 안전을 위해 기본 데이터로 진행합니다.`); }
+                    }
+
+                    // 🧪 [분기 1] 테스트 시 캐시 저장 후 종료
+                    if (isTest) {
+                        const cacheObj = { uniqueId: targetUniqueId, rows: finalRows, rawText: extractedText };
+                        const cacheStr = JSON.stringify(cacheObj);
+                        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('CACHED_TEST_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [cacheStr, cacheStr]);
+                        
+                        let resultHeader = `🧪 [테스트] AI 교정 결과\n`;
+                        let resultList = ""; finalRows.forEach(r => { resultList += `• ${r.bl} | ${r.pal}PAL | ${r.inDate || '미정'}\n`; });
+                        await sendTgMsg(chatId, resultHeader + resultList + `\n💡 (완벽하다면 /ocr 로 확정하세요)`); 
+                        return res.status(200).send('OK'); 
+                    }
+
+                    // 🚀 [분기 2] DB 반영 시작
+                    if (useCachedData) await sendTgMsg(chatId, `⚡ 테스트된 데이터를 기반으로 DB에 즉시 반영합니다... (AI 비용 무료)`);
+
+                    let updateCount = 0; let insertCount = 0;
+                    const makeSafeDate = (val) => {
+                        if (!val) return null;
+                        let s = String(val).trim();
+                        if (!/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(s)) return null;
+                        return s.replace(/\//g, '-'); 
+                    };
+
+                    // 🛠️ 필터 데이터 로드
+                    let customFilters = [];
+                    try {
+                        const [fRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_ETC_FILTERS'`);
+                        if (fRows.length > 0) {
+                            let rawVal = fRows[0].setting_value;
+                            if (typeof rawVal === 'string') {
+                                if (rawVal.startsWith('"') && rawVal.endsWith('"')) rawVal = JSON.parse(rawVal);
+                                customFilters = JSON.parse(rawVal);
+                            } else {
+                                customFilters = rawVal;
+                            }
+                        }
+                        if (!Array.isArray(customFilters)) customFilters = [];
+                    } catch(e) {
+                        console.error("필터 데이터 로드 실패:", e);
+                    }
+
+                    for (const r of finalRows) {
+                        let bl = String(r.bl || '').replace(/[\s•·\-\*]/g, ''); 
+                        let pal = parseInt(r.pal) || 0; 
+                        let inDate = makeSafeDate(r.inDate); 
+                        let eta = makeSafeDate(r.eta); 
+                        let fwd = r.fwd || '';
+                        let sType = String(r.sType || '').toUpperCase(); 
+                        let invoice = r.invoice || ''; 
+                        let etc = r.etc || ''; 
+
+                        // 필터 적용
+                        customFilters.forEach(word => {
+                            const cleanWord = word.trim();
+                            if (cleanWord) {
+                                const regex = new RegExp(cleanWord, 'g');
+                                etc = etc.replace(regex, '');
+                            }
+                        });
+                        etc = etc.replace(/\d+월\s*(첫|둘째|둘쨋|셋째|셋쨋|넷째|넷쨋|다섯|마지막)?\s*주/g, '');
+                        etc = etc.replace(/^[\s\/,|_|-]+|[\s\/,|_|-]+$/g, '').replace(/\/+/g, '/').trim();
+                        r.etc = etc; 
+
+                        let isAiVal = aiSuccess ? 1 : 0; 
+                        let exist = []; if (invoice) { [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]); }
+                        if (exist.length === 0 && bl !== '발행전' && bl !== '') { [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]); }
+
+                        if (exist.length > 0) { 
+                            await pool.query(`UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`, 
+                            [bl, pal, inDate, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id]); 
+                            updateCount++; 
+                        } 
+                        else { 
+                            await pool.query(`INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, ?)`, 
+                            [bl, pal, inDate, sType, fwd, invoice, eta, etc, isAiVal]); 
+                            insertCount++; 
+                        }
+                    }
+                    
+                    let resultHeader = aiSuccess ? `✨ 최종 DB 반영 완료 (AI 스마트 교정)\n` : `✅ 최종 DB 반영 완료 (기본 파싱)\n`;
+                    let resultList = ""; finalRows.forEach(r => { resultList += `• ${r.bl} | ${r.pal}PAL | ${r.inDate || '미정'}\n`; });
+                    await sendTgMsg(chatId, resultHeader + resultList + `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건) [🛡️V2 방어막 작동중]`);
+
+                    // 🛠️ 스케줄 누락 화물 감지
+                    try {
+                        const currentKeys = finalRows.map(r => String(r.bl || '').replace(/[\s•·\-\*]/g, ''));
+                        const [pendingRowsInDb] = await pool.query(`SELECT bl_number, pallets FROM inbound WHERE status = '입고대기' AND (receive_date IS NULL OR receive_date = '미정')`);
+                        let orphans = [];
+                        pendingRowsInDb.forEach(row => { let dbKey = String(row.bl_number).replace(/[\s•·\-\*]/g, ''); if (!currentKeys.includes(dbKey)) orphans.push({ bl: row.bl_number, pal: row.pallets }); });
+                        if (orphans.length > 0) {
+                            let orphanMsg = `💡 [스케줄 누락 화물 감지]\n방금 올리신 이미지에는 없지만, DB에 '입고보류/미정' 상태인 화물이 ${orphans.length}건 있습니다.\n\n`;
+                            orphans.forEach(o => orphanMsg += `• ${o.bl} (${o.pal} PAL)\n`);
+                            orphanMsg += `\n스케줄 완료 시 달력에서 터치하여 처리해 주세요!`; await sendTgMsg(chatId, orphanMsg);
+                        }
+                    } catch (e) {}
+
+                    if (!isReparse && targetUniqueId) { await pool.query(`INSERT IGNORE INTO processed_images (unique_id) VALUES (?)`, [targetUniqueId]); }
+
+                    // 청소 및 기록
+                    await pool.query(`DELETE FROM system_settings WHERE setting_key = 'CACHED_TEST_DATA'`);
+                    await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
+
+                    const currentTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+                    const timeStr = `${currentTime.getMonth() + 1}월${currentTime.getDate()}일 ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`;
+                    const jsonDataStr = JSON.stringify(finalRows); 
+                    
+                    if (!useCachedData && fullUrl) {
+                        const jsonUrl = JSON.stringify({ url: fullUrl, fileId: targetFileId }); 
+                        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonUrl, jsonUrl]);
+                    }
+                    const jsonTime = JSON.stringify({ time: timeStr }); 
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
+                    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonDataStr, jsonDataStr]);
+
+                    if (extractedText) {
+                        const jsonRawStr = JSON.stringify(extractedText); 
+                        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_RAW', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonRawStr, jsonRawStr]);
+                    }
+                    return res.status(200).send('OK');
+
+                } finally {
+                    // 🚨 [가장 중요했던 부분] 에러가 발생하든 성공하든 무조건 락을 0으로 되돌립니다.
+                    await pool.query(`UPDATE system_settings SET setting_value = '0' WHERE setting_key = 'OCR_IS_RUNNING'`);
                 }
-                
-                // 👇 🚨 배포 성공 여부를 확인하기 위해 텔레그램 응답 메시지에 표시를 남깁니다. 👇
-                await sendTgMsg(chatId, resultHeader + resultList + `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건) [🛡️V2 방어막 작동중]`);
-                try {
-                    const currentKeys = finalRows.map(r => String(r.bl || '').replace(/[\s•·\-\*]/g, ''));
-                    const [pendingRowsInDb] = await pool.query(`SELECT bl_number, pallets FROM inbound WHERE status = '입고대기' AND (receive_date IS NULL OR receive_date = '미정')`);
-                    let orphans = [];
-                    pendingRowsInDb.forEach(row => { let dbKey = String(row.bl_number).replace(/[\s•·\-\*]/g, ''); if (!currentKeys.includes(dbKey)) orphans.push({ bl: row.bl_number, pal: row.pallets }); });
-                    if (orphans.length > 0) {
-                        let orphanMsg = `💡 [스케줄 누락 화물 감지]\n방금 올리신 이미지에는 없지만, DB에 '입고보류/미정' 상태인 화물이 ${orphans.length}건 있습니다.\n\n`;
-                        orphans.forEach(o => orphanMsg += `• ${o.bl} (${o.pal} PAL)\n`);
-                        orphanMsg += `\n스케줄 완료 시 달력에서 터치하여 처리해 주세요!`; await sendTgMsg(chatId, orphanMsg);
-                    }
-                } catch (e) {}
-
-                if (!isReparse && targetUniqueId) { await pool.query(`INSERT IGNORE INTO processed_images (unique_id) VALUES (?)`, [targetUniqueId]); }
-
-                const currentTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
-                const timeStr = `${currentTime.getMonth() + 1}월${currentTime.getDate()}일 ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`;
-                const jsonUrl = JSON.stringify({ url: fullUrl, fileId: targetFileId }); const jsonTime = JSON.stringify({ time: timeStr }); const jsonDataStr = JSON.stringify(finalRows); 
-                
-                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonUrl, jsonUrl]);
-                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
-                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonDataStr, jsonDataStr]);
-                // extractedText를 JSON 규격에 맞는 문자열 형태로 변환하여 보냅니다.
-                const jsonRawStr = JSON.stringify(extractedText); 
-
-                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_RAW', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonRawStr, jsonRawStr]);
-                return res.status(200).send('OK');
-            }
-        } 
+            } // 👈 봇 명령어 처리 if문 종료
+        } // 👈 isAdminCmd 체크 if문 종료
 
     } catch (error) {
         console.error("🔥 시스템 에러:", error);
@@ -894,7 +938,7 @@ try {
     }
     return res.status(200).send('OK');
 }; 
-
+// 👆 모듈 핸들러 종료
 // =================================================================
 // 🧠 로컬 정규식 파싱 엔진
 // =================================================================
