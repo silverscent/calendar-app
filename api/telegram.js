@@ -753,22 +753,25 @@ module.exports = async function handler(req, res) {
                     let useCachedData = false;
                     let finalRows = []; let extractedText = ""; let aiSuccess = false;
 
-                    if (text.startsWith('/ocr') && targetUniqueId) {
-                        const [cacheRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'CACHED_TEST_DATA'`);
-                        if (cacheRows.length > 0 && cacheRows[0].setting_value) {
-                            try {
-                                let rawCache = cacheRows[0].setting_value;
-                                // 🚨 MySQL 이중 인코딩 방어 (껍질 완벽히 까기)
-                                if (typeof rawCache === 'string' && rawCache.startsWith('"')) rawCache = JSON.parse(rawCache);
-                                const cacheData = typeof rawCache === 'string' ? JSON.parse(rawCache) : rawCache;
-                                
-                                if (cacheData && cacheData.uniqueId === targetUniqueId) {
-                                    finalRows = cacheData.rows;
-                                    useCachedData = true; aiSuccess = true;
-                                }
-                            } catch (e) { console.error("캐시 로딩 실패:", e); }
-                        }
-                    }
+                    if (text.startsWith('/ocr') && (targetUniqueId || targetFileId)) {
+    const [cacheRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'CACHED_TEST_DATA'`);
+    if (cacheRows.length > 0 && cacheRows[0].setting_value) {
+        try {
+            let rawCache = cacheRows[0].setting_value;
+            if (typeof rawCache === 'string' && rawCache.startsWith('"')) rawCache = JSON.parse(rawCache);
+            const cacheData = typeof rawCache === 'string' ? JSON.parse(rawCache) : rawCache;
+            
+            // 👇 uniqueId 또는 fileId 둘 중 하나라도 일치하면 캐시 사용
+            const idMatch = (targetUniqueId && cacheData.uniqueId === targetUniqueId) 
+                         || (targetFileId && cacheData.fileId === targetFileId);
+            
+            if (cacheData && idMatch) {
+                finalRows = cacheData.rows;
+                useCachedData = true; aiSuccess = true;
+            }
+        } catch (e) { console.error("캐시 로딩 실패:", e); }
+    }
+}
 
                     // 3️⃣ AI 분석 수행 (캐시가 없거나 /test, /reparse 일 때만 실행)
                     if (!useCachedData) {
@@ -816,7 +819,7 @@ module.exports = async function handler(req, res) {
                     // 🧪 [분기 1] 테스트 시 캐시 저장 후 종료
                     if (isTest) {
                         // 🚨 [캐시 버그 수정] DB 에러를 막기 위해 수천 글자의 원본 텍스트는 빼고 핵심 데이터(rows)만 안전하게 저장합니다.
-                        const cacheObj = { uniqueId: targetUniqueId, rows: finalRows };
+                        const cacheObj = { uniqueId: targetUniqueId, fileId: targetFileId, rows: finalRows };
                         const cacheStr = JSON.stringify(cacheObj);
                         await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('CACHED_TEST_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [cacheStr, cacheStr]);
                         
