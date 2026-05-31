@@ -896,6 +896,7 @@ ${schema}
 3. 날짜 계산 시 오늘(${today}) 기준으로 정확하게
 4. 결과가 없을 수 있으니 LIMIT 50 이하로
 5. JSON 외 다른 텍스트 절대 포함 금지
+6. 이 DB는 MySQL/TiDB임. 숫자 변환 시 CAST(컬럼 AS SIGNED) 사용 (CAST AS INT 절대 금지). pallets, pal, box는 varchar이므로 SUM 등 연산 시 반드시 CAST(컬럼 AS SIGNED) 적용.
 
 [질문]
 ${question}
@@ -930,13 +931,16 @@ ${question}
 
         const sql = parsed.sql || '';
 
-        // SELECT만 허용
-        if (!/^\s*SELECT/i.test(sql)) {
-            return res.status(200).json({ success: false, msg: '조회 쿼리만 허용됩니다.' });
-        }
+// 🛡️ MySQL 문법 자동 보정: CAST(... AS INT) → SIGNED
+let safeSql = sql.replace(/AS\s+INT\s*\)/gi, 'AS SIGNED)');
 
-        // SQL 실행
-        const [rows] = await pool.query(sql);
+// SELECT만 허용
+if (!/^\s*SELECT/i.test(safeSql)) {
+    return res.status(200).json({ success: false, msg: '조회 쿼리만 허용됩니다.' });
+}
+
+// SQL 실행
+const [rows] = await pool.query(safeSql);
 
         // 결과 자연어 요약
         const summaryPrompt = `
