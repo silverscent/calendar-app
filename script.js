@@ -237,7 +237,6 @@ function _attachDrag(fab, storageKey) {
     });
 }
 
-// position:fixed + left/top으로 전환 (right/bottom 제거)
 function _setAbsolute(fab) {
     const rect = fab.getBoundingClientRect();
     fab.style.setProperty('position', 'fixed', 'important');
@@ -247,7 +246,6 @@ function _setAbsolute(fab) {
     fab.style.setProperty('bottom', 'auto', 'important');
 }
 
-// 가장 가까운 좌/우 가장자리로 스냅
 function _snapToEdge(fab) {
     const rect  = fab.getBoundingClientRect();
     const cx    = rect.left + rect.width / 2;
@@ -259,13 +257,6 @@ function _snapToEdge(fab) {
     fab.style.setProperty('top', safeY + 'px', 'important');
     fab.style.setProperty('right', 'auto', 'important');
     fab.style.setProperty('bottom', 'auto', 'important');
-}
-
-function _savePos(fab, key) {
-    localStorage.setItem(key, JSON.stringify({
-        left: fab.style.left,
-        top:  fab.style.top
-    }));
 }
 
 function _restorePos(fab, key) {
@@ -285,6 +276,13 @@ function _restorePos(fab, key) {
         fab.style.setProperty('bottom', 'auto', 'important');
     } catch(e) {}
 }
+function _savePos(fab, key) {
+    localStorage.setItem(key, JSON.stringify({
+        left: fab.style.left,
+        top:  fab.style.top
+    }));
+}
+
 
 // ═══════════════════════════════════════════════
 // ── 4. 관리자 확인 후 FAB 표시

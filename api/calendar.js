@@ -19,12 +19,19 @@ module.exports = async function(req, res) {
         // 🚨 [신규 안전망] DB 다이렉트 수정 시 빈칸("")이 들어오면 MySQL 에러가 나지 않도록 NULL로 변환
         const safeDate = (v) => (!v || v === '' || v === 'null' || v === '미정') ? null : v;
 
-        // AI 질의용 이번 주 월요일 계산
+ // 이번 주 일요일(시작) 계산
 function getMondayOfWeek(dateStr) {
     const d = new Date(dateStr);
+    const day = d.getDay();        // 0=일요일
+    d.setDate(d.getDate() - day);  // 일요일로 이동
+    return d.toISOString().slice(0, 10);
+}
+
+// 이번 주 토요일(끝) 계산
+function getSaturdayOfWeek(dateStr) {
+    const d = new Date(dateStr);
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    d.setDate(diff);
+    d.setDate(d.getDate() - day + 6);  // 토요일로 이동
     return d.toISOString().slice(0, 10);
 }
         
@@ -883,7 +890,8 @@ function getMondayOfWeek(dateStr) {
         const prompt = `
 너는 물류 창고 DB 전문 SQL 생성 AI야.
 오늘 날짜: ${today}
-이번 주 월요일: ${getMondayOfWeek(today)}
+이번 주 시작(일요일): ${getMondayOfWeek(today)}
+이번 주 종료(토요일): ${getSaturdayOfWeek(today)}
 이번 달: ${today.slice(0, 7)}
 
 [DB 스키마]
