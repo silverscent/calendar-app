@@ -2422,14 +2422,14 @@ function bindBioAuthEvents() {
 
                     // 후속 암호화 처리를 위한 IIFE 구동
                     (async function() {
-                        const hashedPw = await encryptSHA256(adminPw); 
+                        
 
                         if (typeof google !== 'undefined' && google.script && google.script.run) {
                             google.script.run.withSuccessHandler(function(res) {
                                 if (res.success) {
                                     localStorage.setItem('bio_registered', 'true');
                                     localStorage.setItem('bio_id', adminId);
-                                    localStorage.setItem('bio_pw', hashedPw); 
+                                    localStorage.setItem('bio_pw', adminPw); 
                                     showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
                                     if (pwInput) pwInput.value = "";
                                 } else {
@@ -2437,7 +2437,7 @@ function bindBioAuthEvents() {
                                     const toggle = document.getElementById('toggleBioAuth');
                                     if (toggle) toggle.checked = false;
                                 }
-                            }).login(adminId, hashedPw);
+                            }).login(adminId, adminPw);
                         } else {
                             showToast("⚠️ 시스템 연결에 실패했습니다. (외부 도메인 환경)", 2500);
                         }
@@ -4042,8 +4042,7 @@ async function handleLogin() {
         loginBtn.style.opacity = '0.7';
     }
 
-    // 🛡️ [보안 패치] 네트워크로 전송하기 전 비밀번호를 즉시 SHA-256 암호화
-    const hashedPw = await encryptSHA256(pw);
+   
 
     google.script.run.withSuccessHandler(function(res) {
         if (loginBtn) {
@@ -4089,7 +4088,7 @@ async function handleLogin() {
             loginBtn.style.opacity = '1';
         }
         showToast(`❌ 통신 오류가 발생했습니다.`, 2500);
-    }).login(id, hashedPw); // 🛡️ 평문 대신 암호화된 텍스트 전송!
+    }).login(id, pw); // 🛡️ 평문 대신 암호화된 텍스트 전송!
 }
 
 // =====================================================
@@ -4253,16 +4252,7 @@ async function handleLogin() {
           }
       }
 
-      // =====================================================
-      // 🛡️ [보안 강화] 내장 브라우저 Web Crypto 기반 SHA-256 해시 엔진
-      // =====================================================
-      async function encryptSHA256(message) {
-          const msgBuffer = new TextEncoder().encode(message);
-          const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-          const hashArray = Array.from(new Uint8Array(hashBuffer));
-          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      }
-      
+           
       // 📡 특정 관리자 접속 정보 팝업 엔진
       function showAdminConnInfo(adminId, adminName) {
           const modal = document.getElementById('adminConnModal');
@@ -4427,7 +4417,7 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
 
           if (!confirm(`[${name}(${id})] 계정을 신규 운영 관리자로 등록합니까?`)) return;
 
-          const hashedPw = await encryptSHA256(pw); // 전송 전 암호화 인터셉트
+          
 
           showToast("⏳ 원격 데이터베이스 동기화 중...", 0);
           google.script.run.withSuccessHandler(function(res) {
@@ -4440,7 +4430,7 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
               } else {
                   showToast(`❌ 오류: ${res.msg}`, 2500);
               }
-          })._call({ source: 'vercel', action: 'CREATE_ADMIN', data: { id, name, pw: hashedPw }, admin_id: localStorage.getItem('admin_id') });
+          })._call({ source: 'vercel', action: 'CREATE_ADMIN', data: { id, name, pw: pw }, admin_id: localStorage.getItem('admin_id') });
       }
 
       // 💡 5번 요구사항: 발급 창 부드러운 토글 제어 엔진
@@ -4556,9 +4546,7 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
 
           showToast("⏳ 보안 검증 및 변경 중...", 0);
           
-          // 전송 전 양쪽 다 SHA-256 강제 해싱
-          const hashedCur = await encryptSHA256(curPw);
-          const hashedNew = await encryptSHA256(newPw);
+          
 
           google.script.run.withSuccessHandler(function(res) {
               if (res.success) {
@@ -4568,7 +4556,7 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
               } else {
                   showToast(`❌ 변경 실패: ${res.msg}`, 3000);
               }
-          })._call({ source: 'vercel', action: 'CHANGE_MY_PASSWORD', data: { currentPw: hashedCur, newPw: hashedNew }, admin_id: localStorage.getItem('admin_id') });
+          })._call({ source: 'vercel', action: 'CHANGE_MY_PASSWORD', data: { currentPw: curPw, newPw: newPw }, admin_id: localStorage.getItem('admin_id') });
       }
 
 
@@ -4598,12 +4586,12 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           if (!newPw || newPw.trim() === '') return;
           if (!confirm(`정말 해당 계정의 비밀번호를 변경하시겠습니까?`)) return;
 
-          const hashedPw = await encryptSHA256(newPw); 
+          
           showToast("⏳ 비밀번호 변경 중...", 0);
           google.script.run.withSuccessHandler(function(res) {
               if (res.success) showToast("✅ 비밀번호가 성공적으로 초기화되었습니다.", 2000);
               else showToast(`❌ 오류: ${res.msg}`, 2500);
-          })._call({ source: 'vercel', action: 'RESET_ADMIN_PW', data: { targetId: id, newPw: hashedPw }, admin_id: localStorage.getItem('admin_id') });
+          })._call({ source: 'vercel', action: 'RESET_ADMIN_PW', data: { targetId: id, newPw: newPw }, admin_id: localStorage.getItem('admin_id') });
       }
 
 

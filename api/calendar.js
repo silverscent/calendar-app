@@ -1,5 +1,6 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
+const bcrypt = require('bcryptjs');
 
 // 💡 [수정] DB 연결 풀을 최상단 전역 스코프로 이동 (커넥션 재사용으로 응답 속도 극대화)
 const pool = mysql.createPool(process.env.DATABASE_URL);
@@ -210,6 +211,7 @@ module.exports = async function(req, res) {
                     const { id, name, pw } = data;
                     const [exist] = await pool.query("SELECT admin_id FROM admins WHERE admin_id = ?", [id]);
                     if (exist.length > 0) return res.status(200).json({ success: false, msg: '이미 등록된 아이디입니다.' });
+                    const hashedPw = await bcrypt.hash(pw, 10); // ✅ bcrypt 해시화
                     await pool.query("INSERT INTO admins (admin_id, password_hash, admin_name, role, status) VALUES (?, ?, ?, 'ADMIN', 'ACTIVE')", [id, pw, name]);
                     await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CREATE_ADMIN', ?)", [currentAdmin, `새로운 관리자 계정 발급: ${name}(${id})`]);
                     return res.status(200).json({ success: true });
@@ -291,24 +293,28 @@ module.exports = async function(req, res) {
                     const [rows] = await pool.query("SELECT password_hash FROM admins WHERE admin_id = ? AND status = 'ACTIVE'", [currentAdmin]);
                     if (rows.length === 0) return res.status(200).json({ success: false, msg: '존재하지 않거나 비활성화된 계정입니다.' });
 
+                     // ✅ bcrypt.compare로 검증 (프론트엔드에서 이미 SHA-256으로 암호화해서 보냈다고 가정)
+                    const isMatch = await bcrypt.compare(currentPw, rows[0].password_hash);
                     // 프론트엔드에서 이미 SHA-256으로 암호화해서 보낸 현재 비밀번호와 비교
-                    if (rows[0].password_hash !== currentPw) {
+                    if (!isMatch) {
                         return res.status(200).json({ success: false, msg: '현재 비밀번호가 일치하지 않습니다.' });
                     }
-
+                    // ✅ bcrypt.hash로 저장 (프론트엔드에서 이미 SHA-256으로 암호화된 새 비밀번호를 받아서 bcrypt로 한 번 더 해시화하여 저장)
                     // 2. 새 비밀번호(이것도 프론트에서 암호화되어 옴)로 업데이트
-                    await pool.query("UPDATE admins SET password_hash = ? WHERE admin_id = ?", [newPw, currentAdmin]);
+                    const hashedNewPw = await bcrypt.hash(newPw, 10);
+                    await pool.query("UPDATE admins SET password_hash = ? WHERE admin_id = ?", [hashedNewPw, currentAdmin]);
                     await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CHANGE_PW', '본인 비밀번호 변경 성공')", [currentAdmin]);
 
                     return res.status(200).json({ success: true });
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // 🔑 관리자 비밀번호 강제 초기화
+            // 🔑 비밀번호 강제 초기화 — bcrypt 적용
             else if (action === 'RESET_ADMIN_PW') {
                 try {
                     const { targetId, newPw } = data;
-                    await pool.query("UPDATE admins SET password_hash = ? WHERE admin_id = ?", [newPw, targetId]);
+                    const hashedNew = await bcrypt.hash(newPw, 10); // ✅ bcrypt 해시화
+                    await pool.query("UPDATE admins SET password_hash = ? WHERE admin_id = ?", [hashedNew, targetId]);
                     await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'RESET_PW', ?)", [currentAdmin, `[${targetId}] 관리자 비밀번호 초기화 완료`]);
                     return res.status(200).json({ success: true });
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
@@ -524,10 +530,12 @@ else if (action === 'LOGIN') {
                 [id]
             );
             
+            // ✅ bcrypt.compare로 마스터 검증
+                        const masterMatch = masterCheck.length > 0 ? await bcrypt.compare(pw, masterCheck[0].password_hash) : false;
             // 👑 오직 최고관리자('SYSTEM') 권한을 가졌고, 진짜 비밀번호를 맞췄을 때만 비상 우회 통과
             if (
                 masterCheck.length > 0 && 
-                masterCheck[0].password_hash === pw && 
+                masterMatch &&
                 masterCheck[0].status === 'ACTIVE' &&
                 masterCheck[0].role === 'SYSTEM' // 👈 오직 나(SYSTEM)만 이 문을 열 수 있습니다.
             ) {
