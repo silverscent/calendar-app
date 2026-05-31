@@ -123,7 +123,7 @@ document.addEventListener('click', function(e) {
 
 // FAB 드래그 기능
 function initDraggableFab() {
-    // 1. 입고(inboundAiFab) 혹은 출고(fabBtn) 중 존재하는 것을 찾음
+    // 입고 버튼 ID(inboundAiFab) 혹은 출고 버튼 ID(fabBtn) 중 존재하는 것을 찾음
     const fab = document.getElementById('inboundAiFab') || document.getElementById('fabBtn');
     if (!fab) return;
 
@@ -142,6 +142,7 @@ function initDraggableFab() {
     let offset = { x: 0, y: 0 };
 
     fab.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // 👈 이 줄이 핵심입니다! 새로고침 방지
         isDragging = true;
         offset.x = e.clientX - fab.getBoundingClientRect().left;
         offset.y = e.clientY - fab.getBoundingClientRect().top;
