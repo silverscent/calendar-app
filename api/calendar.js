@@ -903,7 +903,7 @@ ${question}
 
         // Gemini 호출
         const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -915,13 +915,7 @@ ${question}
         );
         const geminiJson = await geminiRes.json();
         const aiText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-if (!aiText) {
-    // 🚨 임시 진단 - Gemini 원본 그대로 노출
-    return res.status(200).json({ 
-        success: false, 
-        msg: 'GEMINI원본: ' + JSON.stringify(geminiJson).slice(0, 400)
-    });
-}
+        if (!aiText) return res.status(200).json({ success: false, msg: 'AI 응답이 없습니다.' });
 
         let parsed;
         try {
@@ -957,7 +951,7 @@ ${JSON.stringify(rows, null, 2)}
         `.trim();
 
         const summaryRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
