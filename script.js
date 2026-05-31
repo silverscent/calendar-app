@@ -1,3 +1,5 @@
+
+console.log("script.js가 정상적으로 로드되었습니다.");
 // ── 1. AI 질의 기능 ──────────────────────────────
 function openAiQuery() {
     const modal = document.getElementById('aiQueryModal');
