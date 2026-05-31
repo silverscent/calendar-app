@@ -199,23 +199,34 @@ function savePosition(fab, key) {
 
 // ── 4. 초기화 ──────────────────────────────
 function showAiFabIfAdmin() {
+    // 1. 관리자 ID 확인
     const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
+    
+    // 2. 디버깅 로그: 도대체 어떤 ID를 읽고 있는지 콘솔에 출력
+    console.log("=== 디버깅: showAiFabIfAdmin 시작 ===");
+    console.log("읽어온 admin_id 값:", adminId);
+
     const inboundFab = document.getElementById('inboundAiFab');
     const fabBtn = document.getElementById('fabBtn');
 
+    // 3. 관리자 ID가 없을 때 '숨기는' 로직을 잠시 막아둡니다 (if문 주석 처리)
     if (!adminId) {
-        if (inboundFab) inboundFab.style.display = 'none';
-        if (fabBtn) fabBtn.style.display = 'none';
+        console.warn("관리자 아이디가 감지되지 않았습니다. (하지만 테스트를 위해 버튼을 숨기지 않음)");
+        // if (inboundFab) inboundFab.style.display = 'none'; // 주석 처리
+        // if (fabBtn) fabBtn.style.display = 'none';         // 주석 처리
         return; 
     }
 
+    console.log("관리자 권한 확인됨. 버튼 표시.");
+
+    // (기존 표시 로직 그대로 유지)
     if (inboundFab) {
         const isMulti = (typeof isMultiMode !== 'undefined' && isMultiMode);
         if (!isMulti) inboundFab.style.display = 'flex';
     }
 
     if (fabBtn) {
-        fabBtn.style.display = 'block';
+        fabBtn.style.display = 'block'; 
         const fabAiSub = document.getElementById('fab-sub-ai-wrap');
         if(fabAiSub) fabAiSub.style.display = 'flex';
     }
