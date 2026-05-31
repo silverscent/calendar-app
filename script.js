@@ -133,7 +133,7 @@ function initDraggableFab() {
 
     const storageKey = fab.id === 'fabBtn' ? 'outboundFabPosition' : 'aiFabPosition';
     
-    // 💡 페이지 로드 시 저장된 위치 불러오기
+    // 1. 저장된 위치 불러오기
     loadPosition(fab, storageKey);
 
     let isMouseDown = false;
@@ -144,6 +144,7 @@ function initDraggableFab() {
         isMouseDown = true;
         startX = e.clientX;
         startY = e.clientY;
+        // 버튼 내부에서의 클릭 위치 계산
         offset.x = e.clientX - fab.getBoundingClientRect().left;
         offset.y = e.clientY - fab.getBoundingClientRect().top;
     });
@@ -156,17 +157,24 @@ function initDraggableFab() {
 
         if (dx > 5 || dy > 5) {
             window.isDragging = true;
-            // 드래그 중 위치 변경
-            fab.style.left = (e.clientX - offset.x) + 'px';
-            fab.style.top = (e.clientY - offset.y) + 'px';
-            fab.style.right = 'auto';
+
+            // 💡 핵심: 버튼의 이동 범위 제한 (화면 밖으로 나가지 못하게)
+            const maxX = window.innerWidth - fab.offsetWidth;
+            const maxY = window.innerHeight - fab.offsetHeight;
+
+            // 마우스 위치에서 offset을 뺀 값이 0보다 작으면 0으로, 최대치보다 크면 최대치로 고정
+            const newLeft = Math.max(0, Math.min(e.clientX - offset.x, maxX));
+            const newTop = Math.max(0, Math.min(e.clientY - offset.y, maxY));
+
+            fab.style.left = newLeft + 'px';
+            fab.style.top = newTop + 'px';
+            fab.style.right = 'auto'; // 고정값 해제
             fab.style.bottom = 'auto';
         }
     });
 
     document.addEventListener('mouseup', () => {
         if (isMouseDown && window.isDragging) {
-            // 💡 구석 이동 대신 위치 저장만 수행
             savePosition(fab, storageKey);
         }
         isMouseDown = false;
