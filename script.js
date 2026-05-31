@@ -127,24 +127,48 @@ function loadPosition(fab, key) {
 }
 
 // ── 3. FAB 드래그 기능 ──────────────────────────────
+// 1. 위치 저장 로직 (범위 검증 추가)
+function savePosition(fab, key) {
+    // 버튼의 실제 위치를 가져옵니다.
+    const rect = fab.getBoundingClientRect();
+    
+    // 화면 밖으로 나가지 않도록 좌표를 강제로 보정해서 저장
+    const safeLeft = Math.max(0, Math.min(rect.left, window.innerWidth - fab.offsetWidth));
+    const safeTop = Math.max(0, Math.min(rect.top, window.innerHeight - fab.offsetHeight));
+
+    const position = {
+        left: safeLeft + 'px',
+        top: safeTop + 'px',
+        right: 'auto',
+        bottom: 'auto',
+        position: 'fixed'
+    };
+    localStorage.setItem(key, JSON.stringify(position));
+    console.log("좌표 저장 완료:", position);
+}
+
+// 2. 드래그 로직 (범위 제한 추가)
 function initDraggableFab() {
     const fab = document.getElementById('inboundAiFab') || document.getElementById('fabBtn');
     if (!fab) return;
 
     const storageKey = fab.id === 'fabBtn' ? 'outboundFabPosition' : 'aiFabPosition';
     
-    // 1. 저장된 위치 불러오기
-    loadPosition(fab, storageKey);
+    // 저장된 위치 불러오기
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+        const pos = JSON.parse(saved);
+        fab.style.left = pos.left;
+        fab.style.top = pos.top;
+        fab.style.right = 'auto';
+        fab.style.bottom = 'auto';
+    }
 
     let isMouseDown = false;
     let offset = { x: 0, y: 0 };
-    let startX = 0, startY = 0;
 
     fab.addEventListener('mousedown', (e) => {
         isMouseDown = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        // 버튼 내부에서의 클릭 위치 계산
         offset.x = e.clientX - fab.getBoundingClientRect().left;
         offset.y = e.clientY - fab.getBoundingClientRect().top;
     });
@@ -152,49 +176,25 @@ function initDraggableFab() {
     document.addEventListener('mousemove', (e) => {
         if (!isMouseDown) return;
 
-        const dx = Math.abs(e.clientX - startX);
-        const dy = Math.abs(e.clientY - startY);
+        // 드래그 중에는 실시간으로 화면 안에서만 움직이게 제한
+        const maxX = window.innerWidth - fab.offsetWidth;
+        const maxY = window.innerHeight - fab.offsetHeight;
 
-        if (dx > 5 || dy > 5) {
-            window.isDragging = true;
+        const newX = Math.max(0, Math.min(e.clientX - offset.x, maxX));
+        const newY = Math.max(0, Math.min(e.clientY - offset.y, maxY));
 
-            // 💡 핵심: 버튼의 이동 범위 제한 (화면 밖으로 나가지 못하게)
-            const maxX = window.innerWidth - fab.offsetWidth;
-            const maxY = window.innerHeight - fab.offsetHeight;
-
-            // 마우스 위치에서 offset을 뺀 값이 0보다 작으면 0으로, 최대치보다 크면 최대치로 고정
-            const newLeft = Math.max(0, Math.min(e.clientX - offset.x, maxX));
-            const newTop = Math.max(0, Math.min(e.clientY - offset.y, maxY));
-
-            fab.style.left = newLeft + 'px';
-            fab.style.top = newTop + 'px';
-            fab.style.right = 'auto'; // 고정값 해제
-            fab.style.bottom = 'auto';
-        }
+        fab.style.left = newX + 'px';
+        fab.style.top = newY + 'px';
+        fab.style.right = 'auto';
+        fab.style.bottom = 'auto';
     });
 
     document.addEventListener('mouseup', () => {
-        if (isMouseDown && window.isDragging) {
+        if (isMouseDown) {
             savePosition(fab, storageKey);
         }
         isMouseDown = false;
-        window.isDragging = false;
     });
-}
-
-// 기존 snapToEdge를 아래 코드로 완전히 교체하세요.
-function savePosition(fab, key) {
-    // 구석으로 이동시키는 로직을 모두 삭제했습니다.
-    // 현재 스타일의 left, top, right, bottom 값을 그대로 저장만 합니다.
-    const position = {
-        left: fab.style.left,
-        top: fab.style.top,
-        right: fab.style.right,
-        bottom: fab.style.bottom,
-        position: 'fixed' // 위치 고정 방식 명시
-    };
-    localStorage.setItem(key, JSON.stringify(position));
-    console.log("위치 저장됨:", position);
 }
 
 // ── 4. 초기화 ──────────────────────────────
