@@ -123,11 +123,14 @@ document.addEventListener('click', function(e) {
 
 // FAB 드래그 기능
 function initDraggableFab() {
-    const fab = document.getElementById('inboundAiFab');
-    console.log("FAB 찾기 결과:", fab); // 이 로그가 null이라면 ID가 틀린 겁니다!
+    // 1. 입고(inboundAiFab) 혹은 출고(fabBtn) 중 존재하는 것을 찾음
+    const fab = document.getElementById('inboundAiFab') || document.getElementById('fabBtn');
     if (!fab) return;
 
-    const savedPos = JSON.parse(localStorage.getItem('aiFabPosition'));
+    // 2. 위치 불러오기 (ID별로 저장 위치를 구분하는 게 좋습니다)
+    const storageKey = fab.id === 'fabBtn' ? 'outboundFabPosition' : 'aiFabPosition';
+    const savedPos = JSON.parse(localStorage.getItem(storageKey));
+    
     if (savedPos) {
         fab.style.left = savedPos.left;
         fab.style.top = savedPos.top;
@@ -155,11 +158,11 @@ function initDraggableFab() {
     document.addEventListener('mouseup', () => {
         if (!isDragging) return;
         isDragging = false;
-        snapToEdge(fab);
+        snapToEdge(fab, storageKey); // storageKey 전달
     });
 }
 
-function snapToEdge(fab) {
+function snapToEdge(fab, key) {
     const rect = fab.getBoundingClientRect();
     const winWidth = window.innerWidth;
     const winHeight = window.innerHeight;
@@ -170,7 +173,7 @@ function snapToEdge(fab) {
     else if (min === rect.top) { fab.style.top = '10px'; fab.style.bottom = 'auto'; }
     else { fab.style.bottom = '10px'; fab.style.top = 'auto'; }
 
-    localStorage.setItem('aiFabPosition', JSON.stringify({
+    localStorage.setItem(key, JSON.stringify({
         left: fab.style.left, top: fab.style.top, right: fab.style.right, bottom: fab.style.bottom
     }));
 }
@@ -180,13 +183,19 @@ function showAiFabIfAdmin() {
     const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
     if (!adminId) return;
 
-    const fabAiSub = document.getElementById('fab-sub-ai-wrap');
-    if (fabAiSub) fabAiSub.style.display = 'flex';
-
+    // 입고 버튼
     const inboundFab = document.getElementById('inboundAiFab');
     if (inboundFab) {
         const isMulti = (typeof isMultiMode !== 'undefined' && isMultiMode);
         if (!isMulti) inboundFab.style.display = 'flex';
+    }
+
+    // 출고 스피드 다이얼
+    const fabBtn = document.getElementById('fabBtn');
+    const fabAiSub = document.getElementById('fab-sub-ai-wrap');
+    if (fabBtn && fabAiSub) {
+        fabBtn.style.display = 'block'; // 전체 다이얼을 보이게 함
+        fabAiSub.style.display = 'flex'; // AI 버튼만 보이게 함
     }
 }
 
