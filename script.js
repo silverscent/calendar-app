@@ -1,7 +1,9 @@
 
 console.log("script.js가 정상적으로 로드되었습니다.");
+let isDragging = false; // 전역 변수로 관리
 // ── 1. AI 질의 기능 ──────────────────────────────
 function openAiQuery() {
+    if (isDragging) return; // 드래그 중이었다면 무시
     const modal = document.getElementById('aiQueryModal');
     if (modal) {
         modal.style.display = 'flex';
@@ -143,6 +145,7 @@ function initDraggableFab() {
 
     fab.addEventListener('mousedown', (e) => {
         e.preventDefault(); // 👈 이 줄이 핵심입니다! 새로고침 방지
+        e.stopPropagation(); // 👈 이 코드가 새로고침을 막는 핵심입니다.
         isDragging = true;
         offset.x = e.clientX - fab.getBoundingClientRect().left;
         offset.y = e.clientY - fab.getBoundingClientRect().top;
@@ -167,15 +170,36 @@ function snapToEdge(fab, key) {
     const rect = fab.getBoundingClientRect();
     const winWidth = window.innerWidth;
     const winHeight = window.innerHeight;
-    const min = Math.min(rect.left, winWidth - rect.right, rect.top, winHeight - rect.bottom);
+    
+    // 4방향과의 거리 계산
+    const distLeft = rect.left;
+    const distRight = winWidth - rect.right;
+    const distTop = rect.top;
+    const distBottom = winHeight - rect.bottom;
+    
+    const min = Math.min(distLeft, distRight, distTop, distBottom);
 
-    if (min === rect.left) { fab.style.left = '10px'; fab.style.right = 'auto'; }
-    else if (min === winWidth - rect.right) { fab.style.right = '10px'; fab.style.left = 'auto'; }
-    else if (min === rect.top) { fab.style.top = '10px'; fab.style.bottom = 'auto'; }
-    else { fab.style.bottom = '10px'; fab.style.top = 'auto'; }
+    // 1. 모든 위치값 초기화 (충돌 방지)
+    fab.style.left = 'auto';
+    fab.style.right = 'auto';
+    fab.style.top = 'auto';
+    fab.style.bottom = 'auto';
 
+    // 2. 가장 가까운 쪽으로 고정
+    if (min === distLeft) {
+        fab.style.left = '10px';
+    } else if (min === distRight) {
+        fab.style.right = '10px';
+    } else if (min === distTop) {
+        fab.style.top = '10px';
+    } else {
+        fab.style.bottom = '10px';
+    }
+
+    // 위치 저장
     localStorage.setItem(key, JSON.stringify({
-        left: fab.style.left, top: fab.style.top, right: fab.style.right, bottom: fab.style.bottom
+        left: fab.style.left, top: fab.style.top, 
+        right: fab.style.right, bottom: fab.style.bottom
     }));
 }
 

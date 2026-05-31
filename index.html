@@ -1814,7 +1814,6 @@
     
     /* 🚀 확장형 FAB 전용 스타일 */
 .fab-wrapper {
-    position: fixed;
     right: 20px;
     bottom: max(30px, env(safe-area-inset-bottom));
     display: flex;
@@ -1822,6 +1821,9 @@
     align-items: flex-end;
     gap: 15px;
     z-index: 1500;
+    position: fixed !important;
+    transform: none !important; /* 붕 뜨는 현상 방지 */
+    width: fit-content;        /* 드래그 시 크기가 찌그러지지 않게 함 */
 }
 .fab-main {
     width: 60px; height: 60px; border-radius: 50%;

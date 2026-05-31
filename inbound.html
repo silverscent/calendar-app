@@ -5148,7 +5148,7 @@ function saveOcrFilterWordsToServer() {
 
 
     </script>
-    <button class="fab-single-ai" id="inboundAiFab" onclick="openAiQuery()" style="display: none;">🤖</button>
+    <button class="fab-single-ai" id="inboundAiFab" type="button" onclick="openAiQuery()" style="display: none;">🤖</button>
 
 <div id="aiQueryModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: flex-end; justify-content: center;" onclick="if(event.target===this) closeAiQuery()">
     <div style="background: var(--card-bg, #1c1c1e); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px; padding-bottom: 40px; max-height: 85vh; overflow-y: auto;" onclick="event.stopPropagation()">
