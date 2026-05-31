@@ -915,7 +915,13 @@ ${question}
         );
         const geminiJson = await geminiRes.json();
         const aiText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (!aiText) return res.status(200).json({ success: false, msg: 'AI 응답이 없습니다.' });
+if (!aiText) {
+    // 🚨 임시 진단 - Gemini 원본 그대로 노출
+    return res.status(200).json({ 
+        success: false, 
+        msg: 'GEMINI원본: ' + JSON.stringify(geminiJson).slice(0, 400)
+    });
+}
 
         let parsed;
         try {

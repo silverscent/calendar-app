@@ -200,6 +200,7 @@ function _attachDrag(fab, storageKey) {
 
     // ── 마우스 이벤트 (PC)
     fab.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // 👈 이 줄 추가
         startX = e.clientX;
         startY = e.clientY;
         const rect = fab.getBoundingClientRect();
@@ -239,11 +240,11 @@ function _attachDrag(fab, storageKey) {
 // position:fixed + left/top으로 전환 (right/bottom 제거)
 function _setAbsolute(fab) {
     const rect = fab.getBoundingClientRect();
-    fab.style.position = 'fixed';
-    fab.style.left   = rect.left + 'px';
-    fab.style.top    = rect.top  + 'px';
-    fab.style.right  = 'auto';
-    fab.style.bottom = 'auto';
+    fab.style.setProperty('position', 'fixed', 'important');
+    fab.style.setProperty('left', rect.left + 'px', 'important');
+    fab.style.setProperty('top', rect.top + 'px', 'important');
+    fab.style.setProperty('right', 'auto', 'important');
+    fab.style.setProperty('bottom', 'auto', 'important');
 }
 
 // 가장 가까운 좌/우 가장자리로 스냅
@@ -251,13 +252,13 @@ function _snapToEdge(fab) {
     const rect  = fab.getBoundingClientRect();
     const cx    = rect.left + rect.width / 2;
     const snapX = cx < window.innerWidth / 2
-        ? 12                                          // 왼쪽 가장자리
-        : window.innerWidth - fab.offsetWidth - 12;  // 오른쪽 가장자리
+        ? 12
+        : window.innerWidth - fab.offsetWidth - 12;
     const safeY = Math.max(12, Math.min(rect.top, window.innerHeight - fab.offsetHeight - 12));
-    fab.style.left   = snapX + 'px';
-    fab.style.top    = safeY + 'px';
-    fab.style.right  = 'auto';
-    fab.style.bottom = 'auto';
+    fab.style.setProperty('left', snapX + 'px', 'important');
+    fab.style.setProperty('top', safeY + 'px', 'important');
+    fab.style.setProperty('right', 'auto', 'important');
+    fab.style.setProperty('bottom', 'auto', 'important');
 }
 
 function _savePos(fab, key) {
@@ -272,17 +273,16 @@ function _restorePos(fab, key) {
     if (!saved) return;
     try {
         const pos = JSON.parse(saved);
-        // 화면 범위 벗어나면 무시
         const l = parseInt(pos.left);
         const t = parseInt(pos.top);
         if (isNaN(l) || isNaN(t)) return;
         if (l < 0 || l > window.innerWidth - 20) return;
         if (t < 0 || t > window.innerHeight - 20) return;
-        fab.style.position = 'fixed';
-        fab.style.left   = pos.left;
-        fab.style.top    = pos.top;
-        fab.style.right  = 'auto';
-        fab.style.bottom = 'auto';
+        fab.style.setProperty('position', 'fixed', 'important');
+        fab.style.setProperty('left', pos.left, 'important');
+        fab.style.setProperty('top', pos.top, 'important');
+        fab.style.setProperty('right', 'auto', 'important');
+        fab.style.setProperty('bottom', 'auto', 'important');
     } catch(e) {}
 }
 
