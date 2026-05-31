@@ -3278,10 +3278,10 @@ google.script.run
       }
 
       // 수정
-setInterval(() => { if (!window.isDragging) silentBackgroundSync(); }, 60000);
+setInterval(() => { if (!window.fabDragging) silentBackgroundSync(); }, 60000);
       // 수정 — 드래그 중이면 sync 건너뛰기
 document.addEventListener("visibilitychange", () => { 
-    if (document.visibilityState === 'visible' && !window.isDragging) silentBackgroundSync(); 
+    if (document.visibilityState === 'visible' && !window.fabDragging) silentBackgroundSync(); 
 });
 
       // =====================================================

@@ -164,6 +164,7 @@ function _attachDrag(fab, storageKey, hasMenu) {
 
     // 터치
     fab.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
         const t = e.touches[0];
         startX = t.clientX; startY = t.clientY;
         const rect = fab.getBoundingClientRect();
@@ -172,17 +173,19 @@ function _attachDrag(fab, storageKey, hasMenu) {
     }, { passive: true });
 
     fab.addEventListener('touchmove', (e) => {
+        e.stopPropagation();
         const t = e.touches[0];
         const moved = moveTo(t.clientX, t.clientY);
         if (moved) e.preventDefault();
     }, { passive: false });
 
-    fab.addEventListener('touchend', endDrag);
-    fab.addEventListener('touchcancel', endDrag);
+    fab.addEventListener('touchend', (e) => { e.stopPropagation(); endDrag(); });
+    fab.addEventListener('touchcancel', (e) => { e.stopPropagation(); endDrag(); });
 
     // 마우스 (PC)
     fab.addEventListener('mousedown', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         startX = e.clientX; startY = e.clientY;
         const rect = fab.getBoundingClientRect();
         startLeft = rect.left; startTop = rect.top;
