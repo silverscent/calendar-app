@@ -1867,6 +1867,47 @@ body.light-mode .fab-label {
 .fab-sub-btn.ai { background: linear-gradient(135deg, #5e5ce6, #bf5af2); color: white; }
 .fab-sub-btn.add { background: #34c759; color: white; }
  
+/* ════════════════════════════════════════════════ */
+/* index.html <style> 안에 추가하세요 (출고 FAB 메뉴 방향 전환) */
+/* ════════════════════════════════════════════════ */
+
+/* 기본: 메뉴가 위로 펼쳐지고 오른쪽 정렬 (기존 동작) */
+.fab-wrapper .fab-sub-container {
+    flex-direction: column;
+}
+
+/* 왼쪽 가장자리에 붙었을 때 → 메뉴/라벨 왼쪽 정렬, 라벨이 버튼 오른쪽으로 */
+.fab-wrapper.snap-left .fab-sub-container {
+    align-items: flex-start;
+}
+.fab-wrapper.snap-left .fab-sub-item {
+    flex-direction: row-reverse;  /* 버튼이 왼쪽, 라벨이 오른쪽 */
+}
+
+/* 오른쪽 가장자리 (기본값) → 라벨이 버튼 왼쪽 */
+.fab-wrapper.snap-right .fab-sub-container {
+    align-items: flex-end;
+}
+.fab-wrapper.snap-right .fab-sub-item {
+    flex-direction: row;
+}
+
+/* 화면 위쪽에 붙었을 때 → 메뉴가 버튼 아래로 펼쳐지도록 */
+.fab-wrapper.snap-top {
+    flex-direction: column;       /* 버튼이 위, 메뉴가 아래 */
+}
+.fab-wrapper.snap-top .fab-sub-container {
+    order: 2;                     /* 메뉴를 버튼 아래로 */
+    transform: translateY(-20px);
+}
+.fab-wrapper.snap-top.open .fab-sub-container {
+    transform: translateY(0);
+}
+
+/* 화면 아래쪽 (기본값) → 메뉴가 버튼 위로 */
+.fab-wrapper.snap-bottom {
+    flex-direction: column-reverse;
+}
 
 /* 결과 요약 박스 */
 #ai-summary {
