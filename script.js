@@ -163,6 +163,8 @@ function _attachDrag(fab, storageKey, hasMenu) {
     };
 
     const endDrag = () => {
+        // 🚨 대기중인 rAF 취소 (스냅 좌표가 중간값으로 덮어써지는 것 방지)
+        if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
         if (dragged) {
             _snapToEdge(fab, hasMenu);
             _savePos(fab, storageKey);
@@ -257,13 +259,18 @@ function _snapToEdge(fab, hasMenu) {
     const PAD = 12;
 
     const isLeft = cx < window.innerWidth / 2;
-    const snapX = isLeft ? PAD : (window.innerWidth - btn.w - PAD);
     // 상하 위치 유지하되 화면 안으로 확실히 보정
     const safeY = Math.max(PAD, Math.min(baseRect.top, window.innerHeight - btn.h - PAD));
 
-    fab.style.setProperty('left', snapX + 'px', 'important');
+    // 🚨 오른쪽이면 right로 고정 (width:max-content 라도 버튼 본체가 항상 오른쪽 가장자리에 붙음)
+    if (isLeft) {
+        fab.style.setProperty('left', PAD + 'px', 'important');
+        fab.style.setProperty('right', 'auto', 'important');
+    } else {
+        fab.style.setProperty('right', PAD + 'px', 'important');
+        fab.style.setProperty('left', 'auto', 'important');
+    }
     fab.style.setProperty('top',  safeY + 'px', 'important');
-    fab.style.setProperty('right', 'auto', 'important');
     fab.style.setProperty('bottom', 'auto', 'important');
 
     if (hasMenu) {
@@ -276,9 +283,13 @@ function _snapToEdge(fab, hasMenu) {
 }
 
 function _savePos(fab, key) {
+    const isLeftSnap = fab.classList.contains('snap-left') || (fab.style.left && fab.style.left !== 'auto');
     localStorage.setItem(key, JSON.stringify({
-        left: fab.style.left,
-        top:  fab.style.top,
+        // 오른쪽 고정이면 right 값을, 왼쪽 고정이면 left 값을 저장
+        side: (fab.style.right && fab.style.right !== 'auto') ? 'right' : 'left',
+        left:  fab.style.left,
+        right: fab.style.right,
+        top:   fab.style.top,
         snapLeft:   fab.classList.contains('snap-left'),
         snapBottom: fab.classList.contains('snap-bottom')
     }));
@@ -289,16 +300,26 @@ function _restorePos(fab, key, hasMenu) {
     if (!saved) return;
     try {
         const pos = JSON.parse(saved);
-        const l = parseInt(pos.left), t = parseInt(pos.top);
-        if (isNaN(l) || isNaN(t)) return;
-        // 화면 밖이면 저장값 폐기하고 기본위치 유지
-        if (l < 0 || l > window.innerWidth - 20) { localStorage.removeItem(key); return; }
+        const t = parseInt(pos.top);
+        if (isNaN(t)) return;
+        // 세로 화면 밖이면 저장값 폐기
         if (t < 0 || t > window.innerHeight - 20) { localStorage.removeItem(key); return; }
+
         fab.style.setProperty('position', 'fixed', 'important');
-        fab.style.setProperty('left', pos.left, 'important');
         fab.style.setProperty('top', pos.top, 'important');
-        fab.style.setProperty('right', 'auto', 'important');
         fab.style.setProperty('bottom', 'auto', 'important');
+
+        // side 정보로 좌우 고정 방식 복원
+        if (pos.side === 'right' && pos.right && pos.right !== 'auto') {
+            fab.style.setProperty('right', pos.right, 'important');
+            fab.style.setProperty('left', 'auto', 'important');
+        } else {
+            const l = parseInt(pos.left);
+            if (isNaN(l) || l < 0 || l > window.innerWidth - 20) { localStorage.removeItem(key); return; }
+            fab.style.setProperty('left', pos.left, 'important');
+            fab.style.setProperty('right', 'auto', 'important');
+        }
+
         if (hasMenu) {
             fab.classList.toggle('snap-left',  !!pos.snapLeft);
             fab.classList.toggle('snap-right', !pos.snapLeft);
