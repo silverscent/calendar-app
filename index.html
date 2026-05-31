@@ -8175,7 +8175,8 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
 
       // 💡 UI가 새로고침되거나 로그아웃되어도 상시 작동하도록 document 전역 위임 패턴 적용
 document.addEventListener('click', function(event) {
-    if (event.target.textContent.includes('[잠김]') || event.target.id === 'lock-btn') {
+    // 수정 (정확히 lock-btn 요소이거나, 잠김 버튼 자체를 클릭했을 때만)
+if (event.target.id === 'lock-btn' || event.target.closest('#lock-btn')) {
         event.preventDefault();
         const token = localStorage.getItem('accessToken');
 
