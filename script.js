@@ -201,13 +201,14 @@ function _attachDrag(fab, storageKey, hasMenu) {
         document.addEventListener('mouseup', onUp);
     });
 
-    // 클릭 차단: 드래그였으면 클릭 무효화 (PC 새로고침/오작동 방지)
-    fab.addEventListener('click', (e) => {
-        if (window.fabDragging) {
-            e.preventDefault();
+    // 클릭 처리 (입고 단일버튼만): 드래그였으면 무효화, 아니면 AI 질의
+    if (!hasMenu) {
+        fab.addEventListener('click', (e) => {
             e.stopPropagation();
-        }
-    }, true);
+            if (window.fabDragging) { e.preventDefault(); return; }
+            openAiQuery();
+        }, false);
+    }
 }
 
 // 버튼 "본체"만의 크기 (메뉴 제외)
