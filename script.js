@@ -119,22 +119,31 @@ function initDraggableFab() {
     if (!fab) return;
 
     const storageKey = fab.id === 'fabBtn' ? 'outboundFabPosition' : 'aiFabPosition';
+    
+    let isMouseDown = false; // 💡 핵심: 마우스 클릭 상태 확인용 변수
     let offset = { x: 0, y: 0 };
     let startX = 0, startY = 0;
 
+    // 1. 마우스를 눌렀을 때
     fab.addEventListener('mousedown', (e) => {
-        window.isDragging = false; 
+        isMouseDown = true; // 드래그 시작!
         startX = e.clientX;
         startY = e.clientY;
         offset.x = e.clientX - fab.getBoundingClientRect().left;
         offset.y = e.clientY - fab.getBoundingClientRect().top;
     });
 
+    // 2. 마우스를 움직일 때
     document.addEventListener('mousemove', (e) => {
+        // 💡 중요: 마우스를 누른 상태(isMouseDown)가 아니면 여기서 즉시 중단!
+        if (!isMouseDown) return; 
+
         const dx = Math.abs(e.clientX - startX);
         const dy = Math.abs(e.clientY - startY);
+
+        // 5px 이상 움직여야 드래그로 간주
         if (dx > 5 || dy > 5) {
-            window.isDragging = true;
+            window.isDragging = true; // 전역 드래그 상태 업데이트
             fab.style.left = (e.clientX - offset.x) + 'px';
             fab.style.top = (e.clientY - offset.y) + 'px';
             fab.style.right = 'auto';
@@ -142,10 +151,12 @@ function initDraggableFab() {
         }
     });
 
+    // 3. 마우스 버튼을 뗐을 때
     document.addEventListener('mouseup', () => {
-        if (window.isDragging) {
+        if (isMouseDown && window.isDragging) {
             snapToEdge(fab, storageKey);
         }
+        isMouseDown = false;    // 드래그 종료
         window.isDragging = false;
     });
 }
