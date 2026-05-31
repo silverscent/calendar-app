@@ -121,7 +121,7 @@ function getMondayOfWeek(dateStr) {
             const currentAdmin = admin_id || 'system';
 
             // 🚨 [강화된 글로벌 세션 방어막] 데이터 조작/조회 시 무조건 권한 철저히 검증!
-            const secureActions = ['ADD', 'EDIT', 'DELETE', 'DONE', 'UNDO_DONE', 'ADD_QTY', 'UPDATE_ORDER', 'MULTI_DELETE', 'MULTI_DONE', 'MULTI_UNDO_DONE', 'CREATE_ADMIN', 'DELETE_ADMIN', 'REACTIVATE_ADMIN', 'HARD_DELETE_ADMIN', 'RESET_ADMIN_PW', 'CHANGE_MY_PASSWORD', 'UPDATE_RAW_ROW_FULL', 'ADD_RAW_ROW_DIRECT', 'DELETE_RAW_ROW_DIRECT', 'SAVE_COMP_INFO_DB', 'SAVE_GLOBAL_COLOR', 'GET_ALL_CONN_LOGS']; 
+            const secureActions = ['ADD', 'EDIT', 'DELETE', 'DONE', 'UNDO_DONE', 'ADD_QTY', 'UPDATE_ORDER', 'MULTI_DELETE', 'MULTI_DONE', 'MULTI_UNDO_DONE', 'CREATE_ADMIN', 'DELETE_ADMIN', 'REACTIVATE_ADMIN', 'HARD_DELETE_ADMIN', 'RESET_ADMIN_PW', 'CHANGE_MY_PASSWORD', 'UPDATE_RAW_ROW_FULL', 'ADD_RAW_ROW_DIRECT', 'DELETE_RAW_ROW_DIRECT', 'SAVE_COMP_INFO_DB', 'SAVE_GLOBAL_COLOR', 'GET_ALL_CONN_LOGS', 'AI_QUERY']; 
             // 👆 맨 끝에 'GET_ALL_CONN_LOGS' 추가 완료
             
             // ... (기존 코드)

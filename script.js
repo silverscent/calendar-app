@@ -1,14 +1,18 @@
-// ── 0. 전역 변수 설정 (브라우저 어디서든 접근 가능하도록 window 객체 사용)
+// ── 0. 전역 변수
 window.isDragging = false;
 
-// ── 1. AI 질의 기능 ──────────────────────────────
+// ═══════════════════════════════════════════════
+// ── 1. AI 질의 기능
+// ═══════════════════════════════════════════════
 function openAiQuery() {
-    if (window.isDragging) return; 
+    if (window.isDragging) return;
     const modal = document.getElementById('aiQueryModal');
-    if (modal) {
-        modal.style.display = 'flex';
-        setTimeout(() => document.getElementById('ai-question-input')?.focus(), 300);
-    }
+    if (!modal) return;
+    modal.style.display = 'flex';
+    // 결과 초기화
+    const resultArea = document.getElementById('ai-result-area');
+    if (resultArea) resultArea.style.display = 'none';
+    setTimeout(() => document.getElementById('ai-question-input')?.focus(), 300);
 }
 
 function closeAiQuery() {
@@ -28,7 +32,6 @@ function toggleAiSql() {
     const box = document.getElementById('ai-sql-box');
     const toggle = document.getElementById('ai-sql-toggle');
     if (!box || !toggle) return;
-    
     if (box.style.display === 'none') {
         box.style.display = 'block';
         toggle.textContent = 'SQL 숨기기 ▴';
@@ -43,195 +46,284 @@ async function runAiQuery() {
     if (!inputEl || !inputEl.value.trim()) return;
     const question = inputEl.value.trim();
 
-    const resultArea = document.getElementById('ai-result-area');
-    const loading = document.getElementById('ai-loading');
-    const summary = document.getElementById('ai-summary');
-    const tableWrap = document.getElementById('ai-table-wrap');
-    const table = document.getElementById('ai-data-table');
-    const errorBox = document.getElementById('ai-error');
-    const sendBtn = document.getElementById('ai-send-btn');
+    const resultArea  = document.getElementById('ai-result-area');
+    const loading     = document.getElementById('ai-loading');
+    const summary     = document.getElementById('ai-summary');
+    const tableWrap   = document.getElementById('ai-table-wrap');
+    const table       = document.getElementById('ai-data-table');
+    const errorBox    = document.getElementById('ai-error');
+    const sendBtn     = document.getElementById('ai-send-btn');
+    if (!resultArea) return;
 
+    // 초기화
     resultArea.style.display = 'block';
-    loading.style.display = 'block';
-    summary.style.display = 'none';
-    tableWrap.style.display = 'none';
-    errorBox.style.display = 'none';
-    sendBtn.disabled = true;
-    sendBtn.textContent = '...';
+    if (loading)   { loading.style.display = 'block'; }
+    if (summary)   { summary.style.display = 'none'; }
+    if (tableWrap) { tableWrap.style.display = 'none'; }
+    if (errorBox)  { errorBox.style.display = 'none'; }
+    if (sendBtn)   { sendBtn.disabled = true; sendBtn.textContent = '...'; }
 
     try {
         const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
         const res = await fetch('/api/calendar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'AI_QUERY', admin_id: adminId, data: { question } })
+            body: JSON.stringify({
+                action: 'AI_QUERY',
+                admin_id: adminId,
+                data: { question }
+            })
         });
         const result = await res.json();
-        loading.style.display = 'none';
+
+        if (loading) loading.style.display = 'none';
 
         if (!result.success) {
-            errorBox.style.display = 'block';
-            errorBox.textContent = '⚠️ ' + (result.msg || '오류가 발생했습니다.');
+            if (errorBox) {
+                errorBox.style.display = 'block';
+                errorBox.textContent = '⚠️ ' + (result.msg || '오류가 발생했습니다.');
+            }
             return;
         }
 
-        summary.style.display = 'block';
-        summary.textContent = result.summary;
-
-        if (result.rows && result.rows.length > 0) {
-            tableWrap.style.display = 'block';
-            document.getElementById('ai-result-count').textContent = `${result.count}건 조회됨`;
-            document.getElementById('ai-sql-box').textContent = result.sql;
-
-            const cols = Object.keys(result.rows[0]);
-            let html = `<thead><tr>${cols.map(c => `<th style="padding:8px 10px; text-align:left; border-bottom:1px solid #333; color:#888; white-space:nowrap;">${c}</th>`).join('')}</tr></thead><tbody>`;
-            result.rows.forEach((row, i) => {
-                html += `<tr style="background:${i%2===0?'transparent':'rgba(255,255,255,0.02)'}">`;
-                cols.forEach(c => { html += `<td style="padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.05); white-space:nowrap; color:#fff;">${row[c] ?? '-'}</td>`; });
-                html += '</tr>';
-            });
-            html += '</tbody>';
-            table.innerHTML = html;
-        } else {
-            tableWrap.style.display = 'block';
-            document.getElementById('ai-result-count').textContent = '0건';
-            table.innerHTML = `<tr><td style="padding:16px; text-align:center; color:#888;">조회된 데이터가 없습니다.</td></tr>`;
+        // 요약 표시
+        if (summary) {
+            summary.style.display = 'block';
+            summary.textContent = result.summary;
         }
-    } catch(e) {
-        loading.style.display = 'none';
-        errorBox.style.display = 'block';
-        errorBox.textContent = '⚠️ 네트워크 오류가 발생했습니다.';
+
+        // 테이블 표시
+        if (tableWrap) {
+            tableWrap.style.display = 'block';
+            const countEl = document.getElementById('ai-result-count');
+            const sqlBox  = document.getElementById('ai-sql-box');
+            if (countEl) countEl.textContent = `${result.count}건 조회됨`;
+            if (sqlBox)  sqlBox.textContent = result.sql;
+
+            if (result.rows && result.rows.length > 0) {
+                const cols = Object.keys(result.rows[0]);
+                let html = `<thead><tr>${cols.map(c =>
+                    `<th style="padding:8px 10px;text-align:left;border-bottom:1px solid #444;color:#aaa;white-space:nowrap;font-size:0.8em;">${c}</th>`
+                ).join('')}</tr></thead><tbody>`;
+                result.rows.forEach((row, i) => {
+                    html += `<tr style="background:${i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.03)'}">`;
+                    cols.forEach(c => {
+                        html += `<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;color:#fff;font-size:0.85em;">${row[c] ?? '-'}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody>';
+                if (table) table.innerHTML = html;
+            } else {
+                if (table) table.innerHTML = `<tr><td colspan="99" style="padding:20px;text-align:center;color:#888;">조회된 데이터가 없습니다.</td></tr>`;
+            }
+        }
+
+    } catch (e) {
+        console.error('AI_QUERY 에러:', e);
+        if (loading)  loading.style.display = 'none';
+        if (errorBox) {
+            errorBox.style.display = 'block';
+            errorBox.textContent = '⚠️ 네트워크 오류가 발생했습니다.';
+        }
     } finally {
-        sendBtn.disabled = false;
-        sendBtn.textContent = '전송';
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '전송'; }
     }
 }
 
-// ── 2. FAB 메뉴 토글 ──────────────────────────────
+// ═══════════════════════════════════════════════
+// ── 2. FAB 메뉴 토글 (출고 전용)
+// ═══════════════════════════════════════════════
 function toggleFabMenu() {
     const wrapper = document.getElementById('fabBtn');
     if (wrapper) wrapper.classList.toggle('open');
 }
 
-// initDraggableFab 함수 바로 위에 추가하세요.
-function loadPosition(fab, key) {
+// ═══════════════════════════════════════════════
+// ── 3. FAB 드래그 기능 (화면 가장자리 고정 스냅)
+// ═══════════════════════════════════════════════
+function initDraggableFab() {
+    // 출고: fabBtn / 입고: inboundAiFab — 각 페이지에 맞는 것만 존재함
+    const fabOut = document.getElementById('fabBtn');
+    const fabIn  = document.getElementById('inboundAiFab');
+
+    if (fabOut) _attachDrag(fabOut, 'outboundFabPos');
+    if (fabIn)  _attachDrag(fabIn,  'inboundFabPos');
+}
+
+function _attachDrag(fab, storageKey) {
+    // 저장된 위치 복원
+    _restorePos(fab, storageKey);
+
+    let startX, startY, startLeft, startTop;
+    let dragged = false;
+    const DRAG_THRESHOLD = 6; // px — 이 이상 움직여야 드래그로 인식
+
+    // ── 터치 이벤트
+    fab.addEventListener('touchstart', (e) => {
+        const t = e.touches[0];
+        startX = t.clientX;
+        startY = t.clientY;
+        const rect = fab.getBoundingClientRect();
+        startLeft = rect.left;
+        startTop  = rect.top;
+        dragged = false;
+        window.isDragging = false;
+    }, { passive: true });
+
+    fab.addEventListener('touchmove', (e) => {
+        const t = e.touches[0];
+        const dx = t.clientX - startX;
+        const dy = t.clientY - startY;
+
+        if (!dragged && Math.sqrt(dx*dx + dy*dy) > DRAG_THRESHOLD) {
+            dragged = true;
+            window.isDragging = true;
+            _setAbsolute(fab);
+        }
+        if (!dragged) return;
+        e.preventDefault();
+
+        const maxX = window.innerWidth  - fab.offsetWidth;
+        const maxY = window.innerHeight - fab.offsetHeight;
+        fab.style.left = Math.max(0, Math.min(startLeft + dx, maxX)) + 'px';
+        fab.style.top  = Math.max(0, Math.min(startTop  + dy, maxY)) + 'px';
+    }, { passive: false });
+
+    fab.addEventListener('touchend', () => {
+        if (dragged) {
+            _snapToEdge(fab);
+            _savePos(fab, storageKey);
+        }
+        setTimeout(() => { window.isDragging = false; }, 100);
+    });
+
+    // ── 마우스 이벤트 (PC)
+    fab.addEventListener('mousedown', (e) => {
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = fab.getBoundingClientRect();
+        startLeft = rect.left;
+        startTop  = rect.top;
+        dragged = false;
+        window.isDragging = false;
+
+        const onMove = (e) => {
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            if (!dragged && Math.sqrt(dx*dx + dy*dy) > DRAG_THRESHOLD) {
+                dragged = true;
+                window.isDragging = true;
+                _setAbsolute(fab);
+            }
+            if (!dragged) return;
+            const maxX = window.innerWidth  - fab.offsetWidth;
+            const maxY = window.innerHeight - fab.offsetHeight;
+            fab.style.left = Math.max(0, Math.min(startLeft + dx, maxX)) + 'px';
+            fab.style.top  = Math.max(0, Math.min(startTop  + dy, maxY)) + 'px';
+        };
+        const onUp = () => {
+            if (dragged) {
+                _snapToEdge(fab);
+                _savePos(fab, storageKey);
+            }
+            setTimeout(() => { window.isDragging = false; }, 100);
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+}
+
+// position:fixed + left/top으로 전환 (right/bottom 제거)
+function _setAbsolute(fab) {
+    const rect = fab.getBoundingClientRect();
+    fab.style.position = 'fixed';
+    fab.style.left   = rect.left + 'px';
+    fab.style.top    = rect.top  + 'px';
+    fab.style.right  = 'auto';
+    fab.style.bottom = 'auto';
+}
+
+// 가장 가까운 좌/우 가장자리로 스냅
+function _snapToEdge(fab) {
+    const rect  = fab.getBoundingClientRect();
+    const cx    = rect.left + rect.width / 2;
+    const snapX = cx < window.innerWidth / 2
+        ? 12                                          // 왼쪽 가장자리
+        : window.innerWidth - fab.offsetWidth - 12;  // 오른쪽 가장자리
+    const safeY = Math.max(12, Math.min(rect.top, window.innerHeight - fab.offsetHeight - 12));
+    fab.style.left   = snapX + 'px';
+    fab.style.top    = safeY + 'px';
+    fab.style.right  = 'auto';
+    fab.style.bottom = 'auto';
+}
+
+function _savePos(fab, key) {
+    localStorage.setItem(key, JSON.stringify({
+        left: fab.style.left,
+        top:  fab.style.top
+    }));
+}
+
+function _restorePos(fab, key) {
     const saved = localStorage.getItem(key);
     if (!saved) return;
-
-    const pos = JSON.parse(saved);
-    fab.style.left = pos.left;
-    fab.style.top = pos.top;
-    fab.style.right = pos.right;
-    fab.style.bottom = pos.bottom;
-    fab.style.position = pos.position;
-}
-
-// ── 3. FAB 드래그 기능 ──────────────────────────────
-// 1. 위치 저장 로직 (범위 검증 추가)
-function savePosition(fab, key) {
-    // 버튼의 실제 위치를 가져옵니다.
-    const rect = fab.getBoundingClientRect();
-    
-    // 화면 밖으로 나가지 않도록 좌표를 강제로 보정해서 저장
-    const safeLeft = Math.max(0, Math.min(rect.left, window.innerWidth - fab.offsetWidth));
-    const safeTop = Math.max(0, Math.min(rect.top, window.innerHeight - fab.offsetHeight));
-
-    const position = {
-        left: safeLeft + 'px',
-        top: safeTop + 'px',
-        right: 'auto',
-        bottom: 'auto',
-        position: 'fixed'
-    };
-    localStorage.setItem(key, JSON.stringify(position));
-    console.log("좌표 저장 완료:", position);
-}
-
-// 2. 드래그 로직 (범위 제한 추가)
-function initDraggableFab() {
-    const fab = document.getElementById('inboundAiFab') || document.getElementById('fabBtn');
-    if (!fab) return;
-
-    const storageKey = fab.id === 'fabBtn' ? 'outboundFabPosition' : 'aiFabPosition';
-    
-    // 저장된 위치 불러오기
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
+    try {
         const pos = JSON.parse(saved);
-        fab.style.left = pos.left;
-        fab.style.top = pos.top;
-        fab.style.right = 'auto';
+        // 화면 범위 벗어나면 무시
+        const l = parseInt(pos.left);
+        const t = parseInt(pos.top);
+        if (isNaN(l) || isNaN(t)) return;
+        if (l < 0 || l > window.innerWidth - 20) return;
+        if (t < 0 || t > window.innerHeight - 20) return;
+        fab.style.position = 'fixed';
+        fab.style.left   = pos.left;
+        fab.style.top    = pos.top;
+        fab.style.right  = 'auto';
         fab.style.bottom = 'auto';
-    }
-
-    let isMouseDown = false;
-    let offset = { x: 0, y: 0 };
-
-    fab.addEventListener('mousedown', (e) => {
-        isMouseDown = true;
-        offset.x = e.clientX - fab.getBoundingClientRect().left;
-        offset.y = e.clientY - fab.getBoundingClientRect().top;
-    });
-
-    document.addEventListener('mousemove', (e) => {
-        if (!isMouseDown) return;
-
-        // 드래그 중에는 실시간으로 화면 안에서만 움직이게 제한
-        const maxX = window.innerWidth - fab.offsetWidth;
-        const maxY = window.innerHeight - fab.offsetHeight;
-
-        const newX = Math.max(0, Math.min(e.clientX - offset.x, maxX));
-        const newY = Math.max(0, Math.min(e.clientY - offset.y, maxY));
-
-        fab.style.left = newX + 'px';
-        fab.style.top = newY + 'px';
-        fab.style.right = 'auto';
-        fab.style.bottom = 'auto';
-    });
-
-    document.addEventListener('mouseup', () => {
-        if (isMouseDown) {
-            savePosition(fab, storageKey);
-        }
-        isMouseDown = false;
-    });
+    } catch(e) {}
 }
 
-// ── 4. 초기화 ──────────────────────────────
+// ═══════════════════════════════════════════════
+// ── 4. 관리자 확인 후 FAB 표시
+// ═══════════════════════════════════════════════
 function showAiFabIfAdmin() {
-    // 1. 관리자 ID 확인
-    const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
-    
-    // 2. 디버깅 로그: 도대체 어떤 ID를 읽고 있는지 콘솔에 출력
-    console.log("=== 디버깅: showAiFabIfAdmin 시작 ===");
-    console.log("읽어온 admin_id 값:", adminId);
+    // window.isAdmin은 로그인 성공 시 HTML 내부에서 세팅됨
+    // localStorage/sessionStorage 는 자동로그인 복원 시 세팅됨
+    const isAdminFlag =
+        window.isAdmin === true ||
+        localStorage.getItem('isAdmin') === 'true' ||
+        sessionStorage.getItem('isAdmin') === 'true';
 
-    const inboundFab = document.getElementById('inboundAiFab');
+    // ── 출고 페이지 (fabBtn)
     const fabBtn = document.getElementById('fabBtn');
-
-    // 3. 관리자 ID가 없을 때 '숨기는' 로직을 잠시 막아둡니다 (if문 주석 처리)
-    if (!adminId) {
-        console.warn("관리자 아이디가 감지되지 않았습니다. (하지만 테스트를 위해 버튼을 숨기지 않음)");
-        // if (inboundFab) inboundFab.style.display = 'none'; // 주석 처리
-        // if (fabBtn) fabBtn.style.display = 'none';         // 주석 처리
-        return; 
-    }
-
-    console.log("관리자 권한 확인됨. 버튼 표시.");
-
-    // (기존 표시 로직 그대로 유지)
-    if (inboundFab) {
-        const isMulti = (typeof isMultiMode !== 'undefined' && isMultiMode);
-        if (!isMulti) inboundFab.style.display = 'flex';
-    }
-
     if (fabBtn) {
-        fabBtn.style.display = 'block'; 
-        const fabAiSub = document.getElementById('fab-sub-ai-wrap');
-        if(fabAiSub) fabAiSub.style.display = 'flex';
+        if (isAdminFlag) {
+            const isMulti = (typeof isMultiMode !== 'undefined' && isMultiMode);
+            if (!isMulti) fabBtn.style.display = 'flex';
+            // AI 서브버튼 표시
+            const aiSub = document.getElementById('fab-sub-ai-wrap');
+            if (aiSub) aiSub.style.display = 'flex';
+        }
+    }
+
+    // ── 입고 페이지 (inboundAiFab)
+    const inboundFab = document.getElementById('inboundAiFab');
+    if (inboundFab) {
+        if (isAdminFlag) {
+            const isMulti = (typeof isMultiMode !== 'undefined' && isMultiMode);
+            if (!isMulti) inboundFab.style.display = 'flex';
+        } else {
+            inboundFab.style.display = 'none';
+        }
     }
 }
 
+// ═══════════════════════════════════════════════
+// ── 5. 초기화
+// ═══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
     initDraggableFab();
     showAiFabIfAdmin();
