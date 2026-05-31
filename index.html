@@ -1868,7 +1868,23 @@ body.light-mode .fab-label {
 .fab-sub-btn:active { transform: scale(0.9); }
 .fab-sub-btn.ai { background: linear-gradient(135deg, #5e5ce6, #bf5af2); color: white; }
 .fab-sub-btn.add { background: #34c759; color: white; }
-    
+ 
+
+/* 결과 요약 박스 */
+#ai-summary {
+    background: #3a3a3c !important; /* 배경을 좀 더 어둡고 확실하게 */
+    color: #ffffff !important;      /* 글자를 무조건 흰색으로 */
+    padding: 15px !important;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
+/* 테이블 헤더 */
+#ai-data-table th {
+    background-color: #333;
+    color: #fff;
+    padding: 10px;
+}
     </style>
   </head>
   <body>
@@ -8385,5 +8401,6 @@ function showAiFabIfAdmin() {
         </div>
     </div>
 </div>
+<script src="script.js"></script>
   </body>
 </html>
