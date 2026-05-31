@@ -919,9 +919,12 @@ ${question}
 
         let parsed;
         try {
-            const cleanText = rawAiText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            // 🚨 수정: rawAiText -> aiText 로 변경
+            const cleanText = aiText.replace(/```json/gi, '').replace(/```/g, '').trim();
             parsed = JSON.parse(cleanText);
         } catch(e) {
+            // 💡 디버깅을 위해 에러 내용을 서버 로그에 찍어보세요
+            console.error("AI 응답 파싱 실패, 원본 텍스트:", aiText); 
             return res.status(200).json({ success: false, msg: 'AI가 올바른 형식으로 응답하지 않았습니다.' });
         }
 
