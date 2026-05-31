@@ -1,11 +1,9 @@
-
-// ── [전역 변수 설정] ──
-let isDragging = false;
-let startX, startY; // 드래그 시작 위치 확인용
+// ── 0. 전역 변수 설정 (브라우저 어디서든 접근 가능하도록 window 객체 사용)
+window.isDragging = false;
 
 // ── 1. AI 질의 기능 ──────────────────────────────
 function openAiQuery() {
-    if (isDragging) return; // 드래그 중이었다면 클릭 방지
+    if (window.isDragging) return; 
     const modal = document.getElementById('aiQueryModal');
     if (modal) {
         modal.style.display = 'flex';
@@ -109,25 +107,23 @@ async function runAiQuery() {
     }
 }
 
-// ── 2. FAB 드래그 및 메뉴 토글 기능 ──────────────────────────────
-
+// ── 2. FAB 메뉴 토글 ──────────────────────────────
 function toggleFabMenu() {
     const wrapper = document.getElementById('fabBtn');
     if (wrapper) wrapper.classList.toggle('open');
 }
 
-// 1. 드래그 초기화 (클릭 방해 X)
+// ── 3. FAB 드래그 기능 ──────────────────────────────
 function initDraggableFab() {
     const fab = document.getElementById('inboundAiFab') || document.getElementById('fabBtn');
     if (!fab) return;
 
     const storageKey = fab.id === 'fabBtn' ? 'outboundFabPosition' : 'aiFabPosition';
-    let isDragging = false;
     let offset = { x: 0, y: 0 };
     let startX = 0, startY = 0;
 
     fab.addEventListener('mousedown', (e) => {
-        isDragging = false; // 누를 땐 일단 드래그 아님
+        window.isDragging = false; 
         startX = e.clientX;
         startY = e.clientY;
         offset.x = e.clientX - fab.getBoundingClientRect().left;
@@ -137,9 +133,8 @@ function initDraggableFab() {
     document.addEventListener('mousemove', (e) => {
         const dx = Math.abs(e.clientX - startX);
         const dy = Math.abs(e.clientY - startY);
-        // 5px 이상 움직여야 드래그로 간주
         if (dx > 5 || dy > 5) {
-            isDragging = true;
+            window.isDragging = true;
             fab.style.left = (e.clientX - offset.x) + 'px';
             fab.style.top = (e.clientY - offset.y) + 'px';
             fab.style.right = 'auto';
@@ -148,10 +143,10 @@ function initDraggableFab() {
     });
 
     document.addEventListener('mouseup', () => {
-        if (isDragging) {
+        if (window.isDragging) {
             snapToEdge(fab, storageKey);
         }
-        isDragging = false;
+        window.isDragging = false;
     });
 }
 
@@ -180,41 +175,27 @@ function snapToEdge(fab, key) {
     }));
 }
 
-
-// script.js 파일 내 showAiFabIfAdmin 함수 수정
+// ── 4. 초기화 ──────────────────────────────
 function showAiFabIfAdmin() {
-    // 1. 관리자 ID 확인 (로컬 혹은 세션 스토리지)
     const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
-    
-    // 2. 디버깅을 위한 로그 추가 (F12 콘솔 탭에서 확인 가능)
-    console.log("현재 감지된 admin_id:", adminId);
+    const inboundFab = document.getElementById('inboundAiFab');
+    const fabBtn = document.getElementById('fabBtn');
 
-    // 3. 관리자가 아니면 버튼을 숨기고 종료 (원래 의도한 기능)
     if (!adminId) {
-        console.warn("관리자 아이디가 없어 버튼을 숨깁니다.");
-        const inboundFab = document.getElementById('inboundAiFab');
-        const fabBtn = document.getElementById('fabBtn');
         if (inboundFab) inboundFab.style.display = 'none';
         if (fabBtn) fabBtn.style.display = 'none';
         return; 
     }
 
-    console.log("관리자 권한 확인됨. 버튼 표시 시작.");
-
-    // 입고 버튼
-    const inboundFab = document.getElementById('inboundAiFab');
     if (inboundFab) {
-        // 기존 isMultiMode 로직 유지
         const isMulti = (typeof isMultiMode !== 'undefined' && isMultiMode);
         if (!isMulti) inboundFab.style.display = 'flex';
     }
 
-    // 출고 스피드 다이얼
-    const fabBtn = document.getElementById('fabBtn');
-    const fabAiSub = document.getElementById('fab-sub-ai-wrap');
-    if (fabBtn && fabAiSub) {
-        fabBtn.style.display = 'block'; 
-        fabAiSub.style.display = 'flex';
+    if (fabBtn) {
+        fabBtn.style.display = 'block';
+        const fabAiSub = document.getElementById('fab-sub-ai-wrap');
+        if(fabAiSub) fabAiSub.style.display = 'flex';
     }
 }
 
