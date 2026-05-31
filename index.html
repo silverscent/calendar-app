@@ -8341,5 +8341,40 @@ function showAiFabIfAdmin() {
 }
 
     </script>
+    <div id="fab-container" style="position: fixed; bottom: 28px; right: 20px; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; z-index: 900;">
+    <div id="fab-ai-btn" onclick="openAiQuery()" style="display: none; width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #5e5ce6, #bf5af2); box-shadow: 0 4px 15px rgba(94,92,230,0.4); align-items: center; justify-content: center; font-size: 22px; cursor: pointer;">🤖</div>
+    <div onclick="openAddModal()" style="width: 56px; height: 56px; border-radius: 50%; background: #0a84ff; box-shadow: 0 4px 15px rgba(10,132,255,0.4); display: flex; align-items: center; justify-content: center; font-size: 28px; color: white; cursor: pointer;">+</div>
+</div>
+
+<div id="aiQueryModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: flex-end; justify-content: center;" onclick="if(event.target===this) closeAiQuery()">
+    <div style="background: var(--card-bg, #1c1c1e); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px; padding-bottom: 40px; max-height: 85vh; overflow-y: auto;" onclick="event.stopPropagation()">
+        <div style="width:40px; height:4px; background:#555; border-radius:2px; margin: 0 auto 16px;"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div style="font-size:1.1em; font-weight:700;">🤖 AI 데이터 질의</div>
+            <button onclick="closeAiQuery()" style="background:none; border:none; color:#888; font-size:1.3em; cursor:pointer;">✕</button>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;">
+            <span class="ai-chip" onclick="setAiQuestion(this)">이번 주 입고 팔레트 합계</span>
+            <span class="ai-chip" onclick="setAiQuestion(this)">이번 달 출고 완료 건수</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <input id="ai-question-input" type="text" placeholder="질문 입력..." style="flex:1; padding:12px; border-radius:12px; border:1px solid #333; background:#2c2c2e; color:#fff;" onkeydown="if(event.key==='Enter') runAiQuery()">
+            <button id="ai-send-btn" onclick="runAiQuery()" style="padding:12px 16px; border-radius:12px; border:none; background: linear-gradient(135deg, #5e5ce6, #bf5af2); color:white; cursor:pointer;">전송</button>
+        </div>
+        <div id="ai-result-area" style="display:none;">
+            <div id="ai-loading" style="text-align:center; padding:20px; color:#888;">⏳ 분석 중...</div>
+            <div id="ai-summary" style="display:none; background: rgba(94,92,230,0.15); border-radius:12px; padding:14px; margin-bottom:12px; color:#fff;"></div>
+            <div id="ai-table-wrap" style="display:none; overflow-x:auto; border-radius:10px; border:1px solid #333;">
+                <div style="padding:8px; font-size:0.75em; border-bottom:1px solid #333; display:flex; justify-content:space-between;">
+                    <span id="ai-result-count"></span>
+                    <span id="ai-sql-toggle" onclick="toggleAiSql()" style="cursor:pointer; color:#5e5ce6;">SQL 보기</span>
+                </div>
+                <div id="ai-sql-box" style="display:none; padding:10px; font-size:0.75em; color:#bf5af2; background:rgba(0,0,0,0.3);"></div>
+                <table id="ai-data-table" style="width:100%; border-collapse:collapse; font-size:0.85em;"></table>
+            </div>
+            <div id="ai-error" style="display:none; padding:12px; border-radius:10px; background:rgba(255,59,48,0.1); color:#ff3b30;"></div>
+        </div>
+    </div>
+</div>
   </body>
 </html>
