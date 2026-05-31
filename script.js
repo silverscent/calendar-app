@@ -113,6 +113,19 @@ function toggleFabMenu() {
     if (wrapper) wrapper.classList.toggle('open');
 }
 
+// initDraggableFab 함수 바로 위에 추가하세요.
+function loadPosition(fab, key) {
+    const saved = localStorage.getItem(key);
+    if (!saved) return;
+
+    const pos = JSON.parse(saved);
+    fab.style.left = pos.left;
+    fab.style.top = pos.top;
+    fab.style.right = pos.right;
+    fab.style.bottom = pos.bottom;
+    fab.style.position = pos.position;
+}
+
 // ── 3. FAB 드래그 기능 ──────────────────────────────
 function initDraggableFab() {
     const fab = document.getElementById('inboundAiFab') || document.getElementById('fabBtn');
@@ -120,30 +133,30 @@ function initDraggableFab() {
 
     const storageKey = fab.id === 'fabBtn' ? 'outboundFabPosition' : 'aiFabPosition';
     
-    let isMouseDown = false; // 💡 핵심: 마우스 클릭 상태 확인용 변수
+    // 💡 페이지 로드 시 저장된 위치 불러오기
+    loadPosition(fab, storageKey);
+
+    let isMouseDown = false;
     let offset = { x: 0, y: 0 };
     let startX = 0, startY = 0;
 
-    // 1. 마우스를 눌렀을 때
     fab.addEventListener('mousedown', (e) => {
-        isMouseDown = true; // 드래그 시작!
+        isMouseDown = true;
         startX = e.clientX;
         startY = e.clientY;
         offset.x = e.clientX - fab.getBoundingClientRect().left;
         offset.y = e.clientY - fab.getBoundingClientRect().top;
     });
 
-    // 2. 마우스를 움직일 때
     document.addEventListener('mousemove', (e) => {
-        // 💡 중요: 마우스를 누른 상태(isMouseDown)가 아니면 여기서 즉시 중단!
-        if (!isMouseDown) return; 
+        if (!isMouseDown) return;
 
         const dx = Math.abs(e.clientX - startX);
         const dy = Math.abs(e.clientY - startY);
 
-        // 5px 이상 움직여야 드래그로 간주
         if (dx > 5 || dy > 5) {
-            window.isDragging = true; // 전역 드래그 상태 업데이트
+            window.isDragging = true;
+            // 드래그 중 위치 변경
             fab.style.left = (e.clientX - offset.x) + 'px';
             fab.style.top = (e.clientY - offset.y) + 'px';
             fab.style.right = 'auto';
@@ -151,39 +164,29 @@ function initDraggableFab() {
         }
     });
 
-    // 3. 마우스 버튼을 뗐을 때
     document.addEventListener('mouseup', () => {
         if (isMouseDown && window.isDragging) {
-            snapToEdge(fab, storageKey);
+            // 💡 구석 이동 대신 위치 저장만 수행
+            savePosition(fab, storageKey);
         }
-        isMouseDown = false;    // 드래그 종료
+        isMouseDown = false;
         window.isDragging = false;
     });
 }
 
-function snapToEdge(fab, key) {
-    const rect = fab.getBoundingClientRect();
-    const winWidth = window.innerWidth;
-    const winHeight = window.innerHeight;
-    
-    const distLeft = rect.left;
-    const distRight = winWidth - rect.right;
-    const distTop = rect.top;
-    const distBottom = winHeight - rect.bottom;
-    const min = Math.min(distLeft, distRight, distTop, distBottom);
-
-    fab.style.left = 'auto'; fab.style.right = 'auto';
-    fab.style.top = 'auto'; fab.style.bottom = 'auto';
-
-    if (min === distLeft) fab.style.left = '10px';
-    else if (min === distRight) fab.style.right = '10px';
-    else if (min === distTop) fab.style.top = '10px';
-    else fab.style.bottom = '10px';
-
-    localStorage.setItem(key, JSON.stringify({
-        left: fab.style.left, top: fab.style.top, 
-        right: fab.style.right, bottom: fab.style.bottom
-    }));
+// 기존 snapToEdge를 아래 코드로 완전히 교체하세요.
+function savePosition(fab, key) {
+    // 구석으로 이동시키는 로직을 모두 삭제했습니다.
+    // 현재 스타일의 left, top, right, bottom 값을 그대로 저장만 합니다.
+    const position = {
+        left: fab.style.left,
+        top: fab.style.top,
+        right: fab.style.right,
+        bottom: fab.style.bottom,
+        position: 'fixed' // 위치 고정 방식 명시
+    };
+    localStorage.setItem(key, JSON.stringify(position));
+    console.log("위치 저장됨:", position);
 }
 
 // ── 4. 초기화 ──────────────────────────────
