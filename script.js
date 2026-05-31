@@ -1,11 +1,11 @@
-// ── 0. 전역 변수
-window.isDragging = false;
+// ── 0. 전역 변수 (이름 충돌 방지를 위해 fabDragging 사용)
+window.fabDragging = false;
 
 // ═══════════════════════════════════════════════
 // ── 1. AI 질의 기능
 // ═══════════════════════════════════════════════
 function openAiQuery() {
-    if (window.isDragging) return;
+    if (window.fabDragging) return;
     const modal = document.getElementById('aiQueryModal');
     if (!modal) return;
     modal.style.display = 'flex';
@@ -113,6 +113,7 @@ async function runAiQuery() {
 // ── 2. FAB 메뉴 토글 (출고 전용)
 // ═══════════════════════════════════════════════
 function toggleFabMenu() {
+    if (window.fabDragging) return; // 드래그 직후 메뉴 안 열리게
     const wrapper = document.getElementById('fabBtn');
     if (wrapper) wrapper.classList.toggle('open');
 }
@@ -139,7 +140,7 @@ function _attachDrag(fab, storageKey, hasMenu) {
         const dy = clientY - startY;
         if (!dragged && Math.sqrt(dx*dx + dy*dy) > THRESHOLD) {
             dragged = true;
-            window.isDragging = true;
+            window.fabDragging = true;
             if (hasMenu) fab.classList.remove('open');
             _setAbsolute(fab);
         }
@@ -157,7 +158,8 @@ function _attachDrag(fab, storageKey, hasMenu) {
             _snapToEdge(fab, hasMenu);
             _savePos(fab, storageKey);
         }
-        setTimeout(() => { window.isDragging = false; }, 120);
+        // 클릭 이벤트가 끝난 뒤에 플래그 해제
+        setTimeout(() => { window.fabDragging = false; }, 150);
     };
 
     // 터치
@@ -166,7 +168,7 @@ function _attachDrag(fab, storageKey, hasMenu) {
         startX = t.clientX; startY = t.clientY;
         const rect = fab.getBoundingClientRect();
         startLeft = rect.left; startTop = rect.top;
-        dragged = false; window.isDragging = false;
+        dragged = false; window.fabDragging = false;
     }, { passive: true });
 
     fab.addEventListener('touchmove', (e) => {
@@ -178,13 +180,13 @@ function _attachDrag(fab, storageKey, hasMenu) {
     fab.addEventListener('touchend', endDrag);
     fab.addEventListener('touchcancel', endDrag);
 
-    // 마우스
+    // 마우스 (PC)
     fab.addEventListener('mousedown', (e) => {
         e.preventDefault();
         startX = e.clientX; startY = e.clientY;
         const rect = fab.getBoundingClientRect();
         startLeft = rect.left; startTop = rect.top;
-        dragged = false; window.isDragging = false;
+        dragged = false; window.fabDragging = false;
 
         const onMove = (e) => moveTo(e.clientX, e.clientY);
         const onUp = () => {
@@ -195,6 +197,14 @@ function _attachDrag(fab, storageKey, hasMenu) {
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onUp);
     });
+
+    // 클릭 차단: 드래그였으면 클릭 무효화 (PC 새로고침/오작동 방지)
+    fab.addEventListener('click', (e) => {
+        if (window.fabDragging) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
 }
 
 // 버튼 "본체"만의 크기 (메뉴 제외)
@@ -228,6 +238,7 @@ function _snapToEdge(fab, hasMenu) {
 
     const isLeft = cx < window.innerWidth / 2;
     const snapX = isLeft ? PAD : (window.innerWidth - btn.w - PAD);
+    // 상하 위치는 현재 높이 유지, 화면 밖만 보정
     const safeY = Math.max(PAD, Math.min(rect.top, window.innerHeight - btn.h - PAD));
 
     fab.style.setProperty('left', snapX + 'px', 'important');
@@ -260,8 +271,9 @@ function _restorePos(fab, key, hasMenu) {
         const pos = JSON.parse(saved);
         const l = parseInt(pos.left), t = parseInt(pos.top);
         if (isNaN(l) || isNaN(t)) return;
-        if (l < 0 || l > window.innerWidth - 20) return;
-        if (t < 0 || t > window.innerHeight - 20) return;
+        // 화면 밖이면 저장값 폐기하고 기본위치 유지
+        if (l < 0 || l > window.innerWidth - 20) { localStorage.removeItem(key); return; }
+        if (t < 0 || t > window.innerHeight - 20) { localStorage.removeItem(key); return; }
         fab.style.setProperty('position', 'fixed', 'important');
         fab.style.setProperty('left', pos.left, 'important');
         fab.style.setProperty('top', pos.top, 'important');
@@ -273,7 +285,7 @@ function _restorePos(fab, key, hasMenu) {
             fab.classList.toggle('snap-bottom', !!pos.snapBottom);
             fab.classList.toggle('snap-top', !pos.snapBottom);
         }
-    } catch(e) {}
+    } catch(e) { localStorage.removeItem(key); }
 }
 
 // ═══════════════════════════════════════════════

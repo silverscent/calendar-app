@@ -3132,7 +3132,8 @@ manageWebInboundData: function(act, data, tk) {
       // =====================================================
       function silentBackgroundSync() {
         // 🚨 스마트폰 네트워크가 기절해 있거나 끄고 켤 때, 드래그 중일 때는 무조건 스킵!
-        if (!navigator.onLine || isDragging || activeRequests > 0) return;
+        // 수정 — fabDragging도 함께 체크
+if (!navigator.onLine || isDragging || window.fabDragging || activeRequests > 0) return;
         
         let modal = document.getElementById('modal');
         let addModal = document.getElementById('addModal');

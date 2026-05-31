@@ -3223,7 +3223,8 @@ google.script.run
       // =====================================================
       function silentBackgroundSync() {
         // 🚨 스마트폰 네트워크가 기절해 있거나 끄고 켤 때, 드래그 중일 때는 무조건 스킵!
-        if (!navigator.onLine || isDragging || activeRequests > 0) return;
+        // 수정 — fabDragging도 함께 체크
+        if (!navigator.onLine || isDragging || window.fabDragging || activeRequests > 0) return;
         let modal = document.getElementById('modal');
         let addModal = document.getElementById('addModal');
         let ocrModal = document.getElementById('ocrImageModal');
@@ -5152,7 +5153,7 @@ function saveOcrFilterWordsToServer() {
 
 
     </script>
-    <button class="fab-single-ai" id="inboundAiFab" type="button" onclick="if(!isDragging) openAiQuery()" style="display: none; position: fixed; right: 20px; bottom: 30px; z-index: 1500;">🤖</button>
+    <button class="fab-single-ai" id="inboundAiFab" type="button" onclick="if(!window.fabDragging) openAiQuery()" style="display: none; position: fixed; right: 20px; bottom: 30px; z-index: 1500;">🤖</button>
 
 <div id="aiQueryModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: flex-end; justify-content: center;" onclick="if(event.target===this) closeAiQuery()">
     <div style="background: var(--card-bg, #1c1c1e); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 20px; padding-bottom: 40px; max-height: 85vh; overflow-y: auto;" onclick="event.stopPropagation()">
