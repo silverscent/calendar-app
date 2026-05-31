@@ -1868,46 +1868,44 @@ body.light-mode .fab-label {
 .fab-sub-btn.add { background: #34c759; color: white; }
  
 /* ════════════════════════════════════════════════ */
-/* index.html <style> 안에 추가하세요 (출고 FAB 메뉴 방향 전환) */
+/* index.html <style> 안에 추가 (기존 fab_menu_direction 있으면 교체) */
+/* 부채 방향: 왼쪽→오른쪽으로, 오른쪽→왼쪽으로, 위→아래로, 아래→위로 */
 /* ════════════════════════════════════════════════ */
 
-/* 기본: 메뉴가 위로 펼쳐지고 오른쪽 정렬 (기존 동작) */
-.fab-wrapper .fab-sub-container {
-    flex-direction: column;
-}
+/* ── 좌우 정렬: 라벨이 버튼 바깥쪽(화면 안쪽)을 향하도록 ── */
 
-/* 왼쪽 가장자리에 붙었을 때 → 메뉴/라벨 왼쪽 정렬, 라벨이 버튼 오른쪽으로 */
-.fab-wrapper.snap-left .fab-sub-container {
-    align-items: flex-start;
-}
-.fab-wrapper.snap-left .fab-sub-item {
-    flex-direction: row-reverse;  /* 버튼이 왼쪽, 라벨이 오른쪽 */
-}
+/* 오른쪽 가장자리에 붙음 → 메뉴는 버튼 왼쪽에 (라벨-버튼 순서) */
+.fab-wrapper.snap-right .fab-sub-container { align-items: flex-end; }
+.fab-wrapper.snap-right .fab-sub-item { flex-direction: row; }
 
-/* 오른쪽 가장자리 (기본값) → 라벨이 버튼 왼쪽 */
-.fab-wrapper.snap-right .fab-sub-container {
-    align-items: flex-end;
-}
-.fab-wrapper.snap-right .fab-sub-item {
-    flex-direction: row;
-}
+/* 왼쪽 가장자리에 붙음 → 메뉴는 버튼 오른쪽에 (버튼-라벨 순서) */
+.fab-wrapper.snap-left .fab-sub-container { align-items: flex-start; }
+.fab-wrapper.snap-left .fab-sub-item { flex-direction: row-reverse; }
 
-/* 화면 위쪽에 붙었을 때 → 메뉴가 버튼 아래로 펼쳐지도록 */
-.fab-wrapper.snap-top {
-    flex-direction: column;       /* 버튼이 위, 메뉴가 아래 */
+/* ── 상하: 메뉴가 펼쳐지는 세로 방향 ── */
+
+/* 아래쪽에 붙음 → 메뉴가 버튼 위로 올라옴 (버튼이 맨 아래) */
+.fab-wrapper.snap-bottom { flex-direction: column; }
+.fab-wrapper.snap-bottom .fab-sub-container {
+    order: 0;                      /* 메뉴 먼저 = 위쪽 */
+    transform: translateY(20px);
 }
+.fab-wrapper.snap-bottom.open .fab-sub-container {
+    transform: translateY(0);
+}
+.fab-wrapper.snap-bottom .fab-main { order: 1; }  /* 버튼 나중 = 아래쪽 */
+
+/* 위쪽에 붙음 → 메뉴가 버튼 아래로 내려감 (버튼이 맨 위) */
+.fab-wrapper.snap-top { flex-direction: column; }
+.fab-wrapper.snap-top .fab-main { order: 0; }      /* 버튼 먼저 = 위쪽 */
 .fab-wrapper.snap-top .fab-sub-container {
-    order: 2;                     /* 메뉴를 버튼 아래로 */
+    order: 1;                      /* 메뉴 나중 = 아래쪽 */
     transform: translateY(-20px);
 }
 .fab-wrapper.snap-top.open .fab-sub-container {
     transform: translateY(0);
 }
 
-/* 화면 아래쪽 (기본값) → 메뉴가 버튼 위로 */
-.fab-wrapper.snap-bottom {
-    flex-direction: column-reverse;
-}
 
 /* 결과 요약 박스 */
 #ai-summary {
@@ -3207,15 +3205,15 @@ manageWebInboundData: function(act, data, tk) {
       // document.addEventListener("visibilitychange", ...
 
       // 🕒 [1. 정기 폴링] 앱을 켜두고 가만히 있어도 1분(60000ms)마다 몰래 동기화
-      setInterval(silentBackgroundSync, 60000);
+      // 수정
+setInterval(() => { if (!window.isDragging) silentBackgroundSync(); }, 60000);
 
       // 👁️ [2. 화면 복귀 감지 (Visibility API)] 
       // 스마트폰 화면을 껐다 켜거나, 카톡/유튜브를 보다가 다시 달력 앱으로 돌아오는 '그 순간' 즉시 동기화!
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === 'visible') {
-          silentBackgroundSync();
-        }
-      });
+      // 수정 — 드래그 중이면 sync 건너뛰기
+document.addEventListener("visibilitychange", () => { 
+    if (document.visibilityState === 'visible' && !window.isDragging) silentBackgroundSync(); 
+});
 
       // 🚀 [앱 초기화] 오염된 캐시 무시 + 강제 뼈대 교정 완결판
       window.addEventListener("DOMContentLoaded", () => {

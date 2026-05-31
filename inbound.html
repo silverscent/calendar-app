@@ -3276,8 +3276,12 @@ google.script.run
           .getCalendarDataAsync(currentType, reqYear, reqMonth);
       }
 
-      setInterval(silentBackgroundSync, 60000);
-      document.addEventListener("visibilitychange", () => { if (document.visibilityState === 'visible') silentBackgroundSync(); });
+      // 수정
+setInterval(() => { if (!window.isDragging) silentBackgroundSync(); }, 60000);
+      // 수정 — 드래그 중이면 sync 건너뛰기
+document.addEventListener("visibilitychange", () => { 
+    if (document.visibilityState === 'visible' && !window.isDragging) silentBackgroundSync(); 
+});
 
       // =====================================================
       // 📊 [개발 추가] 입고 통계 대시보드 스크립트 모음
