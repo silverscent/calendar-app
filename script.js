@@ -181,16 +181,41 @@ function snapToEdge(fab, key) {
 }
 
 
-// 2. 버튼 강제 표시 (사라지는 문제 해결용)
+// script.js 파일 내 showAiFabIfAdmin 함수 수정
 function showAiFabIfAdmin() {
-    const inboundFab = document.getElementById('inboundAiFab');
-    const fabBtn = document.getElementById('fabBtn');
-
-    // 테스트를 위해 일단 무조건 보이게 하세요. (나중에 admin 체크 로직 추가 가능)
-    if (inboundFab) inboundFab.style.display = 'flex'; 
-    if (fabBtn) fabBtn.style.display = 'block';
+    // 1. 관리자 ID 확인 (로컬 혹은 세션 스토리지)
+    const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
     
-    console.log("버튼 표시 여부 체크:", { inboundFab: !!inboundFab, fabBtn: !!fabBtn });
+    // 2. 디버깅을 위한 로그 추가 (F12 콘솔 탭에서 확인 가능)
+    console.log("현재 감지된 admin_id:", adminId);
+
+    // 3. 관리자가 아니면 버튼을 숨기고 종료 (원래 의도한 기능)
+    if (!adminId) {
+        console.warn("관리자 아이디가 없어 버튼을 숨깁니다.");
+        const inboundFab = document.getElementById('inboundAiFab');
+        const fabBtn = document.getElementById('fabBtn');
+        if (inboundFab) inboundFab.style.display = 'none';
+        if (fabBtn) fabBtn.style.display = 'none';
+        return; 
+    }
+
+    console.log("관리자 권한 확인됨. 버튼 표시 시작.");
+
+    // 입고 버튼
+    const inboundFab = document.getElementById('inboundAiFab');
+    if (inboundFab) {
+        // 기존 isMultiMode 로직 유지
+        const isMulti = (typeof isMultiMode !== 'undefined' && isMultiMode);
+        if (!isMulti) inboundFab.style.display = 'flex';
+    }
+
+    // 출고 스피드 다이얼
+    const fabBtn = document.getElementById('fabBtn');
+    const fabAiSub = document.getElementById('fab-sub-ai-wrap');
+    if (fabBtn && fabAiSub) {
+        fabBtn.style.display = 'block'; 
+        fabAiSub.style.display = 'flex';
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
