@@ -19,6 +19,15 @@ module.exports = async function(req, res) {
         // 🚨 [신규 안전망] DB 다이렉트 수정 시 빈칸("")이 들어오면 MySQL 에러가 나지 않도록 NULL로 변환
         const safeDate = (v) => (!v || v === '' || v === 'null' || v === '미정') ? null : v;
 
+        // AI 질의용 이번 주 월요일 계산
+function getMondayOfWeek(dateStr) {
+    const d = new Date(dateStr);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff);
+    return d.toISOString().slice(0, 10);
+}
+        
         if (req.method === 'GET') {
             const { type, year, month, action } = req.query;
 
@@ -837,6 +846,134 @@ module.exports = async function(req, res) {
     }
 }
 
+    else if (action === 'AI_QUERY') {
+    try {
+        const { question } = data;
+        if (!question || !question.trim()) {
+            return res.status(200).json({ success: false, msg: '질문을 입력해주세요.' });
+        }
+
+        const today = new Date().toISOString().slice(0, 10);
+
+        // 스키마 정의
+        const schema = `
+[inbound 테이블 - 입고 데이터]
+- id: 고유번호
+- bl_number: B/L 번호
+- pallets: 팔레트 수 (varchar)
+- eta: 예상 입항일 (date)
+- receive_date: 실제 입고일 (date)
+- fwd: 포워더명
+- s_type: 운송 타입 (SEA=해상, AIR=항공)
+- invoice: 인보이스 번호
+- remarks: 비고
+- status: 상태 (입고대기, 완료)
+- is_ai_modified: AI수정여부
+
+[outbound 테이블 - 출고 데이터]
+- id: 고유번호
+- company: 업체명
+- pal: 팔레트 수 (varchar)
+- box: 박스 수 (varchar)
+- outbound_date: 출고일 (date)
+- etc: 비고/위치
+- isDone: 완료여부 (0=대기, 1=완료)
+        `.trim();
+
+        const prompt = `
+너는 물류 창고 DB 전문 SQL 생성 AI야.
+오늘 날짜: ${today}
+이번 주 월요일: ${getMondayOfWeek(today)}
+이번 달: ${today.slice(0, 7)}
+
+[DB 스키마]
+${schema}
+
+[규칙]
+1. SELECT 쿼리만 생성 (INSERT/UPDATE/DELETE/DROP 절대 금지)
+2. 반드시 아래 JSON 형식으로만 응답:
+{"sql": "SELECT ...", "explanation": "쿼리 설명"}
+3. 날짜 계산 시 오늘(${today}) 기준으로 정확하게
+4. 결과가 없을 수 있으니 LIMIT 50 이하로
+5. JSON 외 다른 텍스트 절대 포함 금지
+
+[질문]
+${question}
+        `.trim();
+
+        // Gemini 호출
+        const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.0, responseMimeType: "application/json" }
+                })
+            }
+        );
+        const geminiJson = await geminiRes.json();
+        const aiText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (!aiText) return res.status(200).json({ success: false, msg: 'AI 응답이 없습니다.' });
+
+        let parsed;
+        try {
+            const cleanText = rawAiText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            parsed = JSON.parse(cleanText);
+        } catch(e) {
+            return res.status(200).json({ success: false, msg: 'AI가 올바른 형식으로 응답하지 않았습니다.' });
+        }
+
+        const sql = parsed.sql || '';
+
+        // SELECT만 허용
+        if (!/^\s*SELECT/i.test(sql)) {
+            return res.status(200).json({ success: false, msg: '조회 쿼리만 허용됩니다.' });
+        }
+
+        // SQL 실행
+        const [rows] = await pool.query(sql);
+
+        // 결과 자연어 요약
+        const summaryPrompt = `
+너는 물류 창고 데이터 분석 AI야.
+관리자가 "${question}" 라고 물었고,
+DB 조회 결과는 다음과 같아:
+${JSON.stringify(rows, null, 2)}
+
+이 결과를 한국어로 친절하고 간결하게 요약해줘.
+숫자가 있으면 강조하고, 결과가 없으면 "해당 데이터가 없습니다"라고 말해줘.
+3문장 이내로 답해줘.
+        `.trim();
+
+        const summaryRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: summaryPrompt }] }],
+                    generationConfig: { temperature: 0.3 }
+                })
+            }
+        );
+        const summaryJson = await summaryRes.json();
+        const summary = summaryJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '결과를 요약할 수 없습니다.';
+
+        return res.status(200).json({
+            success: true,
+            sql: sql,
+            rows: rows,
+            summary: summary,
+            count: rows.length
+        });
+
+    } catch(e) {
+        console.error("AI_QUERY 에러:", e);
+        return res.status(200).json({ success: false, msg: e.message });
+    }
+}
 
             else {
                 const targetBL = data?.oldBL || '알수없음';

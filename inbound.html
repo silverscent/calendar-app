@@ -1164,6 +1164,26 @@
       .ios-toggle input:disabled + .toggle-slider { opacity: 0.5; cursor: not-allowed; }
 
       .master-tab-btn.active { background-color: var(--bg-color) !important; color: #0a84ff !important; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+    
+      /* 🤖 단독 AI 버튼 스타일 */
+.fab-single-ai {
+    position: fixed;
+    right: 20px;
+    bottom: max(30px, env(safe-area-inset-bottom));
+    width: 60px; height: 60px; border-radius: 50%;
+    background: linear-gradient(135deg, #5e5ce6, #bf5af2);
+    color: white; border: none; font-size: 28px;
+    box-shadow: 0 8px 25px rgba(94, 92, 230, 0.5);
+    z-index: 1500; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    -webkit-tap-highlight-color: transparent;
+}
+.fab-single-ai:active {
+    transform: scale(0.9) translateY(4px);
+    box-shadow: 0 4px 15px rgba(94, 92, 230, 0.4);
+}
+
     </style>
   </head>
   <body>
@@ -4011,6 +4031,10 @@ google.script.run
                 renderCalendar(); 
             }
         }).getCalendarDataAsync(currentType, currentYear, currentMonth);
+        // 💡 [최종 위치] AI FAB 관리자 권한 확인 및 노출
+        if (typeof showAiFabIfAdmin === 'function') {
+            showAiFabIfAdmin();
+        }
       });
 
       if ('serviceWorker' in navigator) {
@@ -4077,6 +4101,13 @@ async function handleLogin() {
               if (typeof checkMasterAuthButtonVisibility === 'function') {
                   checkMasterAuthButtonVisibility();
               }
+
+              // 👇 🤖 AI 버튼 표시 함수 추가 (바로 요기!) 👇
+            if (typeof showAiFabIfAdmin === 'function') {
+                showAiFabIfAdmin();
+            }
+            // 👆 ------------------------------------- 👆
+
             idElem.value = ''; pwElem.value = '';
         } else {
             showToast(`❌ ${res.msg}`, 2500);
@@ -4239,6 +4270,11 @@ async function handleLogin() {
                               showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
                               if (typeof renderCalendar === 'function') renderCalendar(); 
                               if (typeof updateFooterUI === 'function') updateFooterUI();
+                              // 👇 🤖 AI 버튼 표시 함수 추가 (바로 요기!) 👇
+            if (typeof showAiFabIfAdmin === 'function') {
+                showAiFabIfAdmin();
+            }
+            // 👆 ------------------------------------- 👆
                           } else {
                               showToast("❌ 서버 인증 실패. 비밀번호가 변경되었을 수 있습니다.", 2500);
                               openLoginModal(); 
@@ -5093,6 +5129,131 @@ function saveOcrFilterWordsToServer() {
 }
 // 👆 ----------------------------------------------------
 
+// ── AI 질의 함수들 ──────────────────────────────
+
+function openAiQuery() {
+    const modal = document.getElementById('aiQueryModal');
+    modal.style.display = 'flex';
+    setTimeout(() => document.getElementById('ai-question-input').focus(), 300);
+}
+
+function closeAiQuery() {
+    document.getElementById('aiQueryModal').style.display = 'none';
+}
+
+function setAiQuestion(el) {
+    document.getElementById('ai-question-input').value = el.textContent;
+    document.getElementById('ai-question-input').focus();
+}
+
+function toggleAiSql() {
+    const box = document.getElementById('ai-sql-box');
+    const toggle = document.getElementById('ai-sql-toggle');
+    if (box.style.display === 'none') {
+        box.style.display = 'block';
+        toggle.textContent = 'SQL 숨기기 ▴';
+    } else {
+        box.style.display = 'none';
+        toggle.textContent = 'SQL 보기 ▾';
+    }
+}
+
+async function runAiQuery() {
+    const question = document.getElementById('ai-question-input').value.trim();
+    if (!question) return;
+
+    const resultArea = document.getElementById('ai-result-area');
+    const loading = document.getElementById('ai-loading');
+    const summary = document.getElementById('ai-summary');
+    const tableWrap = document.getElementById('ai-table-wrap');
+    const table = document.getElementById('ai-data-table');
+    const errorBox = document.getElementById('ai-error');
+    const sendBtn = document.getElementById('ai-send-btn');
+
+    // 초기화
+    resultArea.style.display = 'block';
+    loading.style.display = 'block';
+    summary.style.display = 'none';
+    tableWrap.style.display = 'none';
+    errorBox.style.display = 'none';
+    sendBtn.disabled = true;
+    sendBtn.textContent = '...';
+
+    try {
+        const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
+        const res = await fetch('/api/calendar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'AI_QUERY',
+                admin_id: adminId,
+                data: { question }
+            })
+        });
+        const result = await res.json();
+
+        loading.style.display = 'none';
+
+        if (!result.success) {
+            errorBox.style.display = 'block';
+            errorBox.textContent = '⚠️ ' + (result.msg || '오류가 발생했습니다.');
+            return;
+        }
+
+        // 요약 표시
+        summary.style.display = 'block';
+        summary.textContent = result.summary;
+
+        // 테이블 표시
+        if (result.rows && result.rows.length > 0) {
+            tableWrap.style.display = 'block';
+            document.getElementById('ai-result-count').textContent = `${result.count}건 조회됨`;
+            document.getElementById('ai-sql-box').textContent = result.sql;
+
+            const cols = Object.keys(result.rows[0]);
+            let html = `<thead><tr>${cols.map(c => 
+                `<th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--border,#333); color:var(--text-sub,#888); white-space:nowrap;">${c}</th>`
+            ).join('')}</tr></thead><tbody>`;
+            result.rows.forEach((row, i) => {
+                html += `<tr style="background:${i%2===0?'transparent':'rgba(255,255,255,0.02)'}">`;
+                cols.forEach(c => {
+                    html += `<td style="padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.05); white-space:nowrap; color:var(--text,#fff);">${row[c] ?? '-'}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            table.innerHTML = html;
+        } else {
+            tableWrap.style.display = 'block';
+            document.getElementById('ai-result-count').textContent = '0건';
+            document.getElementById('ai-sql-box').textContent = result.sql;
+            table.innerHTML = `<tr><td style="padding:16px; text-align:center; color:var(--text-sub,#888);">조회된 데이터가 없습니다.</td></tr>`;
+        }
+
+    } catch(e) {
+        loading.style.display = 'none';
+        errorBox.style.display = 'block';
+        errorBox.textContent = '⚠️ 네트워크 오류가 발생했습니다.';
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = '전송';
+    }
+}
+
+
+// 로그인 성공 후 호출되는 기존 함수 안에 showAiFabIfAdmin() 추가
+
+// 관리자 권한 연동 (inbound.html용)
+function showAiFabIfAdmin() {
+    const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
+    const inboundFab = document.getElementById('inboundAiFab');
+    // 다중 선택 모드가 아닐 때만 표시 (선택사항)
+    if (adminId && inboundFab && typeof isMultiMode !== 'undefined' && !isMultiMode) {
+        inboundFab.style.display = 'flex';
+    }
+}
+
     </script>
+    <button class="fab-single-ai" id="inboundAiFab" onclick="openAiQuery()" style="display: none;">🤖</button>
   </body>
 </html>
