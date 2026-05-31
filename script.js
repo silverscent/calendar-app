@@ -1,22 +1,30 @@
 // ── 1. AI 질의 기능 ──────────────────────────────
 function openAiQuery() {
     const modal = document.getElementById('aiQueryModal');
-    modal.style.display = 'flex';
-    setTimeout(() => document.getElementById('ai-question-input').focus(), 300);
+    if (modal) {
+        modal.style.display = 'flex';
+        setTimeout(() => document.getElementById('ai-question-input')?.focus(), 300);
+    }
 }
 
 function closeAiQuery() {
-    document.getElementById('aiQueryModal').style.display = 'none';
+    const modal = document.getElementById('aiQueryModal');
+    if (modal) modal.style.display = 'none';
 }
 
 function setAiQuestion(el) {
-    document.getElementById('ai-question-input').value = el.textContent;
-    document.getElementById('ai-question-input').focus();
+    const input = document.getElementById('ai-question-input');
+    if (input) {
+        input.value = el.textContent;
+        input.focus();
+    }
 }
 
 function toggleAiSql() {
     const box = document.getElementById('ai-sql-box');
     const toggle = document.getElementById('ai-sql-toggle');
+    if (!box || !toggle) return;
+    
     if (box.style.display === 'none') {
         box.style.display = 'block';
         toggle.textContent = 'SQL 숨기기 ▴';
@@ -27,8 +35,9 @@ function toggleAiSql() {
 }
 
 async function runAiQuery() {
-    const question = document.getElementById('ai-question-input').value.trim();
-    if (!question) return;
+    const inputEl = document.getElementById('ai-question-input');
+    if (!inputEl || !inputEl.value.trim()) return;
+    const question = inputEl.value.trim();
 
     const resultArea = document.getElementById('ai-result-area');
     const loading = document.getElementById('ai-loading');
@@ -94,12 +103,27 @@ async function runAiQuery() {
     }
 }
 
-// ── 2. FAB 드래그 및 위치 저장 기능 ──────────────────────────────
+// ── 2. FAB 메뉴 토글 & 드래그 기능 ──────────────────────────────
+
+// 스피드 다이얼 메뉴 토글
+function toggleFabMenu() {
+    const wrapper = document.getElementById('fabBtn');
+    if (wrapper) wrapper.classList.toggle('open');
+}
+
+// 바탕 클릭 시 메뉴 접기
+document.addEventListener('click', function(e) {
+    const wrapper = document.getElementById('fabBtn');
+    if (wrapper && wrapper.classList.contains('open') && !wrapper.contains(e.target)) {
+        wrapper.classList.remove('open');
+    }
+});
+
+// FAB 드래그 기능
 function initDraggableFab() {
     const fab = document.getElementById('inboundAiFab');
     if (!fab) return;
 
-    // 위치 불러오기
     const savedPos = JSON.parse(localStorage.getItem('aiFabPosition'));
     if (savedPos) {
         fab.style.left = savedPos.left;
@@ -149,35 +173,21 @@ function snapToEdge(fab) {
 }
 
 // ── 3. 초기화 ──────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    initDraggableFab();
-    showAiFabIfAdmin();     // 👈 이 줄을 추가하세요!
-    
-    // 관리자 권한 체크 후 FAB 표시
-    const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
-    const fab = document.getElementById('inboundAiFab');
-    if (adminId && fab) {
-        fab.style.display = 'flex'; // 혹은 block 등 스타일
-    }
-});
-
 function showAiFabIfAdmin() {
     const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
     if (!adminId) return;
 
-    // 1. 인덱스 페이지(또는 메인)용 처리
     const fabAiSub = document.getElementById('fab-sub-ai-wrap');
-    if (fabAiSub) {
-        fabAiSub.style.display = 'flex';
-    }
+    if (fabAiSub) fabAiSub.style.display = 'flex';
 
-    // 2. 인바운드 페이지용 처리
     const inboundFab = document.getElementById('inboundAiFab');
     if (inboundFab) {
-        // isMultiMode 변수가 선언되어 있는지 확인하고, 아닐 때만 표시
         const isMulti = (typeof isMultiMode !== 'undefined' && isMultiMode);
-        if (!isMulti) {
-            inboundFab.style.display = 'flex';
-        }
+        if (!isMulti) inboundFab.style.display = 'flex';
     }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    initDraggableFab();
+    showAiFabIfAdmin();
+});
