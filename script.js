@@ -244,15 +244,22 @@ function _setAbsolute(fab) {
 
 function _snapToEdge(fab, hasMenu) {
     const btn = _btnSize(fab, hasMenu);
-    const rect = fab.getBoundingClientRect();
-    const cx = rect.left + btn.w / 2;
-    const cy = rect.top  + btn.h / 2;
+    // 🚨 버튼 본체(.fab-main) 기준으로 위치 측정 (메뉴 포함 영역 무시)
+    let baseRect;
+    if (hasMenu) {
+        const main = fab.querySelector('.fab-main');
+        baseRect = main ? main.getBoundingClientRect() : fab.getBoundingClientRect();
+    } else {
+        baseRect = fab.getBoundingClientRect();
+    }
+    const cx = baseRect.left + btn.w / 2;
+    const cy = baseRect.top  + btn.h / 2;
     const PAD = 12;
 
     const isLeft = cx < window.innerWidth / 2;
     const snapX = isLeft ? PAD : (window.innerWidth - btn.w - PAD);
-    // 상하 위치는 현재 높이 유지, 화면 밖만 보정
-    const safeY = Math.max(PAD, Math.min(rect.top, window.innerHeight - btn.h - PAD));
+    // 상하 위치 유지하되 화면 안으로 확실히 보정
+    const safeY = Math.max(PAD, Math.min(baseRect.top, window.innerHeight - btn.h - PAD));
 
     fab.style.setProperty('left', snapX + 'px', 'important');
     fab.style.setProperty('top',  safeY + 'px', 'important');
