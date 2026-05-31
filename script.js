@@ -264,44 +264,44 @@ function _setAbsolute(fab) {
 
 function _snapToEdge(fab, hasMenu) {
     const btn = _btnSize(fab, hasMenu);
-    const wrapRect = fab.getBoundingClientRect();
-    const main = hasMenu ? fab.querySelector('.fab-main') : null;
-    const baseRect = main ? main.getBoundingClientRect() : wrapRect;
 
-    // wrapper 와 본체의 좌표 차이 (라벨이 왼/위로 뻗은 만큼)
-    const offX = baseRect.left - wrapRect.left;
-    const offY = baseRect.top  - wrapRect.top;
-
-    const cx = baseRect.left + btn.w / 2;
-    const cy = baseRect.top  + btn.h / 2;
+    // 1) 먼저 본체 중심으로 좌/우, 상/하 방향 판정
+    const baseRect0 = (hasMenu ? fab.querySelector('.fab-main')?.getBoundingClientRect() : null) || fab.getBoundingClientRect();
+    const cx = baseRect0.left + btn.w / 2;
+    const cy = baseRect0.top  + btn.h / 2;
+    const isLeft = cx < window.innerWidth / 2;
+    const isBottom = cy > window.innerHeight / 2;
     const PAD = 12;
 
-    const isLeft = cx < window.innerWidth / 2;
-
-    // 본체 기준 세로 위치: 현재 위치 유지 + 화면 안으로 보정
-    const baseTop = Math.max(PAD, Math.min(baseRect.top, window.innerHeight - btn.h - PAD));
-    // wrapper 의 top = 본체 top - offY
-    fab.style.setProperty('top', (baseTop - offY) + 'px', 'important');
-    fab.style.setProperty('bottom', 'auto', 'important');
-
-    if (isLeft) {
-        // 왼쪽: 본체 좌상단이 PAD 에 오도록 → wrapper left = PAD - offX
-        fab.style.setProperty('left', (PAD - offX) + 'px', 'important');
-        fab.style.setProperty('right', 'auto', 'important');
-    } else {
-        // 오른쪽: 본체 우측이 화면 오른쪽 PAD 에 붙도록 right 고정
-        // wrapper 오른쪽 끝과 본체 오른쪽 끝의 차이만큼 보정
-        const offRight = wrapRect.right - baseRect.right;
-        fab.style.setProperty('right', (PAD - offRight) + 'px', 'important');
-        fab.style.setProperty('left', 'auto', 'important');
-    }
-
+    // 2) 🚨 방향 클래스를 '먼저' 적용해서 메뉴 펼침 방향(=wrapper 모양)을 확정
     if (hasMenu) {
         fab.classList.toggle('snap-left',  isLeft);
         fab.classList.toggle('snap-right', !isLeft);
-        const isBottom = cy > window.innerHeight / 2;
         fab.classList.toggle('snap-bottom', isBottom);
         fab.classList.toggle('snap-top', !isBottom);
+    }
+
+    // 3) 클래스 적용 후 강제 reflow → 바뀐 레이아웃 기준으로 offset 재측정
+    void fab.offsetWidth;
+
+    const wrapRect = fab.getBoundingClientRect();
+    const baseRect = (hasMenu ? fab.querySelector('.fab-main')?.getBoundingClientRect() : null) || wrapRect;
+    const offY = baseRect.top  - wrapRect.top;
+
+    // 4) 세로 위치: 현재 본체 위치 유지 + 화면 안 보정
+    const baseTop = Math.max(PAD, Math.min(baseRect.top, window.innerHeight - btn.h - PAD));
+    fab.style.setProperty('top', (baseTop - offY) + 'px', 'important');
+    fab.style.setProperty('bottom', 'auto', 'important');
+
+    // 5) 좌우 고정 (바뀐 클래스 기준으로 측정된 값 사용)
+    if (isLeft) {
+        const offX = baseRect.left - wrapRect.left;
+        fab.style.setProperty('left', (PAD - offX) + 'px', 'important');
+        fab.style.setProperty('right', 'auto', 'important');
+    } else {
+        const offRight = wrapRect.right - baseRect.right;
+        fab.style.setProperty('right', (PAD - offRight) + 'px', 'important');
+        fab.style.setProperty('left', 'auto', 'important');
     }
 }
 
