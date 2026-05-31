@@ -204,15 +204,14 @@ module.exports = async function(req, res) {
             }
             // 👆 ---------------------------------------------------- 👆
 
-            // 🆕 A. 신규 관리자 계정 추가
+            // 🆕 A. 신규 관리자 계정 추가 — bcrypt 해시화 적용
             else if (action === 'CREATE_ADMIN') {
-            // ... (기존 코드 계속)
                 try {
                     const { id, name, pw } = data;
                     const [exist] = await pool.query("SELECT admin_id FROM admins WHERE admin_id = ?", [id]);
                     if (exist.length > 0) return res.status(200).json({ success: false, msg: '이미 등록된 아이디입니다.' });
                     const hashedPw = await bcrypt.hash(pw, 10); // ✅ bcrypt 해시화
-                    await pool.query("INSERT INTO admins (admin_id, password_hash, admin_name, role, status) VALUES (?, ?, ?, 'ADMIN', 'ACTIVE')", [id, pw, name]);
+                    await pool.query("INSERT INTO admins (admin_id, password_hash, admin_name, role, status) VALUES (?, ?, ?, 'ADMIN', 'ACTIVE')", [id, hashedPw, name]);
                     await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CREATE_ADMIN', ?)", [currentAdmin, `새로운 관리자 계정 발급: ${name}(${id})`]);
                     return res.status(200).json({ success: true });
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
@@ -281,34 +280,27 @@ module.exports = async function(req, res) {
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
 
-            // 🔒 [신규 추가] 6번 요구사항: 본인 비밀번호 다이렉트 변경 엔진
+           // 🔒 본인 비밀번호 변경 — bcrypt 적용
             else if (action === 'CHANGE_MY_PASSWORD') {
                 try {
                     const currentAdmin = payload.admin_id;
                     const { currentPw, newPw } = data;
-
                     if (!currentAdmin) return res.status(200).json({ success: false, msg: '로그인 세션이 만료되었습니다.' });
-
-                    // 1. 현재 비밀번호가 맞는지 DB 검증
                     const [rows] = await pool.query("SELECT password_hash FROM admins WHERE admin_id = ? AND status = 'ACTIVE'", [currentAdmin]);
                     if (rows.length === 0) return res.status(200).json({ success: false, msg: '존재하지 않거나 비활성화된 계정입니다.' });
-
-                     // ✅ bcrypt.compare로 검증 (프론트엔드에서 이미 SHA-256으로 암호화해서 보냈다고 가정)
+                    // ✅ bcrypt.compare로 검증
                     const isMatch = await bcrypt.compare(currentPw, rows[0].password_hash);
-                    // 프론트엔드에서 이미 SHA-256으로 암호화해서 보낸 현재 비밀번호와 비교
                     if (!isMatch) {
                         return res.status(200).json({ success: false, msg: '현재 비밀번호가 일치하지 않습니다.' });
                     }
-                    // ✅ bcrypt.hash로 저장 (프론트엔드에서 이미 SHA-256으로 암호화된 새 비밀번호를 받아서 bcrypt로 한 번 더 해시화하여 저장)
-                    // 2. 새 비밀번호(이것도 프론트에서 암호화되어 옴)로 업데이트
+                    // ✅ bcrypt.hash로 저장
                     const hashedNewPw = await bcrypt.hash(newPw, 10);
                     await pool.query("UPDATE admins SET password_hash = ? WHERE admin_id = ?", [hashedNewPw, currentAdmin]);
                     await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CHANGE_PW', '본인 비밀번호 변경 성공')", [currentAdmin]);
-
                     return res.status(200).json({ success: true });
                 } catch (e) { return res.status(200).json({ success: false, msg: e.message }); }
             }
-
+ 
             // 🔑 비밀번호 강제 초기화 — bcrypt 적용
             else if (action === 'RESET_ADMIN_PW') {
                 try {
@@ -485,147 +477,76 @@ module.exports = async function(req, res) {
             }
 
 // ✅ 로그인 로직 (SYSTEM 권한 전용 마스터 패스 + 최근 로그인 일시 업데이트 완전 통합본)
-else if (action === 'LOGIN') {
-    try {
-        const { id, pw } = data; // 프론트엔드에서 전송된 ID와 암호 해시값
-        
-        // 1. IP 추출 및 프록시 환경 정제 (안전한 다중 인프라 대응)
-        let ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.connection?.remoteAddress || 'IP 알수없음';
-        if (ip.includes(',')) {
-            ip = ip.split(',')[0].trim();
-        }
-
-        // 2. 기기 및 브라우저 정보 분석 (기존의 상세 기기 추적 기능)
-        const ua = req.headers['user-agent'] || '';
-        let os = 'PC';
-        if (/android/i.test(ua)) os = 'Android';
-        else if (/ipad|iphone|ipod/i.test(ua)) os = 'iOS';
-        else if (/mac os/i.test(ua)) os = 'Mac';
-        else if (/windows/i.test(ua)) os = 'Windows';
-        
-        let browser = '알수없음';
-        if (/edg/i.test(ua)) browser = 'Edge';
-        else if (/chrome/i.test(ua)) browser = 'Chrome';
-        else if (/safari/i.test(ua) && !/chrome/i.test(ua)) browser = 'Safari';
-        else if (/firefox/i.test(ua)) browser = 'Firefox';
-        else if (/kakao/i.test(ua)) browser = 'KakaoTalk';
-        else if (/naver/i.test(ua)) browser = 'NaverApp';
-
-        const connInfoBase = `기기: ${os} | 브라우저: ${browser}`;
-
-        // [보안 1단계] 최근 10분간 해당 IP와 ID 조합으로 실패한 이력 카운트 조회 (대소문자 무시)
-        const [failCountRows] = await pool.query(
-            `SELECT COUNT(*) as cnt FROM admin_audit_logs 
-             WHERE ip_address = ? AND LOWER(admin_id) = LOWER(?) AND action_type = 'LOGIN_FAILED' 
-               AND created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)`,
-            [ip, id]
-        );
-        const failCount = failCountRows[0].cnt;
-
+// ✅ 로그인 — bcrypt 적용
+            else if (action === 'LOGIN') {
+                try {
+                    const { id, pw } = data;
+                    let ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.connection?.remoteAddress || 'IP 알수없음';
+                    if (ip.includes(',')) ip = ip.split(',')[0].trim();
+                    const ua = req.headers['user-agent'] || '';
+                    let os = 'PC';
+                    if (/android/i.test(ua)) os = 'Android';
+                    else if (/ipad|iphone|ipod/i.test(ua)) os = 'iOS';
+                    else if (/mac os/i.test(ua)) os = 'Mac';
+                    else if (/windows/i.test(ua)) os = 'Windows';
+                    let browser = '알수없음';
+                    if (/edg/i.test(ua)) browser = 'Edge';
+                    else if (/chrome/i.test(ua)) browser = 'Chrome';
+                    else if (/safari/i.test(ua) && !/chrome/i.test(ua)) browser = 'Safari';
+                    else if (/firefox/i.test(ua)) browser = 'Firefox';
+                    else if (/kakao/i.test(ua)) browser = 'KakaoTalk';
+                    else if (/naver/i.test(ua)) browser = 'NaverApp';
+                    const connInfoBase = `기기: ${os} | 브라우저: ${browser}`;
+ 
+                    const [failCountRows] = await pool.query(
+                        `SELECT COUNT(*) as cnt FROM admin_audit_logs WHERE ip_address = ? AND LOWER(admin_id) = LOWER(?) AND action_type = 'LOGIN_FAILED' AND created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)`,
+                        [ip, id]
+                    );
+                    const failCount = failCountRows[0].cnt;
         // [보안 2단계] 5회 이상 연속 실패로 해당 ID-IP 조합이 잠긴 상태인 경우
-        if (failCount >= 5) {
-            // 입력한 ID로 계정 정보 조회
-            const [masterCheck] = await pool.query(
-                "SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = LOWER(?)", 
-                [id]
-            );
-            
-            // ✅ bcrypt.compare로 마스터 검증
+       if (failCount >= 5) {
+                        const [masterCheck] = await pool.query(
+                            "SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = LOWER(?)", [id]
+                        );
+                        // ✅ bcrypt.compare로 마스터 검증
                         const masterMatch = masterCheck.length > 0 ? await bcrypt.compare(pw, masterCheck[0].password_hash) : false;
-            // 👑 오직 최고관리자('SYSTEM') 권한을 가졌고, 진짜 비밀번호를 맞췄을 때만 비상 우회 통과
-            if (
-                masterCheck.length > 0 && 
-                masterMatch &&
-                masterCheck[0].status === 'ACTIVE' &&
-                masterCheck[0].role === 'SYSTEM' // 👈 오직 나(SYSTEM)만 이 문을 열 수 있습니다.
-            ) {
-                
-                // 최근 로그인 일시 업데이트
-                await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [masterCheck[0].admin_id]);
-
-                // 우회 성공 로그 기록
-                const connInfo = `[👑 최고관리자 잠금 우회 성공] IP: ${ip} | ${connInfoBase}`;
-                await pool.query(
-                    "INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_SUCCESS', ?)",
-                    [ip, masterCheck[0].admin_id, connInfo]
-                );
-                
-                return res.status(200).json({ 
-                    success: true, 
-                    admin_id: masterCheck[0].admin_id, 
-                    name: masterCheck[0].admin_name, 
-                    role: masterCheck[0].role,
-                    msg: "비상 우회 통로로 안전하게 로그인되었습니다."
-                });
+                        if (masterMatch && masterCheck[0].status === 'ACTIVE' && masterCheck[0].role === 'SYSTEM') {
+                            await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [masterCheck[0].admin_id]);
+                            const connInfo = `[👑 최고관리자 잠금 우회 성공] IP: ${ip} | ${connInfoBase}`;
+                            await pool.query("INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_SUCCESS', ?)", [ip, masterCheck[0].admin_id, connInfo]);
+                            return res.status(200).json({ success: true, admin_id: masterCheck[0].admin_id, name: masterCheck[0].admin_name, role: masterCheck[0].role, msg: "비상 우회 통로로 안전하게 로그인되었습니다." });
+                        }
+                        return res.status(200).json({ success: false, msg: "⚠️ 비밀번호 5회 실패로 로그인이 임시 제한되었습니다. 10분 후 다시 시도하세요." });
+                    }
+ 
+                    const [rows] = await pool.query(
+                        "SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = LOWER(?)", [id]
+                    );
+                    if (rows.length === 0) {
+                        await pool.query("INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_FAILED', ?)", [ip, id, `[존재하지 않는 ID 로그인 시도] IP: ${ip} | ${connInfoBase}`]);
+                        return res.status(200).json({ success: false, msg: '아이디 또는 비밀번호가 틀립니다.' });
+                    }
+                    const user = rows[0];
+                    if (user.status === 'LOCKED') {
+                        return res.status(200).json({ success: false, msg: '비활성화된 계정입니다. 관리자에게 문의하세요.' });
+                    }
+                    // ✅ bcrypt.compare로 일반 검증
+                    const isMatch = await bcrypt.compare(pw, user.password_hash);
+                    if (isMatch) {
+                        await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [user.admin_id]);
+                        const connInfo = `[접속성공] IP: ${ip} | ${connInfoBase}`;
+                        await pool.query("INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_SUCCESS', ?)", [ip, user.admin_id, connInfo]);
+                        return res.status(200).json({ success: true, admin_id: user.admin_id, name: user.admin_name, role: user.role });
+                    } else {
+                        const connInfo = `[비밀번호 틀림] IP: ${ip} | ${connInfoBase}`;
+                        await pool.query("INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_FAILED', ?)", [ip, user.admin_id, connInfo]);
+                        return res.status(200).json({ success: false, msg: `❌ 비밀번호가 일치하지 않습니다. (현재 10분 내 연속 실패: ${failCount + 1}회 / 5회 실패 시 10분간 자동 잠금)` });
+                    }
+                } catch (error) {
+                    console.error("🔥 로그인 내부 처리 오류:", error);
+                    return res.status(200).json({ success: false, msg: '로그인 처리 중 오류가 발생했습니다.' });
+                }
             }
-
-            // 일반 관리자('ADMIN') 계정이거나 암호가 틀린 해커는 예외 없이 10분간 원천 차단
-            return res.status(200).json({ 
-                success: false, 
-                msg: "⚠️ 비밀번호 5회 실패로 로그인이 임시 제한되었습니다. 10분 후 다시 시도하세요." 
-            });
-        }
-
-        // [보안 3단계] 일반 검증 흐름 (대소문자 무시 및 기존 구조 유지)
-        const [rows] = await pool.query(
-            "SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = LOWER(?)", 
-            [id]
-        );
-
-        // ID가 존재하지 않는 경우 처리
-        if (rows.length === 0) {
-            await pool.query(
-                "INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_FAILED', ?)",
-                [ip, id, `[존재하지 않는 ID 로그인 시도] IP: ${ip} | ${connInfoBase}`]
-            );
-            return res.status(200).json({ success: false, msg: '아이디 또는 비밀번호가 틀립니다.' });
-        }
-
-        const user = rows[0];
-
-        // 비활성화 계정은 비밀번호 검증 전 즉시 전용 메시지 리턴
-        if (user.status === 'LOCKED') {
-            return res.status(200).json({ success: false, msg: '비활성화된 계정입니다. 관리자에게 문의하세요.' });
-        }
-
-        // 비밀번호 해시 검증
-        if (user.password_hash === pw) {
-            
-            // 로그인 성공 시 최근 로그인 일시 업데이트
-            await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [user.admin_id]);
-
-            // 로그인 성공 로그 기록
-            const connInfo = `[접속성공] IP: ${ip} | ${connInfoBase}`;
-            await pool.query(
-                "INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_SUCCESS', ?)",
-                [ip, user.admin_id, connInfo]
-            );
-
-            return res.status(200).json({ 
-                success: true, 
-                admin_id: user.admin_id, 
-                name: user.admin_name, 
-                role: user.role 
-            });
-        } else {
-            // 비밀번호 실패 로그 기록 -> 이 데이터가 쌓여 10분간 자동 잠금을 제어합니다.
-            const connInfo = `[비밀번호 틀림] IP: ${ip} | ${connInfoBase}`;
-            await pool.query(
-                "INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_FAILED', ?)",
-                [ip, user.admin_id, connInfo]
-            );
-
-            return res.status(200).json({ 
-                success: false, 
-                msg: `❌ 비밀번호가 일치하지 않습니다. (현재 10분 내 연속 실패: ${failCount + 1}회 / 5회 실패 시 10분간 자동 잠금)` 
-            });
-        }
-
-    } catch (error) {
-        console.error("🔥 로그인 내부 처리 오류:", error);
-        return res.status(200).json({ success: false, msg: '로그인 처리 중 오류가 발생했습니다.' });
-    }
-}
             
             // 👤 H. [신규] 특정 관리자 접속(로그인) 이력 전용 조회 엔진
             else if (action === 'GET_ADMIN_CONN_LOGS') {
