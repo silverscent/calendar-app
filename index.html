@@ -1874,15 +1874,29 @@ body.light-mode .fab-label {
 
 /* ── 좌우: 라벨이 화면 안쪽을 향하도록 ── */
 
-/* 오른쪽 끝에 붙음 → 메뉴는 버튼 왼쪽으로 (라벨이 버튼 왼쪽) */
+/* ── 좌우 정렬 ── */
+
+/* 오른쪽 끝에 붙음 → 라벨이 버튼 왼쪽에 나란히 (오른쪽 정렬 유지) */
 .fab-wrapper.snap-right .fab-sub-container { align-items: flex-end; }
-.fab-wrapper.snap-right .fab-sub-item { flex-direction: row; }
+.fab-wrapper.snap-right .fab-sub-item {
+    flex-direction: row;
+    justify-content: flex-end;
+}
 
-/* 왼쪽 끝에 붙음 → 메뉴는 버튼 오른쪽으로 (버튼이 왼쪽, 라벨이 오른쪽) */
+/* 왼쪽 끝에 붙음 → 라벨이 버튼 오른쪽에 나란히 (왼쪽 정렬) */
 .fab-wrapper.snap-left .fab-sub-container { align-items: flex-start; }
-.fab-wrapper.snap-left .fab-sub-item { flex-direction: row-reverse; }
-
+.fab-wrapper.snap-left .fab-sub-item {
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+}
 /* ── 상하: 메뉴 펼침 세로 방향 ── */
+.fab-wrapper.snap-right {
+    /* 메뉴가 왼쪽으로 뻗을 공간 확보: 오른쪽 가장자리에 고정하고 너비를 자동으로 */
+    align-items: flex-end;
+}
+.fab-wrapper {
+    width: max-content;   /* 라벨+버튼 전체 너비만큼 자동 확장 */
+}
 
 /* 아래쪽에 붙음 → 메뉴가 버튼 위로 (버튼이 맨 아래) */
 .fab-wrapper.snap-bottom { flex-direction: column; }
