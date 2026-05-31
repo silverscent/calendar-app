@@ -124,6 +124,7 @@ document.addEventListener('click', function(e) {
 // FAB 드래그 기능
 function initDraggableFab() {
     const fab = document.getElementById('inboundAiFab');
+    console.log("FAB 찾기 결과:", fab); // 이 로그가 null이라면 ID가 틀린 겁니다!
     if (!fab) return;
 
     const savedPos = JSON.parse(localStorage.getItem('aiFabPosition'));
