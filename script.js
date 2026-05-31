@@ -116,24 +116,18 @@ function toggleFabMenu() {
     if (wrapper) wrapper.classList.toggle('open');
 }
 
+// 1. 드래그 초기화 (클릭 방해 X)
 function initDraggableFab() {
     const fab = document.getElementById('inboundAiFab') || document.getElementById('fabBtn');
     if (!fab) return;
 
     const storageKey = fab.id === 'fabBtn' ? 'outboundFabPosition' : 'aiFabPosition';
-    const savedPos = JSON.parse(localStorage.getItem(storageKey));
-    
-    if (savedPos) {
-        fab.style.left = savedPos.left;
-        fab.style.top = savedPos.top;
-        fab.style.right = savedPos.right;
-        fab.style.bottom = savedPos.bottom;
-    }
-
+    let isDragging = false;
     let offset = { x: 0, y: 0 };
+    let startX = 0, startY = 0;
 
     fab.addEventListener('mousedown', (e) => {
-        isDragging = false; // 누를 땐 드래그 아님
+        isDragging = false; // 누를 땐 일단 드래그 아님
         startX = e.clientX;
         startY = e.clientY;
         offset.x = e.clientX - fab.getBoundingClientRect().left;
@@ -141,10 +135,9 @@ function initDraggableFab() {
     });
 
     document.addEventListener('mousemove', (e) => {
-        // 이동 거리가 5px 이상이면 드래그 시작으로 간주
         const dx = Math.abs(e.clientX - startX);
         const dy = Math.abs(e.clientY - startY);
-        
+        // 5px 이상 움직여야 드래그로 간주
         if (dx > 5 || dy > 5) {
             isDragging = true;
             fab.style.left = (e.clientX - offset.x) + 'px';
@@ -154,11 +147,11 @@ function initDraggableFab() {
         }
     });
 
-    document.addEventListener('mouseup', (e) => {
+    document.addEventListener('mouseup', () => {
         if (isDragging) {
             snapToEdge(fab, storageKey);
-            isDragging = false; // 드래그 끝
         }
+        isDragging = false;
     });
 }
 
@@ -187,24 +180,17 @@ function snapToEdge(fab, key) {
     }));
 }
 
-// ── 3. 초기화 (버튼 표시) ──────────────────────────────
+
+// 2. 버튼 강제 표시 (사라지는 문제 해결용)
 function showAiFabIfAdmin() {
-    const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
     const inboundFab = document.getElementById('inboundAiFab');
     const fabBtn = document.getElementById('fabBtn');
 
-    if (!adminId) {
-        if(inboundFab) inboundFab.style.display = 'none';
-        if(fabBtn) fabBtn.style.display = 'none';
-        return;
-    }
-
-    if (inboundFab) inboundFab.style.display = 'flex';
-    if (fabBtn) {
-        fabBtn.style.display = 'block';
-        const fabAiSub = document.getElementById('fab-sub-ai-wrap');
-        if(fabAiSub) fabAiSub.style.display = 'flex';
-    }
+    // 테스트를 위해 일단 무조건 보이게 하세요. (나중에 admin 체크 로직 추가 가능)
+    if (inboundFab) inboundFab.style.display = 'flex'; 
+    if (fabBtn) fabBtn.style.display = 'block';
+    
+    console.log("버튼 표시 여부 체크:", { inboundFab: !!inboundFab, fabBtn: !!fabBtn });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
