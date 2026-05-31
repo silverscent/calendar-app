@@ -135,6 +135,16 @@ function _attachDrag(fab, storageKey, hasMenu) {
     let startX, startY, startLeft, startTop, dragged = false;
     const THRESHOLD = 8;
 
+    let rafId = null;
+    let pendingX = 0, pendingY = 0;
+    const applyMove = () => {
+        rafId = null;
+        const btn = _btnSize(fab, hasMenu);
+        const maxX = window.innerWidth  - btn.w;
+        const maxY = window.innerHeight - btn.h;
+        fab.style.setProperty('left', Math.max(0, Math.min(pendingX, maxX)) + 'px', 'important');
+        fab.style.setProperty('top',  Math.max(0, Math.min(pendingY, maxY)) + 'px', 'important');
+    };
     const moveTo = (clientX, clientY) => {
         const dx = clientX - startX;
         const dy = clientY - startY;
@@ -145,11 +155,10 @@ function _attachDrag(fab, storageKey, hasMenu) {
             _setAbsolute(fab);
         }
         if (!dragged) return false;
-        const btn = _btnSize(fab, hasMenu);
-        const maxX = window.innerWidth  - btn.w;
-        const maxY = window.innerHeight - btn.h;
-        fab.style.setProperty('left', Math.max(0, Math.min(startLeft + dx, maxX)) + 'px', 'important');
-        fab.style.setProperty('top',  Math.max(0, Math.min(startTop  + dy, maxY)) + 'px', 'important');
+        pendingX = startLeft + dx;
+        pendingY = startTop + dy;
+        // requestAnimationFrame 으로 프레임당 1회만 적용 (버벅임 제거)
+        if (rafId === null) rafId = requestAnimationFrame(applyMove);
         return true;
     };
 
@@ -162,7 +171,7 @@ function _attachDrag(fab, storageKey, hasMenu) {
         setTimeout(() => { window.fabDragging = false; }, 150);
     };
 
-    // 터치
+    // 터치 (passive:false 로 두어야 preventDefault 가능 → PTR/스크롤 원천차단)
     fab.addEventListener('touchstart', (e) => {
         e.stopPropagation();
         const t = e.touches[0];
@@ -170,7 +179,7 @@ function _attachDrag(fab, storageKey, hasMenu) {
         const rect = fab.getBoundingClientRect();
         startLeft = rect.left; startTop = rect.top;
         dragged = false; window.fabDragging = false;
-    }, { passive: true });
+    }, { passive: false });
 
     fab.addEventListener('touchmove', (e) => {
         e.stopPropagation();
