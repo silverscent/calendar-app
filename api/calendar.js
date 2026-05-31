@@ -924,8 +924,12 @@ ${question}
         );
         const geminiJson = await geminiRes.json();
         const aiText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (!aiText) return res.status(200).json({ success: false, msg: 'AI 응답이 없습니다.' });
-
+if (!aiText) {
+    return res.status(200).json({ 
+        success: false, 
+        msg: 'GEMINI원본: ' + JSON.stringify(geminiJson).slice(0, 400)
+    });
+}
         let parsed;
         try {
             // 🚨 수정: rawAiText -> aiText 로 변경
