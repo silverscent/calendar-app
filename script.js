@@ -132,19 +132,30 @@ function initDraggableFab() {
 function _attachDrag(fab, storageKey, hasMenu) {
     _restorePos(fab, storageKey, hasMenu);
 
-    let startX, startY, startLeft, startTop, dragged = false;
+    let startX, startY, baseStartLeft, baseStartTop, dragged = false;
+    let offX = 0, offY = 0;   // wrapper(left/top) 와 버튼본체(.fab-main) 의 좌표 차이
     const THRESHOLD = 8;
 
+    // 버튼 본체의 화면상 좌상단 좌표
+    const getBaseRect = () => {
+        const main = hasMenu ? fab.querySelector('.fab-main') : null;
+        return main ? main.getBoundingClientRect() : fab.getBoundingClientRect();
+    };
+
     let rafId = null;
-    let pendingX = 0, pendingY = 0;
+    let pendingBaseLeft = 0, pendingBaseTop = 0;
     const applyMove = () => {
         rafId = null;
         const btn = _btnSize(fab, hasMenu);
-        const maxX = window.innerWidth  - btn.w;
-        const maxY = window.innerHeight - btn.h;
-        fab.style.setProperty('left', Math.max(0, Math.min(pendingX, maxX)) + 'px', 'important');
-        fab.style.setProperty('top',  Math.max(0, Math.min(pendingY, maxY)) + 'px', 'important');
+        const PAD = 0;
+        // 본체 기준으로 화면 경계 클램프
+        const clampedBaseLeft = Math.max(PAD, Math.min(pendingBaseLeft, window.innerWidth  - btn.w - PAD));
+        const clampedBaseTop  = Math.max(PAD, Math.min(pendingBaseTop,  window.innerHeight - btn.h - PAD));
+        // wrapper 의 left/top = 본체 좌표 - offset (라벨이 왼/위로 뻗은 만큼 보정)
+        fab.style.setProperty('left', (clampedBaseLeft - offX) + 'px', 'important');
+        fab.style.setProperty('top',  (clampedBaseTop  - offY) + 'px', 'important');
     };
+
     const moveTo = (clientX, clientY) => {
         const dx = clientX - startX;
         const dy = clientY - startY;
@@ -152,34 +163,38 @@ function _attachDrag(fab, storageKey, hasMenu) {
             dragged = true;
             window.fabDragging = true;
             if (hasMenu) fab.classList.remove('open');
-            _setAbsolute(fab);
+            // 드래그 확정 순간: 본체 기준 시작좌표 + offset 확정 후 left/top 모드로 전환
+            const wrapRect = fab.getBoundingClientRect();
+            const baseRect = getBaseRect();
+            offX = baseRect.left - wrapRect.left;
+            offY = baseRect.top  - wrapRect.top;
+            baseStartLeft = baseRect.left;
+            baseStartTop  = baseRect.top;
+            fab.style.setProperty('position', 'fixed', 'important');
+            fab.style.setProperty('right', 'auto', 'important');
+            fab.style.setProperty('bottom', 'auto', 'important');
         }
         if (!dragged) return false;
-        pendingX = startLeft + dx;
-        pendingY = startTop + dy;
-        // requestAnimationFrame 으로 프레임당 1회만 적용 (버벅임 제거)
+        pendingBaseLeft = baseStartLeft + dx;
+        pendingBaseTop  = baseStartTop  + dy;
         if (rafId === null) rafId = requestAnimationFrame(applyMove);
         return true;
     };
 
     const endDrag = () => {
-        // 🚨 대기중인 rAF 취소 (스냅 좌표가 중간값으로 덮어써지는 것 방지)
         if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
         if (dragged) {
             _snapToEdge(fab, hasMenu);
             _savePos(fab, storageKey);
         }
-        // 클릭 이벤트가 끝난 뒤에 플래그 해제
         setTimeout(() => { window.fabDragging = false; }, 150);
     };
 
-    // 터치 (passive:false 로 두어야 preventDefault 가능 → PTR/스크롤 원천차단)
+    // 터치
     fab.addEventListener('touchstart', (e) => {
         e.stopPropagation();
         const t = e.touches[0];
         startX = t.clientX; startY = t.clientY;
-        const rect = fab.getBoundingClientRect();
-        startLeft = rect.left; startTop = rect.top;
         dragged = false; window.fabDragging = false;
     }, { passive: false });
 
@@ -198,8 +213,6 @@ function _attachDrag(fab, storageKey, hasMenu) {
         e.preventDefault();
         e.stopPropagation();
         startX = e.clientX; startY = e.clientY;
-        const rect = fab.getBoundingClientRect();
-        startLeft = rect.left; startTop = rect.top;
         dragged = false; window.fabDragging = false;
 
         const onMove = (e) => moveTo(e.clientX, e.clientY);
@@ -212,7 +225,7 @@ function _attachDrag(fab, storageKey, hasMenu) {
         document.addEventListener('mouseup', onUp);
     });
 
-    // 클릭 처리 (입고 단일버튼만): 드래그였으면 무효화, 아니면 AI 질의
+    // 클릭 처리 (입고 단일버튼만)
     if (!hasMenu) {
         fab.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -222,7 +235,6 @@ function _attachDrag(fab, storageKey, hasMenu) {
     }
 }
 
-// 버튼 "본체"만의 크기 (메뉴 제외)
 function _btnSize(fab, hasMenu) {
     if (hasMenu) {
         const main = fab.querySelector('.fab-main');
@@ -236,42 +248,53 @@ function _btnSize(fab, hasMenu) {
 }
 
 function _setAbsolute(fab) {
-    const rect = fab.getBoundingClientRect();
+    // wrapper 전체가 아니라 버튼 본체(.fab-main) 위치를 기준으로 left/top 고정
+    const main = fab.querySelector('.fab-main');
+    const wrapRect = fab.getBoundingClientRect();
+    const baseRect = main ? main.getBoundingClientRect() : wrapRect;
+    // 본체 left - (wrapper left와의 차이) 보정: wrapper의 left를 본체 left에 맞춤
+    // width:max-content + 라벨이 왼쪽으로 뻗은 경우 wrapRect.left가 라벨 끝이므로 그 차이만큼 빼줌
+    const offsetX = baseRect.left - wrapRect.left;
     fab.style.setProperty('position', 'fixed', 'important');
-    fab.style.setProperty('left', rect.left + 'px', 'important');
-    fab.style.setProperty('top', rect.top + 'px', 'important');
+    fab.style.setProperty('left', (baseRect.left - offsetX) + 'px', 'important');
+    fab.style.setProperty('top', baseRect.top + 'px', 'important');
     fab.style.setProperty('right', 'auto', 'important');
     fab.style.setProperty('bottom', 'auto', 'important');
 }
 
 function _snapToEdge(fab, hasMenu) {
     const btn = _btnSize(fab, hasMenu);
-    // 🚨 버튼 본체(.fab-main) 기준으로 위치 측정 (메뉴 포함 영역 무시)
-    let baseRect;
-    if (hasMenu) {
-        const main = fab.querySelector('.fab-main');
-        baseRect = main ? main.getBoundingClientRect() : fab.getBoundingClientRect();
-    } else {
-        baseRect = fab.getBoundingClientRect();
-    }
+    const wrapRect = fab.getBoundingClientRect();
+    const main = hasMenu ? fab.querySelector('.fab-main') : null;
+    const baseRect = main ? main.getBoundingClientRect() : wrapRect;
+
+    // wrapper 와 본체의 좌표 차이 (라벨이 왼/위로 뻗은 만큼)
+    const offX = baseRect.left - wrapRect.left;
+    const offY = baseRect.top  - wrapRect.top;
+
     const cx = baseRect.left + btn.w / 2;
     const cy = baseRect.top  + btn.h / 2;
     const PAD = 12;
 
     const isLeft = cx < window.innerWidth / 2;
-    // 상하 위치 유지하되 화면 안으로 확실히 보정
-    const safeY = Math.max(PAD, Math.min(baseRect.top, window.innerHeight - btn.h - PAD));
 
-    // 🚨 오른쪽이면 right로 고정 (width:max-content 라도 버튼 본체가 항상 오른쪽 가장자리에 붙음)
+    // 본체 기준 세로 위치: 현재 위치 유지 + 화면 안으로 보정
+    const baseTop = Math.max(PAD, Math.min(baseRect.top, window.innerHeight - btn.h - PAD));
+    // wrapper 의 top = 본체 top - offY
+    fab.style.setProperty('top', (baseTop - offY) + 'px', 'important');
+    fab.style.setProperty('bottom', 'auto', 'important');
+
     if (isLeft) {
-        fab.style.setProperty('left', PAD + 'px', 'important');
+        // 왼쪽: 본체 좌상단이 PAD 에 오도록 → wrapper left = PAD - offX
+        fab.style.setProperty('left', (PAD - offX) + 'px', 'important');
         fab.style.setProperty('right', 'auto', 'important');
     } else {
-        fab.style.setProperty('right', PAD + 'px', 'important');
+        // 오른쪽: 본체 우측이 화면 오른쪽 PAD 에 붙도록 right 고정
+        // wrapper 오른쪽 끝과 본체 오른쪽 끝의 차이만큼 보정
+        const offRight = wrapRect.right - baseRect.right;
+        fab.style.setProperty('right', (PAD - offRight) + 'px', 'important');
         fab.style.setProperty('left', 'auto', 'important');
     }
-    fab.style.setProperty('top',  safeY + 'px', 'important');
-    fab.style.setProperty('bottom', 'auto', 'important');
 
     if (hasMenu) {
         fab.classList.toggle('snap-left',  isLeft);
