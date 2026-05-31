@@ -1,9 +1,11 @@
 
-console.log("script.js가 정상적으로 로드되었습니다.");
-let isDragging = false; // 전역 변수로 관리
+// ── [전역 변수 설정] ──
+let isDragging = false;
+let startX, startY; // 드래그 시작 위치 확인용
+
 // ── 1. AI 질의 기능 ──────────────────────────────
 function openAiQuery() {
-    if (isDragging) return; // 드래그 중이었다면 무시
+    if (isDragging) return; // 드래그 중이었다면 클릭 방지
     const modal = document.getElementById('aiQueryModal');
     if (modal) {
         modal.style.display = 'flex';
@@ -107,29 +109,17 @@ async function runAiQuery() {
     }
 }
 
-// ── 2. FAB 메뉴 토글 & 드래그 기능 ──────────────────────────────
+// ── 2. FAB 드래그 및 메뉴 토글 기능 ──────────────────────────────
 
-// 스피드 다이얼 메뉴 토글
 function toggleFabMenu() {
     const wrapper = document.getElementById('fabBtn');
     if (wrapper) wrapper.classList.toggle('open');
 }
 
-// 바탕 클릭 시 메뉴 접기
-document.addEventListener('click', function(e) {
-    const wrapper = document.getElementById('fabBtn');
-    if (wrapper && wrapper.classList.contains('open') && !wrapper.contains(e.target)) {
-        wrapper.classList.remove('open');
-    }
-});
-
-// FAB 드래그 기능
 function initDraggableFab() {
-    // 입고 버튼 ID(inboundAiFab) 혹은 출고 버튼 ID(fabBtn) 중 존재하는 것을 찾음
     const fab = document.getElementById('inboundAiFab') || document.getElementById('fabBtn');
     if (!fab) return;
 
-    // 2. 위치 불러오기 (ID별로 저장 위치를 구분하는 게 좋습니다)
     const storageKey = fab.id === 'fabBtn' ? 'outboundFabPosition' : 'aiFabPosition';
     const savedPos = JSON.parse(localStorage.getItem(storageKey));
     
@@ -140,29 +130,35 @@ function initDraggableFab() {
         fab.style.bottom = savedPos.bottom;
     }
 
-    let isDragging = false;
     let offset = { x: 0, y: 0 };
 
     fab.addEventListener('mousedown', (e) => {
-        e.preventDefault(); // 👈 이 줄이 핵심입니다! 새로고침 방지
-        e.stopPropagation(); // 👈 이 코드가 새로고침을 막는 핵심입니다.
-        isDragging = true;
+        isDragging = false; // 누를 땐 드래그 아님
+        startX = e.clientX;
+        startY = e.clientY;
         offset.x = e.clientX - fab.getBoundingClientRect().left;
         offset.y = e.clientY - fab.getBoundingClientRect().top;
     });
 
     document.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        fab.style.left = (e.clientX - offset.x) + 'px';
-        fab.style.top = (e.clientY - offset.y) + 'px';
-        fab.style.right = 'auto';
-        fab.style.bottom = 'auto';
+        // 이동 거리가 5px 이상이면 드래그 시작으로 간주
+        const dx = Math.abs(e.clientX - startX);
+        const dy = Math.abs(e.clientY - startY);
+        
+        if (dx > 5 || dy > 5) {
+            isDragging = true;
+            fab.style.left = (e.clientX - offset.x) + 'px';
+            fab.style.top = (e.clientY - offset.y) + 'px';
+            fab.style.right = 'auto';
+            fab.style.bottom = 'auto';
+        }
     });
 
-    document.addEventListener('mouseup', () => {
-        if (!isDragging) return;
-        isDragging = false;
-        snapToEdge(fab, storageKey); // storageKey 전달
+    document.addEventListener('mouseup', (e) => {
+        if (isDragging) {
+            snapToEdge(fab, storageKey);
+            isDragging = false; // 드래그 끝
+        }
     });
 }
 
@@ -171,56 +167,43 @@ function snapToEdge(fab, key) {
     const winWidth = window.innerWidth;
     const winHeight = window.innerHeight;
     
-    // 4방향과의 거리 계산
     const distLeft = rect.left;
     const distRight = winWidth - rect.right;
     const distTop = rect.top;
     const distBottom = winHeight - rect.bottom;
-    
     const min = Math.min(distLeft, distRight, distTop, distBottom);
 
-    // 1. 모든 위치값 초기화 (충돌 방지)
-    fab.style.left = 'auto';
-    fab.style.right = 'auto';
-    fab.style.top = 'auto';
-    fab.style.bottom = 'auto';
+    fab.style.left = 'auto'; fab.style.right = 'auto';
+    fab.style.top = 'auto'; fab.style.bottom = 'auto';
 
-    // 2. 가장 가까운 쪽으로 고정
-    if (min === distLeft) {
-        fab.style.left = '10px';
-    } else if (min === distRight) {
-        fab.style.right = '10px';
-    } else if (min === distTop) {
-        fab.style.top = '10px';
-    } else {
-        fab.style.bottom = '10px';
-    }
+    if (min === distLeft) fab.style.left = '10px';
+    else if (min === distRight) fab.style.right = '10px';
+    else if (min === distTop) fab.style.top = '10px';
+    else fab.style.bottom = '10px';
 
-    // 위치 저장
     localStorage.setItem(key, JSON.stringify({
         left: fab.style.left, top: fab.style.top, 
         right: fab.style.right, bottom: fab.style.bottom
     }));
 }
 
-// ── 3. 초기화 ──────────────────────────────
+// ── 3. 초기화 (버튼 표시) ──────────────────────────────
 function showAiFabIfAdmin() {
     const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
-    if (!adminId) return;
-
-    // 입고 버튼
     const inboundFab = document.getElementById('inboundAiFab');
-    if (inboundFab) {
-        const isMulti = (typeof isMultiMode !== 'undefined' && isMultiMode);
-        if (!isMulti) inboundFab.style.display = 'flex';
+    const fabBtn = document.getElementById('fabBtn');
+
+    if (!adminId) {
+        if(inboundFab) inboundFab.style.display = 'none';
+        if(fabBtn) fabBtn.style.display = 'none';
+        return;
     }
 
-    // 출고 스피드 다이얼
-    const fabBtn = document.getElementById('fabBtn');
-    const fabAiSub = document.getElementById('fab-sub-ai-wrap');
-    if (fabBtn && fabAiSub) {
-        fabBtn.style.display = 'block'; // 전체 다이얼을 보이게 함
-        fabAiSub.style.display = 'flex'; // AI 버튼만 보이게 함
+    if (inboundFab) inboundFab.style.display = 'flex';
+    if (fabBtn) {
+        fabBtn.style.display = 'block';
+        const fabAiSub = document.getElementById('fab-sub-ai-wrap');
+        if(fabAiSub) fabAiSub.style.display = 'flex';
     }
 }
 

@@ -1813,17 +1813,13 @@
       .master-tab-btn.active { background-color: var(--bg-color) !important; color: #0a84ff !important; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
     
     /* 🚀 확장형 FAB 전용 스타일 */
+/* style.css (또는 관련 CSS 파일) */
 .fab-wrapper {
+    position: fixed;
     right: 20px;
-    bottom: max(30px, env(safe-area-inset-bottom));
-    display: flex;
-    flex-direction: column-reverse;
-    align-items: flex-end;
-    gap: 15px;
+    bottom: 30px;
     z-index: 1500;
-    position: fixed !important;
-    transform: none !important; /* 붕 뜨는 현상 방지 */
-    width: fit-content;        /* 드래그 시 크기가 찌그러지지 않게 함 */
+    /* !important나 transform은 여기서 다 지우세요 */
 }
 .fab-main {
     width: 60px; height: 60px; border-radius: 50%;
