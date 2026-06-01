@@ -1863,9 +1863,25 @@
     transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
     pointer-events: none;
 }
+/* 🚨 메뉴가 닫혀 있을 때: 서브컨테이너를 absolute 로 빼서 wrapper 가
+   본체(60px) 영역만 차지하게 → 대시보드 위 투명영역 클릭가로채기 제거 */
+.fab-wrapper:not(.open) .fab-sub-container {
+    position: absolute;
+    height: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+/* 좌우 기준: 오른쪽 붙으면 right:0, 왼쪽 붙으면 left:0 */
+.fab-wrapper.snap-right:not(.open) .fab-sub-container { right: 0; left: auto; }
+.fab-wrapper.snap-left:not(.open)  .fab-sub-container { left: 0; right: auto; }
+/* 상하 기준: 아래 붙으면 메뉴는 본체 위, 위 붙으면 본체 아래 */
+.fab-wrapper.snap-bottom:not(.open) .fab-sub-container { bottom: 100%; top: auto; }
+.fab-wrapper.snap-top:not(.open) .fab-sub-container { top: 100%; bottom: auto; }
 .fab-wrapper.open .fab-sub-container {
     opacity: 1; visibility: visible; transform: translateY(0);
     pointer-events: auto;
+    position: static;
+    height: auto;
 }
 .fab-sub-item {
     display: flex; align-items: center; gap: 10px;
