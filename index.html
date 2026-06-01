@@ -5747,8 +5747,18 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       };
       
       // 🚨 이전에 꼬였던 플러그인들 리셋하고 새것만 등록!
-      Chart.unregister(pieCenterTextPlugin, pieHybridLabelPlugin); 
-      Chart.register(pieCenterTextPlugin, pieHybridLabelPlugin);
+      // 🚨 chart.js(defer 로드) 준비 후에만 플러그인 등록 (Chart is not defined 방지)
+      function _registerChartPlugins() {
+        if (typeof Chart === 'undefined') { 
+          // 아직 chart.js 로드 전이면 잠시 후 재시도
+          return setTimeout(_registerChartPlugins, 50); 
+        }
+        try {
+          Chart.unregister(pieCenterTextPlugin, pieHybridLabelPlugin);
+          Chart.register(pieCenterTextPlugin, pieHybridLabelPlugin);
+        } catch(e) {}
+      }
+      _registerChartPlugins();
 
      
       // ⚙️ 스위치 토글 및 네비게이션 함수들
