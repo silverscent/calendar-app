@@ -912,7 +912,7 @@ ${question}
 
         // Gemini 호출
         const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY_AI || process.env.GEMINI_API_KEY}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -925,11 +925,13 @@ ${question}
         const geminiJson = await geminiRes.json();
         const aiText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 if (!aiText) {
-    return res.status(200).json({ 
-        success: false, 
-        msg: 'GEMINI원본: ' + JSON.stringify(geminiJson).slice(0, 400)
-    });
-}
+            // 429(할당량) 등 Gemini 에러를 사용자에게 친절히 안내
+            const errMsg = geminiJson?.error?.message || '';
+            if (geminiJson?.error?.code === 429 || /quota|rate/i.test(errMsg)) {
+                return res.status(200).json({ success: false, msg: 'AI 사용량 한도에 도달했습니다. 잠시 후 다시 시도해주세요.' });
+            }
+            return res.status(200).json({ success: false, msg: 'AI 응답이 없습니다.' });
+        }
         let parsed;
         try {
             // 🚨 수정: rawAiText -> aiText 로 변경
@@ -954,31 +956,31 @@ if (!/^\s*SELECT/i.test(safeSql)) {
 // SQL 실행
 const [rows] = await pool.query(safeSql);
 
-        // 결과 자연어 요약
-        const summaryPrompt = `
-너는 물류 창고 데이터 분석 AI야.
-관리자가 "${question}" 라고 물었고,
-DB 조회 결과는 다음과 같아:
-${JSON.stringify(rows, null, 2)}
-
-이 결과를 한국어로 친절하고 간결하게 요약해줘.
-숫자가 있으면 강조하고, 결과가 없으면 "해당 데이터가 없습니다"라고 말해줘.
-3문장 이내로 답해줘.
-        `.trim();
-
-        const summaryRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: summaryPrompt }] }],
-                    generationConfig: { temperature: 0.3 }
-                })
+        // 🚀 [호출 1회 최적화] 2차 Gemini 요약 호출 제거 → 서버에서 코드로 요약 생성
+        //    (무료 할당량 절약: AI 질의당 Gemini 호출 2회 → 1회)
+        let summary;
+        if (!rows || rows.length === 0) {
+            summary = '해당 데이터가 없습니다.';
+        } else {
+            const cnt = rows.length;
+            // 숫자형 컬럼이 있으면 합계를 자동 계산해 요약에 포함
+            const numericKeys = [];
+            const sample = rows[0];
+            for (const k in sample) {
+                // 숫자로 환산 가능한 값이 다수면 숫자컬럼으로 간주
+                const v = sample[k];
+                if (v !== null && v !== '' && !isNaN(Number(v))) numericKeys.push(k);
             }
-        );
-        const summaryJson = await summaryRes.json();
-        const summary = summaryJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '결과를 요약할 수 없습니다.';
+            let sumParts = [];
+            // pal, pallets, box, qty 등 물량 관련 컬럼 우선 합산
+            const qtyKeys = numericKeys.filter(k => /pal|box|qty|수량|count|cnt/i.test(k));
+            (qtyKeys.length ? qtyKeys : numericKeys).slice(0, 3).forEach(k => {
+                const total = rows.reduce((acc, r) => acc + (Number(r[k]) || 0), 0);
+                if (total > 0) sumParts.push(`${k} 합계 ${total.toLocaleString()}`);
+            });
+            summary = `총 ${cnt.toLocaleString()}건이 조회되었습니다.`;
+            if (sumParts.length) summary += ` (${sumParts.join(', ')})`;
+        }
 
         return res.status(200).json({
             success: true,
