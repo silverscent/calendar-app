@@ -46,16 +46,19 @@ function _attachKeyboardHandling() {
         if (!modal || modal.style.display === 'none') return;
         const panel = modal.firstElementChild;
         if (!panel) return;
+        const chipRow = document.getElementById('ai-chip-row');
         // 키보드가 가린 높이 = 전체 높이 - 보이는 뷰포트 높이
         const hidden = window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop;
         if (hidden > 60) {
-            // 키보드가 올라옴 → 패널을 그만큼 위로 띄우고, 높이도 보이는 영역에 맞춤
-            panel.style.transform = 'translateY(-' + hidden + 'px)';
-            panel.style.transition = 'transform 0.2s ease';
-            panel.style.maxHeight = (window.visualViewport.height - 20) + 'px';
+            // 키보드 올라옴 → 패널은 안 밀고 높이만 키보드 위에 딱 맞춤 (하단 고정이라 자동 정렬)
+            panel.style.transform = '';
+            panel.style.maxHeight = (window.visualViewport.height - 10) + 'px';
+            // 좁은 공간 확보: 칩 줄을 접어서 대화 영역을 넓힘
+            if (chipRow) { chipRow.style.display = 'none'; }
         } else {
             panel.style.transform = '';
             panel.style.maxHeight = '';
+            if (chipRow) { chipRow.style.display = 'flex'; }
         }
     };
     window.visualViewport.addEventListener('resize', onResize);
@@ -163,6 +166,8 @@ function closeAiQuery() {
     if (modal) {
         const panel = modal.firstElementChild;
         if (panel) { panel.style.transform = ''; panel.style.maxHeight = ''; }   // 키보드 보정 초기화
+        const chipRow = document.getElementById('ai-chip-row');
+        if (chipRow) chipRow.style.display = 'flex';   // 칩 복원
         modal.style.display = 'none';
     }
 }
