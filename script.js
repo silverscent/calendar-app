@@ -16,7 +16,50 @@ function openAiQuery() {
     if (!modal) return;
     modal.style.display = 'flex';
     renderAiChatHistory();   // 저장된 대화 복원
-    setTimeout(() => document.getElementById('ai-question-input')?.focus(), 300);
+    _attachKeyboardHandling();
+    setTimeout(() => {
+        const inp = document.getElementById('ai-question-input');
+        if (inp) { inp.focus(); _scrollInputIntoView(); }
+    }, 300);
+}
+
+// 입력창이 키보드에 가리지 않게 보이도록 스크롤
+function _scrollInputIntoView() {
+    const inp = document.getElementById('ai-question-input');
+    if (inp && inp.scrollIntoView) {
+        setTimeout(() => inp.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
+    }
+}
+
+// 모바일 키보드(visualViewport) 대응: 키보드 높이만큼 모달 안쪽 패널을 위로
+let _kbHandlerAttached = false;
+function _attachKeyboardHandling() {
+    const inp = document.getElementById('ai-question-input');
+    if (inp && !inp._focusBound) {
+        inp.addEventListener('focus', _scrollInputIntoView);
+        inp._focusBound = true;
+    }
+    if (_kbHandlerAttached || !window.visualViewport) return;
+    _kbHandlerAttached = true;
+    const onResize = () => {
+        const modal = document.getElementById('aiQueryModal');
+        if (!modal || modal.style.display === 'none') return;
+        const panel = modal.firstElementChild;
+        if (!panel) return;
+        // 키보드가 가린 높이 = 전체 높이 - 보이는 뷰포트 높이
+        const hidden = window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop;
+        if (hidden > 60) {
+            // 키보드가 올라옴 → 패널을 그만큼 위로 띄우고, 높이도 보이는 영역에 맞춤
+            panel.style.transform = 'translateY(-' + hidden + 'px)';
+            panel.style.transition = 'transform 0.2s ease';
+            panel.style.maxHeight = (window.visualViewport.height - 20) + 'px';
+        } else {
+            panel.style.transform = '';
+            panel.style.maxHeight = '';
+        }
+    };
+    window.visualViewport.addEventListener('resize', onResize);
+    window.visualViewport.addEventListener('scroll', onResize);
 }
 
 // 저장된 대화를 말풍선으로 복원
@@ -48,21 +91,25 @@ function _saveAiMessage(msg) {
 // 말풍선 DOM 생성 (msg: {role:'user'|'ai', text, rows, sql, count, isError})
 function _buildBubble(msg) {
     const wrap = document.createElement('div');
+    wrap.className = 'ai-bubble-in';
     wrap.style.display = 'flex';
     wrap.style.flexDirection = 'column';
 
     if (msg.role === 'user') {
         wrap.style.alignItems = 'flex-end';
         const b = document.createElement('div');
-        b.style.cssText = 'max-width:80%; background:linear-gradient(135deg,#5e5ce6,#bf5af2); color:#fff; padding:10px 14px; border-radius:16px 16px 4px 16px; font-size:0.9em; word-break:break-word;';
+        b.style.cssText = 'max-width:80%; background:linear-gradient(135deg,#6e6cf0,#bf5af2); color:#fff; padding:11px 15px; border-radius:18px 18px 5px 18px; box-shadow:0 2px 10px rgba(110,108,240,0.3); font-size:0.9em; word-break:break-word;';
         b.textContent = msg.text;
         wrap.appendChild(b);
     } else {
         wrap.style.alignItems = 'flex-start';
         const b = document.createElement('div');
-        const bg = msg.isError ? 'rgba(255,59,48,0.12)' : 'rgba(120,120,128,0.16)';
-        const col = msg.isError ? '#ff6b6b' : 'var(--text-main, #fff)';
-        b.style.cssText = 'max-width:90%; background:'+bg+'; color:'+col+'; padding:12px 14px; border-radius:16px 16px 16px 4px; font-size:0.9em; word-break:break-word;';
+        if (msg.isError) {
+            b.style.cssText = 'max-width:90%; background:rgba(255,59,48,0.12); color:#ff6b6b; padding:12px 15px; border-radius:18px 18px 18px 5px; font-size:0.9em; word-break:break-word; line-height:1.5;';
+        } else {
+            b.className = 'ai-ans-bubble';
+            b.style.cssText = 'max-width:90%; background:rgba(120,120,128,0.16); color:var(--text-main, #fff); padding:12px 15px; border-radius:18px 18px 18px 5px; font-size:0.9em; word-break:break-word; line-height:1.5;';
+        }
         b.textContent = msg.text || '';
         wrap.appendChild(b);
 
@@ -113,12 +160,21 @@ function clearAiChat() {
 
 function closeAiQuery() {
     const modal = document.getElementById('aiQueryModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        const panel = modal.firstElementChild;
+        if (panel) { panel.style.transform = ''; panel.style.maxHeight = ''; }   // 키보드 보정 초기화
+        modal.style.display = 'none';
+    }
 }
 
 function setAiQuestion(el) {
     const input = document.getElementById('ai-question-input');
-    if (input) { input.value = el.textContent; input.focus(); }
+    if (!input) return;
+    // data-q 가 있으면 그 명확한 질문을, 없으면 보이는 라벨을 사용
+    const q = el.getAttribute('data-q') || el.textContent.replace(/^[^\uAC00-\uD7A3a-zA-Z0-9]+/, '').trim();
+    input.value = q;
+    input.focus();
+    _scrollInputIntoView();
 }
 
 async function runAiQuery() {
