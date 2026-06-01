@@ -12,19 +12,12 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <link rel="manifest" href="/manifest_v2.json?v=2">
     <script>
-      // ── 첫 페인트 전에 테마/배경을 즉시 적용해 검은 화면(FOUC) 제거 ──
+      // ── 첫 페인트 전에 html 배경만 즉시 적용해 검은 화면(FOUC) 제거 ──
+      //    (body 배경/클래스는 페이지 로드 후 CSS 변수가 처리하므로 건드리지 않음)
       (function(){
         try {
           var t = localStorage.getItem('cal_theme') || 'light';
-          var bg = (t === 'light') ? '#f4f6f9' : '#212225';
-          var de = document.documentElement;
-          de.style.background = bg;
-          // body 가 아직 없을 수 있으니 html 에 미리 표시, body 생기면 클래스 부여
-          if (t === 'light') de.setAttribute('data-theme','light');
-          document.addEventListener('DOMContentLoaded', function(){
-            if (t === 'light') document.body.classList.add('light-mode');
-            document.body.style.background = bg;
-          });
+          document.documentElement.style.background = (t === 'light') ? '#f4f6f9' : '#212225';
         } catch(e) {}
       })();
     </script>
