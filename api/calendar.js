@@ -905,6 +905,7 @@ ${schema}
 4. 결과가 없을 수 있으니 LIMIT 50 이하로
 5. JSON 외 다른 텍스트 절대 포함 금지
 6. 이 DB는 MySQL/TiDB임. 숫자 변환 시 CAST(컬럼 AS SIGNED) 사용 (CAST AS INT 절대 금지). pallets, pal, box는 varchar이므로 SUM 등 연산 시 반드시 CAST(컬럼 AS SIGNED) 적용.
+7. 만약 질문이 데이터 조회와 무관한 인사/농담/잡담(예: "안녕", "기분 어때", "넌 누구야", "심심해")이라면, SQL을 만들지 말고 대신 이 형식으로 응답: {"chat": "여기에 위트있고 친근한 한국어 답변(존댓말, 이모지 1개 정도). 단 너는 물류 데이터 조회 비서임을 가볍게 어필"}
 
 [질문]
 ${question}
@@ -943,6 +944,18 @@ if (!aiText) {
             return res.status(200).json({ success: false, msg: 'AI가 올바른 형식으로 응답하지 않았습니다.' });
         }
 
+        // 잡담/농담이면 SQL 실행 없이 바로 위트있게 응답 (Gemini 1회로 끝)
+        if (parsed.chat && !parsed.sql) {
+            return res.status(200).json({
+                success: true,
+                sql: '',
+                rows: [],
+                summary: parsed.chat,
+                count: 0,
+                isChat: true
+            });
+        }
+
         const sql = parsed.sql || '';
 
 // 🛡️ MySQL 문법 자동 보정: CAST(... AS INT) → SIGNED
@@ -956,30 +969,49 @@ if (!/^\s*SELECT/i.test(safeSql)) {
 // SQL 실행
 const [rows] = await pool.query(safeSql);
 
-        // 🚀 [호출 1회 최적화] 2차 Gemini 요약 호출 제거 → 서버에서 코드로 요약 생성
-        //    (무료 할당량 절약: AI 질의당 Gemini 호출 2회 → 1회)
+        // 결과 자연어 요약 (위트 있는 톤). 결과가 0건이면 호출 아끼고 코드로 처리
         let summary;
         if (!rows || rows.length === 0) {
-            summary = '해당 데이터가 없습니다.';
+            summary = '음... 눈 씻고 찾아봐도 해당하는 데이터가 없네요. 질문을 살짝 바꿔서 다시 물어봐 주실래요? 🔍';
         } else {
-            const cnt = rows.length;
-            // 숫자형 컬럼이 있으면 합계를 자동 계산해 요약에 포함
-            const numericKeys = [];
-            const sample = rows[0];
-            for (const k in sample) {
-                // 숫자로 환산 가능한 값이 다수면 숫자컬럼으로 간주
-                const v = sample[k];
-                if (v !== null && v !== '' && !isNaN(Number(v))) numericKeys.push(k);
+            const summaryPrompt = `
+너는 물류 창고 데이터를 분석해주는 센스 있는 AI 비서야.
+관리자가 "${question}" 라고 물었고, DB 조회 결과는 다음과 같아:
+${JSON.stringify(rows, null, 2)}
+
+[답변 스타일 가이드]
+- 딱딱한 보고서 말투 금지! 친근하고 위트 있게, 가벼운 농담이나 비유를 섞어도 좋아.
+- 관리자가 농담조로 물으면 너도 센스 있게 받아쳐도 돼. 단, 숫자/사실은 정확하게.
+- 핵심 숫자는 강조하고, 너무 길지 않게 2~3문장으로.
+- 이모지는 1~2개 정도만 자연스럽게.
+- 어조는 친한 동료가 데이터 봐주는 느낌으로. 존댓말 유지.
+
+이 결과를 위 스타일로 요약해줘.
+            `.trim();
+
+            try {
+                const summaryRes = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY_AI || process.env.GEMINI_API_KEY}`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: summaryPrompt }] }],
+                            generationConfig: { temperature: 0.8 }
+                        })
+                    }
+                );
+                const summaryJson = await summaryRes.json();
+                summary = summaryJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+                // 요약 호출이 429 등으로 실패하면 표는 살리고 간단 요약으로 폴백
+                if (!summary) {
+                    const cnt = rows.length;
+                    summary = `총 ${cnt.toLocaleString()}건 찾았어요! (AI 요약은 잠시 쉬는 중이라 표로 보여드릴게요 😅)`;
+                }
+            } catch (se) {
+                const cnt = rows.length;
+                summary = `총 ${cnt.toLocaleString()}건 찾았어요! (AI 요약은 잠시 쉬는 중이라 표로 보여드릴게요 😅)`;
             }
-            let sumParts = [];
-            // pal, pallets, box, qty 등 물량 관련 컬럼 우선 합산
-            const qtyKeys = numericKeys.filter(k => /pal|box|qty|수량|count|cnt/i.test(k));
-            (qtyKeys.length ? qtyKeys : numericKeys).slice(0, 3).forEach(k => {
-                const total = rows.reduce((acc, r) => acc + (Number(r[k]) || 0), 0);
-                if (total > 0) sumParts.push(`${k} 합계 ${total.toLocaleString()}`);
-            });
-            summary = `총 ${cnt.toLocaleString()}건이 조회되었습니다.`;
-            if (sumParts.length) summary += ` (${sumParts.join(', ')})`;
         }
 
         return res.status(200).json({
