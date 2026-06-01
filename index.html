@@ -2742,6 +2742,8 @@ body.light-mode .fab-label {
       // 🚨 [추가된 변수] 색상 관리용 빈 상자들!
       let companyColors = {}; 
       let customColors = {};
+      // 🚨 TDZ 방지: compInfoDB 를 최상단에서 미리 초기화 (아래 사용처보다 먼저 선언)
+      let compInfoDB = JSON.parse(localStorage.getItem('COMP_INFO_DB') || '{}');
 
       let serverData = {
           year: todayDateObj.getFullYear(),
@@ -6836,7 +6838,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       // =====================================================
       // 🏢 [미니 CRM] 업체 정보 관리 시스템 (화면 분할 마스터-디테일 V3)
       // =====================================================
-      let compInfoDB = JSON.parse(localStorage.getItem('COMP_INFO_DB') || '{}');
+      compInfoDB = JSON.parse(localStorage.getItem('COMP_INFO_DB') || '{}'); // (위에서 이미 let 선언됨)
       let selectedCrmComp = null; // 💡 현재 선택된 업체 기억
 
       function getPillHtml(compName) {
