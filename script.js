@@ -4,14 +4,111 @@ window.fabDragging = false;
 // ═══════════════════════════════════════════════
 // ── 1. AI 질의 기능
 // ═══════════════════════════════════════════════
+// 대화 저장 키 (출고/입고 분리)
+function _aiChatKey() {
+    var t = (typeof currentType !== 'undefined') ? currentType : 'out';
+    return 'ai_chat_history_' + t;
+}
+
 function openAiQuery() {
     if (window.fabDragging) return;
     const modal = document.getElementById('aiQueryModal');
     if (!modal) return;
     modal.style.display = 'flex';
-    const resultArea = document.getElementById('ai-result-area');
-    if (resultArea) resultArea.style.display = 'none';
+    renderAiChatHistory();   // 저장된 대화 복원
     setTimeout(() => document.getElementById('ai-question-input')?.focus(), 300);
+}
+
+// 저장된 대화를 말풍선으로 복원
+function renderAiChatHistory() {
+    const log = document.getElementById('ai-chat-log');
+    if (!log) return;
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem(_aiChatKey()) || '[]'); } catch(e) {}
+    log.innerHTML = '';
+    if (history.length === 0) {
+        log.style.display = 'none';
+        return;
+    }
+    log.style.display = 'flex';
+    history.forEach(msg => log.appendChild(_buildBubble(msg)));
+    // 맨 아래로 스크롤
+    setTimeout(() => { log.scrollTop = log.scrollHeight; }, 50);
+}
+
+// 대화 1건을 localStorage 에 추가 저장 (최근 30건만 유지)
+function _saveAiMessage(msg) {
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem(_aiChatKey()) || '[]'); } catch(e) {}
+    history.push(msg);
+    if (history.length > 30) history = history.slice(-30);
+    try { localStorage.setItem(_aiChatKey(), JSON.stringify(history)); } catch(e) {}
+}
+
+// 말풍선 DOM 생성 (msg: {role:'user'|'ai', text, rows, sql, count, isError})
+function _buildBubble(msg) {
+    const wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.flexDirection = 'column';
+
+    if (msg.role === 'user') {
+        wrap.style.alignItems = 'flex-end';
+        const b = document.createElement('div');
+        b.style.cssText = 'max-width:80%; background:linear-gradient(135deg,#5e5ce6,#bf5af2); color:#fff; padding:10px 14px; border-radius:16px 16px 4px 16px; font-size:0.9em; word-break:break-word;';
+        b.textContent = msg.text;
+        wrap.appendChild(b);
+    } else {
+        wrap.style.alignItems = 'flex-start';
+        const b = document.createElement('div');
+        const bg = msg.isError ? 'rgba(255,59,48,0.12)' : 'rgba(120,120,128,0.16)';
+        const col = msg.isError ? '#ff6b6b' : 'var(--text-main, #fff)';
+        b.style.cssText = 'max-width:90%; background:'+bg+'; color:'+col+'; padding:12px 14px; border-radius:16px 16px 16px 4px; font-size:0.9em; word-break:break-word;';
+        b.textContent = msg.text || '';
+        wrap.appendChild(b);
+
+        // 데이터 표가 있으면 말풍선 아래에 붙임
+        if (msg.rows && msg.rows.length > 0) {
+            const tableWrap = document.createElement('div');
+            tableWrap.style.cssText = 'margin-top:8px; max-width:100%; overflow-x:auto; border-radius:10px; border:1px solid #333;';
+            const cols = Object.keys(msg.rows[0]);
+            let html = '<div style="padding:6px 8px; font-size:0.7em; border-bottom:1px solid #333; display:flex; justify-content:space-between; color:#888;">';
+            html += '<span>'+ (msg.count||msg.rows.length) +'건 조회됨</span>';
+            if (msg.sql) html += '<span class="ai-sql-mini" style="cursor:pointer; color:#5e5ce6;">SQL</span>';
+            html += '</div>';
+            if (msg.sql) html += '<div class="ai-sql-mini-box" style="display:none; padding:8px; font-size:0.7em; color:#bf5af2; background:rgba(0,0,0,0.3); white-space:pre-wrap; word-break:break-all;">'+ _esc(msg.sql) +'</div>';
+            html += '<table style="width:100%; border-collapse:collapse; font-size:0.78em;"><thead><tr>';
+            html += cols.map(c => '<th style="padding:6px 8px; text-align:left; border-bottom:1px solid #444; color:#aaa; white-space:nowrap;">'+_esc(c)+'</th>').join('');
+            html += '</tr></thead><tbody>';
+            msg.rows.forEach((row,i) => {
+                html += '<tr style="background:'+(i%2===0?'transparent':'rgba(255,255,255,0.03)')+'">';
+                cols.forEach(c => { html += '<td style="padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); white-space:nowrap;">'+ _esc(row[c]) +'</td>'; });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            tableWrap.innerHTML = html;
+            // SQL 토글
+            const toggle = tableWrap.querySelector('.ai-sql-mini');
+            const sqlBox = tableWrap.querySelector('.ai-sql-mini-box');
+            if (toggle && sqlBox) toggle.addEventListener('click', () => {
+                sqlBox.style.display = sqlBox.style.display === 'none' ? 'block' : 'none';
+            });
+            wrap.appendChild(tableWrap);
+        }
+    }
+    return wrap;
+}
+
+// 간단 이스케이프 (표 값에 < > 들어와도 안전)
+function _esc(v) {
+    if (v === null || v === undefined) return '-';
+    return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// 대화 지우기
+function clearAiChat() {
+    try { localStorage.removeItem(_aiChatKey()); } catch(e) {}
+    const log = document.getElementById('ai-chat-log');
+    if (log) { log.innerHTML = ''; log.style.display = 'none'; }
 }
 
 function closeAiQuery() {
@@ -24,39 +121,26 @@ function setAiQuestion(el) {
     if (input) { input.value = el.textContent; input.focus(); }
 }
 
-function toggleAiSql() {
-    const box = document.getElementById('ai-sql-box');
-    const toggle = document.getElementById('ai-sql-toggle');
-    if (!box || !toggle) return;
-    if (box.style.display === 'none') {
-        box.style.display = 'block';
-        toggle.textContent = 'SQL 숨기기 ▴';
-    } else {
-        box.style.display = 'none';
-        toggle.textContent = 'SQL 보기 ▾';
-    }
-}
-
 async function runAiQuery() {
     const inputEl = document.getElementById('ai-question-input');
     if (!inputEl || !inputEl.value.trim()) return;
     const question = inputEl.value.trim();
+    inputEl.value = '';
 
-    const resultArea = document.getElementById('ai-result-area');
-    const loading    = document.getElementById('ai-loading');
-    const summary    = document.getElementById('ai-summary');
-    const tableWrap  = document.getElementById('ai-table-wrap');
-    const table      = document.getElementById('ai-data-table');
-    const errorBox   = document.getElementById('ai-error');
-    const sendBtn    = document.getElementById('ai-send-btn');
-    if (!resultArea) return;
+    const log     = document.getElementById('ai-chat-log');
+    const loading = document.getElementById('ai-loading');
+    const sendBtn = document.getElementById('ai-send-btn');
+    if (!log) return;
 
-    resultArea.style.display = 'block';
-    if (loading)   loading.style.display = 'block';
-    if (summary)   summary.style.display = 'none';
-    if (tableWrap) tableWrap.style.display = 'none';
-    if (errorBox)  errorBox.style.display = 'none';
-    if (sendBtn)   { sendBtn.disabled = true; sendBtn.textContent = '...'; }
+    // 1) 사용자 말풍선 즉시 추가 + 저장
+    log.style.display = 'flex';
+    const userMsg = { role: 'user', text: question };
+    log.appendChild(_buildBubble(userMsg));
+    _saveAiMessage(userMsg);
+    log.scrollTop = log.scrollHeight;
+
+    if (loading) loading.style.display = 'block';
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '...'; }
 
     try {
         const adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
@@ -68,56 +152,34 @@ async function runAiQuery() {
         const result = await res.json();
         if (loading) loading.style.display = 'none';
 
+        let aiMsg;
         if (!result.success) {
-            if (errorBox) { errorBox.style.display = 'block'; errorBox.textContent = '⚠️ ' + (result.msg || '오류가 발생했습니다.'); }
-            return;
+            aiMsg = { role: 'ai', text: '⚠️ ' + (result.msg || '오류가 발생했습니다.'), isError: true };
+        } else if (result.isChat) {
+            // 잡담/농담 → 답변만
+            aiMsg = { role: 'ai', text: result.summary };
+        } else {
+            // 데이터 질의 → 요약 + 표
+            aiMsg = { role: 'ai', text: result.summary, rows: result.rows, sql: result.sql, count: result.count };
         }
 
-        if (summary) { summary.style.display = 'block'; summary.textContent = result.summary; }
+        log.appendChild(_buildBubble(aiMsg));
+        _saveAiMessage(aiMsg);
+        log.scrollTop = log.scrollHeight;
 
-        // 잡담/농담 응답(isChat)이면 표·SQL 영역은 숨기고 답변만 보여줌
-        if (result.isChat) {
-            if (tableWrap) tableWrap.style.display = 'none';
-            return;
-        }
-
-        if (tableWrap) {
-            tableWrap.style.display = 'block';
-            const countEl = document.getElementById('ai-result-count');
-            const sqlBox  = document.getElementById('ai-sql-box');
-            if (countEl) countEl.textContent = result.count + '건 조회됨';
-            if (sqlBox)  sqlBox.textContent = result.sql;
-
-            if (result.rows && result.rows.length > 0) {
-                const cols = Object.keys(result.rows[0]);
-                let html = '<thead><tr>' + cols.map(c =>
-                    '<th style="padding:8px 10px;text-align:left;border-bottom:1px solid #444;color:#aaa;white-space:nowrap;font-size:0.8em;">' + c + '</th>'
-                ).join('') + '</tr></thead><tbody>';
-                result.rows.forEach((row, i) => {
-                    html += '<tr style="background:' + (i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.03)') + '">';
-                    cols.forEach(c => {
-                        html += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;color:#fff;font-size:0.85em;">' + (row[c] ?? '-') + '</td>';
-                    });
-                    html += '</tr>';
-                });
-                html += '</tbody>';
-                if (table) table.innerHTML = html;
-            } else {
-                if (table) table.innerHTML = '<tr><td colspan="99" style="padding:20px;text-align:center;color:#888;">조회된 데이터가 없습니다.</td></tr>';
-            }
-        }
     } catch (e) {
         console.error('AI_QUERY 에러:', e);
-        if (loading)  loading.style.display = 'none';
-        if (errorBox) { errorBox.style.display = 'block'; errorBox.textContent = '⚠️ 네트워크 오류가 발생했습니다.'; }
+        if (loading) loading.style.display = 'none';
+        const errMsg = { role: 'ai', text: '⚠️ 네트워크 오류가 발생했습니다.', isError: true };
+        log.appendChild(_buildBubble(errMsg));
+        _saveAiMessage(errMsg);
+        log.scrollTop = log.scrollHeight;
     } finally {
         if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '전송'; }
+        inputEl.focus();
     }
 }
 
-// ═══════════════════════════════════════════════
-// ── 2. FAB 메뉴 토글 (출고 전용)
-// ═══════════════════════════════════════════════
 function toggleFabMenu() {
     if (window.fabDragging) return; // 드래그 직후 메뉴 안 열리게
     const wrapper = document.getElementById('fabBtn');
