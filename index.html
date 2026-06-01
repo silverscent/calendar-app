@@ -6588,11 +6588,14 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           isDarkMode = false;
           if (themeBtn) themeBtn.innerText = "🌙";
           localStorage.setItem("cal_theme", "light");
+          // 🚨 html(documentElement) 배경도 같이 전환 (인라인 테마 스크립트가 칠한 값 갱신)
+          document.documentElement.style.background = "#f4f6f9";
         } else {
           body.classList.remove("light-mode");
           isDarkMode = true;
           if (themeBtn) themeBtn.innerText = "☀️";
           localStorage.setItem("cal_theme", "dark");
+          document.documentElement.style.background = "#212225";
         }
       }
       function changeSize(size) {

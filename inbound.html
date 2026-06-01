@@ -3470,8 +3470,8 @@ google.script.run
 
       
       function toggleTheme() { const body = document.body;
-        const themeBtn = document.querySelector('.theme-toggle'); if (isDarkMode) { body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; localStorage.setItem('cal_theme', 'light');
-        } else { body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; localStorage.setItem('cal_theme', 'dark');
+        const themeBtn = document.querySelector('.theme-toggle'); if (isDarkMode) { body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; localStorage.setItem('cal_theme', 'light'); document.documentElement.style.background = '#f4f6f9';
+        } else { body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; localStorage.setItem('cal_theme', 'dark'); document.documentElement.style.background = '#212225';
         } }
       function changeSize(size) { document.querySelectorAll('.size-btn').forEach(btn => btn.classList.remove('active')); const body = document.body;
         if(size === 'S') { body.style.fontSize = '80%'; document.getElementById('btnS').classList.add('active'); } if(size === 'M') { body.style.fontSize = '95%'; document.getElementById('btnM').classList.add('active');
