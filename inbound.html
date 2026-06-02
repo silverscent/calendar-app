@@ -1215,6 +1215,13 @@
 }
 
 /* 모달 패널 (유리 질감 + 부드러운 등장) */
+/* 기존 스와이프 엔진용 modal-box 클래스를 붙이되, 레이아웃은 AI 디자인 유지 */
+.ai-modal-panel.modal-box {
+    padding: 0;
+    overflow: hidden;            /* 패널 자체 스크롤 금지 (내부 ai-chat-log 만 스크롤) */
+    max-width: 480px;
+    animation: aiPanelUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
 .ai-modal-panel {
     background: linear-gradient(180deg, #1e1e22 0%, #161618 100%);
     width: 100%;
@@ -5421,10 +5428,10 @@ function saveOcrFilterWordsToServer() {
     </script>
     <div class="fab-single-ai" id="inboundAiFab" style="display: none; position: fixed; right: 20px; bottom: 30px; z-index: 1500;">🤖</div>
 
-<div id="aiQueryModal" style="display:none; position:fixed; inset:0; z-index:3000; align-items:flex-end; justify-content:center;" onclick="if(event.target===this) closeAiQuery()">
-    <div class="ai-modal-panel" onclick="event.stopPropagation()">
-        <div class="ai-handle"></div>
-        <div class="ai-header">
+<div id="aiQueryModal" class="overlay-modal" style="display:none; position:fixed; inset:0; z-index:3000; align-items:flex-end; justify-content:center;" onclick="if(event.target===this) closeAiQuery()">
+    <div class="ai-modal-panel modal-box" onclick="event.stopPropagation()">
+        <div class="ai-handle bottom-sheet-handle"></div>
+        <div class="ai-header modal-header">
             <div class="ai-header-title">
                 <span class="ai-header-badge">🤖</span>
                 <span>AI 데이터 질의</span>

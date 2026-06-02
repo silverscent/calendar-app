@@ -27,9 +27,13 @@ function openAiQuery() {
     const modal = document.getElementById('aiQueryModal');
     if (!modal) return;
     modal.style.display = 'flex';
+    // 열 때 항상 초기화 (엔진/✕/배경 어떤 방식으로 닫혔든 칩·패널 정상화)
+    const chipRow = document.getElementById('ai-chip-row');
+    if (chipRow) chipRow.style.display = 'flex';
+    const panel = modal.firstElementChild;
+    if (panel) { panel.style.transform = ''; panel.style.transition = ''; panel.style.maxHeight = ''; }
     renderAiChatHistory();   // 저장된 대화 복원
     _attachKeyboardHandling();
-    _attachSwipeToClose();   // 상단 끌어서 닫기
     setTimeout(() => {
         const inp = document.getElementById('ai-question-input');
         if (inp) { inp.focus(); _scrollInputIntoView(); }
@@ -37,59 +41,6 @@ function openAiQuery() {
 }
 
 // 상단(핸들/헤더)을 아래로 끌면 모달 닫기 (다른 모달과 동일 UX)
-let _swipeBound = false;
-function _attachSwipeToClose() {
-    if (_swipeBound) return;
-    _swipeBound = true;
-    const modal = document.getElementById('aiQueryModal');
-    const panel = modal && modal.firstElementChild;
-    if (!panel) return;
-
-    // 끌기 감지 영역: 핸들 + 헤더 (대화/입력 영역은 제외해서 스크롤과 충돌 방지)
-    const handle = panel.querySelector('.ai-handle');
-    const header = panel.querySelector('.ai-header');
-    const zones = [handle, header].filter(Boolean);
-
-    let startY = 0, curY = 0, dragging = false;
-
-    const onStart = (y) => {
-        startY = y; curY = y; dragging = true;
-        panel.style.transition = 'none';
-    };
-    const onMove = (y) => {
-        if (!dragging) return;
-        curY = y;
-        const dy = Math.max(0, curY - startY);   // 아래로만
-        panel.style.transform = 'translateY(' + dy + 'px)';
-    };
-    const onEnd = () => {
-        if (!dragging) return;
-        dragging = false;
-        const dy = curY - startY;
-        panel.style.transition = 'transform 0.25s cubic-bezier(0.16,1,0.3,1)';
-        if (dy > 90) {
-            // 충분히 내리면 닫기 (아래로 슬라이드아웃 후 닫음)
-            panel.style.transform = 'translateY(100%)';
-            setTimeout(() => { panel.style.transform = ''; closeAiQuery(); }, 200);
-        } else {
-            panel.style.transform = '';   // 덜 내리면 제자리 복귀
-        }
-    };
-
-    zones.forEach(z => {
-        z.style.cursor = 'grab';
-        z.addEventListener('touchstart', (e) => onStart(e.touches[0].clientY), { passive: true });
-        z.addEventListener('touchmove',  (e) => onMove(e.touches[0].clientY),  { passive: true });
-        z.addEventListener('touchend', onEnd);
-        z.addEventListener('mousedown', (e) => {
-            onStart(e.clientY);
-            const mv = (ev) => onMove(ev.clientY);
-            const up = () => { onEnd(); document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
-            document.addEventListener('mousemove', mv);
-            document.addEventListener('mouseup', up);
-        });
-    });
-}
 
 // 입력창이 키보드에 가리지 않게 보이도록 스크롤
 function _scrollInputIntoView() {
