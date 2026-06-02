@@ -1,3 +1,15 @@
+// ── [H] 운영 환경 콘솔 침묵 (localhost 에서만 로그 출력) ──
+(function(){
+    try {
+        var h = location.hostname;
+        if (!(h === 'localhost' || h === '127.0.0.1' || h === '')) {
+            console.log = function(){};
+            console.warn = function(){};
+            // console.error 는 진짜 에러 추적용으로 유지
+        }
+    } catch(e) {}
+})();
+
 // ── 0. 전역 변수 (이름 충돌 방지를 위해 fabDragging 사용)
 window.fabDragging = false;
 
@@ -510,9 +522,37 @@ function showAiFabIfAdmin() {
 }
 
 // ═══════════════════════════════════════════════
+// ── [E] 오래된 로컬 캐시 정리 (12개월 초과분 삭제)
+// ═══════════════════════════════════════════════
+function cleanOldCache() {
+    try {
+        var now = new Date();
+        var curYM = now.getFullYear() * 12 + now.getMonth();
+        var KEEP_MONTHS = 12;
+        var removed = 0;
+        var keys = [];
+        for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+        keys.forEach(function(k){
+            if (!k) return;
+            var m1 = k.match(/^cal_cache_\w+_(\d{4})_(\d{1,2})$/);
+            var m2 = k.match(/^yearly_stats_cache_\w+_(\d{4})$/);
+            if (m1) {
+                var ym = parseInt(m1[1]) * 12 + (parseInt(m1[2]) - 1);
+                if (Math.abs(curYM - ym) > KEEP_MONTHS) { localStorage.removeItem(k); removed++; }
+            } else if (m2) {
+                var y = parseInt(m2[1]);
+                if (Math.abs(now.getFullYear() - y) > 1) { localStorage.removeItem(k); removed++; }
+            }
+        });
+        if (removed > 0) console.log('[캐시정리] 오래된 캐시 ' + removed + '건 삭제');
+    } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════
 // ── 5. 초기화
 // ═══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
+    cleanOldCache();
     initDraggableFab();
     showAiFabIfAdmin();
 });
