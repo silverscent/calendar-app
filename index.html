@@ -1879,6 +1879,7 @@
 }
 .fab-sub-item {
     display: flex; align-items: center; gap: 10px;
+    flex-shrink: 0;
 }
 .fab-label {
     background: rgba(40, 44, 52, 0.9); color: white; padding: 6px 12px;
@@ -1890,6 +1891,8 @@ body.light-mode .fab-label {
 }
 .fab-sub-btn {
     width: 48px; height: 48px; border-radius: 50%; border: none;
+    flex: 0 0 48px;        /* 🚨 찌그러짐 방지: 가로로 절대 안 줄어들게 고정 */
+    min-width: 48px;
     display: flex; align-items: center; justify-content: center;
     font-size: 20px; cursor: pointer;
     box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: 0.2s;
