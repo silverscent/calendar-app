@@ -253,31 +253,36 @@ async function runAiQuery() {
     }
 }
 
+// 잔상 없이 즉시 메뉴 닫기 (transition 끄고 숨긴 뒤 다음 프레임에 원복)
+function _closeFabMenuInstant(wrapper) {
+    if (!wrapper || !wrapper.classList.contains('open')) return;
+    const container = wrapper.querySelector('.fab-sub-container');
+    if (container) {
+        container.style.transition = 'none';
+        container.style.opacity = '0';
+        container.style.visibility = 'hidden';
+    }
+    wrapper.classList.remove('open');
+    if (container) {
+        requestAnimationFrame(() => {
+            // 드래그 중이 아닐 때만 원복 (드래그 중엔 :not(.open) CSS가 숨김 처리)
+            if (!window.fabDragging) {
+                container.style.transition = '';
+                container.style.opacity = '';
+                container.style.visibility = '';
+            }
+        });
+    }
+}
+
 function toggleFabMenu() {
     if (window.fabDragging) return; // 드래그 직후 메뉴 안 열리게
     const wrapper = document.getElementById('fabBtn');
     if (!wrapper) return;
-    const container = wrapper.querySelector('.fab-sub-container');
-
     if (wrapper.classList.contains('open')) {
-        // ── 닫기: 잔상 방지 위해 즉시 숨김 처리 ──
-        if (container) {
-            container.style.transition = 'none';     // 전환 제거(페이드 잔상 차단)
-            container.style.opacity = '0';
-            container.style.visibility = 'hidden';
-        }
-        wrapper.classList.remove('open');
-        // 다음 열기를 위해 인라인 스타일 원복 (다음 프레임에)
-        if (container) {
-            requestAnimationFrame(() => {
-                container.style.transition = '';
-                container.style.opacity = '';
-                container.style.visibility = '';
-            });
-        }
+        _closeFabMenuInstant(wrapper);   // 닫기: 잔상 방지
     } else {
-        // ── 열기: CSS 애니메이션 그대로 사용 ──
-        wrapper.classList.add('open');
+        wrapper.classList.add('open');   // 열기: CSS 애니메이션 사용
     }
 }
 
@@ -325,7 +330,7 @@ function _attachDrag(fab, storageKey, hasMenu) {
         if (!dragged && Math.sqrt(dx*dx + dy*dy) > THRESHOLD) {
             dragged = true;
             window.fabDragging = true;
-            if (hasMenu) fab.classList.remove('open');
+            if (hasMenu) _closeFabMenuInstant(fab);   // 드래그 시작 시 잔상 없이 닫기
             // 드래그 확정 순간: 본체 기준 시작좌표 + offset 확정 후 left/top 모드로 전환
             const wrapRect = fab.getBoundingClientRect();
             const baseRect = getBaseRect();
@@ -349,6 +354,11 @@ function _attachDrag(fab, storageKey, hasMenu) {
         if (dragged) {
             _snapToEdge(fab, hasMenu);
             _savePos(fab, storageKey);
+            // 드래그 중 닫기로 남은 인라인 스타일 원복 (다음 메뉴 열기 정상화)
+            if (hasMenu) {
+                const c = fab.querySelector('.fab-sub-container');
+                if (c) { c.style.transition = ''; c.style.opacity = ''; c.style.visibility = ''; }
+            }
         }
         setTimeout(() => { window.fabDragging = false; }, 150);
     };
