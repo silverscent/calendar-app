@@ -256,7 +256,29 @@ async function runAiQuery() {
 function toggleFabMenu() {
     if (window.fabDragging) return; // 드래그 직후 메뉴 안 열리게
     const wrapper = document.getElementById('fabBtn');
-    if (wrapper) wrapper.classList.toggle('open');
+    if (!wrapper) return;
+    const container = wrapper.querySelector('.fab-sub-container');
+
+    if (wrapper.classList.contains('open')) {
+        // ── 닫기: 잔상 방지 위해 즉시 숨김 처리 ──
+        if (container) {
+            container.style.transition = 'none';     // 전환 제거(페이드 잔상 차단)
+            container.style.opacity = '0';
+            container.style.visibility = 'hidden';
+        }
+        wrapper.classList.remove('open');
+        // 다음 열기를 위해 인라인 스타일 원복 (다음 프레임에)
+        if (container) {
+            requestAnimationFrame(() => {
+                container.style.transition = '';
+                container.style.opacity = '';
+                container.style.visibility = '';
+            });
+        }
+    } else {
+        // ── 열기: CSS 애니메이션 그대로 사용 ──
+        wrapper.classList.add('open');
+    }
 }
 
 // ═══════════════════════════════════════════════
