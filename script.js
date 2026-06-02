@@ -34,56 +34,34 @@ function openAiQuery() {
     if (panel) { panel.style.transform = ''; panel.style.transition = ''; panel.style.maxHeight = ''; }
     renderAiChatHistory();   // 저장된 대화 복원
     _attachKeyboardHandling();
-    setTimeout(() => {
-        const inp = document.getElementById('ai-question-input');
-        if (inp) { inp.focus(); _scrollInputIntoView(); }
-    }, 300);
+    // 자동 포커스 안 함 (열자마자 키보드 뜨는 어색함 방지). 사용자가 입력창 탭하면 키보드 올라옴.
+    // 대화가 있으면 맨 아래(최신)로 스크롤
+    const log = document.getElementById('ai-chat-log');
+    if (log) setTimeout(() => { log.scrollTop = log.scrollHeight; }, 100);
 }
 
 // 상단(핸들/헤더)을 아래로 끌면 모달 닫기 (다른 모달과 동일 UX)
 
-// 입력창이 키보드에 가리지 않게 보이도록 스크롤
+// 입력창 포커스 시 살짝 아래로 스크롤해 보이게만 함 (기존 모달과 동일하게 OS가 키보드 처리)
 function _scrollInputIntoView() {
-    const inp = document.getElementById('ai-question-input');
-    if (inp && inp.scrollIntoView) {
-        setTimeout(() => inp.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
-    }
+    const log = document.getElementById('ai-chat-log');
+    // 키보드가 올라오면 대화 맨 아래(최신)로 — 가장 자연스러움
+    if (log) setTimeout(() => { log.scrollTop = log.scrollHeight; }, 350);
 }
 
-// 모바일 키보드(visualViewport) 대응: 키보드 높이만큼 모달 안쪽 패널을 위로
-let _kbHandlerAttached = false;
+// 단순화: 입력창 포커스 시 칩만 접어 공간 확보 (키보드는 OS가 처리)
 function _attachKeyboardHandling() {
     const inp = document.getElementById('ai-question-input');
-    if (inp && !inp._focusBound) {
-        inp.addEventListener('focus', _scrollInputIntoView);
-        inp._focusBound = true;
-    }
-    if (_kbHandlerAttached || !window.visualViewport) return;
-    _kbHandlerAttached = true;
-    const onResize = () => {
-        const modal = document.getElementById('aiQueryModal');
-        if (!modal || modal.style.display === 'none') return;
-        const panel = modal.firstElementChild;
-        if (!panel) return;
-        const chipRow = document.getElementById('ai-chip-row');
-        // 키보드가 가린 높이 = 전체 높이 - 보이는 뷰포트 높이
-        const hidden = window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop;
-        if (hidden > 60) {
-            // 키보드 올라옴 → 패널 높이를 보이는 영역에 맞춤 (하단 고정이라 자동 정렬)
-            panel.style.transform = '';
-            panel.style.maxHeight = (window.visualViewport.height - 8) + 'px';
-            panel.style.height = (window.visualViewport.height - 8) + 'px';   // 높이 확정 → 채팅로그 flex 계산 정확
-            // 좁은 공간 확보: 칩 줄을 접어서 대화 영역을 넓힘
-            if (chipRow) { chipRow.style.display = 'none'; }
-        } else {
-            panel.style.transform = '';
-            panel.style.maxHeight = '';
-            panel.style.height = '';
-            if (chipRow) { chipRow.style.display = 'flex'; }
-        }
-    };
-    window.visualViewport.addEventListener('resize', onResize);
-    window.visualViewport.addEventListener('scroll', onResize);
+    if (!inp || inp._focusBound) return;
+    inp._focusBound = true;
+    const chipRow = document.getElementById('ai-chip-row');
+    inp.addEventListener('focus', () => {
+        if (chipRow) chipRow.style.display = 'none';   // 입력 시작하면 칩 접기
+        _scrollInputIntoView();
+    });
+    inp.addEventListener('blur', () => {
+        if (chipRow) chipRow.style.display = 'flex';   // 입력 끝나면 칩 복원
+    });
 }
 
 // 저장된 대화를 말풍선으로 복원
