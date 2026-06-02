@@ -29,10 +29,66 @@ function openAiQuery() {
     modal.style.display = 'flex';
     renderAiChatHistory();   // 저장된 대화 복원
     _attachKeyboardHandling();
+    _attachSwipeToClose();   // 상단 끌어서 닫기
     setTimeout(() => {
         const inp = document.getElementById('ai-question-input');
         if (inp) { inp.focus(); _scrollInputIntoView(); }
     }, 300);
+}
+
+// 상단(핸들/헤더)을 아래로 끌면 모달 닫기 (다른 모달과 동일 UX)
+let _swipeBound = false;
+function _attachSwipeToClose() {
+    if (_swipeBound) return;
+    _swipeBound = true;
+    const modal = document.getElementById('aiQueryModal');
+    const panel = modal && modal.firstElementChild;
+    if (!panel) return;
+
+    // 끌기 감지 영역: 핸들 + 헤더 (대화/입력 영역은 제외해서 스크롤과 충돌 방지)
+    const handle = panel.querySelector('.ai-handle');
+    const header = panel.querySelector('.ai-header');
+    const zones = [handle, header].filter(Boolean);
+
+    let startY = 0, curY = 0, dragging = false;
+
+    const onStart = (y) => {
+        startY = y; curY = y; dragging = true;
+        panel.style.transition = 'none';
+    };
+    const onMove = (y) => {
+        if (!dragging) return;
+        curY = y;
+        const dy = Math.max(0, curY - startY);   // 아래로만
+        panel.style.transform = 'translateY(' + dy + 'px)';
+    };
+    const onEnd = () => {
+        if (!dragging) return;
+        dragging = false;
+        const dy = curY - startY;
+        panel.style.transition = 'transform 0.25s cubic-bezier(0.16,1,0.3,1)';
+        if (dy > 90) {
+            // 충분히 내리면 닫기 (아래로 슬라이드아웃 후 닫음)
+            panel.style.transform = 'translateY(100%)';
+            setTimeout(() => { panel.style.transform = ''; closeAiQuery(); }, 200);
+        } else {
+            panel.style.transform = '';   // 덜 내리면 제자리 복귀
+        }
+    };
+
+    zones.forEach(z => {
+        z.style.cursor = 'grab';
+        z.addEventListener('touchstart', (e) => onStart(e.touches[0].clientY), { passive: true });
+        z.addEventListener('touchmove',  (e) => onMove(e.touches[0].clientY),  { passive: true });
+        z.addEventListener('touchend', onEnd);
+        z.addEventListener('mousedown', (e) => {
+            onStart(e.clientY);
+            const mv = (ev) => onMove(ev.clientY);
+            const up = () => { onEnd(); document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
+            document.addEventListener('mousemove', mv);
+            document.addEventListener('mouseup', up);
+        });
+    });
 }
 
 // 입력창이 키보드에 가리지 않게 보이도록 스크롤
@@ -62,14 +118,16 @@ function _attachKeyboardHandling() {
         // 키보드가 가린 높이 = 전체 높이 - 보이는 뷰포트 높이
         const hidden = window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop;
         if (hidden > 60) {
-            // 키보드 올라옴 → 패널은 안 밀고 높이만 키보드 위에 딱 맞춤 (하단 고정이라 자동 정렬)
+            // 키보드 올라옴 → 패널 높이를 보이는 영역에 맞춤 (하단 고정이라 자동 정렬)
             panel.style.transform = '';
-            panel.style.maxHeight = (window.visualViewport.height - 10) + 'px';
+            panel.style.maxHeight = (window.visualViewport.height - 8) + 'px';
+            panel.style.height = (window.visualViewport.height - 8) + 'px';   // 높이 확정 → 채팅로그 flex 계산 정확
             // 좁은 공간 확보: 칩 줄을 접어서 대화 영역을 넓힘
             if (chipRow) { chipRow.style.display = 'none'; }
         } else {
             panel.style.transform = '';
             panel.style.maxHeight = '';
+            panel.style.height = '';
             if (chipRow) { chipRow.style.display = 'flex'; }
         }
     };
@@ -88,7 +146,7 @@ function renderAiChatHistory() {
         log.style.display = 'none';
         return;
     }
-    log.style.display = 'flex';
+    log.style.display = 'block';
     history.forEach(msg => log.appendChild(_buildBubble(msg)));
     // 맨 아래로 스크롤
     setTimeout(() => { log.scrollTop = log.scrollHeight; }, 50);
@@ -177,7 +235,7 @@ function closeAiQuery() {
     const modal = document.getElementById('aiQueryModal');
     if (modal) {
         const panel = modal.firstElementChild;
-        if (panel) { panel.style.transform = ''; panel.style.maxHeight = ''; }   // 키보드 보정 초기화
+        if (panel) { panel.style.transform = ''; panel.style.maxHeight = ''; panel.style.height = ''; panel.style.transition = ''; }   // 보정/스와이프 초기화
         const chipRow = document.getElementById('ai-chip-row');
         if (chipRow) chipRow.style.display = 'flex';   // 칩 복원
         modal.style.display = 'none';
@@ -206,7 +264,7 @@ async function runAiQuery() {
     if (!log) return;
 
     // 1) 사용자 말풍선 즉시 추가 + 저장
-    log.style.display = 'flex';
+    log.style.display = 'block';
     const userMsg = { role: 'user', text: question };
     log.appendChild(_buildBubble(userMsg));
     _saveAiMessage(userMsg);
