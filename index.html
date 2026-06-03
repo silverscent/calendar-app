@@ -3432,14 +3432,13 @@ document.addEventListener("visibilitychange", () => {
         else if (ua.includes("safari") && !ua.includes("chrome")) browser = "Safari";
         else if (ua.includes("firefox")) browser = "Firefox";
         // 서버에 추적 로그 전송 (실패해도 앱 구동에 영향 안 주게 방어)
-        google.script.run.withFailureHandler(()=>{})
-          ._call({ 
-              source: 'vercel', 
-              action: 'LOG_SITE_ACCESS', 
-              admin_id: currentAdminId, 
-              access_type: accessType, 
-              description: `기기: ${device} / 브라우저: ${browser}` 
-          });
+        apiCall({
+            source: 'vercel',
+            action: 'LOG_SITE_ACCESS',
+            admin_id: currentAdminId,
+            access_type: accessType,
+            description: `기기: ${device} / 브라우저: ${browser}`
+        });
         // 👆 -------------------------------------------------------- 👆
 
         // 🚨 [버그 3 수정] 앱 켜자마자 내 폰(로컬)에 저장된 색상을 먼저 장전해서 번쩍임(Flash) 방지!
@@ -4685,8 +4684,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           
           // 👇 🚨 [로그아웃 기록 전송] 내 폰의 메모리를 지우기 전에 서버로 먼저 알림!
           if (adminId) {
-              google.script.run.withFailureHandler(()=>{})
-                  ._call({ source: 'vercel', action: 'LOG_LOGOUT', admin_id: adminId });
+              apiCall({ source: 'vercel', action: 'LOG_LOGOUT', admin_id: adminId });
           }
 
           window.isAdmin = false; 
@@ -4953,7 +4951,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
                   // 🚨 [핵심 패치 2] 순서표를 각인시킨 직후 로컬 캐시에 즉시 저장! (새로고침 대비)
                   localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
 
-                  google.script.run.manageWebOutboundData("UPDATE_ORDER", orderPayload, adminToken);
+                  apiCall({ source: 'vercel', domain: 'out', action: 'UPDATE_ORDER', data: orderPayload, token: adminToken, admin_id: localStorage.getItem('admin_id') });
                   return;
               }
           }
@@ -5214,7 +5212,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             companyColors[stdName] = tempEditColorObj;
             customColors[stdName] = tempEditColorIdx;
             localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
-            google.script.run.saveGlobalColor(stdName, tempEditColorIdx);
+            apiCall({ source: 'vercel', action: 'SAVE_GLOBAL_COLOR', compName: stdName, colorIdx: tempEditColorIdx });
             tempEditColorObj = null;
             tempEditColorIdx = null;
           }
@@ -5273,7 +5271,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             }
             datesToProcess.forEach((dateStr) => {
               let curPayload = { ...payload, newDate: dateStr };
-              google.script.run.manageWebOutboundData("ADD", curPayload, adminToken);
+              apiCall({ source: 'vercel', domain: 'out', action: 'ADD', data: curPayload, token: adminToken, admin_id: localStorage.getItem('admin_id') });
             });
             return;
           }
@@ -5316,7 +5314,8 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             });
 
             actionsToRun.forEach((act) => {
-              google.script.run.withFailureHandler(() => { goToAsync(serverData.year, serverData.month); }).manageWebOutboundData(act.action, act.payload, adminToken);
+              apiCall({ source: 'vercel', domain: 'out', action: act.action, data: act.payload, token: adminToken, admin_id: localStorage.getItem('admin_id') })
+                .then(res => { if (res === null) goToAsync(serverData.year, serverData.month); });
             });
             return;
           }
@@ -7230,7 +7229,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
               companyColors[newCompName] = tempEditColorObj; // 메모리 갱신
               customColors[newCompName] = tempEditColorIdx;  // 로컬 캐시 갱신
               localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
-              google.script.run.saveGlobalColor(newCompName, tempEditColorIdx); // 구글 시트 저장
+              apiCall({ source: 'vercel', action: 'SAVE_GLOBAL_COLOR', compName: newCompName, colorIdx: tempEditColorIdx });
               
               // 저장했으니 임시 메모리 청소
               tempEditColorObj = null;
@@ -7238,12 +7237,12 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           } else if (oldCompName !== newCompName) {
               // 색상은 안 바꿨는데 이름만 바꾼 경우에도 바뀐 이름의 색상을 구글 시트에 업데이트
               localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
-              google.script.run.saveGlobalColor(newCompName, customColors[newCompName]);
+              apiCall({ source: 'vercel', action: 'SAVE_GLOBAL_COLOR', compName: newCompName, colorIdx: customColors[newCompName] });
           }
 
           localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
-          google.script.run.saveCompInfoDB(compInfoDB);
-          
+          apiCall({ source: 'vercel', action: 'SAVE_COMP_INFO_DB', data: compInfoDB });
+
           showToast("💾 업체 정보 및 색상이 저장되었습니다.", 1500);
           renderCompList(); 
           renderCalendar(); // 달력 즉시 새로고침 (색상 완벽 반영됨!)
@@ -7253,7 +7252,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           if (!confirm(`⚠️ 정말 [${comp}] 업체의 CRM 정보를 삭제하시겠습니까?\n\n※ 주의: 하드코딩된 기본 업체라면 알약 및 추가 정보만 '초기화'되며 리스트에서 지워지지 않습니다.`)) return;
           delete compInfoDB[comp];
           localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
-          google.script.run.saveCompInfoDB(compInfoDB);
+          apiCall({ source: 'vercel', action: 'SAVE_COMP_INFO_DB', data: compInfoDB });
           showToast(`🗑️ 삭제되었습니다.`);
           
           // 삭제 후 선택 초기화
@@ -7286,7 +7285,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
               time: document.getElementById('nc-time').value
           };
           localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
-          google.script.run.saveCompInfoDB(compInfoDB);
+          apiCall({ source: 'vercel', action: 'SAVE_COMP_INFO_DB', data: compInfoDB });
           showToast(`✅ [${full}] 등록 완료!`);
           
           document.getElementById('newCompModal').style.display = 'none';
@@ -7653,8 +7652,9 @@ async function handleLogin() {
           list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--text-sub); font-weight:bold;'>접속망 트래킹 중... ⏳</div>";
           modal.style.display = 'flex';
 
-          google.script.run.withSuccessHandler(function(res) {
-              if (!res.success || !res.logs || res.logs.length === 0) {
+          apiCall({ source: 'vercel', action: 'GET_ADMIN_CONN_LOGS', data: { targetId: adminId } })
+          .then(function(res) {
+              if (res === null || !res.success || !res.logs || res.logs.length === 0) {
                   list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--text-sub);'>최근 기록이 없습니다.</div>";
                   return;
               }
@@ -7663,7 +7663,7 @@ async function handleLogin() {
                   let rawDate = log.created_at || '';
 let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') : rawDate;
                   let cleanDesc = log.description.replace('[접속성공] ', ''); // 중복 문구 제거
-                  
+
                   html += `
                   <div style="background:var(--card-bg); border:1px solid var(--border-color); border-radius:8px; padding:10px; font-size:0.85em;">
                       <div style="color:#0a84ff; font-weight:900; margin-bottom:6px;">⏱️ ${timeStr}</div>
@@ -7671,7 +7671,7 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                   </div>`;
               });
               list.innerHTML = html;
-          })._call({ source: 'vercel', action: 'GET_ADMIN_CONN_LOGS', data: { targetId: adminId } });
+          });
       }
 
      // =====================================================
@@ -7747,12 +7747,19 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:15px; font-weight:800;'>접속망 트래킹 중... ⏳</div>";
           if (pager) pager.innerHTML = "";
 
-          google.script.run.withSuccessHandler(function(res) {
-              if (!res.success || !res.logs || res.logs.length === 0) {
+          apiCall({
+              source: 'vercel',
+              action: 'GET_ALL_CONN_LOGS',
+              keyword: keyword,
+              limit: Number(limit),
+              page: connLogCurrentPage,
+              admin_id: localStorage.getItem('admin_id')
+          }).then(function(res) {
+              if (res === null || !res.success || !res.logs || res.logs.length === 0) {
                   timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:20px;'>검색 조건에 맞는 접속 로그가 없습니다.</div>";
                   return;
               }
-              
+
               let html = "";
               res.logs.forEach(log => {
                   let dateStr = log.created_at ? log.created_at.substring(5, 19).replace('-', '.') : ''; 
@@ -7785,13 +7792,6 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                   pageHtml += `<button onclick="changeConnLogPage(1)" ${res.page === res.totalPages ? 'disabled' : ''} style="padding:6px 12px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">▶</button>`;
                   pager.innerHTML = pageHtml;
               }
-          })._call({ 
-              source: 'vercel', 
-              action: 'GET_ALL_CONN_LOGS', 
-              keyword: keyword, 
-              limit: Number(limit), 
-              page: connLogCurrentPage,
-              admin_id: localStorage.getItem('admin_id') // 👇🚨 이 한 줄을 반드시 추가해 주세요! 🚨👇
           });
       }
 
@@ -7811,7 +7811,9 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           
 
           showToast("⏳ 원격 데이터베이스 동기화 중...", 0);
-          google.script.run.withSuccessHandler(function(res) {
+          apiCall({ source: 'vercel', action: 'CREATE_ADMIN', data: { id, name, pw: pw }, admin_id: localStorage.getItem('admin_id') })
+          .then(function(res) {
+              if (res === null) return;
               if (res.success) {
                   showToast("✅ 신규 관리자 계정이 활성화되었습니다.", 2000);
                   document.getElementById('newAdminId').value = '';
@@ -7821,7 +7823,7 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
               } else {
                   showToast(`❌ 오류: ${res.msg}`, 2500);
               }
-          })._call({ source: 'vercel', action: 'CREATE_ADMIN', data: { id, name, pw: pw }, admin_id: localStorage.getItem('admin_id') });
+          });
       }
 
       // 💡 5번 요구사항: 발급 창 부드러운 토글 제어 엔진
@@ -7846,8 +7848,8 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           if (!container) return;
           container.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:15px; font-weight:800;'>보안 세션 확인 중...</div>";
 
-          google.script.run.withSuccessHandler(function(res) {
-              if (!res.success || !res.list) {
+          apiCall({ source: 'vercel', action: 'GET_ADMIN_LIST' }).then(function(res) {
+              if (res === null || !res.success || !res.list) {
                   container.innerHTML = "<div style='color:var(--text-sub); padding:10px;'>목록 수집 실패</div>"; return;
               }
               container.innerHTML = "";
@@ -7909,17 +7911,19 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                   lockedUsers.forEach(u => container.appendChild(buildCard(u, true)));
               }
 
-          })._call({ source: 'vercel', action: 'GET_ADMIN_LIST' });
+          });
       }
 
       // 🛑 2번 요구사항: 비활성화 경고문구 정교화 및 전송 처리
       function deleteAdminAccount(id, name) {
           if (!confirm(`[확인] [${name}(${id})] 관리자 권한을 회수하고 계정을 비활성화 하시겠습니까?`)) return;
           showToast("⏳ 권한 회수 중...", 0);
-          google.script.run.withSuccessHandler(function(res) {
-              if (res.success) { showToast("✅ 계정이 비활성화 상태로 전환되었습니다.", 2000); refreshAdminList(); } 
+          apiCall({ source: 'vercel', action: 'DELETE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') })
+          .then(function(res) {
+              if (res === null) return;
+              if (res.success) { showToast("✅ 계정이 비활성화 상태로 전환되었습니다.", 2000); refreshAdminList(); }
               else { showToast(`❌ 처리 실패: ${res.msg}`, 3000); }
-          })._call({ source: 'vercel', action: 'DELETE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') });
+          });
       }
 
       // 🔒 6번 요구사항: 본인 비밀번호 실시간 변경 연동 엔진 (SHA-256 연동)
@@ -7938,35 +7942,41 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           showToast("⏳ 보안 검증 및 변경 중...", 0);
           
           
-          google.script.run.withSuccessHandler(function(res) {
+          apiCall({ source: 'vercel', action: 'CHANGE_MY_PASSWORD', data: { currentPw: curPw, newPw: newPw }, admin_id: localStorage.getItem('admin_id') })
+          .then(function(res) {
+              if (res === null) return;
               if (res.success) {
                   showToast("✅ 비밀번호 변경 완료! 다음 로그인부터 적용됩니다.", 3000);
                   currentInput.value = ""; newInput.value = "";
-                  document.getElementById('myInfoModal').style.display = 'none'; // 성공 시 모달 닫기
+                  document.getElementById('myInfoModal').style.display = 'none';
               } else {
                   showToast(`❌ 변경 실패: ${res.msg}`, 3000);
               }
-          })._call({ source: 'vercel', action: 'CHANGE_MY_PASSWORD', data: { currentPw: curPw, newPw: newPw }, admin_id: localStorage.getItem('admin_id') });
+          });
       }
 
       // ♻️ 계정 복구(활성화) 실행 함수
       function reactivateAdminAccount(id, name) {
           if (!confirm(`[${name}(${id})] 계정을 다시 활성화(ACTIVE) 복구하시겠습니까?`)) return;
           showToast("⏳ 계정 복구 중...", 0);
-          google.script.run.withSuccessHandler(function(res) {
-              if (res.success) { showToast("✅ 관리자 계정이 활성화되었습니다.", 2000); refreshAdminList(); } 
+          apiCall({ source: 'vercel', action: 'REACTIVATE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') })
+          .then(function(res) {
+              if (res === null) return;
+              if (res.success) { showToast("✅ 관리자 계정이 활성화되었습니다.", 2000); refreshAdminList(); }
               else { showToast(`❌ 복구 실패: ${res.msg}`, 3000); }
-          })._call({ source: 'vercel', action: 'REACTIVATE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') });
+          });
       }
 
       // 💥 계정 완전 삭제 실행 함수
       function hardDeleteAdminAccount(id, name) {
           if (!confirm(`🚨 최후 경고: [${name}(${id})] 계정을 데이터베이스에서 완전히 삭제(Hard Delete)합니까?\n이 작업은 되돌릴 수 없으며 접속 기록 외 모든 정보가 파기됩니다!`)) return;
           showToast("💥 계정 영구 파기 중...", 0);
-          google.script.run.withSuccessHandler(function(res) {
-              if (res.success) { showToast("🗑️ 계정이 DB에서 완전히 파기되었습니다.", 2000); refreshAdminList(); } 
+          apiCall({ source: 'vercel', action: 'HARD_DELETE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') })
+          .then(function(res) {
+              if (res === null) return;
+              if (res.success) { showToast("🗑️ 계정이 DB에서 완전히 파기되었습니다.", 2000); refreshAdminList(); }
               else { showToast(`❌ 삭제 실패: ${res.msg}`, 3000); }
-          })._call({ source: 'vercel', action: 'HARD_DELETE_ADMIN', data: { id: id }, admin_id: localStorage.getItem('admin_id') });
+          });
       }
 
       // 🔑 비밀번호 초기화 실행 함수
@@ -7977,10 +7987,12 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
 
           
           showToast("⏳ 비밀번호 변경 중...", 0);
-          google.script.run.withSuccessHandler(function(res) {
+          apiCall({ source: 'vercel', action: 'RESET_ADMIN_PW', data: { targetId: id, newPw: newPw }, admin_id: localStorage.getItem('admin_id') })
+          .then(function(res) {
+              if (res === null) return;
               if (res.success) showToast("✅ 비밀번호가 성공적으로 초기화되었습니다.", 2000);
               else showToast(`❌ 오류: ${res.msg}`, 2500);
-          })._call({ source: 'vercel', action: 'RESET_ADMIN_PW', data: { targetId: id, newPw: newPw }, admin_id: localStorage.getItem('admin_id') });
+          });
       }
 
     
@@ -8006,14 +8018,22 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:15px; font-weight:800;'>보안 로그 동기화 및 검색 중...</div>";
           if (pager) pager.innerHTML = "";
 
-          google.script.run.withSuccessHandler(function(res) {
-              if (!res.success || !res.logs || res.logs.length === 0) {
+          apiCall({
+              source: 'vercel',
+              action: 'GET_AUDIT_LOGS',
+              startDate: startDate,
+              endDate: endDate,
+              keyword: keyword,
+              limit: Number(limit),
+              page: logCurrentPage
+          }).then(function(res) {
+              if (res === null || !res.success || !res.logs || res.logs.length === 0) {
                   timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:20px;'>검색 조건에 맞는 감사 로그가 없습니다.</div>";
                   return;
               }
-              
+
               timeline.innerHTML = "";
-              
+
               res.logs.forEach(log => {
                   const item = document.createElement('div');
                   item.className = 'audit-log-item'; 
@@ -8042,14 +8062,6 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                   pager.innerHTML = pageHtml;
               }
 
-          })._call({ 
-              source: 'vercel', 
-              action: 'GET_AUDIT_LOGS', 
-              startDate: startDate, 
-              endDate: endDate, 
-              keyword: keyword,
-              limit: Number(limit),
-              page: logCurrentPage
           });
       }
       // 🚨 DB 페이지네이션 관리 상태 변수
@@ -8099,8 +8111,18 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           container.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:25px; font-weight:800;'>실시간 데이터 파싱 중...</div>";
           if (pager) pager.innerHTML = "";
 
-          google.script.run.withSuccessHandler(function(res) {
-              if (!res.success || !res.rows || res.rows.length === 0) {
+          apiCall({
+              source: 'vercel',
+              action: 'GET_RAW_DB_ROWS',
+              keyword: keyword,
+              filterCol: filterCol,
+              limit: Number(limit),
+              page: dbCurrentPage,
+              sortCol: dbSortCol,
+              sortDir: dbSortDir,
+              type: currentType
+          }).then(function(res) {
+              if (res === null || !res.success || !res.rows || res.rows.length === 0) {
                   container.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:25px;'>데이터가 없습니다.</div>";
                   return;
               }
@@ -8201,16 +8223,6 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                   pageHtml += `<button onclick="changeDbPage(1)" ${res.page === res.totalPages ? 'disabled' : ''} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">다음 ▶</button>`;
                   pager.innerHTML = pageHtml;
               }
-          })._call({ 
-              source: 'vercel', 
-              action: 'GET_RAW_DB_ROWS', 
-              keyword: keyword, 
-              filterCol: filterCol, 
-              limit: Number(limit), 
-              page: dbCurrentPage, 
-              sortCol: dbSortCol, // 🚨 서버로 정렬 타겟 발송
-              sortDir: dbSortDir, // 🚨 오름/내림차순 발송
-              type: currentType 
           });
       }
 
@@ -8247,15 +8259,17 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
               if (!insertData.bl_number) { alert("⚠️ B/L 번호는 필수입니다."); return; }
           }
 
-          google.script.run.withSuccessHandler(function(res) {
+          apiCall({ source: 'vercel', action: 'ADD_RAW_ROW_DIRECT', type: currentType, insertData: insertData, admin_id: localStorage.getItem('admin_id') })
+          .then(function(res) {
+              if (res === null) return;
               if (res.success) {
                   showToast("✅ 신규 데이터 DB 삽입 완료!", 2000);
-                  searchRawDatabaseRows(); // DB 화면 새로고침
-                  if (typeof renderCalendar === 'function') renderCalendar(); // 캘린더 화면도 동기화
+                  searchRawDatabaseRows();
+                  if (typeof renderCalendar === 'function') renderCalendar();
               } else {
                   alert("오류 발생: " + res.msg);
               }
-          })._call({ source: 'vercel', action: 'ADD_RAW_ROW_DIRECT', type: currentType, insertData: insertData, admin_id: localStorage.getItem('admin_id') });
+          });
       }
 
       // ✏️ 인라인 폼 데이터 취합 및 백엔드 전송
@@ -8289,7 +8303,9 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           if (!confirm(`[ID: ${id}] 변경된 모든 컬럼 데이터를 덮어쓰시겠습니까?`)) return;
 
           showToast("⏳ DB 동기화 중...", 0);
-          google.script.run.withSuccessHandler(function(res) {
+          apiCall({ source: 'vercel', action: 'UPDATE_RAW_ROW_FULL', updateData: updateData, type: currentType, admin_id: localStorage.getItem('admin_id') })
+          .then(function(res) {
+              if (res === null) return;
               if (res.success) {
                   showToast("✅ 원본 데이터 업데이트 완료", 2000);
                   searchRawDatabaseRows();
@@ -8297,7 +8313,7 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
               } else {
                   showToast("❌ 실패: " + res.msg, 2500);
               }
-          })._call({ source: 'vercel', action: 'UPDATE_RAW_ROW_FULL', updateData: updateData, type: currentType, admin_id: localStorage.getItem('admin_id') });
+          });
       }
 
       // ✏️ DB 로우 식별명 다이렉트 수정
@@ -8306,7 +8322,9 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           if (!newName || newName.trim() === '' || newName === oldName) return;
           
           showToast("⏳ 원본 데이터 수정 중...", 0);
-          google.script.run.withSuccessHandler(function(res) {
+          apiCall({ source: 'vercel', action: 'UPDATE_RAW_ROW_DIRECT', rowId: rowId, type: currentType, newName: newName.trim(), admin_id: localStorage.getItem('admin_id') })
+          .then(function(res) {
+              if (res === null) return;
               if (res.success) {
                   showToast("✅ 수정 완료!", 2000);
                   searchRawDatabaseRows();
@@ -8314,7 +8332,7 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
               } else {
                   showToast("❌ 수정 실패", 2000);
               }
-          })._call({ source: 'vercel', action: 'UPDATE_RAW_ROW_DIRECT', rowId: rowId, type: currentType, newName: newName.trim(), admin_id: localStorage.getItem('admin_id') });
+          });
       }
 
 
@@ -8322,15 +8340,17 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           if (!confirm(`⚠️ [초긴급 경고]\n데이터베이스 일련번호 [ID: ${rowId}] 로우를 영구 파기합니까?\n달력 동기화 데이터 꼬임 현상을 정밀 강제 수정할 때만 실행하세요.`)) return;
           
           showToast("💥 DB 로우 레벨 파괴 중...", 0);
-          google.script.run.withSuccessHandler(function(res) {
+          apiCall({ source: 'vercel', action: 'DELETE_RAW_ROW_DIRECT', rowId: rowId, type: currentType, admin_id: localStorage.getItem('admin_id') })
+          .then(function(res) {
+              if (res === null) return;
               if (res.success) {
                   showToast("✅ 원본 로우 파기 완료", 2000);
                   searchRawDatabaseRows();
-                  if (typeof renderCalendar === 'function') renderCalendar(); // 메인 달력 자동 동기화 갱신 트리거
+                  if (typeof renderCalendar === 'function') renderCalendar();
               } else {
                   showToast("❌ 명령 거부됨", 2000);
               }
-          })._call({ source: 'vercel', action: 'DELETE_RAW_ROW_DIRECT', rowId: rowId, type: currentType, admin_id: localStorage.getItem('admin_id') });
+          });
       }
 
   // 💡 [보안/디버깅 강화] 마스터 권한 판별 인터락 (localStorage + sessionStorage 동시 검사)
@@ -8402,10 +8422,12 @@ if (event.target.id === 'lock-btn' || event.target.closest('#lock-btn')) {
 let globalOcrFilters = [];
 
 function loadOcrFilterWords() {
-    google.script.run.withSuccessHandler(function(res) {
+    apiCall({ source: 'vercel', action: 'GET_OCR_FILTERS' })
+    .then(function(res) {
+        if (res === null) return;
         globalOcrFilters = Array.isArray(res) ? res : [];
         renderOcrFilterBadges();
-    })._call({ source: 'vercel', action: 'GET_OCR_FILTERS' });
+    });
 }
 
 function renderOcrFilterBadges() {
@@ -8447,9 +8469,10 @@ function removeOcrFilterWord(idx) {
 
 function saveOcrFilterWordsToServer() {
     showToast("저장 중...", 0);
-    google.script.run.withSuccessHandler(function(res) {
-        if(res.success) showToast("✅ 필터가 업데이트되었습니다.", 1500);
-    })._call({ source: 'vercel', action: 'SAVE_OCR_FILTERS', data: globalOcrFilters });
+    apiCall({ source: 'vercel', action: 'SAVE_OCR_FILTERS', data: globalOcrFilters })
+    .then(function(res) {
+        if (res !== null && res.success) showToast("✅ 필터가 업데이트되었습니다.", 1500);
+    });
 }
 // 👆 ----------------------------------------------------
 
