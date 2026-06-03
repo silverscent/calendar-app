@@ -956,7 +956,19 @@ const idMatch = targetUniqueId && cacheData.uniqueId === targetUniqueId;
                     const timeStr = `${currentTime.getMonth() + 1}월${currentTime.getDate()}일 ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`;
                     const jsonDataStr = JSON.stringify(finalRows); 
                     
-                    if (!useCachedData && fullUrl) {
+                    // 🚨 [버그수정] 캐시(/test 후 /ocr) 사용 시에도 최근 OCR 이미지 갱신.
+                    //    캐시 경로에선 fullUrl 이 비어있으므로 targetFileId 로 새로 생성.
+                    if (!fullUrl && targetFileId) {
+                        try {
+                            const botToken2 = process.env.TELEGRAM_BOT_TOKEN;
+                            const fRes = await fetch(`https://api.telegram.org/bot${botToken2}/getFile?file_id=${targetFileId}`);
+                            const fData = await fRes.json();
+                            if (fData.ok && fData.result && fData.result.file_path) {
+                                fullUrl = `https://api.telegram.org/file/bot${botToken2}/${fData.result.file_path}`;
+                            }
+                        } catch (e) { console.error('이미지 URL 생성 실패:', e); }
+                    }
+                    if (fullUrl) {
                         const jsonUrl = JSON.stringify({ url: fullUrl, fileId: targetFileId }); 
                         await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonUrl, jsonUrl]);
                     }
