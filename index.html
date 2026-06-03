@@ -3394,6 +3394,9 @@ document.addEventListener("visibilitychange", () => {
       // 🚀 [앱 초기화] 오염된 캐시 무시 + 강제 뼈대 교정 완결판
       window.addEventListener("DOMContentLoaded", () => {
 
+        // 저장된 session_token 복원
+        window._sessionToken = localStorage.getItem('session_token') || sessionStorage.getItem('session_token') || null;
+
         // 👇 🚨 [자동로그인 & GUEST 사이트 접속 추적기] 여기에 삽입! 👇
         let isAdm = localStorage.getItem('isAdmin') === 'true' || sessionStorage.getItem('isAdmin') === 'true';
         let currentAdminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id') || 'GUEST';
@@ -4348,19 +4351,22 @@ document.addEventListener("visibilitychange", () => {
       // =====================================================
 
       // 🚨 1. 인증 데이터 통합 저장/삭제 헬퍼 (localStorage vs sessionStorage 자동 분배)
-      function saveAuthData(id, role, isSave) {
+      function saveAuthData(id, role, isSave, session_token) {
           const isAuto = localStorage.getItem('auto_login') !== 'false';
           const targetStorage = isAuto ? localStorage : sessionStorage;
           const otherStorage = isAuto ? sessionStorage : localStorage;
 
           if (isSave) {
-              otherStorage.removeItem('isAdmin'); otherStorage.removeItem('admin_id'); otherStorage.removeItem('admin_role');
+              otherStorage.removeItem('isAdmin'); otherStorage.removeItem('admin_id'); otherStorage.removeItem('admin_role'); otherStorage.removeItem('session_token');
               targetStorage.setItem('isAdmin', 'true');
               targetStorage.setItem('admin_id', id);
               targetStorage.setItem('admin_role', role);
+              if (session_token) targetStorage.setItem('session_token', session_token);
           } else {
-              localStorage.removeItem('isAdmin'); localStorage.removeItem('admin_id'); localStorage.removeItem('admin_role');
-              sessionStorage.removeItem('isAdmin'); sessionStorage.removeItem('admin_id'); sessionStorage.removeItem('admin_role');
+              localStorage.removeItem('isAdmin'); localStorage.removeItem('admin_id'); localStorage.removeItem('admin_role'); localStorage.removeItem('session_token');
+              sessionStorage.removeItem('isAdmin'); sessionStorage.removeItem('admin_id'); sessionStorage.removeItem('admin_role'); sessionStorage.removeItem('session_token');
+              // bio 토큰도 함께 정리
+              localStorage.removeItem('bio_registered'); localStorage.removeItem('bio_id'); localStorage.removeItem('bio_token');
           }
       }
 
@@ -4501,7 +4507,7 @@ document.addEventListener("visibilitychange", () => {
               if(confirm("생체 인증 로그인을 해제하시겠습니까?\n(※ 기기에 저장된 패스키는 브라우저 설정에서 직접 지워주세요)")) {
                   localStorage.removeItem('bio_registered');
                   localStorage.removeItem('bio_id');
-                  localStorage.removeItem('bio_pw');
+                  localStorage.removeItem('bio_token');
                   showToast("🗑️ 생체 인증이 해제되었습니다.", 2000);
               } else {
                   checkbox.checked = true; 
@@ -4588,7 +4594,7 @@ function bindBioAuthEvents() {
                         if (res.success) {
                             localStorage.setItem('bio_registered', 'true');
                             localStorage.setItem('bio_id', adminId);
-                            localStorage.setItem('bio_pw', adminPw);
+                            localStorage.setItem('bio_token', res.session_token || '');
                             showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
                             if (pwInput) pwInput.value = "";
                         } else {
@@ -7338,7 +7344,8 @@ async function handleLogin() {
 
         if (res.success) {
             window.isAdmin = true; isAdmin = true;
-            saveAuthData(res.admin_id, res.role, true);
+            saveAuthData(res.admin_id, res.role, true, res.session_token);
+            if (res.session_token) window._sessionToken = res.session_token;
 
             const btn = document.getElementById("adminBtn");
             if (btn) { btn.innerHTML = '🔓 관리자'; btn.className = 'admin-btn unlocked'; btn.removeAttribute("style"); }
@@ -7487,20 +7494,21 @@ async function handleLogin() {
               
               if (assertion) {
                   const savedId = localStorage.getItem('bio_id');
-                  const savedPw = localStorage.getItem('bio_pw'); 
-                  
-                  if (savedId && savedPw) {
+                  const savedToken = localStorage.getItem('bio_token');
+
+                  if (savedId && savedToken) {
                       document.getElementById('adminLoginModal').style.display = 'none';
                       showToast("🔒 생체 인증 성공! 서버 확인 중...", 0);
-                      
-                      apiCall({ source: 'vercel', action: 'LOGIN', data: { id: savedId, pw: savedPw } }).then(function(res) {
+
+                      apiCall({ source: 'vercel', action: 'VERIFY_SESSION', session_token: savedToken }).then(function(res) {
                           if (res === null || !res.success) {
-                              showToast("❌ 서버 인증 실패. 비밀번호가 변경되었을 수 있습니다.", 2500);
+                              showToast("❌ 세션이 만료되었습니다. 다시 로그인하세요.", 2500);
+                              localStorage.removeItem('bio_registered'); localStorage.removeItem('bio_id'); localStorage.removeItem('bio_token');
                               openLoginModal();
                               return;
                           }
                           window.isAdmin = true; isAdmin = true;
-                          saveAuthData(res.admin_id, res.role, true);
+                          saveAuthData(res.admin_id, res.role, true, savedToken);
 
                           const btn = document.getElementById("adminBtn");
                           if (btn) { btn.innerHTML = '🔓 관리자'; btn.className = 'admin-btn unlocked'; btn.removeAttribute("style"); }

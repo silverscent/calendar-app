@@ -23,6 +23,11 @@ async function apiCall(payload) {
     setLoadingState(true);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
+    // session_token 자동 포함 (있을 때만)
+    const sessionToken = window._sessionToken ||
+        localStorage.getItem('session_token') ||
+        sessionStorage.getItem('session_token');
+    if (sessionToken && !payload.session_token) payload = { ...payload, session_token: sessionToken };
     try {
         const r = await fetch(VERCEL_API_URL, { method: 'POST', body: JSON.stringify(payload), signal: controller.signal });
         clearTimeout(timeoutId);

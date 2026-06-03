@@ -27,12 +27,45 @@ const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-// 💡 [수정] DB 연결 풀을 최상단 전역 스코프로 이동 (커넥션 재사용으로 응답 속도 극대화)
-const pool = mysql.createPool(process.env.DATABASE_URL);
+const pool = mysql.createPool({
+    uri: process.env.DATABASE_URL,
+    connectionLimit: 10,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+    waitForConnections: true,
+    queueLimit: 0,
+});
 
 // ── 모듈 레벨 유틸 (요청마다 재생성 방지)
 const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
 const safeDate  = (v) => (!v || v === '' || v === 'null' || v === '미정') ? null : v;
+
+// ── 세션 토큰 (HMAC-SHA256, DB 없이 자가검증, 30일 유효)
+const TOKEN_SECRET = process.env.TOKEN_SECRET || process.env.DATABASE_URL?.slice(-32) || 'fallback-secret';
+const TOKEN_TTL = 30 * 24 * 60 * 60 * 1000; // 30일
+
+function generateToken(admin_id) {
+    const expires = Date.now() + TOKEN_TTL;
+    const payload = `${admin_id}:${expires}`;
+    const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
+    return Buffer.from(`${payload}:${sig}`).toString('base64url');
+}
+
+function verifyToken(token) {
+    try {
+        const decoded = Buffer.from(token, 'base64url').toString('utf8');
+        const lastColon = decoded.lastIndexOf(':');
+        const payload = decoded.slice(0, lastColon);
+        const sig = decoded.slice(lastColon + 1);
+        const expected = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
+        if (sig !== expected) return null;
+        const colonIdx = payload.indexOf(':');
+        const admin_id = payload.slice(0, colonIdx);
+        const expires = parseInt(payload.slice(colonIdx + 1));
+        if (Date.now() > expires) return null;
+        return admin_id;
+    } catch { return null; }
+}
 
 function getMondayOfWeek(dateStr) {
     const d = new Date(dateStr);
@@ -114,8 +147,8 @@ module.exports = async function(req, res) {
             const endYmd = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
 
             if (type === 'out') {
-                const [monthRows] = await pool.query(`SELECT * FROM outbound WHERE outbound_date >= ? AND outbound_date < ? ORDER BY sort_idx ASC, id ASC`, [startYmd, endYmd]);
-                const [pendingRows] = await pool.query(`SELECT * FROM outbound WHERE outbound_date IS NULL ORDER BY sort_idx ASC, id ASC`);
+                const [monthRows] = await pool.query(`SELECT id, company, pal, box, etc, isDone, sort_idx FROM outbound WHERE outbound_date >= ? AND outbound_date < ? ORDER BY sort_idx ASC, id ASC`, [startYmd, endYmd]);
+                const [pendingRows] = await pool.query(`SELECT id, company, pal, box, etc, isDone, sort_idx FROM outbound WHERE outbound_date IS NULL ORDER BY sort_idx ASC, id ASC`);
                 monthRows.forEach(row => {
                     const day = new Date(row.outbound_date).getDate();
                     if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
@@ -123,8 +156,8 @@ module.exports = async function(req, res) {
                 });
                 pendingRows.forEach(row => { formattedData.pendingItems.push({ id: row.id, company: row.company, pal: row.pal, box: row.box, etc: row.etc, isDone: row.isDone === 1, sortIdx: row.sort_idx !== null ? row.sort_idx : 999 }); });
             } else {
-                const [monthRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date >= ? AND receive_date < ? ORDER BY sort_idx ASC, id ASC`, [startYmd, endYmd]);
-                const [pendingRows] = await pool.query(`SELECT * FROM inbound WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`);
+                const [monthRows] = await pool.query(`SELECT id, bl_number, pallets, remarks, s_type, fwd, invoice, status, is_ai_modified, sort_idx FROM inbound WHERE receive_date >= ? AND receive_date < ? ORDER BY sort_idx ASC, id ASC`, [startYmd, endYmd]);
+                const [pendingRows] = await pool.query(`SELECT id, bl_number, pallets, remarks, s_type, fwd, invoice, status, is_ai_modified, sort_idx FROM inbound WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`);
                 monthRows.forEach(row => {
                     const day = new Date(row.receive_date).getDate();
                     if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
@@ -161,12 +194,31 @@ module.exports = async function(req, res) {
             ]);
 
             if (secureActions.has(action)) {
-                if (!admin_id) { return res.status(200).json({ success: false, forceLogout: true, msg: '로그인 세션이 만료되었거나 유효하지 않습니다.' }); }
+                // session_token 검증 (있으면 검증, 없으면 구형 클라이언트 호환을 위해 admin_id만 확인)
+                const sessionToken = payload.session_token;
+                if (sessionToken) {
+                    const tokenAdmin = verifyToken(sessionToken);
+                    if (!tokenAdmin || tokenAdmin !== admin_id) {
+                        return res.status(200).json({ success: false, forceLogout: true, msg: '세션이 만료되었습니다. 다시 로그인하세요.' });
+                    }
+                } else if (!admin_id) {
+                    return res.status(200).json({ success: false, forceLogout: true, msg: '로그인 세션이 만료되었거나 유효하지 않습니다.' });
+                }
                 const [sessionCheck] = await pool.query("SELECT status FROM admins WHERE admin_id = ?", [admin_id]);
                 if (sessionCheck.length === 0 || sessionCheck[0].status === 'LOCKED') { return res.status(200).json({ success: false, forceLogout: true, msg: '관리자에 의해 계정이 비활성화되었습니다.' }); }
             }
 
-            // 👇 🚨 [신규 1] 사이트 접속 트래킹 저장 (GUEST, AUTO_LOGIN) 👇
+            // ── 생체인증 재로그인용 세션 토큰 검증
+            if (action === 'VERIFY_SESSION') {
+                const token = payload.session_token;
+                if (!token) return res.status(200).json({ success: false, msg: '토큰이 없습니다.' });
+                const tokenAdmin = verifyToken(token);
+                if (!tokenAdmin) return res.status(200).json({ success: false, msg: '세션이 만료되었습니다. 다시 로그인하세요.' });
+                const [rows] = await pool.query("SELECT admin_id, admin_name, role, status FROM admins WHERE admin_id = ?", [tokenAdmin]);
+                if (rows.length === 0 || rows[0].status === 'LOCKED') return res.status(200).json({ success: false, msg: '계정이 비활성화되었습니다.' });
+                return res.status(200).json({ success: true, admin_id: rows[0].admin_id, name: rows[0].admin_name, role: rows[0].role });
+            }
+
             if (action === 'LOG_SITE_ACCESS') {
                 try {
                     // 접속자 IP 추출 (프록시 환경 고려)
@@ -571,7 +623,8 @@ module.exports = async function(req, res) {
                             await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [masterCheck[0].admin_id]);
                             const connInfo = `[👑 최고관리자 잠금 우회 성공] IP: ${ip} | ${connInfoBase}`;
                             await pool.query("INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_SUCCESS', ?)", [ip, masterCheck[0].admin_id, connInfo]);
-                            return res.status(200).json({ success: true, admin_id: masterCheck[0].admin_id, name: masterCheck[0].admin_name, role: masterCheck[0].role, msg: "비상 우회 통로로 안전하게 로그인되었습니다." });
+                            const session_token = generateToken(masterCheck[0].admin_id);
+                            return res.status(200).json({ success: true, admin_id: masterCheck[0].admin_id, name: masterCheck[0].admin_name, role: masterCheck[0].role, session_token, msg: "비상 우회 통로로 안전하게 로그인되었습니다." });
                         }
                         return res.status(200).json({ success: false, msg: "⚠️ 비밀번호 5회 실패로 로그인이 임시 제한되었습니다. 10분 후 다시 시도하세요." });
                     }
@@ -605,7 +658,8 @@ module.exports = async function(req, res) {
                         await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [user.admin_id]);
                         const connInfo = `[접속성공] IP: ${ip} | ${connInfoBase}`;
                         await pool.query("INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_SUCCESS', ?)", [ip, user.admin_id, connInfo]);
-                        return res.status(200).json({ success: true, admin_id: user.admin_id, name: user.admin_name, role: user.role });
+                        const session_token = generateToken(user.admin_id);
+                        return res.status(200).json({ success: true, admin_id: user.admin_id, name: user.admin_name, role: user.role, session_token });
                     } else {
                         const connInfo = `[비밀번호 틀림] IP: ${ip} | ${connInfoBase}`;
                         await pool.query("INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_FAILED', ?)", [ip, user.admin_id, connInfo]);
