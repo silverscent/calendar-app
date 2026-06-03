@@ -4553,7 +4553,7 @@ function bindBioAuthEvents() {
 
             const pwInput = document.getElementById('bioConfirmPwInput');
             let adminPw = pwInput ? pwInput.value.trim() : '';
-            if (!adminPw) { alert("비밀번호를 입력해 주세요."); return; }
+            if (!adminPw) { showToast("비밀번호를 입력해 주세요.", 2000); return; }
 
             let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
 
@@ -5034,8 +5034,8 @@ if (document.readyState === "complete" || document.readyState === "interactive")
         // 🚨 [아이폰 철통 방어벽 추가] 실수로 이전 날짜를 골랐을 때 강제 복구!
         endDateInput.onchange = function() {
             if (this.value && this.min && this.value < this.min) {
-                alert("⚠️ 종료일은 시작일보다 빠를 수 없습니다.");
-                this.value = this.min; // 즉시 시작일로 덮어씌움
+                showToast("⚠️ 종료일은 시작일보다 빠를 수 없습니다.", 2000);
+                this.value = this.min;
             }
         };
 
@@ -5155,7 +5155,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           payload.addBox = document.getElementById(`add-q-box-${idx}`).value;
           
           if (!payload.addPal && !payload.addBox) {
-              alert("⚠️ 추가할 파레트나 박스 수량을 입력해주세요.");
+              showToast("⚠️ 추가할 파레트나 박스 수량을 입력해주세요.", 2000);
               return;
           }
 
@@ -5177,13 +5177,13 @@ if (document.readyState === "complete" || document.readyState === "interactive")
         }
 
         if ((action === "ADD" || action === "EDIT") && (!payload.newComp || payload.newComp === "[TASK]")) {
-          alert("⚠️ 업체/작업명은 필수입니다."); return;
+          showToast("⚠️ 업체/작업명은 필수입니다.", 2000); return;
         }
         if (action === "DELETE" && !confirm(`⚠️ 정말 [${confirmName}] 일정을 영구 삭제하시겠습니까?`)) return;
 
         if (action === "ADD" || action === "EDIT") {
           if (startDateStr !== "미정" && endDateStr && endDateStr < startDateStr) {
-            alert("⚠️ 종료일은 시작일보다 빠를 수 없습니다."); return;
+            showToast("⚠️ 종료일은 시작일보다 빠를 수 없습니다.", 2000); return;
           }
         }
 
@@ -5267,7 +5267,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
         // ❌ [삭제됨] if(isProcessing) { showToast('⏳ 처리 중입니다.', 1000); return; }
 
         if (selectedItems.length === 0) {
-          alert("항목을 먼저 터치하여 선택해 주세요.");
+          showToast("항목을 먼저 터치하여 선택해 주세요.", 2000);
           return;
         }
         let actionName =
@@ -5541,7 +5541,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             };
             editEndInput.onchange = function () {
               if (this.value && this.min && this.value < this.min) {
-                alert("⚠️ 종료일은 시작일보다 빠를 수 없습니다.");
+                showToast("⚠️ 종료일은 시작일보다 빠를 수 없습니다.", 2000); return;
                 this.value = this.min;
               }
             };
@@ -7110,7 +7110,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       }
       function saveCompEdit(oldCompName) {
           const newCompName = document.getElementById('crm-edit-fullname').value.trim();
-          if (!newCompName) { alert("업체 풀네임은 필수입니다."); return; }
+          if (!newCompName) { showToast("업체 풀네임은 필수입니다.", 2000); return; }
 
           const newInfo = {
               shortName: document.getElementById('crm-edit-short').value.trim(),
@@ -7187,7 +7187,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
 
       function saveNewComp() {
           let full = document.getElementById('nc-full').value.trim();
-          if (!full) { alert("업체명을 입력하세요."); return; }
+          if (!full) { showToast("업체명을 입력하세요.", 2000); return; }
           
           compInfoDB[full] = {
               shortName: document.getElementById('nc-short').value.trim(),
@@ -7574,7 +7574,7 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                                role.toUpperCase().includes('SYSTEM');
 
           if (!isMasterUser) {
-              alert("🚨 접근 거부: 최상위 시스템 관리자 계정이 아닙니다.");
+              showToast("🚨 접근 거부: 최상위 시스템 관리자 계정이 아닙니다.", 3000);
               return;
           }
           
@@ -7820,8 +7820,8 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           const curPw = currentInput.value.trim();
           const newPw = newInput.value.trim();
 
-          if (!curPw || !newPw) { alert("⚠️ 현재 비밀번호와 새 비밀번호를 모두 입력하세요."); return; }
-          if (curPw === newPw) { alert("⚠️ 새 비밀번호는 현재 비밀번호와 다르게 입력해 주세요."); return; }
+          if (!curPw || !newPw) { showToast("⚠️ 현재 비밀번호와 새 비밀번호를 모두 입력하세요.", 2000); return; }
+          if (curPw === newPw) { showToast("⚠️ 새 비밀번호는 현재 비밀번호와 다르게 입력해 주세요.", 2000); return; }
           if (!confirm("정말 비밀번호를 변경하시겠습니까?")) return;
 
           showToast("⏳ 보안 검증 및 변경 중...", 0);
@@ -8126,7 +8126,7 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                   sort_idx: document.getElementById('db-o-sort-new').value,
                   isDone: document.getElementById('db-o-done-new').value
               };
-              if (!insertData.company) { alert("⚠️ 업체명은 필수입니다."); return; }
+              if (!insertData.company) { showToast("⚠️ 업체명은 필수입니다.", 2000); return; }
           } else {
               insertData = {
                   bl_number: document.getElementById('db-i-bl-new').value,
@@ -8141,7 +8141,7 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                   status: document.getElementById('db-i-stat-new').value,
                   is_ai_modified: document.getElementById('db-i-ai-new').value
               };
-              if (!insertData.bl_number) { alert("⚠️ B/L 번호는 필수입니다."); return; }
+              if (!insertData.bl_number) { showToast("⚠️ B/L 번호는 필수입니다.", 2000); return; }
           }
 
           apiCall({ source: 'vercel', action: 'ADD_RAW_ROW_DIRECT', type: currentType, insertData: insertData, admin_id: localStorage.getItem('admin_id') })
@@ -8152,7 +8152,7 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                   searchRawDatabaseRows();
                   if (typeof renderCalendar === 'function') renderCalendar();
               } else {
-                  alert("오류 발생: " + res.msg);
+                  showToast("오류 발생: " + res.msg, 3000);
               }
           });
       }

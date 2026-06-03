@@ -2583,7 +2583,7 @@ function bindBioAuthEvents() {
 
             const pwInput = document.getElementById('bioConfirmPwInput');
             let adminPw = pwInput ? pwInput.value.trim() : '';
-            if (!adminPw) { alert("비밀번호를 입력해 주세요."); return; }
+            if (!adminPw) { showToast("비밀번호를 입력해 주세요.", 2000); return; }
 
             let adminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
 
@@ -2995,7 +2995,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       }
 
       function executeMultiAction(action) {
-        if (selectedItems.length === 0) { alert('항목을 먼저 터치하여 선택해 주세요.'); return; }
+        if (selectedItems.length === 0) { showToast('항목을 먼저 터치하여 선택해 주세요.', 2000); return; }
         let actionName = action === 'MULTI_DONE' ? "입고 완료 처리" : action === 'MULTI_UNDO_DONE' ? "완료 취소" : "영구 삭제";
         if (!confirm(`⚠️ 선택된 ${selectedItems.length}개의 일정을 일괄 [${actionName}] 하시겠습니까?`)) return;
 
@@ -3186,7 +3186,7 @@ apiCall({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_DATA' }).the
         if (data === null) { btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기'; btnElement.disabled = false; return; }
         // 🔥 1. 데이터가 있는지 확인
         if (!data || !data.parsedData || (Array.isArray(data.parsedData) && data.parsedData.length === 0)) {
-            alert("⚠️ 저장된 파싱 데이터가 없습니다.");
+            showToast("⚠️ 저장된 파싱 데이터가 없습니다.", 2500);
             btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
             btnElement.disabled = false;
             return;
@@ -4462,7 +4462,7 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                                role.toUpperCase().includes('SYSTEM');
 
           if (!isMasterUser) {
-              alert("🚨 접근 거부: 최상위 시스템 관리자 계정이 아닙니다.");
+              showToast("🚨 접근 거부: 최상위 시스템 관리자 계정이 아닙니다.", 3000);
               return;
           }
           
@@ -4709,8 +4709,8 @@ let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
           const curPw = currentInput.value.trim();
           const newPw = newInput.value.trim();
 
-          if (!curPw || !newPw) { alert("⚠️ 현재 비밀번호와 새 비밀번호를 모두 입력하세요."); return; }
-          if (curPw === newPw) { alert("⚠️ 새 비밀번호는 현재 비밀번호와 다르게 입력해 주세요."); return; }
+          if (!curPw || !newPw) { showToast("⚠️ 현재 비밀번호와 새 비밀번호를 모두 입력하세요.", 2000); return; }
+          if (curPw === newPw) { showToast("⚠️ 새 비밀번호는 현재 비밀번호와 다르게 입력해 주세요.", 2000); return; }
           if (!confirm("정말 비밀번호를 변경하시겠습니까?")) return;
 
           showToast("⏳ 보안 검증 및 변경 중...", 0);
@@ -5017,7 +5017,7 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                   sort_idx: document.getElementById('db-o-sort-new').value,
                   isDone: document.getElementById('db-o-done-new').value
               };
-              if (!insertData.company) { alert("⚠️ 업체명은 필수입니다."); return; }
+              if (!insertData.company) { showToast("⚠️ 업체명은 필수입니다.", 2000); return; }
           } else {
               insertData = {
                   bl_number: document.getElementById('db-i-bl-new').value,
@@ -5032,7 +5032,7 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                   status: document.getElementById('db-i-stat-new').value,
                   is_ai_modified: document.getElementById('db-i-ai-new').value
               };
-              if (!insertData.bl_number) { alert("⚠️ B/L 번호는 필수입니다."); return; }
+              if (!insertData.bl_number) { showToast("⚠️ B/L 번호는 필수입니다.", 2000); return; }
           }
 
           apiCall({ source: 'vercel', action: 'ADD_RAW_ROW_DIRECT', type: currentType, insertData: insertData, admin_id: localStorage.getItem('admin_id') })
@@ -5043,7 +5043,7 @@ let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') 
                   searchRawDatabaseRows();
                   if (typeof renderCalendar === 'function') renderCalendar();
               } else {
-                  alert("오류 발생: " + res.msg);
+                  showToast("오류 발생: " + res.msg, 3000);
               }
           });
       }
@@ -5172,7 +5172,7 @@ function toggleRawOcrView() {
 function copyRawOcrText() {
     const area = document.getElementById('rawOcrTextArea');
     if (!area || !area.value || area.value === "가져온 Raw 데이터가 존재하지 않습니다.") {
-        alert("복사할 데이터가 없습니다.");
+        showToast("복사할 데이터가 없습니다.", 2000);
         return;
     }
     
@@ -5182,12 +5182,12 @@ function copyRawOcrText() {
     
     navigator.clipboard.writeText(area.value)
         .then(() => {
-            alert("📋 RAW 텍스트가 클립보드에 전체 복사되었습니다!");
+            showToast("📋 RAW 텍스트가 클립보드에 전체 복사되었습니다!", 2000);
         })
         .catch(err => {
             // 구형 기기 등 navigator 나이 미지원 시 백업용 복사
             document.execCommand('copy');
-            alert("📋 텍스트가 복사되었습니다.");
+            showToast("📋 텍스트가 복사되었습니다.", 2000);
         });
 }
 
