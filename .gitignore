@@ -1,2 +1,5 @@
 .env
 .vercel
+verify_polyfill.py
+공통분리_실행절차서.md
+작업현황_정리.md
