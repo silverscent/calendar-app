@@ -2461,7 +2461,7 @@ body.light-mode .ai-ans-bubble {
           <div class="modal-title" id="modalTitle">상세 내역</div>
           <button
             class="close-btn"
-            onclick="document.getElementById('modal').style.display = 'none'"
+            onclick="_editState = null; document.getElementById('modal').style.display = 'none'"
           >
             ✕
           </button>
@@ -5133,6 +5133,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
         oldBlockStart = null,
         oldBlockEnd = null,
       ) {
+        if (action === "EDIT" || action === "DELETE") _editState = null; // 수정 세션 종료
         try {
           if (action === "ADD") {
             let addInput = document.getElementById("add-comp");
@@ -5331,16 +5332,19 @@ if (document.readyState === "complete" || document.readyState === "interactive")
               apiCall({ source: 'vercel', domain: 'out', action: act.action, data: act.payload, token: adminToken, admin_id: localStorage.getItem('admin_id') })
                 .then(res => { if (res === null) goToAsync(serverData.year, serverData.month); });
             });
+            if (action === "EDIT") _reopenDetailAfter(payload.newDate);
             return;
           }
 
           if (action !== "ADD_QTY") updateLocalState(action, payload, idx);
           renderCalendar();
-          
+
           apiCall({ source: 'vercel', domain: 'out', action: action, data: payload, token: adminToken, admin_id: localStorage.getItem('admin_id') })
             .then(function(res) {
               if (res === null || !res.success) { showToast("❌ 서버 실패! 복구합니다.", 2500); goToAsync(serverData.year, serverData.month); }
             });
+          // 💡 수정/수량추가 후엔 모달을 닫지 않고 상세보기로 복귀
+          if (action === "EDIT" || action === "ADD_QTY") _reopenDetailAfter(payload.newDate || oldDate);
         }, 50);
       }
 
@@ -5595,6 +5599,43 @@ if (document.readyState === "complete" || document.readyState === "interactive")
         document.getElementById("modal").style.display = "flex";
       }
 
+      // ── 상세 모달 인라인 수정 상태 관리 ──
+      let _editState = null; // { day, idx, snapshot, saveArgs }
+
+      // 현재 수정폼 입력값 스냅샷 (변경 감지용)
+      function _snapshotEdit(idx) {
+        const g = (id) => { let e = document.getElementById(id); return e ? e.value : ''; };
+        const c = (id) => { let e = document.getElementById(id); return e ? e.checked : false; };
+        return JSON.stringify([
+          g(`edit-comp-${idx}`), g(`edit-pal-${idx}`), g(`edit-box-${idx}`),
+          g(`edit-date-${idx}`), g(`edit-${idx}-end-date`), g(`edit-etc-${idx}`),
+          c(`edit-type-task-${idx}`)
+        ]);
+      }
+      function _isEditDirty() {
+        if (!_editState) return false;
+        if (tempEditColorIdx !== null) return true; // 색상 변경도 변경으로 간주
+        return _snapshotEdit(_editState.idx) !== _editState.snapshot;
+      }
+
+      // 저장/수정 후 상세보기 모달 다시 열기 (해당 날짜에 항목이 남아있을 때)
+      function _reopenDetailAfter(oldDate) {
+        let d = (oldDate === '미정' || !oldDate) ? 'pending' : parseInt(String(oldDate).split('-')[2], 10);
+        let data = d === 'pending' ? serverData.pendingItems : (serverData.monthData[d] || []);
+        if (data && data.length > 0) showModal(d);
+      }
+
+      // 수정폼 닫고 상세보기로 복귀 (취소 버튼)
+      function closeEditForm(day, idx) {
+        if (_isEditDirty()) {
+          if (!confirm("⚠️ 저장하지 않은 변경사항이 있습니다.\n변경을 취소하고 상세보기로 돌아갈까요?")) return;
+        }
+        _editState = null;
+        tempEditColorObj = null; tempEditColorIdx = null;
+        renderCalendar();
+        showModal(day);
+      }
+
       function openEditForm(
         day,
         idx,
@@ -5607,8 +5648,26 @@ if (document.readyState === "complete" || document.readyState === "interactive")
         blockStartDateStr = null,
         blockEndDateStr = null,
       ) {
+        // 🔁 다른 일정을 수정 중이었다면: 변경사항 확인 후 전환 (아코디언)
+        if (_editState && _editState.idx !== idx) {
+          if (_isEditDirty()) {
+            const save = confirm("✏️ 수정 중인 변경사항이 있습니다.\n[확인] 저장하고 이동 / [취소] 변경 취소하고 이동");
+            if (save) {
+              const a = _editState.saveArgs;
+              _editState = null;
+              submitCMS('EDIT', a.comp, a.dateStr, a.idx, a.isDone, a.blockStart, a.blockEnd);
+              return; // 저장 후엔 상세보기로 복귀됨 (새 수정폼은 다시 탭하여 열기)
+            }
+          }
+          // 변경 취소하고 이동: 카드들을 상세보기로 리셋 후 새 카드 수정폼 열기
+          _editState = null;
+          tempEditColorObj = null; tempEditColorIdx = null;
+          showModal(day);
+        }
+
         tempEditColorObj = null;
         const card = document.getElementById(`modal-card-${day}-${idx}`);
+        if (!card) return;
         let inputDateVal =
           blockStartDateStr || (dateStr === "미정" ? "" : dateStr);
         let inputEndDateVal = blockEndDateStr || "";
@@ -5725,12 +5784,19 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             
             <div class="btn-row">
               <button class="save-btn" onclick="submitCMS('EDIT', '${comp}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">💾 저장</button>
-              <button class="cancel-btn" onclick="renderCalendar(); document.getElementById('modal').style.display='none';">취소</button>
+              <button class="cancel-btn" onclick="closeEditForm('${day}', ${idx})">취소</button>
             </div>
             <button class="delete-btn" onclick="submitCMS('DELETE', '${comp}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">🗑️ 이 스케줄 삭제</button>
           </div>
         `;
         attachAutocomplete(`edit-comp-${idx}`);
+
+        // 수정 상태 기록 (변경 감지 + 전환 시 저장용)
+        _editState = {
+          day, idx,
+          snapshot: _snapshotEdit(idx),
+          saveArgs: { comp, dateStr, idx, isDone, blockStart: blockStartDateStr, blockEnd: blockEndDateStr }
+        };
       }
 
       // =====================================================

@@ -1589,7 +1589,7 @@ body.light-mode .ai-ans-bubble {
         <div class="bottom-sheet-handle"></div>
         <div class="modal-header">
           <div class="modal-title" id="modalTitle">상세 내역</div>
-          <button class="close-btn" onclick="document.getElementById('modal').style.display = 'none'">✕</button>
+          <button class="close-btn" onclick="_editState = null; document.getElementById('modal').style.display = 'none'">✕</button>
         </div>
         <div id="modalContent"></div>
       </div>
@@ -3007,6 +3007,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       }
 
       function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = false) {
+        if (action === "EDIT" || action === "DELETE") _editState = null; // 수정 세션 종료
         let oldPal = "";
         let itemId = null; // 🚨 ID 변수 추가
         const safeStr = (val) => (val === "" || val == null) ? "" : String(val).trim();
@@ -3043,6 +3044,8 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             .then(function(res) {
                 if (res === null || !res.success) { showToast('❌ 서버 실패! 원상복구합니다.', 2500); goToAsync(serverData.year, serverData.month); }
             });
+            // 💡 수정 후엔 모달을 닫지 않고 상세보기로 복귀
+            if (action === "EDIT") _reopenDetailAfter(payload.newDate || oldDate);
         }, 50);
       }
 
@@ -3108,8 +3111,54 @@ if (document.readyState === "complete" || document.readyState === "interactive")
         document.getElementById('modalContent').innerHTML = contentHtml; document.getElementById('modal').style.display = 'flex';
       }
 
+      // ── 상세 모달 인라인 수정 상태 관리 ──
+      let _editState = null; // { day, idx, snapshot, saveArgs }
+
+      function _snapshotEdit(idx) {
+        const g = (id) => { let e = document.getElementById(id); return e ? e.value : ''; };
+        return JSON.stringify([
+          g(`edit-bl-${idx}`), g(`edit-pal-${idx}`), g(`edit-stype-${idx}`),
+          g(`edit-fwd-${idx}`), g(`edit-invoice-${idx}`), g(`edit-date-${idx}`), g(`edit-etc-${idx}`)
+        ]);
+      }
+      function _isEditDirty() {
+        if (!_editState) return false;
+        return _snapshotEdit(_editState.idx) !== _editState.snapshot;
+      }
+
+      function _reopenDetailAfter(oldDate) {
+        let d = (oldDate === '미정' || !oldDate) ? 'pending' : parseInt(String(oldDate).split('-')[2], 10);
+        let data = d === 'pending' ? serverData.pendingItems : (serverData.monthData[d] || []);
+        if (data && data.length > 0) showModal(d);
+      }
+
+      function closeEditForm(day, idx) {
+        if (_isEditDirty()) {
+          if (!confirm("⚠️ 저장하지 않은 변경사항이 있습니다.\n변경을 취소하고 상세보기로 돌아갈까요?")) return;
+        }
+        _editState = null;
+        renderCalendar();
+        showModal(day);
+      }
+
       function openEditForm(day, idx, bl, dateStr, pal, etc) {
+        // 🔁 다른 일정 수정 중이면 변경사항 확인 후 전환 (아코디언)
+        if (_editState && _editState.idx !== idx) {
+          if (_isEditDirty()) {
+            const save = confirm("✏️ 수정 중인 변경사항이 있습니다.\n[확인] 저장하고 이동 / [취소] 변경 취소하고 이동");
+            if (save) {
+              const a = _editState.saveArgs;
+              _editState = null;
+              submitCMS('EDIT', a.bl, a.dateStr, a.idx);
+              return;
+            }
+          }
+          _editState = null;
+          showModal(day);
+        }
+
         const card = document.getElementById(`modal-card-${day}-${idx}`);
+        if (!card) return;
         let inputDateVal = dateStr === '미정' ? '' : dateStr;
         let item = day === 'pending' ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
         
@@ -3158,11 +3207,18 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             
             <div class="btn-row" style="margin-top: 15px; padding-bottom: 10px;">
               <button class="save-btn" onclick="submitCMS('EDIT', '${bl}', '${dateStr}', ${idx})">💾 저장</button>
-              <button class="cancel-btn" onclick="renderCalendar(); document.getElementById('modal').style.display='none';">취소</button>
+              <button class="cancel-btn" onclick="closeEditForm('${day}', ${idx})">취소</button>
             </div>
             <button class="delete-btn" style="margin-bottom: 15px;" onclick="submitCMS('DELETE', '${bl}', '${dateStr}', ${idx})">🗑️ 이 스케줄 삭제</button>
           </div>
         `;
+
+        // 수정 상태 기록
+        _editState = {
+          day, idx,
+          snapshot: _snapshotEdit(idx),
+          saveArgs: { bl, dateStr, idx }
+        };
       }
 
 // =====================================================
@@ -3396,7 +3452,7 @@ apiCall({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_DATA' }).the
 
       function closeModalOnBgClick(e) { 
         if (isLongPress || isMultiMode) return;
-        if(e.target === document.getElementById('modal')) document.getElementById('modal').style.display = 'none'; 
+        if(e.target === document.getElementById('modal')) { _editState = null; document.getElementById('modal').style.display = 'none'; } 
         if(e.target === document.getElementById('ocrImageModal')) document.getElementById('ocrImageModal').style.display = 'none';
         if(e.target === document.getElementById('dashboardModal')) document.getElementById('dashboardModal').style.display = 'none';
       }
