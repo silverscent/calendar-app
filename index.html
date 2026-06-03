@@ -3171,6 +3171,11 @@ body.light-mode .ai-ans-bubble {
         return fullName.substring(0, 2);
       }
 
+      // onclick="fn('${...}')" 안에 안전하게 넣기 위한 JS+HTML 이중 이스케이프
+      function _argq(s) {
+        return _esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+      }
+
       // 💡 [지능형 마스터 이름 추출기]
       function getFullName(name) {
         if (!name) return "";
@@ -4026,7 +4031,9 @@ document.addEventListener("visibilitychange", () => {
       // 💡 [미니 CRM] 데이터 조용히 백그라운드 동기화하는 함수
       function syncCrmDataBackground() {
           apiCall({ source: 'vercel', action: 'GET_COMP_INFO_DB' }).then(function(dbData) {
-              if (dbData) { compInfoDB = dbData; localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB)); renderCalendar(); }
+              if (dbData) { compInfoDB = dbData; localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB)); }
+              if (typeof migrateFixedCompanies === 'function') migrateFixedCompanies(); // 서버 최신 데이터 기준 1회 seed
+              renderCalendar();
           });
       }
 
@@ -4334,8 +4341,8 @@ document.addEventListener("visibilitychange", () => {
         input.parentNode.insertBefore(drop, input.nextSibling);
         const cleanStr = (s) => s.replace(/[\(\)주]/g, "");
         function renderList(filterText) {
-          // 💡 기존 fixedCompanies에 CRM에서 새로 추가된 업체들까지 영혼까지 끌어모음
-          let combinedComps = Array.from(new Set([...fixedCompanies, ...Object.keys(compInfoDB)]));
+          // CRM(compInfoDB) 업체 목록 (하드코딩 제거 → DB 단일 소스)
+          let combinedComps = Object.keys(compInfoDB);
           let filtered = [...combinedComps];
           
           if (filterText) {
@@ -5574,10 +5581,10 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           
           if (isRegistered && !isTaskMode) {
               // CRM에 등록되어 있고 TASK가 아닐 때만 터치 가능 (밑줄 쫙!)
-              compNameHtml = `<span class="modal-comp" style="font-size:1.05em; font-weight:900; cursor:pointer; text-decoration: underline; text-decoration-color: rgba(128,128,128,0.3); text-underline-offset: 4px;" onclick="event.stopPropagation(); openReadCompPopup('${cleanComp}')">${fullName}</span>`;
+              compNameHtml = `<span class="modal-comp" style="font-size:1.05em; font-weight:900; cursor:pointer; text-decoration: underline; text-decoration-color: rgba(128,128,128,0.3); text-underline-offset: 4px;" onclick="event.stopPropagation(); openReadCompPopup('${_argq(cleanComp)}')">${_esc(fullName)}</span>`;
           } else {
               // 미등록 업체이거나 TASK일 경우 그냥 평범한 텍스트로 출력 (터치 안됨)
-              compNameHtml = `<span class="modal-comp" style="font-size:1.05em; font-weight:900;">${fullName}</span>`;
+              compNameHtml = `<span class="modal-comp" style="font-size:1.05em; font-weight:900;">${_esc(fullName)}</span>`;
           }
 
           contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
@@ -7101,6 +7108,27 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       }
 
       // 💡 1. 업체 리스트 모달창 열기 (서버 기다리지 않고 즉시 오픈!)
+      // 🔁 [1회성 마이그레이션] 하드코딩 기본 업체를 compInfoDB로 이관
+      //    반드시 '서버 최신 compInfoDB를 받은 직후'에만 호출할 것 (기존 데이터 보존)
+      function migrateFixedCompanies() {
+          if (localStorage.getItem('crm_fixed_migrated_v1')) return;
+          let changed = false;
+          fixedCompanies.forEach(name => {
+              if (!compInfoDB[name]) {
+                  compInfoDB[name] = {
+                      shortName: compShortMap[name] || name.substring(0, 2),
+                      ic: false, oc: false, wc: false, etc: '', addr: '', phone: '', time: ''
+                  };
+                  changed = true;
+              }
+          });
+          if (changed) {
+              localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
+              apiCall({ source: 'vercel', action: 'SAVE_COMP_INFO_DB', data: compInfoDB });
+          }
+          localStorage.setItem('crm_fixed_migrated_v1', '1');
+      }
+
       function openCompListModal() {
           // 1단계: [즉시 실행] 내 폰에 저장된 데이터로 0.1초 만에 창부터 엽니다.
           document.getElementById('btnAddNewComp').style.display = isAdmin ? 'block' : 'none';
@@ -7110,22 +7138,19 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           // 2단계: [백그라운드] 창이 떠 있는 동안 서버에서 최신 DB를 몰래 가져옵니다.
           apiCall({ source: 'vercel', action: 'GET_COMP_INFO_DB' }).then(function(dbData) {
               if (dbData) {
-                  let oldStr = JSON.stringify(compInfoDB);
-                  let newStr = JSON.stringify(dbData);
-                  if (oldStr !== newStr) {
-                      compInfoDB = dbData;
-                      localStorage.setItem('COMP_INFO_DB', newStr);
-                      renderCompList();
-                      renderCalendar();
-                  }
+                  compInfoDB = dbData;
+                  localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
               }
+              migrateFixedCompanies(); // 최신 서버 데이터 기준 1회 seed
+              renderCompList();
+              renderCalendar();
           });
       }
 
       // 💡 상단 태그(Pill) 목록만 그리는 함수
       function renderCompList() {
           // 🚨 [스마트 정렬 필터] (주), (유), (사), (재) 및 띄어쓰기를 모두 무시하고 알맹이만 추출해서 가나다 정렬!
-          let allComps = Array.from(new Set([...fixedCompanies, ...Object.keys(compInfoDB)])).sort((a, b) => {
+          let allComps = Object.keys(compInfoDB).sort((a, b) => {
               const cleanStr = (str) => str.replace(/\(주\)|\(유\)|\(사\)|\(재\)/g, '').replace(/\s+/g, '').trim();
               let cleanA = cleanStr(a);
               let cleanB = cleanStr(b);
@@ -7140,13 +7165,22 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           allComps.forEach((comp) => {
               let cObj = getCompanyColor(comp);
               let isActive = (comp === selectedCrmComp) ? 'active' : '';
-              
-              // 화면에 그릴 때는 원래 이름(comp)을 그대로 씁니다.
-              html += `<button class="comp-tag-btn ${isActive}" 
-                          style="background:${cObj.bg}; color:${cObj.cMain};" 
-                          onclick="selectCrmComp('${comp}')">${comp}</button>`;
+
+              // 업체명에 따옴표/특수문자가 있어도 안전하도록 data 속성 + 위임 방식 사용
+              html += `<button class="comp-tag-btn ${isActive}"
+                          style="background:${cObj.bg}; color:${cObj.cMain};"
+                          data-comp="${_esc(comp)}">${_esc(comp)}</button>`;
           });
-          document.getElementById('compTagsContainer').innerHTML = html;
+          const cont = document.getElementById('compTagsContainer');
+          cont.innerHTML = html;
+          // 이벤트 위임 (한 번만 바인딩)
+          if (!cont._bound) {
+              cont.addEventListener('click', (e) => {
+                  const btn = e.target.closest('.comp-tag-btn');
+                  if (btn && btn.dataset.comp != null) selectCrmComp(btn.dataset.comp);
+              });
+              cont._bound = true;
+          }
 
           if (!selectedCrmComp || !allComps.includes(selectedCrmComp)) {
               if (allComps.length > 0) selectCrmComp(allComps[0]);
@@ -7159,7 +7193,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       function selectCrmComp(comp) {
           selectedCrmComp = comp;
           document.querySelectorAll('.comp-tag-btn').forEach(btn => {
-              if (btn.innerText === comp) btn.classList.add('active');
+              if (btn.dataset.comp === comp) btn.classList.add('active');
               else btn.classList.remove('active');
           });
           renderCompDetail(comp);
@@ -7179,7 +7213,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
               <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; padding: 0 5px;">
                   <div style="display:flex; flex-direction:column; gap:4px;">
                       <span style="font-size:0.75em; font-weight:800; color:#0a84ff;">MASTER BUSINESS NAME</span>
-                      <div style="font-size:1.4em; font-weight:900; letter-spacing:-0.5px; color:var(--text-main);">${comp}</div>
+                      <div style="font-size:1.4em; font-weight:900; letter-spacing:-0.5px; color:var(--text-main);">${_esc(comp)}</div>
                   </div>
                   <div class="pill-group" style="margin-bottom:5px;">${pillStr}</div>
               </div>
@@ -7197,12 +7231,12 @@ if (document.readyState === "complete" || document.readyState === "interactive")
                   <div id="crm-edit-mode" style="display:none; flex-direction:column; gap:12px;">
                       <div class="info-row">
                           <span class="info-label">🏢 업체 풀네임 (마스터 명칭)</span>
-                          <input type="text" id="crm-edit-fullname" class="edit-input" value="${comp}" style="border:2px solid #0a84ff; background:var(--bg-color);">
+                          <input type="text" id="crm-edit-fullname" class="edit-input" value="${_esc(comp)}" style="border:2px solid #0a84ff; background:var(--bg-color);">
                       </div>
                       
                       <button type="button" style="width:100%; padding:14px; border-radius:12px; background:rgba(10,132,255,0.1); color:#0a84ff; border:1px solid rgba(10,132,255,0.3); font-weight:900; font-size:0.95em; cursor:pointer; transition:0.2s;" 
                               onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'"
-                              onclick="openColorPickerV3('${comp}')">🎨 달력 표시 색상 변경</button>
+                              onclick="openColorPickerV3(selectedCrmComp)">🎨 달력 표시 색상 변경</button>
                       
                       <div id="crm-color-picker-area" style="display:none;"></div>
 
@@ -7219,10 +7253,10 @@ if (document.readyState === "complete" || document.readyState === "interactive")
                       <div class="info-row"><span class="info-label">📝 특이사항</span><textarea id="crm-edit-etc" class="edit-input auto-expand" oninput="autoResizeTextarea(this)" rows="1" placeholder="줄바꿈은 엔터입니다">${info.etc||''}</textarea></div>
                       
                       <div style="display:flex; gap:10px; margin-top:10px;">
-                          <button class="save-btn" style="flex:2; padding:15px; font-weight:900;" onclick="saveCompEdit('${comp}')">💾 변경사항 저장</button>
+                          <button class="save-btn" style="flex:2; padding:15px; font-weight:900;" onclick="saveCompEdit(selectedCrmComp)">💾 변경사항 저장</button>
                           <button class="cancel-btn" style="flex:1; padding:15px; font-weight:800;" onclick="cancelEditMode()">취소</button>
                       </div>
-                      <button class="delete-btn" style="width:100%; margin-top:5px; padding:12px; font-size:0.9em; border:none; background:transparent; color:#ff3b30; text-decoration:underline;" onclick="deleteCompInfo('${comp}')">🗑️ 이 업체 정보 완전히 삭제</button>
+                      <button class="delete-btn" style="width:100%; margin-top:5px; padding:12px; font-size:0.9em; border:none; background:transparent; color:#ff3b30; text-decoration:underline;" onclick="deleteCompInfo(selectedCrmComp)">🗑️ 이 업체 정보 완전히 삭제</button>
                   </div>
               </div>
           `;
@@ -7272,6 +7306,10 @@ if (document.readyState === "complete" || document.readyState === "interactive")
 
           // 이름이 바뀌었다면 이사 처리
           if (oldCompName !== newCompName) {
+              if (compInfoDB[newCompName]) {
+                  showToast(`⚠️ [${newCompName}]은(는) 이미 등록된 업체명입니다.`, 2500);
+                  return;
+              }
               if (confirm(`업체 명칭을 [${oldCompName}]에서 [${newCompName}]으로 변경하시겠습니까?`)) {
                   delete compInfoDB[oldCompName];
                   
@@ -7311,7 +7349,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       }
 
       function deleteCompInfo(comp) {
-          if (!confirm(`⚠️ 정말 [${comp}] 업체의 CRM 정보를 삭제하시겠습니까?\n\n※ 주의: 하드코딩된 기본 업체라면 알약 및 추가 정보만 '초기화'되며 리스트에서 지워지지 않습니다.`)) return;
+          if (!confirm(`⚠️ 정말 [${comp}] 업체를 목록에서 완전히 삭제하시겠습니까?\n\n※ 이미 등록된 달력 일정에는 영향을 주지 않습니다.`)) return;
           delete compInfoDB[comp];
           localStorage.setItem('COMP_INFO_DB', JSON.stringify(compInfoDB));
           apiCall({ source: 'vercel', action: 'SAVE_COMP_INFO_DB', data: compInfoDB });
@@ -7402,8 +7440,8 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           container.style.display = 'block';
 
           // 1. 색상 사용 현황 수집
-          let usedColorMap = {}; 
-          let allComps = Array.from(new Set([...fixedCompanies, ...Object.keys(compInfoDB)]));
+          let usedColorMap = {};
+          let allComps = Object.keys(compInfoDB);
           
           allComps.forEach(c => {
               if (c === stdName) return; 
