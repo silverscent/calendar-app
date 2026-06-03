@@ -1990,23 +1990,20 @@ body.light-mode .ai-ans-bubble {
           }
 
           // 2. 그 뒤에 백그라운드에서 최신 데이터를 긁어와서 캐시 업데이트
-          if (!google || !google.script) return;
-          google.script.run.withSuccessHandler(res => {
+          apiCall({ source: 'vercel', action: 'GET_YEARLY_HOLIDAYS', year: year }).then(res => {
               if (res && Array.isArray(res)) {
                   const newHolidays = {};
                   res.forEach(item => {
                       if (typeof item === 'object') newHolidays[item.date] = item.name;
                       else newHolidays[item] = true;
                   });
-                  
-                  // 캐시와 다르면 업데이트 후 다시 그리기
                   if (JSON.stringify(newHolidays) !== cached) {
                       localStorage.setItem(cacheKey, JSON.stringify(newHolidays));
                       Object.assign(window.yearlyHolidays, newHolidays);
                       if (typeof renderCalendar === 'function') renderCalendar();
                   }
               }
-          }).getYearlyHolidays(year);
+          });
       }
 
       // 💡 [추가] 공휴일 이름 표시 ON/OFF 상태 (기본값 ON)
@@ -2275,18 +2272,16 @@ body.light-mode .ai-ans-bubble {
         window.currentNavId = (window.currentNavId || 0) + 1;
         let myNavId = window.currentNavId;
         let fetchStartTime = Date.now();
-        // ... (아래 google.script.run 부분은 기존 그대로 유지) ...
-        google.script.run.withSuccessHandler(res => {
-          // 🚨 [핵심 방어막] 달력을 연타해서 빠르게 넘기면, 가장 마지막 달력만 진짜로 인정!
-          if (myNavId !== window.currentNavId) return; 
-          
-          if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return; 
-          
+        apiGet({ type: currentType, year: safeYear, month: safeMonth }).then(res => {
+          if (res === null) return;
+          if (myNavId !== window.currentNavId) return;
+          if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return;
+
           res.year = safeYear;
           res.month = safeMonth;
           res.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
           res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
-          
+
           const getScheduleSig = (dataObj) => {
             if (!dataObj) return "";
             const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
@@ -2298,16 +2293,9 @@ body.light-mode .ai-ans-bubble {
             return sigs.sort().join("||");
           };
           let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
-
-          localStorage.setItem(cacheKey, JSON.stringify(res)); 
-          
-          // 💡 [수정완료] 없는 변수(isHolidayChanged)를 호출하던 버그 삭제!
-          if (isScheduleChanged) {
-            serverData = res;
-            renderCalendar();
-          }
-        }).withFailureHandler(err => {
-        }).getCalendarDataAsync(currentType, safeYear, safeMonth);
+          localStorage.setItem(cacheKey, JSON.stringify(res));
+          if (isScheduleChanged) { serverData = res; renderCalendar(); }
+        });
       }
 
       // 🚀 [스텔스 연간 동기화 매니저] (연속 클릭 시 서버 과부하/멈춤 완벽 방어)
@@ -2316,19 +2304,16 @@ body.light-mode .ai-ans-bubble {
           if (stealthYearlyTimer) clearTimeout(stealthYearlyTimer);
           
           stealthYearlyTimer = setTimeout(() => {
-              google.script.run.withSuccessHandler(res => {
+              apiGet({ action: 'yearlyStats', type: currentType, year: targetYear }).then(res => {
                   if (res && res.year) {
-                      yearlyCache[res.year] = res; // 단기 기억 갱신
-                      localStorage.setItem(`yearly_stats_cache_${currentType}_${res.year}`, JSON.stringify(res)); // 창고 갱신
-                      
-                      // 대시보드 연간 탭을 보고 있다면 화면 스르륵 갱신
-                      if (document.getElementById('dashboardModal').style.display === 'flex' && 
-                          window.dashMode === 'year' && 
-                          window.dashYear === res.year) {
+                      yearlyCache[res.year] = res;
+                      localStorage.setItem(`yearly_stats_cache_${currentType}_${res.year}`, JSON.stringify(res));
+                      if (document.getElementById('dashboardModal').style.display === 'flex' &&
+                          window.dashMode === 'year' && window.dashYear === res.year) {
                           renderDashCharts();
                       }
                   }
-              }).withFailureHandler(() => {}).getYearlyStatsAsync(currentType, targetYear);
+              });
           }, 1500); 
       }
 
@@ -2616,22 +2601,18 @@ function bindBioAuthEvents() {
                     (async function() {
                         
 
-                        if (typeof google !== 'undefined' && google.script && google.script.run) {
-                            google.script.run.withSuccessHandler(function(res) {
-                                if (res.success) {
-                                    localStorage.setItem('bio_registered', 'true');
-                                    localStorage.setItem('bio_id', adminId);
-                                    localStorage.setItem('bio_pw', adminPw); 
-                                    showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
-                                    if (pwInput) pwInput.value = "";
-                                } else {
-                                    alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.\n(※ 기기에 방금 저장된 패스키는 무효 처리되므로 삭제 권장)");
-                                    const toggle = document.getElementById('toggleBioAuth');
-                                    if (toggle) toggle.checked = false;
-                                }
-                            }).login(adminId, adminPw);
+                        const res = await apiCall({ source: 'vercel', action: 'LOGIN', data: { id: adminId, pw: adminPw } });
+                        if (res === null) { showToast("⚠️ 서버 연결에 실패했습니다.", 2500); return; }
+                        if (res.success) {
+                            localStorage.setItem('bio_registered', 'true');
+                            localStorage.setItem('bio_id', adminId);
+                            localStorage.setItem('bio_pw', adminPw);
+                            showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
+                            if (pwInput) pwInput.value = "";
                         } else {
-                            showToast("⚠️ 시스템 연결에 실패했습니다. (외부 도메인 환경)", 2500);
+                            alert("비밀번호가 일치하지 않습니다. 등록이 취소됩니다.\n(※ 기기에 방금 저장된 패스키는 무효 처리되므로 삭제 권장)");
+                            const toggle = document.getElementById('toggleBioAuth');
+                            if (toggle) toggle.checked = false;
                         }
                     })();
                 })
@@ -2933,11 +2914,10 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             newDate: newDateStr, newBL: item.bl, newPal: item.pal, newSType: item.sType, newFwd: item.fwd, newInvoice: item.invoice, newEtc: item.etc 
         };
         updateLocalState('EDIT', payload, idx); renderCalendar(); 
-        google.script.run.withSuccessHandler(res => {
-          if(!res.success) { showToast('❌ 서버 저장 실패! 데이터를 다시 불러옵니다.', 2000); goToAsync(serverData.year, serverData.month); }
-        }).withFailureHandler(err => {
-          showToast('❌ 통신 오류! 데이터를 다시 불러옵니다.', 2000); goToAsync(serverData.year, serverData.month);
-        }).manageWebInboundData('EDIT', payload, adminToken);
+        apiCall({ source: 'vercel', domain: 'in', action: 'EDIT', data: payload, token: adminToken, admin_id: localStorage.getItem('admin_id') })
+        .then(res => {
+          if (res === null || !res.success) { showToast('❌ 서버 저장 실패! 데이터를 다시 불러옵니다.', 2000); goToAsync(serverData.year, serverData.month); }
+        });
       }
 
       function handleItemClick(e, day, idx, bl, isDone) {
@@ -2994,11 +2974,10 @@ if (document.readyState === "complete" || document.readyState === "interactive")
         setTimeout(() => {
             updateLocalState(action, payload, idx);
             renderCalendar();
-            google.script.run.withSuccessHandler(function(res) {
-                if(!res.success) { showToast('❌ 서버 실패! 원상복구합니다.', 2500); goToAsync(serverData.year, serverData.month); }
-            }).withFailureHandler(err => {
-                showToast('❌ 통신 오류! 원상복구합니다.', 2500); goToAsync(serverData.year, serverData.month);
-            }).manageWebInboundData(action, payload, adminToken);
+            apiCall({ source: 'vercel', domain: 'in', action: action, data: payload, token: adminToken, admin_id: localStorage.getItem('admin_id') })
+            .then(function(res) {
+                if (res === null || !res.success) { showToast('❌ 서버 실패! 원상복구합니다.', 2500); goToAsync(serverData.year, serverData.month); }
+            });
         }, 50);
       }
 
@@ -3011,10 +2990,11 @@ if (document.readyState === "complete" || document.readyState === "interactive")
         toggleMultiMode();
         setTimeout(() => {
             updateMultiLocalState(action, itemsToProcess); renderCalendar();
-            google.script.run.withSuccessHandler(function(res) {
-                if(res.success) { showToast(`✅ 다중 ${actionName} 완료!`, 2500); }
-                else { showToast('❌ 작업 실패! 복구합니다.', 2500); goToAsync(serverData.year, serverData.month); }
-            }).manageWebInboundData(action, { items: itemsToProcess }, adminToken);
+            apiCall({ source: 'vercel', domain: 'in', action: action, data: { items: itemsToProcess }, token: adminToken, admin_id: localStorage.getItem('admin_id') })
+            .then(function(res) {
+                if (res === null || !res.success) { showToast('❌ 작업 실패! 복구합니다.', 2500); goToAsync(serverData.year, serverData.month); }
+                else { showToast(`✅ 다중 ${actionName} 완료!`, 2500); }
+            });
         }, 50);
       }
 
@@ -3131,7 +3111,8 @@ function showLastOcrImage() {
     document.getElementById('ocrImageContent').innerHTML = '불러오는 중... ⏳';
     ocrTransform = { scale: 1, x: 0, y: 0 }; 
 
-    google.script.run.withSuccessHandler(function(res) {
+    apiCall({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_IMAGE' }).then(function(res) {
+        if (res === null) { document.getElementById('ocrImageContent').innerHTML = '이미지 로딩 에러'; return; }
         let url = (res && res.url) ? res.url : (typeof res === 'string' ? res : "");
         if (url && url.startsWith("http")) {
             
@@ -3168,9 +3149,7 @@ function showLastOcrImage() {
         } else {
             document.getElementById('ocrImageContent').innerHTML = '<div style="color:var(--text-sub); font-weight:800;">현재 서버에 등록된 최신 이미지가 없습니다.</div>';
         }
-    }).withFailureHandler(function(err) {
-        document.getElementById('ocrImageContent').innerHTML = '이미지 로딩 에러: ' + err.message;
-    }).getLastOcrImageUrl();
+    });
 }
 
 function loadOcrVerificationData(btnElement) {
@@ -3190,9 +3169,9 @@ function loadOcrVerificationData(btnElement) {
     btnElement.disabled = true;
 
    // 💡 핵심: 서버에서 데이터를 받아오는 함수를 직접 호출합니다.
-google.script.run
-    .withSuccessHandler(function(data) {
-        // 🔥 1. 데이터가 있는지 확인 (객체 내부의 parsedData 배열을 검사하도록 수정)
+apiCall({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_DATA' }).then(function(data) {
+        if (data === null) { btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기'; btnElement.disabled = false; return; }
+        // 🔥 1. 데이터가 있는지 확인
         if (!data || !data.parsedData || (Array.isArray(data.parsedData) && data.parsedData.length === 0)) {
             alert("⚠️ 저장된 파싱 데이터가 없습니다.");
             btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
@@ -3244,13 +3223,7 @@ google.script.run
         tableHtml += `</tbody></table>`;
         container.innerHTML = tableHtml;
         container.style.display = 'block';
-    })
-    .withFailureHandler(function(err) {
-        btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
-        btnElement.disabled = false;
-        alert("서버 연결 실패: " + err.message);
-    })
-    .getLastOcrData();
+    });
 }
 
       function initOcrGestures() {
@@ -3392,19 +3365,16 @@ google.script.run
         const reqMonth = serverData.month;
         const reqNavId = window.currentNavId;
         
-        google.script.run
-          .withSuccessHandler((res) => {
-            // 🚨 [핵심 2] 심부름이 끝났는데, 그사이에 유저가 달력을 넘겼다? -> 쿨하게 데이터 폐기!
+        apiGet({ type: currentType, year: reqYear, month: reqMonth }).then(res => {
+            if (res === null) return;
             if (reqYear !== serverData.year || reqMonth !== serverData.month || reqNavId !== window.currentNavId) return;
-            
             if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
-            
+
             res.year = reqYear;
             res.month = reqMonth;
             res.firstDay = new Date(reqYear, reqMonth - 1, 1).getDay();
             res.daysInMonth = new Date(reqYear, reqMonth, 0).getDate();
 
-            // 💡 입고(bl)/출고(company) 모두 완벽 호환되는 지문 대조기
             const getScheduleSig = (dataObj) => {
               if (!dataObj) return "";
               const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
@@ -3416,20 +3386,14 @@ google.script.run
               return sigs.sort().join("||");
             };
             let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
-            
             if (isScheduleChanged) {
               serverData = res;
-              // 🚨 [핵심 3] 캐시도 박제해둔 연/월(reqYear, reqMonth)에만 안전하게 덮어씁니다.
-              localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res)); 
+              localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res));
               renderCalendar();
-              if (isScheduleChanged) {
-                  showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
-              }
+              showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
             }
             updateSyncTime();
-          })
-          .withFailureHandler(() => {})
-          .getCalendarDataAsync(currentType, reqYear, reqMonth);
+        });
       }
 
       // 수정
@@ -3544,21 +3508,19 @@ document.addEventListener("visibilitychange", () => {
           }
 
           // 🚀 Vercel API 백그라운드 호출 (기존 래퍼 사용)
-          google.script.run.withSuccessHandler(res => {
-              let finalData = typeof res === 'string' ? JSON.parse(res) : res;
-              
-              // 🚨 Vercel 서버에서 온 새 데이터 지문
-              let newSig = JSON.stringify(finalData.monthData || {}) + JSON.stringify(finalData.pendingItems || []);
-
-              // 🛡️ [스마트 방어막] 지문이 완벽히 동일하면?
-              if (oldSig === newSig) {
-                  localStorage.setItem(cacheKey, JSON.stringify(finalData)); // 캐시만 조용히 갱신
-                  let subTxt = document.getElementById('dashSubTitleText');
-                  if (subTxt) subTxt.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`; // '(조회중)' 글씨만 제거
-                  return; // ⛔ 2차 렌더링 스킵!
+          apiGet({ type: currentType, year: window.dashYear, month: window.dashMonth }).then(res => {
+              if (res === null) {
+                  if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲";
+                  return;
               }
-
-              // 지문이 다르면 정상적으로 차트를 다시 그림
+              let finalData = typeof res === 'string' ? JSON.parse(res) : res;
+              let newSig = JSON.stringify(finalData.monthData || {}) + JSON.stringify(finalData.pendingItems || []);
+              if (oldSig === newSig) {
+                  localStorage.setItem(cacheKey, JSON.stringify(finalData));
+                  let subTxt = document.getElementById('dashSubTitleText');
+                  if (subTxt) subTxt.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
+                  return;
+              }
               window.dashCurrentData = finalData;
               localStorage.setItem(cacheKey, JSON.stringify(finalData));
               if (window.dashMode === 'month') {
@@ -3566,9 +3528,7 @@ document.addEventListener("visibilitychange", () => {
                   if (subTxt) subTxt.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
                   renderDashCharts();
               }
-          }).withFailureHandler(err => { 
-              if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; 
-          }).getCalendarDataAsync(currentType, window.dashYear, window.dashMonth);
+          });
       }
 
       function fetchYearlyAndRender() {
@@ -3598,27 +3558,27 @@ document.addEventListener("visibilitychange", () => {
           }
 
           // 🚀 Vercel API 백그라운드 호출
-          google.script.run.withSuccessHandler(res => {
+          apiGet({ action: 'yearlyStats', type: currentType, year: window.dashYearlyYear }).then(res => {
+              if (res === null) {
+                  if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲";
+                  return;
+              }
               let newSig = JSON.stringify(res.monthly || []) + JSON.stringify(res.comp || {});
-
               if (oldSig === newSig) {
-                  yearlyCache[res.year] = res; 
-                  localStorage.setItem(cacheKey, JSON.stringify(res)); 
+                  yearlyCache[res.year] = res;
+                  localStorage.setItem(cacheKey, JSON.stringify(res));
                   let subTxt = document.getElementById('dashSubTitleText');
                   if (subTxt) subTxt.innerText = `${window.dashYearlyYear}년 연간 요약`;
-                  return; // ⛔ 차트 2차 렌더링 스킵!
+                  return;
               }
-
-              yearlyCache[res.year] = res; 
-              localStorage.setItem(cacheKey, JSON.stringify(res)); 
+              yearlyCache[res.year] = res;
+              localStorage.setItem(cacheKey, JSON.stringify(res));
               if (window.dashMode === 'year' && window.dashYearlyYear === res.year) {
                   let subTxt = document.getElementById('dashSubTitleText');
                   if (subTxt) subTxt.innerText = `${window.dashYearlyYear}년 연간 요약`;
                   renderDashCharts();
               }
-          }).withFailureHandler(err => { 
-              if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲"; 
-          }).getYearlyStatsAsync(currentType, window.dashYearlyYear);
+          });
       }
 
       // 1. 도넛 가운데에 정보 띄우기 플러그인 유지
@@ -4194,28 +4154,27 @@ document.addEventListener("visibilitychange", () => {
         let fetchStartTime = Date.now();
 
         // 💡 OCR 통신도 백그라운드로 안전하게 요청
-        google.script.run.withSuccessHandler(function(res) {
+        apiCall({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }).then(function(res) {
+            if (res === null) return;
             let timeStr = (res && res.time) ? res.time : (typeof res === 'string' ? res : "최근 처리내역 없음");
             const el = document.getElementById('ocrTimeText');
             if(el) el.innerText = timeStr;
-        }).getOcrLastTimeStr();
+        });
 
         // 💡 입고 데이터 백그라운드 동기화
-        google.script.run.withSuccessHandler(function(newData) {
-            if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return; 
-            
+        apiGet({ type: currentType, year: currentYear, month: currentMonth }).then(function(newData) {
+            if (newData === null) return;
+            if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return;
+
             newData.year = currentYear;
             newData.month = currentMonth;
             newData.firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
             newData.daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-            
-            localStorage.setItem(cacheKey, JSON.stringify(newData)); 
-            
+            localStorage.setItem(cacheKey, JSON.stringify(newData));
             if (serverData.year === currentYear && serverData.month === currentMonth) {
-                serverData = newData;
-                renderCalendar(); 
+                serverData = newData; renderCalendar();
             }
-        }).getCalendarDataAsync(currentType, currentYear, currentMonth);
+        });
         // 💡 [최종 위치] AI FAB 관리자 권한 확인 및 노출
         if (typeof showAiFabIfAdmin === 'function') {
             showAiFabIfAdmin();
@@ -4253,58 +4212,34 @@ async function handleLogin() {
 
    
 
-    google.script.run.withSuccessHandler(function(res) {
-        if (loginBtn) {
-            loginBtn.innerHTML = originalBtnText;
-            loginBtn.style.pointerEvents = 'auto';
-            loginBtn.style.opacity = '1';
-        }
+    apiCall({ source: 'vercel', action: 'LOGIN', data: { id, pw } }).then(function(res) {
+        if (loginBtn) { loginBtn.innerHTML = originalBtnText; loginBtn.style.pointerEvents = 'auto'; loginBtn.style.opacity = '1'; }
+        if (res === null) { showToast(`❌ 통신 오류가 발생했습니다.`, 2500); return; }
 
         if (res.success) {
-    window.isAdmin = true; isAdmin = true; 
-    saveAuthData(res.admin_id, res.role, true); // 👈 🚨 통합 헬퍼로 변경!
-    // ... 이하 동일
+            window.isAdmin = true; isAdmin = true;
+            saveAuthData(res.admin_id, res.role, true);
 
             const btn = document.getElementById("adminBtn");
-            if (btn) {
-                btn.innerHTML = '🔓 관리자';
-                btn.className = 'admin-btn unlocked'; 
-                btn.removeAttribute("style"); 
-            }
+            if (btn) { btn.innerHTML = '🔓 관리자'; btn.className = 'admin-btn unlocked'; btn.removeAttribute("style"); }
 
             const actions = document.getElementById('adminActions');
             if (actions) actions.style.display = 'flex';
-            
+
             const fab = document.getElementById("fabBtn");
             if (fab) fab.style.display = "flex";
 
             document.getElementById('adminLoginModal').style.display = 'none';
             showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
-            if (typeof renderCalendar === 'function') renderCalendar(); 
+            if (typeof renderCalendar === 'function') renderCalendar();
             if (typeof updateFooterUI === 'function') updateFooterUI();
-            // handleLogin() 및 handleBioLogin() 함수 내 res.success 블록 하단에 각각 추가
-              if (typeof checkMasterAuthButtonVisibility === 'function') {
-                  checkMasterAuthButtonVisibility();
-              }
-
-              // 👇 🤖 AI 버튼 표시 함수 추가 (바로 요기!) 👇
-            if (typeof showAiFabIfAdmin === 'function') {
-                showAiFabIfAdmin();
-            }
-            // 👆 ------------------------------------- 👆
-
+            if (typeof checkMasterAuthButtonVisibility === 'function') checkMasterAuthButtonVisibility();
+            if (typeof showAiFabIfAdmin === 'function') showAiFabIfAdmin();
             idElem.value = ''; pwElem.value = '';
         } else {
             showToast(`❌ ${res.msg}`, 2500);
         }
-    }).withFailureHandler(function(err) {
-        if (loginBtn) {
-            loginBtn.innerHTML = originalBtnText;
-            loginBtn.style.pointerEvents = 'auto';
-            loginBtn.style.opacity = '1';
-        }
-        showToast(`❌ 통신 오류가 발생했습니다.`, 2500);
-    }).login(id, pw); // 🛡️ 평문 대신 암호화된 텍스트 전송!
+    });
 }
 
 // =====================================================
@@ -4438,33 +4373,28 @@ async function handleLogin() {
                       document.getElementById('adminLoginModal').style.display = 'none';
                       showToast("🔒 생체 인증 성공! 서버 확인 중...", 0);
                       
-                      google.script.run.withSuccessHandler(function(res) {
-                          if (res.success) {
-    window.isAdmin = true; isAdmin = true; 
-    saveAuthData(res.admin_id, res.role, true); // 👈 🚨 통합 헬퍼로 변경!
-    // ... 이하 동일
-                              
-                              const btn = document.getElementById("adminBtn");
-                              if (btn) { btn.innerHTML = '🔓 관리자'; btn.className = 'admin-btn unlocked'; btn.removeAttribute("style"); }
-                              
-                              const actions = document.getElementById('adminActions');
-                              if (actions) actions.style.display = 'flex';
-                              const fab = document.getElementById("fabBtn");
-                              if (fab) fab.style.display = "flex";
-                              
-                              showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
-                              if (typeof renderCalendar === 'function') renderCalendar(); 
-                              if (typeof updateFooterUI === 'function') updateFooterUI();
-                              // 👇 🤖 AI 버튼 표시 함수 추가 (바로 요기!) 👇
-            if (typeof showAiFabIfAdmin === 'function') {
-                showAiFabIfAdmin();
-            }
-            // 👆 ------------------------------------- 👆
-                          } else {
+                      apiCall({ source: 'vercel', action: 'LOGIN', data: { id: savedId, pw: savedPw } }).then(function(res) {
+                          if (res === null || !res.success) {
                               showToast("❌ 서버 인증 실패. 비밀번호가 변경되었을 수 있습니다.", 2500);
-                              openLoginModal(); 
+                              openLoginModal();
+                              return;
                           }
-                      }).login(savedId, savedPw); 
+                          window.isAdmin = true; isAdmin = true;
+                          saveAuthData(res.admin_id, res.role, true);
+
+                          const btn = document.getElementById("adminBtn");
+                          if (btn) { btn.innerHTML = '🔓 관리자'; btn.className = 'admin-btn unlocked'; btn.removeAttribute("style"); }
+
+                          const actions = document.getElementById('adminActions');
+                          if (actions) actions.style.display = 'flex';
+                          const fab = document.getElementById("fabBtn");
+                          if (fab) fab.style.display = "flex";
+
+                          showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
+                          if (typeof renderCalendar === 'function') renderCalendar();
+                          if (typeof updateFooterUI === 'function') updateFooterUI();
+                          if (typeof showAiFabIfAdmin === 'function') showAiFabIfAdmin();
+                      });
                   }
               }
           } catch (err) {
@@ -5251,17 +5181,9 @@ function copyRawOcrText() {
 // 🚀 [해결책] 페이지 로드 시 백그라운드에서 OCR 데이터를 미리 가져오는 자동 호출 수신부
 document.addEventListener("DOMContentLoaded", function() {
     setTimeout(function() {
-        if (typeof google !== 'undefined' && google.script && google.script.run) {
-            google.script.run
-                .withSuccessHandler(function(data) {
-                    if (data && data.rawData) {
-                        // 대조하기 버튼을 누르기 전에도 미리 전역 변수에 넣어둠!
-                        currentRawOcrString = data.rawData;
-                    }
-                })
-                .withFailureHandler(function(e) { console.log("초기 OCR 로딩 실패:", e); })
-                .getLastOcrData();
-        }
+        apiCall({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_DATA' }).then(function(data) {
+            if (data && data.rawData) currentRawOcrString = data.rawData;
+        });
     }, 1000); // 안전하게 1초 뒤 백그라운드 자동 실행
 });
 
