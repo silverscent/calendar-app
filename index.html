@@ -3671,7 +3671,7 @@ document.addEventListener("visibilitychange", () => {
         return true; // 며칠 이어지는 간트차트 작업만 슬림하게!
       };
 
-      function renderCalendar() {
+      function computeGanttSlots() {
         
         // 🚀 [무적의 통합 엔진] 이전 렌더링 찌꺼기를 완벽히 지우고, 사용자의 배열 순서를 절대 존중!
         serverData.customOrderFlags = serverData.customOrderFlags || {};
@@ -3772,14 +3772,6 @@ document.addEventListener("visibilitychange", () => {
           });
         }
 
-        document.getElementById("calTitle").innerText = `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2, "0")}`;
-        const grid = document.getElementById("calendarGrid");
-        let rowHtml = '<div class="grid-row">'; let cellCount = 0;
-        for (let i = 0; i < serverData.firstDay; i++) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
-
-        const isThisMonthView = serverData.year === todayDateObj.getFullYear() && serverData.month === todayDateObj.getMonth() + 1;
-        const todayDayNumber = todayDateObj.getDate();
-
        // 🚨 [출고 지능형 가변 높이 엔진 V4] - 초밀착 정렬형
         let weekHeights = {};
         let savedSize = localStorage.getItem('cal_fontSize') || 'M';
@@ -3804,6 +3796,42 @@ document.addEventListener("visibilitychange", () => {
                 }
             }
         }
+
+        return { weekSlotHeights, weekHeights };
+      }
+
+      function renderPending() {
+        if (serverData.pendingItems && serverData.pendingItems.length > 0) {
+          document.getElementById("pendingSection").style.display = "block";
+          document.getElementById("pendingCount").innerText = `(${serverData.pendingItems.length}건)`;
+          let pListHtml = "";
+          serverData.pendingItems.forEach((item, idx) => {
+            let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi,"").trim() : "";
+            let etcTag = meaningfulEtc !== "" ? `<div class="pending-etc">${meaningfulEtc}</div>` : "";
+            let isItemDone = item.isDone === true || String(item.isDone) === "true";
+            let cleanComp = item.company.replace(/\[TASK\]/gi, "").trim();
+            let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.company}', ${isItemDone})"`;
+            let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : "";
+            let pCount = parseInt(item.pal) || 0; let bCount = parseInt(item.box) || 0;
+            let qtyText = ""; if (pCount > 0) qtyText = `📦 ${pCount}P`; else if (bCount > 0) qtyText = `📦 ${bCount}B`;
+            let volHtml = qtyText ? `<div class="pending-vol">${qtyText}</div>` : `<div class="pending-vol"></div>`;
+            let colorObj = getCompanyColor(cleanComp);
+            let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${colorObj.bg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
+            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${getFullName(cleanComp)}</div>${volHtml}${etcTag}</div></div>`;
+          });
+          document.getElementById("pendingList").innerHTML = pListHtml;
+        } else { document.getElementById("pendingSection").style.display = "none"; }
+      }
+
+      function renderCalendar() {
+        const { weekSlotHeights, weekHeights } = computeGanttSlots();
+
+        document.getElementById("calTitle").innerText = `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2, "0")}`;
+        const grid = document.getElementById("calendarGrid");
+        let rowHtml = '<div class="grid-row">'; let cellCount = 0;
+        for (let i = 0; i < serverData.firstDay; i++) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
+        const isThisMonthView = serverData.year === todayDateObj.getFullYear() && serverData.month === todayDateObj.getMonth() + 1;
+        const todayDayNumber = todayDateObj.getDate();
 
         for (let day = 1; day <= serverData.daysInMonth; day++) {
           if (cellCount > 0 && cellCount % 7 === 0) rowHtml += '</div><div class="grid-row">';
@@ -3955,26 +3983,7 @@ document.addEventListener("visibilitychange", () => {
 
         
         // ... (나머지 대기열 그리는 부분은 기존과 완벽히 동일합니다!)
-        if (serverData.pendingItems && serverData.pendingItems.length > 0) {
-          document.getElementById("pendingSection").style.display = "block";
-          document.getElementById("pendingCount").innerText = `(${serverData.pendingItems.length}건)`;
-          let pListHtml = "";
-          serverData.pendingItems.forEach((item, idx) => {
-            let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi,"").trim() : "";
-            let etcTag = meaningfulEtc !== "" ? `<div class="pending-etc">${meaningfulEtc}</div>` : "";
-            let isItemDone = item.isDone === true || String(item.isDone) === "true";
-            let cleanComp = item.company.replace(/\[TASK\]/gi, "").trim();
-            let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.company}', ${isItemDone})"`;
-            let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : "";
-            let pCount = parseInt(item.pal) || 0; let bCount = parseInt(item.box) || 0;
-            let qtyText = ""; if (pCount > 0) qtyText = `📦 ${pCount}P`; else if (bCount > 0) qtyText = `📦 ${bCount}B`;
-            let volHtml = qtyText ? `<div class="pending-vol">${qtyText}</div>` : `<div class="pending-vol"></div>`;
-            let colorObj = getCompanyColor(cleanComp);
-            let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${colorObj.bg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
-            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${getFullName(cleanComp)}</div>${volHtml}${etcTag}</div></div>`;
-          });
-          document.getElementById("pendingList").innerHTML = pListHtml;
-        } else { document.getElementById("pendingSection").style.display = "none"; }
+        renderPending();
         if (isAdmin) { if (!isMultiMode) document.getElementById("fabBtn").style.display = "flex"; }
         updateSyncTime();
         // 🚨 [추가] 달력을 다 그리고 나면, 하단 통계 수치도 실시간으로 업데이트!

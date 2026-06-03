@@ -2056,7 +2056,7 @@ body.light-mode .ai-ans-bubble {
           }
       }
 
-      function renderCalendar() {
+      function computeWeekHeights() {
         for (let d = 1; d <= serverData.daysInMonth; d++) {
             if (serverData.monthData[d]) { serverData.monthData[d].forEach((item, idx) => { item._rawIdx = idx; }); }
         }
@@ -2086,6 +2086,45 @@ body.light-mode .ai-ans-bubble {
                 }
             }
         }
+
+        return weekHeights;
+      }
+
+      function renderPending() {
+        // 💡 [수정] 미정건 전역 상태 유지 로직 확실하게 고정
+        if (serverData.pendingItems && serverData.pendingItems.length > 0) { 
+            window.globalPendingItems = serverData.pendingItems; 
+        } else if (window.globalPendingItems && window.globalPendingItems.length > 0) {
+            serverData.pendingItems = window.globalPendingItems;
+        }
+        let currentPending = serverData.pendingItems || [];
+
+        if (currentPending.length > 0) {
+          document.getElementById('pendingSection').style.display = 'block';
+          document.getElementById('pendingCount').innerText = `(${currentPending.length}건)`;
+          let pListHtml = "";
+          currentPending.forEach((item, idx) => {
+            let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
+            let etcTag = meaningfulEtc !== '' ? `<div class="pending-etc">${meaningfulEtc}</div>` : '';
+            let isItemDone = item.isDone === true || String(item.isDone) === "true";
+            let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.bl}', ${isItemDone})"`;
+            let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : '';
+            
+            let isPendingAir = item.sType === 'AIR';
+            let pendingPastelBg = isPendingAir ? '#ff7eff' : '#26e2fd';
+            let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${pendingPastelBg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
+
+            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${item.bl}</div><div class="pending-vol">📦 ${item.pal}P (${item.sType})</div>${etcTag}</div></div>`;
+          });
+          document.getElementById('pendingList').innerHTML = pListHtml;
+        } else { document.getElementById('pendingSection').style.display = 'none'; }
+      }
+
+      function renderCalendar() {
+        for (let d = 1; d <= serverData.daysInMonth; d++) {
+            if (serverData.monthData[d]) { serverData.monthData[d].forEach((item, idx) => { item._rawIdx = idx; }); }
+        }
+        const weekHeights = computeWeekHeights();
 
         document.getElementById('calTitle').innerText = `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2,'0')}`;
         const grid = document.getElementById('calendarGrid');
@@ -2174,33 +2213,7 @@ body.light-mode .ai-ans-bubble {
         while(cellCount % 7 !== 0) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
         rowHtml += '</div>'; grid.innerHTML = rowHtml;
         
-        // 💡 [수정] 미정건 전역 상태 유지 로직 확실하게 고정
-        if (serverData.pendingItems && serverData.pendingItems.length > 0) { 
-            window.globalPendingItems = serverData.pendingItems; 
-        } else if (window.globalPendingItems && window.globalPendingItems.length > 0) {
-            serverData.pendingItems = window.globalPendingItems;
-        }
-        let currentPending = serverData.pendingItems || [];
-
-        if (currentPending.length > 0) {
-          document.getElementById('pendingSection').style.display = 'block';
-          document.getElementById('pendingCount').innerText = `(${currentPending.length}건)`;
-          let pListHtml = "";
-          currentPending.forEach((item, idx) => {
-            let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
-            let etcTag = meaningfulEtc !== '' ? `<div class="pending-etc">${meaningfulEtc}</div>` : '';
-            let isItemDone = item.isDone === true || String(item.isDone) === "true";
-            let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.bl}', ${isItemDone})"`;
-            let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : '';
-            
-            let isPendingAir = item.sType === 'AIR';
-            let pendingPastelBg = isPendingAir ? '#ff7eff' : '#26e2fd';
-            let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${pendingPastelBg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
-
-            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${item.bl}</div><div class="pending-vol">📦 ${item.pal}P (${item.sType})</div>${etcTag}</div></div>`;
-          });
-          document.getElementById('pendingList').innerHTML = pListHtml;
-        } else { document.getElementById('pendingSection').style.display = 'none'; }
+        renderPending();
         
         updateStatsSummary(); updateSyncTime();
       }
