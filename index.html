@@ -1382,10 +1382,20 @@
         margin: 0 !important;
       }
       /* ===================================================== */
-      /* 💡 [수정] 드래그 깜빡임 차단! 확실하고 직관적인 네온 두꺼운 선 표시 */
-      .item-tag { transition: background 0.15s, opacity 0.15s !important; }
-      .insert-line-top { border-top: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
-      .insert-line-bottom { border-bottom: 5px solid #0a84ff !important; border-radius: 0 !important; filter: brightness(0.9); }
+      /* 💡 드래그 시 드롭 위치에 갭이 벌어지며 들어갈 자리를 직관적으로 표시 */
+      .item-tag { transition: background 0.15s, opacity 0.15s, margin 0.18s ease-out !important; }
+      .insert-line-top { position: relative; margin-top: 34px !important; }
+      .insert-line-top::before {
+        content: ""; position: absolute; left: 0; right: 0; top: -31px; height: 27px;
+        border: 2px dashed #0a84ff; border-radius: 8px; background: rgba(10,132,255,0.12);
+        box-sizing: border-box; pointer-events: none;
+      }
+      .insert-line-bottom { position: relative; margin-bottom: 34px !important; }
+      .insert-line-bottom::before {
+        content: ""; position: absolute; left: 0; right: 0; bottom: -31px; height: 27px;
+        border: 2px dashed #0a84ff; border-radius: 8px; background: rgba(10,132,255,0.12);
+        box-sizing: border-box; pointer-events: none;
+      }
       .day-cell.drag-over { background: rgba(10, 132, 255, 0.1) !important; outline: 3px dashed #0a84ff !important; outline-offset: -3px; z-index: 10; }
       #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
       #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
@@ -4715,6 +4725,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       let dragOffsetX = 0, dragOffsetY = 0;
       let dragReq = null;
       let lastDropTarget = null;
+      let _lastInsertPos = null; // 'top' | 'bottom' | 'cell'
 
       function startPress(e, type, day, idx = null) {
         if (!isAdmin || isMultiMode) return;
@@ -4797,24 +4808,57 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             let dropElement = document.elementFromPoint(x, y);
             let targetCell = dropElement ? dropElement.closest(".day-cell:not(.empty)") : null;
             let targetItem = dropElement ? dropElement.closest(".item-tag") : null;
+            if (targetItem === pressTarget) targetItem = null; // 자기 자신 제외
 
+            // 셀 안의 '보이는' 아이템 목록 (자기 자신·투명 placeholder 제외)
+            let visItems = targetCell ? Array.from(targetCell.querySelectorAll('.item-tag')).filter(el =>
+                el !== pressTarget && el.style.pointerEvents !== 'none' && el.style.opacity !== '0') : [];
+            let lastItem = visItems.length ? visItems[visItems.length - 1] : null;
+            let belowAll = lastItem && y > lastItem.getBoundingClientRect().bottom;
+
+            // 🛡️ [떨림 방지] 벌어진 갭(빈 자리) 위에 있으면 직전 결정을 그대로 유지
+            // (단, 마지막 아이템보다 아래에 있을 땐 sticky 무시하고 맨끝 처리)
+            if (!belowAll && !targetItem && lastDropTarget && lastDropTarget.classList &&
+                lastDropTarget.classList.contains('item-tag') &&
+                targetCell && lastDropTarget.closest('.day-cell') === targetCell) {
+              dragReq = null; return;
+            }
+
+            // 들어갈 위치(desired) 결정
+            let desiredTarget = null, desiredPos = null;
+            if (targetCell) {
+              if (belowAll) {
+                // 🟢 마지막 아이템(맨 밑 간트 등)보다 아래에 있으면 무조건 맨 끝에 삽입
+                desiredTarget = lastItem; desiredPos = 'bottom';
+              } else if (targetItem) {
+                let rect = targetItem.getBoundingClientRect();
+                let ratio = (y - rect.top) / rect.height;
+                // 중앙 0.4~0.6 구간은 기존 결정 유지(히스테리시스) → 경계 떨림 차단
+                if (ratio < 0.4) desiredPos = 'top';
+                else if (ratio > 0.6) desiredPos = 'bottom';
+                else desiredPos = (lastDropTarget === targetItem && _lastInsertPos) ? _lastInsertPos : (ratio < 0.5 ? 'top' : 'bottom');
+                desiredTarget = targetItem;
+              } else {
+                desiredTarget = targetCell; desiredPos = 'cell';
+              }
+            }
+
+            // 상태가 동일하면 DOM 안 건드림 (깜빡임 차단)
+            if (desiredTarget === lastDropTarget && desiredPos === _lastInsertPos) {
+              dragReq = null; return;
+            }
+
+            // 바뀐 경우에만 클리어 후 재적용
             document.querySelectorAll(".insert-line-top, .insert-line-bottom, .drag-over").forEach((el) => {
               el.classList.remove("insert-line-top", "insert-line-bottom", "drag-over");
             });
-
-            if (targetCell) {
-              if (targetItem && targetItem !== pressTarget) {
-                let rect = targetItem.getBoundingClientRect();
-                if (y < rect.top + rect.height / 2) targetItem.classList.add("insert-line-top");
-                else targetItem.classList.add("insert-line-bottom");
-                lastDropTarget = targetItem;
-              } else {
-                targetCell.classList.add("drag-over");
-                lastDropTarget = targetCell;
-              }
-            } else {
-              lastDropTarget = null;
+            if (desiredTarget) {
+              if (desiredPos === 'top') desiredTarget.classList.add("insert-line-top");
+              else if (desiredPos === 'bottom') desiredTarget.classList.add("insert-line-bottom");
+              else desiredTarget.classList.add("drag-over");
             }
+            lastDropTarget = desiredTarget;
+            _lastInsertPos = desiredPos;
             dragReq = null;
           });
         }
@@ -4829,6 +4873,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       });
       
       document.addEventListener("touchend", endDrag); document.addEventListener("mouseup", endDrag);
+      document.addEventListener("touchcancel", endDrag); // 터치 취소 시 드래그 얼어붙음 방지
 
       function endDrag(e) {
         if (!isDragging) return;
@@ -4850,6 +4895,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           lastDropTarget.classList.remove("drag-over", "insert-line-top", "insert-line-bottom");
           lastDropTarget = null;
         }
+        _lastInsertPos = null;
 
         if (!hasMovedDuringDrag) return;
         // (이후 아래 로직은 기존과 동일합니다)
@@ -4866,10 +4912,17 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
 
           // 💡 [간트 & 하루일정 순서 변경 완벽 작동 로직]
-          if (newDay === dragData.day && currentDropTarget && currentDropTarget.classList.contains('item-tag')) {
-              let targetIdx = parseInt(currentDropTarget.getAttribute('data-raw-idx'));
-              if (!isNaN(targetIdx)) {
-                  let arr = serverData.monthData[dragData.day];
+          if (newDay === dragData.day && dragData.day !== "pending") {
+              let arr = serverData.monthData[dragData.day];
+              let targetIdx;
+              if (currentDropTarget && currentDropTarget.classList.contains('item-tag')) {
+                  targetIdx = parseInt(currentDropTarget.getAttribute('data-raw-idx'));
+              } else {
+                  // 같은 날 빈 공간(맨 아래 간트 밑 등)에 드롭 → 맨 끝으로 이동
+                  targetIdx = arr.length - 1;
+                  isTopInsert = false;
+              }
+              if (!isNaN(targetIdx) && arr) {
                   let movedItem = arr[dragData.idx]; 
                   let targetItem = arr[targetIdx];
                   
