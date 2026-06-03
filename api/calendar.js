@@ -147,7 +147,7 @@ module.exports = async function(req, res) {
             const endYmd = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
 
             if (type === 'out') {
-                const [monthRows] = await pool.query(`SELECT id, company, pal, box, etc, isDone, sort_idx FROM outbound WHERE outbound_date >= ? AND outbound_date < ? ORDER BY sort_idx ASC, id ASC`, [startYmd, endYmd]);
+                const [monthRows] = await pool.query(`SELECT id, company, pal, box, etc, isDone, sort_idx, outbound_date FROM outbound WHERE outbound_date >= ? AND outbound_date < ? ORDER BY sort_idx ASC, id ASC`, [startYmd, endYmd]);
                 const [pendingRows] = await pool.query(`SELECT id, company, pal, box, etc, isDone, sort_idx FROM outbound WHERE outbound_date IS NULL ORDER BY sort_idx ASC, id ASC`);
                 monthRows.forEach(row => {
                     const day = new Date(row.outbound_date).getDate();
@@ -156,7 +156,7 @@ module.exports = async function(req, res) {
                 });
                 pendingRows.forEach(row => { formattedData.pendingItems.push({ id: row.id, company: row.company, pal: row.pal, box: row.box, etc: row.etc, isDone: row.isDone === 1, sortIdx: row.sort_idx !== null ? row.sort_idx : 999 }); });
             } else {
-                const [monthRows] = await pool.query(`SELECT id, bl_number, pallets, remarks, s_type, fwd, invoice, status, is_ai_modified, sort_idx FROM inbound WHERE receive_date >= ? AND receive_date < ? ORDER BY sort_idx ASC, id ASC`, [startYmd, endYmd]);
+                const [monthRows] = await pool.query(`SELECT id, bl_number, pallets, remarks, s_type, fwd, invoice, status, is_ai_modified, sort_idx, receive_date FROM inbound WHERE receive_date >= ? AND receive_date < ? ORDER BY sort_idx ASC, id ASC`, [startYmd, endYmd]);
                 const [pendingRows] = await pool.query(`SELECT id, bl_number, pallets, remarks, s_type, fwd, invoice, status, is_ai_modified, sort_idx FROM inbound WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`);
                 monthRows.forEach(row => {
                     const day = new Date(row.receive_date).getDate();
@@ -194,17 +194,24 @@ module.exports = async function(req, res) {
             ]);
 
             if (secureActions.has(action)) {
-                // session_token 검증 (있으면 검증, 없으면 구형 클라이언트 호환을 위해 admin_id만 확인)
                 const sessionToken = payload.session_token;
+                let effectiveAdminId = admin_id;
+
                 if (sessionToken) {
                     const tokenAdmin = verifyToken(sessionToken);
-                    if (!tokenAdmin || tokenAdmin !== admin_id) {
+                    if (!tokenAdmin) {
                         return res.status(200).json({ success: false, forceLogout: true, msg: '세션이 만료되었습니다. 다시 로그인하세요.' });
                     }
+                    // admin_id가 있으면 토큰과 일치 여부 확인, 없으면 토큰에서 사용
+                    if (admin_id && tokenAdmin !== admin_id) {
+                        return res.status(200).json({ success: false, forceLogout: true, msg: '세션이 만료되었습니다. 다시 로그인하세요.' });
+                    }
+                    effectiveAdminId = tokenAdmin;
                 } else if (!admin_id) {
                     return res.status(200).json({ success: false, forceLogout: true, msg: '로그인 세션이 만료되었거나 유효하지 않습니다.' });
                 }
-                const [sessionCheck] = await pool.query("SELECT status FROM admins WHERE admin_id = ?", [admin_id]);
+
+                const [sessionCheck] = await pool.query("SELECT status FROM admins WHERE admin_id = ?", [effectiveAdminId]);
                 if (sessionCheck.length === 0 || sessionCheck[0].status === 'LOCKED') { return res.status(200).json({ success: false, forceLogout: true, msg: '관리자에 의해 계정이 비활성화되었습니다.' }); }
             }
 

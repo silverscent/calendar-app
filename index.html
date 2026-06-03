@@ -3396,6 +3396,12 @@ document.addEventListener("visibilitychange", () => {
 
         // 저장된 session_token 복원
         window._sessionToken = localStorage.getItem('session_token') || sessionStorage.getItem('session_token') || null;
+        // bio_pw → bio_token 마이그레이션 (구형 등록 정리)
+        if (localStorage.getItem('bio_pw')) {
+            localStorage.removeItem('bio_pw');
+            localStorage.removeItem('bio_registered');
+            localStorage.removeItem('bio_id');
+        }
 
         // 👇 🚨 [자동로그인 & GUEST 사이트 접속 추적기] 여기에 삽입! 👇
         let isAdm = localStorage.getItem('isAdmin') === 'true' || sessionStorage.getItem('isAdmin') === 'true';
@@ -4365,8 +4371,7 @@ document.addEventListener("visibilitychange", () => {
           } else {
               localStorage.removeItem('isAdmin'); localStorage.removeItem('admin_id'); localStorage.removeItem('admin_role'); localStorage.removeItem('session_token');
               sessionStorage.removeItem('isAdmin'); sessionStorage.removeItem('admin_id'); sessionStorage.removeItem('admin_role'); sessionStorage.removeItem('session_token');
-              // bio 토큰도 함께 정리
-              localStorage.removeItem('bio_registered'); localStorage.removeItem('bio_id'); localStorage.removeItem('bio_token');
+              // ⚠️ bio_registered/bio_id/bio_token 은 로그아웃해도 유지 (생체 재로그인용)
           }
       }
 
@@ -4467,10 +4472,13 @@ document.addEventListener("visibilitychange", () => {
               let isBioRegistered = localStorage.getItem('bio_registered') === 'true' && localStorage.getItem('bio_id') === savedId;
               document.getElementById('toggleBioAuth').checked = isBioRegistered;
               
-              let isAutoLogin = localStorage.getItem('auto_login') !== 'false'; 
+              let isAutoLogin = localStorage.getItem('auto_login') !== 'false';
               document.getElementById('toggleAutoLogin').checked = isAutoLogin;
-              
+
               document.getElementById('pwChangeFormContainer').style.display = 'none';
+
+              // 모달 열 때마다 마스터 권한 버튼 재확인 (첫 로그인 직후 표시 누락 방지)
+              if (typeof checkMasterAuthButtonVisibility === 'function') checkMasterAuthButtonVisibility();
 
               document.getElementById('myInfoModal').style.display = 'flex';
               return;
@@ -4595,6 +4603,8 @@ function bindBioAuthEvents() {
                             localStorage.setItem('bio_registered', 'true');
                             localStorage.setItem('bio_id', adminId);
                             localStorage.setItem('bio_token', res.session_token || '');
+                            const tg = document.getElementById('toggleBioAuth');
+                            if (tg) tg.checked = true;
                             showToast("✅ 생체 인증(패스키)이 기기에 안전하게 등록되었습니다.", 2500);
                             if (pwInput) pwInput.value = "";
                         } else {
