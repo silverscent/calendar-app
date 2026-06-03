@@ -1,3 +1,27 @@
+// ============================================================
+// api/calendar.js — Vercel 서버리스 API
+//
+// GET  actions: (query param) yearlyStats | 월간 달력 데이터
+// POST actions:
+//   인증:     LOGIN | PING
+//   접속로그:  LOG_SITE_ACCESS | LOG_LOGOUT
+//   관리자:   CREATE_ADMIN | DELETE_ADMIN | REACTIVATE_ADMIN | HARD_DELETE_ADMIN
+//             RESET_ADMIN_PW | CHANGE_MY_PASSWORD
+//             GET_ADMIN_LIST | GET_ADMIN_CONN_LOGS | GET_ALL_CONN_LOGS
+//   감사로그:  GET_AUDIT_LOGS
+//   DB직접:   GET_RAW_DB_ROWS | ADD_RAW_ROW_DIRECT | UPDATE_RAW_ROW_FULL
+//             UPDATE_RAW_ROW_DIRECT | DELETE_RAW_ROW_DIRECT
+//   출고:     manageWebOutboundData → ADD | EDIT | DELETE | DONE | UNDO_DONE
+//             ADD_QTY | UPDATE_ORDER | MULTI_DELETE | MULTI_DONE | MULTI_UNDO_DONE
+//   입고:     manageWebInboundData  → ADD | EDIT | DELETE | DONE | UNDO_DONE
+//             UPDATE_ORDER | MULTI_DELETE | MULTI_DONE | MULTI_UNDO_DONE
+//   설정:     GET_COMP_INFO_DB | SAVE_COMP_INFO_DB
+//             GET_GLOBAL_COLORS | SAVE_GLOBAL_COLOR
+//             GET_YEARLY_HOLIDAYS
+//   OCR:      GET_LAST_OCR_IMAGE | GET_LAST_OCR_DATA | GET_OCR_LAST_TIME
+//             SAVE_OCR_INFO | GET_OCR_FILTERS | SAVE_OCR_FILTERS
+//   AI:       AI_QUERY
+// ============================================================
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
@@ -6,6 +30,22 @@ const crypto = require('crypto');
 // 💡 [수정] DB 연결 풀을 최상단 전역 스코프로 이동 (커넥션 재사용으로 응답 속도 극대화)
 const pool = mysql.createPool(process.env.DATABASE_URL);
 
+// ── 모듈 레벨 유틸 (요청마다 재생성 방지)
+const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
+const safeDate  = (v) => (!v || v === '' || v === 'null' || v === '미정') ? null : v;
+
+function getMondayOfWeek(dateStr) {
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() - d.getDay());
+    return d.toISOString().slice(0, 10);
+}
+
+function getSaturdayOfWeek(dateStr) {
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() - d.getDay() + 6);
+    return d.toISOString().slice(0, 10);
+}
+
 module.exports = async function(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -13,29 +53,7 @@ module.exports = async function(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     try {
-        // 💡 내부의 기존 'const pool = ...' 한 줄은 지우고, pool.query 구문들은 그대로 둡니다.
 
-        // ✅ 공통 함수는 안전하게 상단에 한 번만 선언
-        const parseJSON = (val) => { try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return val; } };
-        // 🚨 [신규 안전망] DB 다이렉트 수정 시 빈칸("")이 들어오면 MySQL 에러가 나지 않도록 NULL로 변환
-        const safeDate = (v) => (!v || v === '' || v === 'null' || v === '미정') ? null : v;
-
- // 이번 주 일요일(시작) 계산
-function getMondayOfWeek(dateStr) {
-    const d = new Date(dateStr);
-    const day = d.getDay();        // 0=일요일
-    d.setDate(d.getDate() - day);  // 일요일로 이동
-    return d.toISOString().slice(0, 10);
-}
-
-// 이번 주 토요일(끝) 계산
-function getSaturdayOfWeek(dateStr) {
-    const d = new Date(dateStr);
-    const day = d.getDay();
-    d.setDate(d.getDate() - day + 6);  // 토요일로 이동
-    return d.toISOString().slice(0, 10);
-}
-        
         if (req.method === 'GET') {
             const { type, year, month, action } = req.query;
 
@@ -132,13 +150,11 @@ function getSaturdayOfWeek(dateStr) {
             const secureActions = ['ADD', 'EDIT', 'DELETE', 'DONE', 'UNDO_DONE', 'ADD_QTY', 'UPDATE_ORDER', 'MULTI_DELETE', 'MULTI_DONE', 'MULTI_UNDO_DONE', 'CREATE_ADMIN', 'DELETE_ADMIN', 'REACTIVATE_ADMIN', 'HARD_DELETE_ADMIN', 'RESET_ADMIN_PW', 'CHANGE_MY_PASSWORD', 'UPDATE_RAW_ROW_FULL', 'ADD_RAW_ROW_DIRECT', 'DELETE_RAW_ROW_DIRECT', 'SAVE_COMP_INFO_DB', 'SAVE_GLOBAL_COLOR', 'GET_ALL_CONN_LOGS', 'AI_QUERY']; 
             // 👆 맨 끝에 'GET_ALL_CONN_LOGS' 추가 완료
             
-            // ... (기존 코드)
             if (secureActions.includes(action)) {
                 if (!admin_id) { return res.status(200).json({ success: false, forceLogout: true, msg: '로그인 세션이 만료되었거나 유효하지 않습니다.' }); }
                 const [sessionCheck] = await pool.query("SELECT status FROM admins WHERE admin_id = ?", [admin_id]);
                 if (sessionCheck.length === 0 || sessionCheck[0].status === 'LOCKED') { return res.status(200).json({ success: false, forceLogout: true, msg: '관리자에 의해 계정이 비활성화되었습니다.' }); }
             }
-            // 👆 기존 방어막 종료 부분
 
             // 👇 🚨 [신규 1] 사이트 접속 트래킹 저장 (GUEST, AUTO_LOGIN) 👇
             if (action === 'LOG_SITE_ACCESS') {
@@ -605,7 +621,7 @@ function getSaturdayOfWeek(dateStr) {
             }
             
             // ✅ 2. 시스템 및 OCR 로직들 (원본 100% 유지)
-            else if (action === 'getLastOcrImageUrl' || action === 'GET_LAST_OCR_IMAGE') {
+            else if (action === 'GET_LAST_OCR_IMAGE') {
                 try {
                     await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
                     const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`);
@@ -644,7 +660,7 @@ function getSaturdayOfWeek(dateStr) {
                 }
             }
 
-            else if (action === 'getOcrLastTimeStr' || action === 'GET_OCR_LAST_TIME') {
+            else if (action === 'GET_OCR_LAST_TIME') {
                 try {
                     await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
                     const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_time'`);
@@ -674,13 +690,28 @@ function getSaturdayOfWeek(dateStr) {
             }
             
             
-            else if (action === 'GET_COMP_INFO_DB') { const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`); return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {}); }
-            else if (action === 'SAVE_COMP_INFO_DB') { const jsonStr = JSON.stringify(data); await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('COMP_INFO_DB', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]); return res.status(200).json({ success: true }); }
-            // 👇 🚨 [여기에 추가하세요!] OCR 동적 필터 저장/불러오기 API
-            else if (action === 'GET_OCR_FILTERS') { const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_ETC_FILTERS'`); return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : []); }
-            else if (action === 'SAVE_OCR_FILTERS') { const jsonStr = JSON.stringify(data); await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_ETC_FILTERS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]); return res.status(200).json({ success: true }); }
-            // 👆 ----------------------------------------------------
-            else if (action === 'GET_GLOBAL_COLORS') { const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'GLOBAL_COMPANY_COLORS'`); return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {}); }
+            else if (action === 'GET_COMP_INFO_DB') {
+                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`);
+                return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {});
+            }
+            else if (action === 'SAVE_COMP_INFO_DB') {
+                const jsonStr = JSON.stringify(data);
+                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('COMP_INFO_DB', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]);
+                return res.status(200).json({ success: true });
+            }
+            else if (action === 'GET_OCR_FILTERS') {
+                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_ETC_FILTERS'`);
+                return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : []);
+            }
+            else if (action === 'SAVE_OCR_FILTERS') {
+                const jsonStr = JSON.stringify(data);
+                await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_ETC_FILTERS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonStr, jsonStr]);
+                return res.status(200).json({ success: true });
+            }
+            else if (action === 'GET_GLOBAL_COLORS') {
+                const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'GLOBAL_COMPANY_COLORS'`);
+                return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {});
+            }
             else if (action === 'SAVE_GLOBAL_COLOR') { 
                 const compName = data?.compName || payload.compName;
                 const colorIdx = data?.colorIdx || payload.colorIdx;
@@ -844,7 +875,7 @@ function getSaturdayOfWeek(dateStr) {
                 return res.status(200).json({ success: true, msg: '작업 완료' });
             } 
             // 🎯 [여기서부터 복사해서 새로 붙여넣으세요!] -----------------------------------------
-            else if (action === 'GET_LAST_OCR_DATA' || action === 'getLastOcrData') {
+            else if (action === 'GET_LAST_OCR_DATA') {
     try {
         const [rows] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'LAST_OCR_DATA'");
         const [rawRows] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'LAST_OCR_RAW'");
