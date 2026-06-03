@@ -4522,7 +4522,6 @@ function bindBioAuthEvents() {
     const bioPwInput = document.getElementById('bioConfirmPwInput');
 
     // 연결 확인용 로그 (콘솔에서 확인 가능)
-    console.log("생체 인증 버튼 바인딩 프로세스 가동:", { bioSubmitBtn, bioCancelBtn });
 
     if (bioCancelBtn) {
         bioCancelBtn.onclick = function() { closeBioPwModal(); };
@@ -6476,8 +6475,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('서비스 워커 등록 성공!', reg.scope))
-            .catch(err => console.log('서비스 워커 등록 실패:', err));
+            .catch(err => console.warn('서비스 워커 등록 실패:', err));
         });
       }
 
@@ -7521,7 +7519,6 @@ async function handleLogin() {
                   }
               }
           } catch (err) {
-              console.log("생체 인증 취소됨:", err);
               openLoginModal();
           }
       }

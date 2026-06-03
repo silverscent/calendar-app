@@ -124,13 +124,13 @@ function _buildBubble(msg) {
             html += '<span>'+ (msg.count||msg.rows.length) +'건 조회됨</span>';
             if (msg.sql) html += '<span class="ai-sql-mini" style="cursor:pointer; color:#5e5ce6;">SQL</span>';
             html += '</div>';
-            if (msg.sql) html += '<div class="ai-sql-mini-box" style="display:none; padding:8px; font-size:0.7em; color:#bf5af2; background:rgba(0,0,0,0.3); white-space:pre-wrap; word-break:break-all;">'+ _esc(msg.sql) +'</div>';
+            if (msg.sql) html += '<div class="ai-sql-mini-box" style="display:none; padding:8px; font-size:0.7em; color:#bf5af2; background:rgba(0,0,0,0.3); white-space:pre-wrap; word-break:break-all;">'+ _escTbl(msg.sql) +'</div>';
             html += '<table style="width:100%; border-collapse:collapse; font-size:0.78em;"><thead><tr>';
-            html += cols.map(c => '<th style="padding:6px 8px; text-align:left; border-bottom:1px solid #444; color:#aaa; white-space:nowrap;">'+_esc(c)+'</th>').join('');
+            html += cols.map(c => '<th style="padding:6px 8px; text-align:left; border-bottom:1px solid #444; color:#aaa; white-space:nowrap;">'+_escTbl(c)+'</th>').join('');
             html += '</tr></thead><tbody>';
             msg.rows.forEach((row,i) => {
                 html += '<tr style="background:'+(i%2===0?'transparent':'rgba(255,255,255,0.03)')+'">';
-                cols.forEach(c => { html += '<td style="padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); white-space:nowrap;">'+ _esc(row[c]) +'</td>'; });
+                cols.forEach(c => { html += '<td style="padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); white-space:nowrap;">'+ _escTbl(row[c]) +'</td>'; });
                 html += '</tr>';
             });
             html += '</tbody></table>';
@@ -147,8 +147,8 @@ function _buildBubble(msg) {
     return wrap;
 }
 
-// 간단 이스케이프 (표 값에 < > 들어와도 안전)
-function _esc(v) {
+// AI 테이블 전용 이스케이프 (null → '-' 표시)
+function _escTbl(v) {
     if (v === null || v === undefined) return '-';
     return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -563,7 +563,6 @@ function cleanOldCache() {
                 if (Math.abs(now.getFullYear() - y) > 1) { localStorage.removeItem(k); removed++; }
             }
         });
-        if (removed > 0) console.log('[캐시정리] 오래된 캐시 ' + removed + '건 삭제');
     } catch(e) {}
 }
 

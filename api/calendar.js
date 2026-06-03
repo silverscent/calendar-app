@@ -1,6 +1,7 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 // 💡 [수정] DB 연결 풀을 최상단 전역 스코프로 이동 (커넥션 재사용으로 응답 속도 극대화)
 const pool = mysql.createPool(process.env.DATABASE_URL);
@@ -304,8 +305,14 @@ function getSaturdayOfWeek(dateStr) {
                     if (!currentAdmin) return res.status(200).json({ success: false, msg: '로그인 세션이 만료되었습니다.' });
                     const [rows] = await pool.query("SELECT password_hash FROM admins WHERE admin_id = ? AND status = 'ACTIVE'", [currentAdmin]);
                     if (rows.length === 0) return res.status(200).json({ success: false, msg: '존재하지 않거나 비활성화된 계정입니다.' });
-                    // ✅ bcrypt.compare로 검증
-                    const isMatch = await bcrypt.compare(currentPw, rows[0].password_hash);
+                    // ✅ bcrypt + SHA-256 호환 검증
+                    const storedHash = rows[0].password_hash;
+                    let isMatch;
+                    if (storedHash.startsWith('$2b$') || storedHash.startsWith('$2a$')) {
+                        isMatch = await bcrypt.compare(currentPw, storedHash);
+                    } else {
+                        isMatch = crypto.createHash('sha256').update(currentPw).digest('hex') === storedHash;
+                    }
                     if (!isMatch) {
                         return res.status(200).json({ success: false, msg: '현재 비밀번호가 일치하지 않습니다.' });
                     }
@@ -524,8 +531,16 @@ function getSaturdayOfWeek(dateStr) {
                         const [masterCheck] = await pool.query(
                             "SELECT admin_id, password_hash, admin_name, role, status FROM admins WHERE LOWER(admin_id) = LOWER(?)", [id]
                         );
-                        // ✅ bcrypt.compare로 마스터 검증
-                        const masterMatch = masterCheck.length > 0 ? await bcrypt.compare(pw, masterCheck[0].password_hash) : false;
+                        // ✅ 마스터 검증 (bcrypt + SHA-256 호환)
+                        let masterMatch = false;
+                        if (masterCheck.length > 0) {
+                            const mHash = masterCheck[0].password_hash;
+                            if (mHash.startsWith('$2b$') || mHash.startsWith('$2a$')) {
+                                masterMatch = await bcrypt.compare(pw, mHash);
+                            } else {
+                                masterMatch = crypto.createHash('sha256').update(pw).digest('hex') === mHash;
+                            }
+                        }
                         if (masterMatch && masterCheck[0].status === 'ACTIVE' && masterCheck[0].role === 'SYSTEM') {
                             await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [masterCheck[0].admin_id]);
                             const connInfo = `[👑 최고관리자 잠금 우회 성공] IP: ${ip} | ${connInfoBase}`;
@@ -546,8 +561,20 @@ function getSaturdayOfWeek(dateStr) {
                     if (user.status === 'LOCKED') {
                         return res.status(200).json({ success: false, msg: '비활성화된 계정입니다. 관리자에게 문의하세요.' });
                     }
-                    // ✅ bcrypt.compare로 일반 검증
-                    const isMatch = await bcrypt.compare(pw, user.password_hash);
+                    // ✅ bcrypt 검증 + SHA-256 구형 계정 자동 마이그레이션
+                    const isBcrypt = user.password_hash.startsWith('$2b$') || user.password_hash.startsWith('$2a$');
+                    let isMatch;
+                    if (isBcrypt) {
+                        isMatch = await bcrypt.compare(pw, user.password_hash);
+                    } else {
+                        // 구형 SHA-256 해시 비교 후 bcrypt로 자동 업그레이드
+                        const sha256 = crypto.createHash('sha256').update(pw).digest('hex');
+                        isMatch = sha256 === user.password_hash;
+                        if (isMatch) {
+                            const newHash = await bcrypt.hash(pw, 10);
+                            await pool.query("UPDATE admins SET password_hash = ? WHERE admin_id = ?", [newHash, user.admin_id]);
+                        }
+                    }
                     if (isMatch) {
                         await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [user.admin_id]);
                         const connInfo = `[접속성공] IP: ${ip} | ${connInfoBase}`;
