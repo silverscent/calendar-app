@@ -583,7 +583,7 @@ module.exports = async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
-            if (text.startsWith('/용차')) {
+            if (text.startsWith('/용차') && !text.startsWith('/용차완료') && !text.startsWith('/용차삭제')) {
                 const parts = text.trim().split(/\s+/).slice(1);
                 if (parts.length === 0) { await sendTgMsg(chatId, "⚠️ 사용법: /용차 [업체명] [박스] [파레트] [날짜] [비고]"); return res.status(200).send('OK'); }
                 
