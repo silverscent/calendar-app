@@ -146,11 +146,21 @@ module.exports = async function(req, res) {
             const { domain, action, data, keyword, type, rowId, year, month, id, admin_id } = payload;
             const currentAdmin = admin_id || 'system';
 
-            // 🚨 [강화된 글로벌 세션 방어막] 데이터 조작/조회 시 무조건 권한 철저히 검증!
-            const secureActions = ['ADD', 'EDIT', 'DELETE', 'DONE', 'UNDO_DONE', 'ADD_QTY', 'UPDATE_ORDER', 'MULTI_DELETE', 'MULTI_DONE', 'MULTI_UNDO_DONE', 'CREATE_ADMIN', 'DELETE_ADMIN', 'REACTIVATE_ADMIN', 'HARD_DELETE_ADMIN', 'RESET_ADMIN_PW', 'CHANGE_MY_PASSWORD', 'UPDATE_RAW_ROW_FULL', 'ADD_RAW_ROW_DIRECT', 'DELETE_RAW_ROW_DIRECT', 'SAVE_COMP_INFO_DB', 'SAVE_GLOBAL_COLOR', 'GET_ALL_CONN_LOGS', 'AI_QUERY']; 
-            // 👆 맨 끝에 'GET_ALL_CONN_LOGS' 추가 완료
-            
-            if (secureActions.includes(action)) {
+            // 관리자 인증 필요 액션 (Set → O(1) 조회)
+            const secureActions = new Set([
+                'ADD', 'EDIT', 'DELETE', 'DONE', 'UNDO_DONE', 'ADD_QTY',
+                'UPDATE_ORDER', 'MULTI_DELETE', 'MULTI_DONE', 'MULTI_UNDO_DONE',
+                'CREATE_ADMIN', 'DELETE_ADMIN', 'REACTIVATE_ADMIN', 'HARD_DELETE_ADMIN',
+                'RESET_ADMIN_PW', 'CHANGE_MY_PASSWORD',
+                'UPDATE_RAW_ROW_FULL', 'UPDATE_RAW_ROW_DIRECT',
+                'ADD_RAW_ROW_DIRECT', 'DELETE_RAW_ROW_DIRECT',
+                'GET_RAW_DB_ROWS', 'GET_AUDIT_LOGS', 'GET_ALL_CONN_LOGS',
+                'SAVE_COMP_INFO_DB', 'SAVE_GLOBAL_COLOR',
+                'SAVE_OCR_INFO', 'SAVE_OCR_FILTERS',
+                'AI_QUERY',
+            ]);
+
+            if (secureActions.has(action)) {
                 if (!admin_id) { return res.status(200).json({ success: false, forceLogout: true, msg: '로그인 세션이 만료되었거나 유효하지 않습니다.' }); }
                 const [sessionCheck] = await pool.query("SELECT status FROM admins WHERE admin_id = ?", [admin_id]);
                 if (sessionCheck.length === 0 || sessionCheck[0].status === 'LOCKED') { return res.status(200).json({ success: false, forceLogout: true, msg: '관리자에 의해 계정이 비활성화되었습니다.' }); }
@@ -1019,9 +1029,12 @@ if (!aiText) {
 // 🛡️ MySQL 문법 자동 보정: CAST(... AS INT) → SIGNED
 let safeSql = sql.replace(/AS\s+INT\s*\)/gi, 'AS SIGNED)');
 
-// SELECT만 허용
+// SELECT만 허용 + 세미콜론/다중쿼리 차단
 if (!/^\s*SELECT/i.test(safeSql)) {
     return res.status(200).json({ success: false, msg: '조회 쿼리만 허용됩니다.' });
+}
+if (/;/.test(safeSql)) {
+    return res.status(200).json({ success: false, msg: '단일 쿼리만 허용됩니다.' });
 }
 
 // SQL 실행

@@ -54,7 +54,6 @@ function safeGetJson(val) {
     return { id: val, url: val, time: val };
 }
 
-// 🚨 Vercel 서버 폭파 방지 (커넥션 재사용)
 const pool = mysql.createPool({
     uri: process.env.DATABASE_URL,
     connectionLimit: 10,
@@ -62,11 +61,18 @@ const pool = mysql.createPool({
     keepAliveInitialDelay: 0
 });
 
-// 💡 CommonJS 문법으로 통일
+// 테이블이 없으면 생성 (콜드 스타트 시 1회만 실행)
+let tablesEnsured = false;
+async function ensureTables() {
+    if (tablesEnsured) return;
+    await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+    tablesEnsured = true;
+}
+
 module.exports = async function handler(req, res) {
     try {
-        await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
-        await pool.query(`CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+        await ensureTables();
 
         // =================================================================
         // ⏰ [1차 관문] Vercel Cron 알림 자동 수신부 (GET 방식 허용)
