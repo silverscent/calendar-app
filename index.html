@@ -3807,7 +3807,7 @@ document.addEventListener("visibilitychange", () => {
           let pListHtml = "";
           serverData.pendingItems.forEach((item, idx) => {
             let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi,"").trim() : "";
-            let etcTag = meaningfulEtc !== "" ? `<div class="pending-etc">${meaningfulEtc}</div>` : "";
+            let etcTag = meaningfulEtc !== "" ? `<div class="pending-etc">${_esc(meaningfulEtc)}</div>` : "";
             let isItemDone = item.isDone === true || String(item.isDone) === "true";
             let cleanComp = item.company.replace(/\[TASK\]/gi, "").trim();
             let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.company}', ${isItemDone})"`;
@@ -3817,7 +3817,7 @@ document.addEventListener("visibilitychange", () => {
             let volHtml = qtyText ? `<div class="pending-vol">${qtyText}</div>` : `<div class="pending-vol"></div>`;
             let colorObj = getCompanyColor(cleanComp);
             let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${colorObj.bg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
-            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${getFullName(cleanComp)}</div>${volHtml}${etcTag}</div></div>`;
+            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${_esc(getFullName(cleanComp))}</div>${volHtml}${etcTag}</div></div>`;
           });
           document.getElementById("pendingList").innerHTML = pListHtml;
         } else { document.getElementById("pendingSection").style.display = "none"; }

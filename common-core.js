@@ -5,6 +5,12 @@
 
 const VERCEL_API_URL = "/api/calendar";
 
+// ── 사용자 입력을 innerHTML에 삽입할 때 XSS 방지
+function _esc(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 // ── 네트워크 에러 중 조용히 넘길 것들 판별 (오프라인·abort·fetch실패)
 function _isSilentError(e) {
     if (!navigator.onLine) return true;
