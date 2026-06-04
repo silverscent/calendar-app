@@ -1249,7 +1249,7 @@ apiCall({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_DATA' }).the
       }
 
       // 수정
-setInterval(() => { if (!window.fabDragging) silentBackgroundSync(); }, 60000);
+setInterval(() => { if (!window.fabDragging && document.visibilityState === 'visible') silentBackgroundSync(); }, 60000);
       // 수정 — 드래그 중이면 sync 건너뛰기
 document.addEventListener("visibilitychange", () => { 
     if (document.visibilityState === 'visible' && !window.fabDragging) silentBackgroundSync(); 

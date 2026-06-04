@@ -339,7 +339,7 @@ if (!navigator.onLine || isDragging || window.fabDragging || activeRequests > 0)
 
       // 🕒 [1. 정기 폴링] 앱을 켜두고 가만히 있어도 1분(60000ms)마다 몰래 동기화
       // 수정
-setInterval(() => { if (!window.isDragging) silentBackgroundSync(); }, 60000);
+setInterval(() => { if (!window.isDragging && document.visibilityState === 'visible') silentBackgroundSync(); }, 60000);
 
       // 👁️ [2. 화면 복귀 감지 (Visibility API)] 
       // 스마트폰 화면을 껐다 켜거나, 카톡/유튜브를 보다가 다시 달력 앱으로 돌아오는 '그 순간' 즉시 동기화!
