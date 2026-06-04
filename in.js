@@ -1,905 +1,1137 @@
 // ====================================================================
-      // 🚀 [Vercel 독립 생명유지장치] 구글 서버가 몰래 주던 변수들을 직접 생성!
-      // ====================================================================
-      let currentType = 'in'; // 🟢 입고 달력 (출고는 'out'으로 변경)
-      let isAdmin = false;
-      let adminToken = null;
-      let todayDateObj = new Date();
-      let lastLocalUpdateTime = 0;
-      let isDarkMode = false; // 다크모드 충돌 방지
-      
-      // 텅 빈 달력 뼈대를 미리 만들어줍니다.
-      let serverData = {
-          year: todayDateObj.getFullYear(),
-          month: todayDateObj.getMonth() + 1,
-          firstDay: new Date(todayDateObj.getFullYear(), todayDateObj.getMonth(), 1).getDay(),
-          daysInMonth: new Date(todayDateObj.getFullYear(), todayDateObj.getMonth() + 1, 0).getDate(),
-          monthData: {},
-          pendingItems: []
-      };
-      window.yearlyHolidays = {};
-      
-      // 누락되었던 공휴일 통신 함수 복구
-      
+// 🚀 [Vercel 독립 생명유지장치] 구글 서버가 몰래 주던 변수들을 직접 생성!
+// ====================================================================
+let currentType = "in"; // 🟢 입고 달력 (출고는 'out'으로 변경)
+let isAdmin = false;
+let adminToken = null;
+let todayDateObj = new Date();
+let lastLocalUpdateTime = 0;
+let isDarkMode = false; // 다크모드 충돌 방지
 
-      // 💡 [추가] 공휴일 이름 표시 ON/OFF 상태 (기본값 ON)
-      let isShowHoliday = localStorage.getItem('cal_show_holiday') !== 'false';
+// 텅 빈 달력 뼈대를 미리 만들어줍니다.
+let serverData = {
+  year: todayDateObj.getFullYear(),
+  month: todayDateObj.getMonth() + 1,
+  firstDay: new Date(todayDateObj.getFullYear(), todayDateObj.getMonth(), 1).getDay(),
+  daysInMonth: new Date(todayDateObj.getFullYear(), todayDateObj.getMonth() + 1, 0).getDate(),
+  monthData: {},
+  pendingItems: [],
+};
+window.yearlyHolidays = {};
 
-      // 💡 [추가] 공휴일 토글 실행 함수
-      
+// 누락되었던 공휴일 통신 함수 복구
 
-      // (폴리필 -> common-core.js 로 분리됨)
+// 💡 [추가] 공휴일 이름 표시 ON/OFF 상태 (기본값 ON)
+let isShowHoliday = localStorage.getItem("cal_show_holiday") !== "false";
 
-      let activeRequests = 0;
-      
+// 💡 [추가] 공휴일 토글 실행 함수
 
-      
+// (폴리필 -> common-core.js 로 분리됨)
 
-      function updateSyncTime() {
-         const now = new Date();
-         const hh = String(now.getHours()).padStart(2, '0');
-         const mm = String(now.getMinutes()).padStart(2, '0');
-         document.getElementById('lastSyncTime').innerText = `최근 ${hh}:${mm}`;
-      }
+let activeRequests = 0;
 
-      function updateFooterUI() {
-          const footer = document.getElementById('infoFooter');
-          if (footer) {
-              footer.innerText = isAdmin ? '👆 날짜 터치: 상세내역 확인 및 수정 / 꾹 누르기: 이동' : '👆 날짜 터치: 상세내역 확인';
-          }
-      }
+function updateSyncTime() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  document.getElementById("lastSyncTime").innerText = `최근 ${hh}:${mm}`;
+}
 
-      function computeWeekHeights() {
-        for (let d = 1; d <= serverData.daysInMonth; d++) {
-            if (serverData.monthData[d]) { serverData.monthData[d].forEach((item, idx) => { item._rawIdx = idx; }); }
-        }
+function updateFooterUI() {
+  const footer = document.getElementById("infoFooter");
+  if (footer) {
+    footer.innerText = isAdmin
+      ? "👆 날짜 터치: 상세내역 확인 및 수정 / 꾹 누르기: 이동"
+      : "👆 날짜 터치: 상세내역 확인";
+  }
+}
 
-        // 🚨 [입고 지능형 가변 높이 엔진] - 초밀착 정렬형
-        let weekHeights = {};
-        let savedSize = localStorage.getItem('cal_fontSize') || 'M';
-        let charsPerLine = (savedSize === 'L') ? 4 : 5; // 글자 크기에 따른 줄바꿈 기준
-
-        for (let d = 1; d <= serverData.daysInMonth; d++) {
-            let wIdx = Math.floor((serverData.firstDay + d - 1) / 7);
-            if (!weekHeights[wIdx]) weekHeights[wIdx] = 'auto'; 
-
-            let dYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            let hName = window.yearlyHolidays ? window.yearlyHolidays[dYmd] : null;
-            let hasSched = serverData.monthData[d] && serverData.monthData[d].length > 0;
-
-            // 공휴일에 입고 일정이 있을 때만! 그 주차(Week)의 헤더 높이를 통일함
-            // 🛠️ 수정 후 (isShowHoliday 조건 추가)
-            if (hName && hasSched && isShowHoliday) {
-                let linesNeeded = Math.ceil(hName.length / charsPerLine);
-                // 입고 레이아웃(1.0 + 공휴일줄)에 최적화된 수치 적용
-                let calcH = (1.0 + (linesNeeded * 0.75)).toFixed(2) + 'em';
-
-                if (weekHeights[wIdx] === 'auto' || parseFloat(weekHeights[wIdx]) < parseFloat(calcH)) {
-                    weekHeights[wIdx] = calcH;
-                }
-            }
-        }
-
-        return weekHeights;
-      }
-
-      function renderPending() {
-        // 💡 [수정] 미정건 전역 상태 유지 로직 확실하게 고정
-        if (serverData.pendingItems && serverData.pendingItems.length > 0) { 
-            window.globalPendingItems = serverData.pendingItems; 
-        } else if (window.globalPendingItems && window.globalPendingItems.length > 0) {
-            serverData.pendingItems = window.globalPendingItems;
-        }
-        let currentPending = serverData.pendingItems || [];
-
-        if (currentPending.length > 0) {
-          document.getElementById('pendingSection').style.display = 'block';
-          document.getElementById('pendingCount').innerText = `(${currentPending.length}건)`;
-          let pListHtml = "";
-          currentPending.forEach((item, idx) => {
-            let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
-            let etcTag = meaningfulEtc !== '' ? `<div class="pending-etc">${_esc(meaningfulEtc)}</div>` : '';
-            let isItemDone = item.isDone === true || String(item.isDone) === "true";
-            let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${_argq(item.bl)}', ${isItemDone})"`;
-            let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : '';
-            
-            let isPendingAir = item.sType === 'AIR';
-            let pendingPastelBg = isPendingAir ? '#ff7eff' : '#26e2fd';
-            let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${pendingPastelBg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
-
-            pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${_esc(item.bl)}</div><div class="pending-vol">📦 ${_esc(item.pal)}P (${_esc(item.sType)})</div>${etcTag}</div></div>`;
-          });
-          document.getElementById('pendingList').innerHTML = pListHtml;
-        } else { document.getElementById('pendingSection').style.display = 'none'; }
-      }
-
-      function renderCalendar() {
-        for (let d = 1; d <= serverData.daysInMonth; d++) {
-            if (serverData.monthData[d]) { serverData.monthData[d].forEach((item, idx) => { item._rawIdx = idx; }); }
-        }
-        const weekHeights = computeWeekHeights();
-
-        document.getElementById('calTitle').innerText = `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2,'0')}`;
-        const grid = document.getElementById('calendarGrid');
-        let rowHtml = '<div class="grid-row">'; let cellCount = 0;
-        for(let i=0; i<serverData.firstDay; i++) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
-
-        const isThisMonthView = (serverData.year === todayDateObj.getFullYear() && serverData.month === (todayDateObj.getMonth() + 1));
-        const todayDayNumber = todayDateObj.getDate();
-
-        for(let day=1; day<=serverData.daysInMonth; day++) {
-          if(cellCount > 0 && cellCount % 7 === 0) rowHtml += '</div><div class="grid-row">';
-          const dayOfWeek = (serverData.firstDay + day - 1) % 7;
-          let dateClass = "date-num";
-          if(dayOfWeek === 0) dateClass += " sun"; if(dayOfWeek === 6) dateClass += " sat";
-          let cellClass = (isThisMonthView && day === todayDayNumber) ? "day-cell today-cell" : "day-cell";
-          let dayData = serverData.monthData[day];
-          let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
-          let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          
-          let holidayName = window.yearlyHolidays ? window.yearlyHolidays[currentYmd] : null;
-          let isHoliday = !!holidayName;
-          let redStyle = (dayOfWeek === 0 || isHoliday) ? 'color: #ff3b30 !important; font-weight: bold;' : '';
-
-          let w = Math.floor((serverData.firstDay + day - 1) / 7);
-          let currentHeaderHeight = weekHeights[w];
-
-          // 일정이 없는 공휴일은 공간 절약을 위해 auto로 찰싹 붙임
-          if (isHoliday && (!dayData || dayData.length === 0)) {
-              currentHeaderHeight = 'auto';
-          }
-
-          // 🚨 [입고 2층 구조 유지] 1층(날짜/합계) + 2층(공휴일) 유지하며 height만 조절
-          let dateRowHtml = `<div class="date-row" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0px; width: 100%; height: ${currentHeaderHeight}; overflow: hidden; justify-content: flex-start; margin-bottom: 2px;">`;
-          
-          // (1층) 날짜와 총 팔레트 수
-          dateRowHtml += `<div style="display: flex; justify-content: space-between; width: 100%; align-items: center; line-height: 1.0; height: 1.1em;">`;
-          dateRowHtml += `<span class="${dateClass}" style="${redStyle}">${day}</span>`;
-          if (dayData && dayData.length > 0) {
-              let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
-              if (totalPallets > 0) {
-                  dateRowHtml += `<span class="daily-total" style="flex-shrink: 0; font-weight: 800; font-size: 0.75em;">${totalPallets}</span>`;
-              }
-          }
-          dateRowHtml += `</div>`;
-
-          // (2층) 공휴일 이름 (전체 너비 사용)
-          if (isHoliday && typeof holidayName === 'string' && isShowHoliday) {
-              dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:1px; display: block; width: 100%; white-space: normal; word-break: break-all; line-height: 1.0;">${holidayName}</span>`;
-          }
-          dateRowHtml += `</div>`;
-          
-          let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
-
-          // ... (이후 item-tag 렌더링 및 미정건 로직은 기존과 동일) ...
-                   
-          if(dayData && dayData.length > 0) {
-            dayData.forEach((item, idx) => {
-              let isItemDone = item.isDone === true || String(item.isDone) === "true";
-              let isAir = item.sType === 'AIR';
-              let pastelBg = isAir ? '#ff7eff' : '#26e2fd';
-              
-              let tagClass = `item-tag`;
-              if (isItemDone) tagClass += " done-mark";
-              let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
-              if (meaningfulEtc !== '') tagClass += " has-etc";
-
-              // 기존에 있던 AI 뱃지는 과감하게 지우고 P 글씨도 뺍니다!
-              let iconHtml = isItemDone ? `<span class="done-icon">✅</span>` : '';
-              let shortName = item.bl.length > 4 ? item.bl.slice(-4) : item.bl;
-              if (item.bl.startsWith('발행전')) shortName = '발행전';
-              
-              let innerHtml = `<span class="pal-main">${_esc(item.pal)}</span><span class="bl-sub">${iconHtml}${_esc(shortName)}</span>`;
-              let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
-              let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${_argq(item.bl)}', ${isItemDone})"`;
-
-              // 💡 [디테일 2 수정] 완료 여부에 따른 극명한 글씨색 대비
-              let textColor = isItemDone ? '#ffffff' : '#111111';
-              let textShadow = isItemDone ? 'text-shadow: 0px 1px 2px rgba(0,0,0,0.6);' : '';
-              let customStyle = `background-color: ${pastelBg} !important; color: ${textColor} !important; ${textShadow} border: 1px solid rgba(0,0,0,0.1);`;
-
-              cellHtml += `<div class="${tagClass}" style="${customStyle}" data-raw-idx="${originalIdx}" ${bindItem}>${innerHtml}</div>`;
-            });
-          }
-          cellHtml += `</div>`; rowHtml += cellHtml; cellCount++;
-        }
-        while(cellCount % 7 !== 0) { rowHtml += `<div class="day-cell empty"></div>`; cellCount++; }
-        rowHtml += '</div>'; grid.innerHTML = rowHtml;
-        
-        renderPending();
-
-        updateStatsSummary(); updateSyncTime();
-        const _bl = document.getElementById('bootLoader');
-        if (_bl) _bl.classList.add('hide');
-      }
-
-      function navMonth(offset) { 
-        let currentY = parseInt(serverData.year, 10); let currentM = parseInt(serverData.month, 10);
-        if (isNaN(currentY) || isNaN(currentM)) { let now = new Date(); currentY = now.getFullYear(); currentM = now.getMonth() + 1; }
-        let newMonth = currentM + parseInt(offset, 10); 
-        let newYear = currentY; 
-        if (newMonth > 12) { newMonth = 1; newYear++; } else if (newMonth < 1) { newMonth = 12; newYear--; } 
-        goToAsync(newYear, newMonth); 
-      }
-
-      let tempPickerYear = serverData.year; 
-      function openPicker() { tempPickerYear = parseInt(serverData.year, 10); renderPicker(); document.getElementById('monthPickerModal').style.display = 'flex'; }
-      
-      function renderPicker() { 
-        document.getElementById('pickerYearText').innerText = `${tempPickerYear}년`;
-        let gridHtml = ''; 
-        for (let i = 1; i <= 12; i++) { 
-          let isCurrent = (tempPickerYear === parseInt(serverData.year, 10) && i === parseInt(serverData.month, 10)) ? 'current' : ''; 
-          gridHtml += `<button class="month-btn ${isCurrent}" onclick="document.getElementById('monthPickerModal').style.display='none'; goToAsync(${tempPickerYear}, ${i})">${i}월</button>`;
-        } 
-        document.getElementById('pickerMonthGrid').innerHTML = gridHtml;
-      }
-
-    
-      // 🚀 [초고속 월 이동] 오염된 캐시 치료 + 깜빡임 방지 100% 최적화
-      function goToAsync(year, month) {
-        const toastEl = document.getElementById("toast");
-        if(toastEl) toastEl.classList.remove("show");
-        if(window.toastTimer) clearTimeout(window.toastTimer);
-
-        let safeYear = parseInt(year, 10);
-        let safeMonth = parseInt(month, 10);
-
-        checkAndFetchHolidays(safeYear);
-
-        // 💡 [핵심 패치] 달력을 넘기기 전에 현재 가지고 있는 '미정(대기)' 최신 목록을 배낭에 챙깁니다!
-        let globalPending = window.globalPendingItems && window.globalPendingItems.length > 0 ? window.globalPendingItems : (serverData.pendingItems || []);
-
-        const cacheKey = `cal_cache_${currentType}_${safeYear}_${safeMonth}`;
-        const cachedData = localStorage.getItem(cacheKey);
-        let isCacheValid = false;
-
-        if (cachedData) {
-            try {
-                let parsed = JSON.parse(cachedData);
-                serverData = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
-                serverData.year = safeYear;
-                serverData.month = safeMonth;
-                serverData.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
-                serverData.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
-                if (!isNaN(serverData.year)) isCacheValid = true;
-            } catch(e) { }
-        } 
-        
-        if (!isCacheValid) {
-            let tempFirstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
-            let tempDays = new Date(safeYear, safeMonth, 0).getDate();
-            serverData = { year: safeYear, month: safeMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {} };
-        }
-        
-        // 💡 [핵심 패치] 새로 연 달력에 캐시 상관없이 아까 챙겨둔 '미정(대기)' 목록을 무조건 덮어씌움!
-        serverData.pendingItems = globalPending;
-        
-        renderCalendar();
-        
-        window.currentNavId = (window.currentNavId || 0) + 1;
-        let myNavId = window.currentNavId;
-        let fetchStartTime = Date.now();
-        apiGet({ type: currentType, year: safeYear, month: safeMonth }).then(res => {
-          if (res === null) return;
-          if (myNavId !== window.currentNavId) return;
-          if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return;
-
-          res.year = safeYear;
-          res.month = safeMonth;
-          res.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
-          res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
-
-          const getScheduleSig = (dataObj) => {
-            if (!dataObj) return "";
-            const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
-            let sigs = [];
-            if (dataObj.pendingItems) dataObj.pendingItems.forEach(it => sigs.push(`P_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
-            if (dataObj.monthData) {
-              for (let d in dataObj.monthData) dataObj.monthData[d].forEach(it => sigs.push(`${d}_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
-            }
-            return sigs.sort().join("||");
-          };
-          let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
-          localStorage.setItem(cacheKey, JSON.stringify(res));
-          if (isScheduleChanged) { serverData = res; renderCalendar(); }
-        });
-      }
-
-      // 🚀 [스텔스 연간 동기화 매니저] (연속 클릭 시 서버 과부하/멈춤 완벽 방어)
-      let stealthYearlyTimer = null;
-      function triggerStealthYearlySync(targetYear) {
-          if (stealthYearlyTimer) clearTimeout(stealthYearlyTimer);
-          
-          stealthYearlyTimer = setTimeout(() => {
-              apiGet({ action: 'yearlyStats', type: currentType, year: targetYear }).then(res => {
-                  if (res && res.year) {
-                      yearlyCache[res.year] = res;
-                      localStorage.setItem(`yearly_stats_cache_${currentType}_${res.year}`, JSON.stringify(res));
-                      if (document.getElementById('dashboardModal').style.display === 'flex' &&
-                          window.dashMode === 'year' && window.dashYear === res.year) {
-                          renderDashCharts();
-                      }
-                  }
-              });
-          }, 1500); 
-      }
-
-      function updateLocalState(action, payload, idx) {
-        let oldDay = (payload.oldDate && payload.oldDate !== '미정') ? parseInt(payload.oldDate.split('-')[2], 10) : 'pending';
-        let newDay = (payload.newDate && payload.newDate !== '미정') ? parseInt(payload.newDate.split('-')[2], 10) : 'pending';
-        let arr = oldDay === 'pending' ? serverData.pendingItems : serverData.monthData[oldDay];
-        if(!arr) return;
-
-        if (action === 'EDIT') {
-          let item = arr.splice(idx, 1)[0];
-          
-          // 🚨 [핵심 픽스] 수정된 모든 데이터를 내 폰 화면(로컬 객체)에도 즉시 덮어씌웁니다!
-          if (payload.newBL !== undefined) {
-              item.bl = payload.newBL;
-              item.company = payload.newBL; // 시스템 호환용
-          }
-          if (payload.newPal !== undefined) item.pal = payload.newPal;
-          if (payload.newSType !== undefined) item.sType = payload.newSType;
-          if (payload.newFwd !== undefined) item.fwd = payload.newFwd;
-          if (payload.newInvoice !== undefined) item.invoice = payload.newInvoice;
-          if (payload.newEtc !== undefined) item.etc = payload.newEtc;
-
-          if(newDay !== 'pending' && !serverData.monthData[newDay]) serverData.monthData[newDay] = [];
-          let newArr = newDay === 'pending' ? serverData.pendingItems : serverData.monthData[newDay];
-          newArr.push(item);
-        } else if (action === 'DELETE') { 
-            arr.splice(idx, 1);
-        } else if (action === 'DONE') { 
-            arr[idx].isDone = true;
-        } else if (action === 'UNDO_DONE') { 
-            arr[idx].isDone = false;
-        }
-        
-        lastLocalUpdateTime = Date.now();
-        localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
-        
-        triggerStealthYearlySync(serverData.year);
-      }
-
-      function updateMultiLocalState(action, items) {
-        const norm = (v) => { let s = String(v != null ? v : "").trim(); return (s === "0" || s === "") ? "" : s; };
-        items.forEach(target => {
-            let day = target.dateStr === '미정' ? 'pending' : parseInt(target.dateStr.split('-')[2], 10);
-            let arr = day === 'pending' ? serverData.pendingItems : serverData.monthData[day];
-            if(!arr) return;
-            // 🚨 ID가 있으면 무조건 ID로 잡고, 없으면 글자로 찾아서 확실하게 업데이트!
-            let idx = arr.findIndex(i => {
-                if (target.id && i.id === target.id) return true;
-                return i.bl === target.bl && norm(i.pal) === norm(target.pal);
-            });
-            if (idx !== -1) {
-               if (action === 'MULTI_DELETE') arr.splice(idx, 1);
-               else if (action === 'MULTI_DONE') arr[idx].isDone = true;
-               else if (action === 'MULTI_UNDO_DONE') arr[idx].isDone = false;
-            }
-        });
-        lastLocalUpdateTime = Date.now(); 
-        localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
-        triggerStealthYearlySync(serverData.year);
-      }
-
-      if (isAdmin) {
-        const btn = document.getElementById('adminBtn');
-        btn.innerHTML = '🔓 관리자'; btn.classList.add('unlocked');
-        document.getElementById('adminActions').style.display = 'flex';
-      }
-
-
-      // =====================================================
-      // 🔒 [통합 인증 및 세션 제어 엔진] - 중복 코드 제거 및 최적화
-      // =====================================================
-
-      // 🚨 1. 인증 데이터 통합 저장/삭제 헬퍼
-      
-
-      // 🚨 2. 수동 로그인 모달창 띄우기
-      
-
-      // 🚨 3. 권한에 따른 프로필 모달 및 세팅 토글
-      
-
-      // 🚨 4. 자동 로그인 토글 (스토리지 이사)
-      function handleAutoLoginToggle(checkbox) {
-          const id = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
-          const role = localStorage.getItem('admin_role') || sessionStorage.getItem('admin_role');
-          
-          if (checkbox.checked) {
-              localStorage.setItem('auto_login', 'true');
-              if (id) saveAuthData(id, role, true);
-              showToast("자동 로그인 기능이 켜졌습니다.", 1500);
-          } else {
-              localStorage.setItem('auto_login', 'false');
-              if (id) saveAuthData(id, role, true);
-              showToast("앱 종료 시 자동으로 로그아웃됩니다.", 1500);
-          }
-      }
-
-      window.addEventListener('beforeunload', () => {
-          if (localStorage.getItem('auto_login') === 'false') {
-              saveAuthData(null, null, false);
-          }
+function computeWeekHeights() {
+  for (let d = 1; d <= serverData.daysInMonth; d++) {
+    if (serverData.monthData[d]) {
+      serverData.monthData[d].forEach((item, idx) => {
+        item._rawIdx = idx;
       });
+    }
+  }
 
-      // 🚨 5. 생체 인증 스위치 컨트롤 (모달 호출)
-      
+  // 🚨 [입고 지능형 가변 높이 엔진] - 초밀착 정렬형
+  let weekHeights = {};
+  let savedSize = localStorage.getItem("cal_fontSize") || "M";
+  let charsPerLine = savedSize === "L" ? 4 : 5; // 글자 크기에 따른 줄바꿈 기준
 
-      // 모달 취소 시 스위치 원상복구
-      
+  for (let d = 1; d <= serverData.daysInMonth; d++) {
+    let wIdx = Math.floor((serverData.firstDay + d - 1) / 7);
+    if (!weekHeights[wIdx]) weekHeights[wIdx] = "auto";
+
+    let dYmd = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    let hName = window.yearlyHolidays ? window.yearlyHolidays[dYmd] : null;
+    let hasSched = serverData.monthData[d] && serverData.monthData[d].length > 0;
+
+    // 공휴일에 입고 일정이 있을 때만! 그 주차(Week)의 헤더 높이를 통일함
+    // 🛠️ 수정 후 (isShowHoliday 조건 추가)
+    if (hName && hasSched && isShowHoliday) {
+      let linesNeeded = Math.ceil(hName.length / charsPerLine);
+      // 입고 레이아웃(1.0 + 공휴일줄)에 최적화된 수치 적용
+      let calcH = (1.0 + linesNeeded * 0.75).toFixed(2) + "em";
+
+      if (weekHeights[wIdx] === "auto" || parseFloat(weekHeights[wIdx]) < parseFloat(calcH)) {
+        weekHeights[wIdx] = calcH;
+      }
+    }
+  }
+
+  return weekHeights;
+}
+
+function renderPending() {
+  // 💡 [수정] 미정건 전역 상태 유지 로직 확실하게 고정
+  if (serverData.pendingItems && serverData.pendingItems.length > 0) {
+    window.globalPendingItems = serverData.pendingItems;
+  } else if (window.globalPendingItems && window.globalPendingItems.length > 0) {
+    serverData.pendingItems = window.globalPendingItems;
+  }
+  let currentPending = serverData.pendingItems || [];
+
+  if (currentPending.length > 0) {
+    document.getElementById("pendingSection").style.display = "block";
+    document.getElementById("pendingCount").innerText = `(${currentPending.length}건)`;
+    let pListHtml = "";
+    currentPending.forEach((item, idx) => {
+      let meaningfulEtc = item.etc
+        ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, "").trim()
+        : "";
+      let etcTag = meaningfulEtc !== "" ? `<div class="pending-etc">${_esc(meaningfulEtc)}</div>` : "";
+      let isItemDone = item.isDone === true || String(item.isDone) === "true";
+      let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${_argq(item.bl)}', ${isItemDone})"`;
+      let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : "";
+
+      let isPendingAir = item.sType === "AIR";
+      let pendingPastelBg = isPendingAir ? "#ff7eff" : "#26e2fd";
+      let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${pendingPastelBg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
+
+      pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${_esc(item.bl)}</div><div class="pending-vol">📦 ${_esc(item.pal)}P (${_esc(item.sType)})</div>${etcTag}</div></div>`;
+    });
+    document.getElementById("pendingList").innerHTML = pListHtml;
+  } else {
+    document.getElementById("pendingSection").style.display = "none";
+  }
+}
+
+function renderCalendar() {
+  for (let d = 1; d <= serverData.daysInMonth; d++) {
+    if (serverData.monthData[d]) {
+      serverData.monthData[d].forEach((item, idx) => {
+        item._rawIdx = idx;
+      });
+    }
+  }
+  const weekHeights = computeWeekHeights();
+
+  document.getElementById("calTitle").innerText =
+    `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2, "0")}`;
+  const grid = document.getElementById("calendarGrid");
+  let rowHtml = '<div class="grid-row">';
+  let cellCount = 0;
+  for (let i = 0; i < serverData.firstDay; i++) {
+    rowHtml += `<div class="day-cell empty"></div>`;
+    cellCount++;
+  }
+
+  const isThisMonthView =
+    serverData.year === todayDateObj.getFullYear() && serverData.month === todayDateObj.getMonth() + 1;
+  const todayDayNumber = todayDateObj.getDate();
+
+  for (let day = 1; day <= serverData.daysInMonth; day++) {
+    if (cellCount > 0 && cellCount % 7 === 0) rowHtml += '</div><div class="grid-row">';
+    const dayOfWeek = (serverData.firstDay + day - 1) % 7;
+    let dateClass = "date-num";
+    if (dayOfWeek === 0) dateClass += " sun";
+    if (dayOfWeek === 6) dateClass += " sat";
+    let cellClass = isThisMonthView && day === todayDayNumber ? "day-cell today-cell" : "day-cell";
+    let dayData = serverData.monthData[day];
+    let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
+    let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+    let holidayName = window.yearlyHolidays ? window.yearlyHolidays[currentYmd] : null;
+    let isHoliday = !!holidayName;
+    let redStyle = dayOfWeek === 0 || isHoliday ? "color: #ff3b30 !important; font-weight: bold;" : "";
+
+    let w = Math.floor((serverData.firstDay + day - 1) / 7);
+    let currentHeaderHeight = weekHeights[w];
+
+    // 일정이 없는 공휴일은 공간 절약을 위해 auto로 찰싹 붙임
+    if (isHoliday && (!dayData || dayData.length === 0)) {
+      currentHeaderHeight = "auto";
+    }
+
+    // 🚨 [입고 2층 구조 유지] 1층(날짜/합계) + 2층(공휴일) 유지하며 height만 조절
+    let dateRowHtml = `<div class="date-row" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0px; width: 100%; height: ${currentHeaderHeight}; overflow: hidden; justify-content: flex-start; margin-bottom: 2px;">`;
+
+    // (1층) 날짜와 총 팔레트 수
+    dateRowHtml += `<div style="display: flex; justify-content: space-between; width: 100%; align-items: center; line-height: 1.0; height: 1.1em;">`;
+    dateRowHtml += `<span class="${dateClass}" style="${redStyle}">${day}</span>`;
+    if (dayData && dayData.length > 0) {
+      let totalPallets = dayData.reduce((sum, item) => sum + parseInt(item.pal || 0), 0);
+      if (totalPallets > 0) {
+        dateRowHtml += `<span class="daily-total" style="flex-shrink: 0; font-weight: 800; font-size: 0.75em;">${totalPallets}</span>`;
+      }
+    }
+    dateRowHtml += `</div>`;
+
+    // (2층) 공휴일 이름 (전체 너비 사용)
+    if (isHoliday && typeof holidayName === "string" && isShowHoliday) {
+      dateRowHtml += `<span style="color:#ff3b30; font-size:0.6em; font-weight:800; letter-spacing:-0.5px; margin-top:1px; display: block; width: 100%; white-space: normal; word-break: break-all; line-height: 1.0;">${holidayName}</span>`;
+    }
+    dateRowHtml += `</div>`;
+
+    let cellHtml = `<div class="${cellClass}" ${bindCell}>${dateRowHtml}`;
+
+    // ... (이후 item-tag 렌더링 및 미정건 로직은 기존과 동일) ...
+
+    if (dayData && dayData.length > 0) {
+      dayData.forEach((item, idx) => {
+        let isItemDone = item.isDone === true || String(item.isDone) === "true";
+        let isAir = item.sType === "AIR";
+        let pastelBg = isAir ? "#ff7eff" : "#26e2fd";
+
+        let tagClass = `item-tag`;
+        if (isItemDone) tagClass += " done-mark";
+        let meaningfulEtc = item.etc
+          ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, "").trim()
+          : "";
+        if (meaningfulEtc !== "") tagClass += " has-etc";
+
+        // 기존에 있던 AI 뱃지는 과감하게 지우고 P 글씨도 뺍니다!
+        let iconHtml = isItemDone ? `<span class="done-icon">✅</span>` : "";
+        let shortName = item.bl.length > 4 ? item.bl.slice(-4) : item.bl;
+        if (item.bl.startsWith("발행전")) shortName = "발행전";
+
+        let innerHtml = `<span class="pal-main">${_esc(item.pal)}</span><span class="bl-sub">${iconHtml}${_esc(shortName)}</span>`;
+        let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
+        let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${_argq(item.bl)}', ${isItemDone})"`;
+
+        // 💡 [디테일 2 수정] 완료 여부에 따른 극명한 글씨색 대비
+        let textColor = isItemDone ? "#ffffff" : "#111111";
+        let textShadow = isItemDone ? "text-shadow: 0px 1px 2px rgba(0,0,0,0.6);" : "";
+        let customStyle = `background-color: ${pastelBg} !important; color: ${textColor} !important; ${textShadow} border: 1px solid rgba(0,0,0,0.1);`;
+
+        cellHtml += `<div class="${tagClass}" style="${customStyle}" data-raw-idx="${originalIdx}" ${bindItem}>${innerHtml}</div>`;
+      });
+    }
+    cellHtml += `</div>`;
+    rowHtml += cellHtml;
+    cellCount++;
+  }
+  while (cellCount % 7 !== 0) {
+    rowHtml += `<div class="day-cell empty"></div>`;
+    cellCount++;
+  }
+  rowHtml += "</div>";
+  grid.innerHTML = rowHtml;
+
+  renderPending();
+
+  updateStatsSummary();
+  updateSyncTime();
+  const _bl = document.getElementById("bootLoader");
+  if (_bl) _bl.classList.add("hide");
+}
+
+function navMonth(offset) {
+  let currentY = parseInt(serverData.year, 10);
+  let currentM = parseInt(serverData.month, 10);
+  if (isNaN(currentY) || isNaN(currentM)) {
+    let now = new Date();
+    currentY = now.getFullYear();
+    currentM = now.getMonth() + 1;
+  }
+  let newMonth = currentM + parseInt(offset, 10);
+  let newYear = currentY;
+  if (newMonth > 12) {
+    newMonth = 1;
+    newYear++;
+  } else if (newMonth < 1) {
+    newMonth = 12;
+    newYear--;
+  }
+  goToAsync(newYear, newMonth);
+}
+
+let tempPickerYear = serverData.year;
+function openPicker() {
+  tempPickerYear = parseInt(serverData.year, 10);
+  renderPicker();
+  document.getElementById("monthPickerModal").style.display = "flex";
+}
+
+function renderPicker() {
+  document.getElementById("pickerYearText").innerText = `${tempPickerYear}년`;
+  let gridHtml = "";
+  for (let i = 1; i <= 12; i++) {
+    let isCurrent =
+      tempPickerYear === parseInt(serverData.year, 10) && i === parseInt(serverData.month, 10) ? "current" : "";
+    gridHtml += `<button class="month-btn ${isCurrent}" onclick="document.getElementById('monthPickerModal').style.display='none'; goToAsync(${tempPickerYear}, ${i})">${i}월</button>`;
+  }
+  document.getElementById("pickerMonthGrid").innerHTML = gridHtml;
+}
+
+// 🚀 [초고속 월 이동] 오염된 캐시 치료 + 깜빡임 방지 100% 최적화
+function goToAsync(year, month) {
+  const toastEl = document.getElementById("toast");
+  if (toastEl) toastEl.classList.remove("show");
+  if (window.toastTimer) clearTimeout(window.toastTimer);
+
+  let safeYear = parseInt(year, 10);
+  let safeMonth = parseInt(month, 10);
+
+  checkAndFetchHolidays(safeYear);
+
+  // 💡 [핵심 패치] 달력을 넘기기 전에 현재 가지고 있는 '미정(대기)' 최신 목록을 배낭에 챙깁니다!
+  let globalPending =
+    window.globalPendingItems && window.globalPendingItems.length > 0
+      ? window.globalPendingItems
+      : serverData.pendingItems || [];
+
+  const cacheKey = `cal_cache_${currentType}_${safeYear}_${safeMonth}`;
+  const cachedData = localStorage.getItem(cacheKey);
+  let isCacheValid = false;
+
+  if (cachedData) {
+    try {
+      let parsed = JSON.parse(cachedData);
+      serverData = typeof parsed === "string" ? JSON.parse(parsed) : parsed;
+      serverData.year = safeYear;
+      serverData.month = safeMonth;
+      serverData.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
+      serverData.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
+      if (!isNaN(serverData.year)) isCacheValid = true;
+    } catch (e) {}
+  }
+
+  if (!isCacheValid) {
+    let tempFirstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
+    let tempDays = new Date(safeYear, safeMonth, 0).getDate();
+    serverData = { year: safeYear, month: safeMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {} };
+  }
+
+  // 💡 [핵심 패치] 새로 연 달력에 캐시 상관없이 아까 챙겨둔 '미정(대기)' 목록을 무조건 덮어씌움!
+  serverData.pendingItems = globalPending;
+
+  renderCalendar();
+
+  window.currentNavId = (window.currentNavId || 0) + 1;
+  let myNavId = window.currentNavId;
+  let fetchStartTime = Date.now();
+  apiGet({ type: currentType, year: safeYear, month: safeMonth }).then((res) => {
+    if (res === null) return;
+    if (myNavId !== window.currentNavId) return;
+    if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
+
+    res.year = safeYear;
+    res.month = safeMonth;
+    res.firstDay = new Date(safeYear, safeMonth - 1, 1).getDay();
+    res.daysInMonth = new Date(safeYear, safeMonth, 0).getDate();
+
+    const getScheduleSig = (dataObj) => {
+      if (!dataObj) return "";
+      const norm = (v) => {
+        let s = v == null || v === "" ? "" : String(v).trim();
+        return s === "0" || s === "" ? "" : s;
+      };
+      let sigs = [];
+      if (dataObj.pendingItems)
+        dataObj.pendingItems.forEach((it) =>
+          sigs.push(`P_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`),
+        );
+      if (dataObj.monthData) {
+        for (let d in dataObj.monthData)
+          dataObj.monthData[d].forEach((it) =>
+            sigs.push(`${d}_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`),
+          );
+      }
+      return sigs.sort().join("||");
+    };
+    let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
+    localStorage.setItem(cacheKey, JSON.stringify(res));
+    if (isScheduleChanged) {
+      serverData = res;
+      renderCalendar();
+    }
+  });
+}
+
+// 🚀 [스텔스 연간 동기화 매니저] (연속 클릭 시 서버 과부하/멈춤 완벽 방어)
+let stealthYearlyTimer = null;
+function triggerStealthYearlySync(targetYear) {
+  if (stealthYearlyTimer) clearTimeout(stealthYearlyTimer);
+
+  stealthYearlyTimer = setTimeout(() => {
+    apiGet({ action: "yearlyStats", type: currentType, year: targetYear }).then((res) => {
+      if (res && res.year) {
+        yearlyCache[res.year] = res;
+        localStorage.setItem(`yearly_stats_cache_${currentType}_${res.year}`, JSON.stringify(res));
+        if (
+          document.getElementById("dashboardModal").style.display === "flex" &&
+          window.dashMode === "year" &&
+          window.dashYear === res.year
+        ) {
+          renderDashCharts();
+        }
+      }
+    });
+  }, 1500);
+}
+
+function updateLocalState(action, payload, idx) {
+  let oldDay = payload.oldDate && payload.oldDate !== "미정" ? parseInt(payload.oldDate.split("-")[2], 10) : "pending";
+  let newDay = payload.newDate && payload.newDate !== "미정" ? parseInt(payload.newDate.split("-")[2], 10) : "pending";
+  let arr = oldDay === "pending" ? serverData.pendingItems : serverData.monthData[oldDay];
+  if (!arr) return;
+
+  if (action === "EDIT") {
+    let item = arr.splice(idx, 1)[0];
+
+    // 🚨 [핵심 픽스] 수정된 모든 데이터를 내 폰 화면(로컬 객체)에도 즉시 덮어씌웁니다!
+    if (payload.newBL !== undefined) {
+      item.bl = payload.newBL;
+      item.company = payload.newBL; // 시스템 호환용
+    }
+    if (payload.newPal !== undefined) item.pal = payload.newPal;
+    if (payload.newSType !== undefined) item.sType = payload.newSType;
+    if (payload.newFwd !== undefined) item.fwd = payload.newFwd;
+    if (payload.newInvoice !== undefined) item.invoice = payload.newInvoice;
+    if (payload.newEtc !== undefined) item.etc = payload.newEtc;
+
+    if (newDay !== "pending" && !serverData.monthData[newDay]) serverData.monthData[newDay] = [];
+    let newArr = newDay === "pending" ? serverData.pendingItems : serverData.monthData[newDay];
+    newArr.push(item);
+  } else if (action === "DELETE") {
+    arr.splice(idx, 1);
+  } else if (action === "DONE") {
+    arr[idx].isDone = true;
+  } else if (action === "UNDO_DONE") {
+    arr[idx].isDone = false;
+  }
+
+  lastLocalUpdateTime = Date.now();
+  localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+
+  triggerStealthYearlySync(serverData.year);
+}
+
+function updateMultiLocalState(action, items) {
+  const norm = (v) => {
+    let s = String(v != null ? v : "").trim();
+    return s === "0" || s === "" ? "" : s;
+  };
+  items.forEach((target) => {
+    let day = target.dateStr === "미정" ? "pending" : parseInt(target.dateStr.split("-")[2], 10);
+    let arr = day === "pending" ? serverData.pendingItems : serverData.monthData[day];
+    if (!arr) return;
+    // 🚨 ID가 있으면 무조건 ID로 잡고, 없으면 글자로 찾아서 확실하게 업데이트!
+    let idx = arr.findIndex((i) => {
+      if (target.id && i.id === target.id) return true;
+      return i.bl === target.bl && norm(i.pal) === norm(target.pal);
+    });
+    if (idx !== -1) {
+      if (action === "MULTI_DELETE") arr.splice(idx, 1);
+      else if (action === "MULTI_DONE") arr[idx].isDone = true;
+      else if (action === "MULTI_UNDO_DONE") arr[idx].isDone = false;
+    }
+  });
+  lastLocalUpdateTime = Date.now();
+  localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
+  triggerStealthYearlySync(serverData.year);
+}
+
+if (isAdmin) {
+  const btn = document.getElementById("adminBtn");
+  btn.innerHTML = "🔓 관리자";
+  btn.classList.add("unlocked");
+  document.getElementById("adminActions").style.display = "flex";
+}
+
+// =====================================================
+// 🔒 [통합 인증 및 세션 제어 엔진] - 중복 코드 제거 및 최적화
+// =====================================================
+
+// 🚨 1. 인증 데이터 통합 저장/삭제 헬퍼
+
+// 🚨 2. 수동 로그인 모달창 띄우기
+
+// 🚨 3. 권한에 따른 프로필 모달 및 세팅 토글
+
+// 🚨 4. 자동 로그인 토글 (스토리지 이사)
+function handleAutoLoginToggle(checkbox) {
+  const id = localStorage.getItem("admin_id") || sessionStorage.getItem("admin_id");
+  const role = localStorage.getItem("admin_role") || sessionStorage.getItem("admin_role");
+
+  if (checkbox.checked) {
+    localStorage.setItem("auto_login", "true");
+    if (id) saveAuthData(id, role, true);
+    showToast("자동 로그인 기능이 켜졌습니다.", 1500);
+  } else {
+    localStorage.setItem("auto_login", "false");
+    if (id) saveAuthData(id, role, true);
+    showToast("앱 종료 시 자동으로 로그아웃됩니다.", 1500);
+  }
+}
+
+window.addEventListener("beforeunload", () => {
+  if (localStorage.getItem("auto_login") === "false") {
+    saveAuthData(null, null, false);
+  }
+});
+
+// 🚨 5. 생체 인증 스위치 컨트롤 (모달 호출)
+
+// 모달 취소 시 스위치 원상복구
 
 // 💡 [PWA 완벽 대응 및 무반응 버그 원천 차단] 통합 가동 엔진
-
 
 // 🚨 [가장 중요한 핵심 타이밍 제어]
 // 이미 DOM 로드가 완료된 인터랙티브/컴플리트 상태라면 대기하지 않고 즉시 이벤트를 바인딩합니다.
 if (document.readyState === "complete" || document.readyState === "interactive") {
-    bindBioAuthEvents();
+  bindBioAuthEvents();
 } else {
-    document.addEventListener("DOMContentLoaded", bindBioAuthEvents);
+  document.addEventListener("DOMContentLoaded", bindBioAuthEvents);
 }
 
-      // 🚨 6. 비밀번호 눈알 아이콘 토글
-      
+// 🚨 6. 비밀번호 눈알 아이콘 토글
 
-      // 🚨 7. 로그아웃 (서버에 로그아웃 기록 전송 추가)
-      
+// 🚨 7. 로그아웃 (서버에 로그아웃 기록 전송 추가)
 
-      let isMultiMode = false;
-      let selectedItems = [];
-      function toggleMultiMode() {
-        isMultiMode = !isMultiMode; selectedItems = [];
-        document.querySelectorAll('.item-tag, .pending-item').forEach(el => el.classList.remove('multi-selected'));
-        const btn = document.getElementById('multiBtn'); const bar = document.getElementById('multiActionBar');
-        if (isMultiMode) {
-          btn.innerText = '❌ 취소'; btn.classList.add('active'); bar.style.display = 'flex';
-          document.getElementById('selCount').innerText = '0';
-        } else { btn.innerText = '☑️ 다중 선택'; btn.classList.remove('active'); bar.style.display = 'none';
-        }
-      }
+let isMultiMode = false;
+let selectedItems = [];
+function toggleMultiMode() {
+  isMultiMode = !isMultiMode;
+  selectedItems = [];
+  document.querySelectorAll(".item-tag, .pending-item").forEach((el) => el.classList.remove("multi-selected"));
+  const btn = document.getElementById("multiBtn");
+  const bar = document.getElementById("multiActionBar");
+  if (isMultiMode) {
+    btn.innerText = "❌ 취소";
+    btn.classList.add("active");
+    bar.style.display = "flex";
+    document.getElementById("selCount").innerText = "0";
+  } else {
+    btn.innerText = "☑️ 다중 선택";
+    btn.classList.remove("active");
+    bar.style.display = "none";
+  }
+}
 
-    // 🚀 [초정밀 통합 드래그 엔진] (입고/출고 공통)
-      let pressTimer = null;
-      let isLongPress = false;
-      let pressTarget = null;
-      let startX = 0, startY = 0;
-      let isDragging = false;
-      let dragGhost = null;
-      let dragData = null;
-      let hasMovedDuringDrag = false;
-      let dragOffsetX = 0, dragOffsetY = 0;
-      let dragReq = null;
-      let lastDropTarget = null;
-      let _lastInsertPos = null; // 'top' | 'bottom' | 'cell'
+// 🚀 [초정밀 통합 드래그 엔진] (입고/출고 공통)
+let pressTimer = null;
+let isLongPress = false;
+let pressTarget = null;
+let startX = 0,
+  startY = 0;
+let isDragging = false;
+let dragGhost = null;
+let dragData = null;
+let hasMovedDuringDrag = false;
+let dragOffsetX = 0,
+  dragOffsetY = 0;
+let dragReq = null;
+let lastDropTarget = null;
+let _lastInsertPos = null; // 'top' | 'bottom' | 'cell'
 
-      function startPress(e, type, day, idx = null) {
-        if (!isAdmin || isMultiMode) return;
-        cancelPress();
-        isLongPress = false;
-        hasMovedDuringDrag = false;
-        pressTarget = e.currentTarget;
-        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        startX = clientX; startY = clientY;
-        pressTarget.classList.add("cell-pressing");
-        pressTimer = setTimeout(() => {
-          isLongPress = true;
-          if (pressTarget) pressTarget.classList.remove("cell-pressing");
-          if (navigator.vibrate) navigator.vibrate(50);
+function startPress(e, type, day, idx = null) {
+  if (!isAdmin || isMultiMode) return;
+  cancelPress();
+  isLongPress = false;
+  hasMovedDuringDrag = false;
+  pressTarget = e.currentTarget;
+  let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  startX = clientX;
+  startY = clientY;
+  pressTarget.classList.add("cell-pressing");
+  pressTimer = setTimeout(() => {
+    isLongPress = true;
+    if (pressTarget) pressTarget.classList.remove("cell-pressing");
+    if (navigator.vibrate) navigator.vibrate(50);
 
-          if (type === "cell") {
-            if (typeof openAddFormWithDate === "function") openAddFormWithDate(day);
-          } else if (type === "item") {
-            isDragging = true;
-            dragData = { day: day, idx: idx };
-            let rect = pressTarget.getBoundingClientRect();
-            dragOffsetX = clientX - rect.left;
-            dragOffsetY = clientY - rect.top;
+    if (type === "cell") {
+      if (typeof openAddFormWithDate === "function") openAddFormWithDate(day);
+    } else if (type === "item") {
+      isDragging = true;
+      dragData = { day: day, idx: idx };
+      let rect = pressTarget.getBoundingClientRect();
+      dragOffsetX = clientX - rect.left;
+      dragOffsetY = clientY - rect.top;
 
-            dragGhost = pressTarget.cloneNode(true);
-            pressTarget.style.opacity = "0.3"; 
+      dragGhost = pressTarget.cloneNode(true);
+      pressTarget.style.opacity = "0.3";
 
-            if (day === "pending") {
-              dragGhost.className = "item-tag";
-              if (serverData.pendingItems[idx].sType) {
-                 let cClass = serverData.pendingItems[idx].sType === 'SEA' ? 'color-sea' : 'color-air';
-                 dragGhost.classList.add(cClass);
-                 dragGhost.innerHTML = serverData.pendingItems[idx].bl.slice(-4);
-                 dragGhost.style.color = '#fff';
-              } else {
-                 let cleanComp = serverData.pendingItems[idx].company.replace(/\[TASK\]/gi, "").trim();
-                 let shortName = typeof getShortName === "function" ? getShortName(cleanComp) : cleanComp.slice(0, 4);
-                 if (typeof getCompanyColor === "function") {
-                    let colorObj = getCompanyColor(cleanComp);
-                    dragGhost.style.background = colorObj.bg;
-                    dragGhost.style.color = colorObj.cMain;
-                 }
-                 dragGhost.innerHTML = shortName;
-              }
-              dragGhost.style.width = "60px"; dragGhost.style.height = "35px";
-              dragGhost.style.justifyContent = "center"; dragGhost.style.alignItems = "center"; dragGhost.style.display = "flex"; dragGhost.style.borderRadius = "6px"; dragGhost.style.fontSize = "0.85em"; dragGhost.style.fontWeight = "900";
-              dragOffsetX = 30; dragOffsetY = 17;
-            } else {
-              let isWideTask = rect.width > window.innerWidth * 0.4;
-              dragGhost.style.width = isWideTask ? "100px" : rect.width + "px";
-              dragGhost.style.height = rect.height + "px";
-              if (isWideTask) dragOffsetX = 50;
-              dragGhost.classList.remove("linked-left", "linked-right", "item-tag-slim", "edge-left", "edge-right");
-              dragGhost.style.margin = "0px"; dragGhost.style.borderRight = ""; dragGhost.style.borderLeft = ""; dragGhost.style.borderRadius = "8px";
-            }
-            
-            dragGhost.style.position = "fixed";
-            dragGhost.style.left = "0px"; dragGhost.style.top = "0px"; dragGhost.style.margin = "0px"; dragGhost.style.zIndex = "999999"; dragGhost.style.opacity = "0.95"; dragGhost.style.pointerEvents = "none";
-            dragGhost.style.willChange = "transform"; dragGhost.style.boxShadow = "0 15px 35px rgba(0,0,0,0.3)"; dragGhost.style.transition = "none";
-            
-            document.body.appendChild(dragGhost);
-            
-            // 🚨 화면에 박자마자 즉시 좌표 적용! (입고 버그 픽스)
-            dragGhost.style.transform = `translate3d(${clientX - dragOffsetX}px, ${clientY - dragOffsetY}px, 0) scale(1.05)`;
+      if (day === "pending") {
+        dragGhost.className = "item-tag";
+        if (serverData.pendingItems[idx].sType) {
+          let cClass = serverData.pendingItems[idx].sType === "SEA" ? "color-sea" : "color-air";
+          dragGhost.classList.add(cClass);
+          dragGhost.innerHTML = serverData.pendingItems[idx].bl.slice(-4);
+          dragGhost.style.color = "#fff";
+        } else {
+          let cleanComp = serverData.pendingItems[idx].company.replace(/\[TASK\]/gi, "").trim();
+          let shortName = typeof getShortName === "function" ? getShortName(cleanComp) : cleanComp.slice(0, 4);
+          if (typeof getCompanyColor === "function") {
+            let colorObj = getCompanyColor(cleanComp);
+            dragGhost.style.background = colorObj.bg;
+            dragGhost.style.color = colorObj.cMain;
           }
-        }, 400);
+          dragGhost.innerHTML = shortName;
+        }
+        dragGhost.style.width = "60px";
+        dragGhost.style.height = "35px";
+        dragGhost.style.justifyContent = "center";
+        dragGhost.style.alignItems = "center";
+        dragGhost.style.display = "flex";
+        dragGhost.style.borderRadius = "6px";
+        dragGhost.style.fontSize = "0.85em";
+        dragGhost.style.fontWeight = "900";
+        dragOffsetX = 30;
+        dragOffsetY = 17;
+      } else {
+        let isWideTask = rect.width > window.innerWidth * 0.4;
+        dragGhost.style.width = isWideTask ? "100px" : rect.width + "px";
+        dragGhost.style.height = rect.height + "px";
+        if (isWideTask) dragOffsetX = 50;
+        dragGhost.classList.remove("linked-left", "linked-right", "item-tag-slim", "edge-left", "edge-right");
+        dragGhost.style.margin = "0px";
+        dragGhost.style.borderRight = "";
+        dragGhost.style.borderLeft = "";
+        dragGhost.style.borderRadius = "8px";
       }
 
-      
+      dragGhost.style.position = "fixed";
+      dragGhost.style.left = "0px";
+      dragGhost.style.top = "0px";
+      dragGhost.style.margin = "0px";
+      dragGhost.style.zIndex = "999999";
+      dragGhost.style.opacity = "0.95";
+      dragGhost.style.pointerEvents = "none";
+      dragGhost.style.willChange = "transform";
+      dragGhost.style.boxShadow = "0 15px 35px rgba(0,0,0,0.3)";
+      dragGhost.style.transition = "none";
 
-      function updateGhostPosition(x, y) {
-        if (!dragGhost) return;
-        // 🚨 픽셀 단위 직접 주입으로 입고 달력 먹통 현상 완벽 해결!
-        dragGhost.style.left = (x - dragOffsetX) + "px";
-        dragGhost.style.top = (y - dragOffsetY) + "px";
-        dragGhost.style.transform = "scale(1.05)"; // 크기만 살짝 키움
-        
-        if (!dragReq) {
-          dragReq = requestAnimationFrame(() => {
-            let dropElement = document.elementFromPoint(x, y);
-            let targetCell = dropElement ? dropElement.closest(".day-cell:not(.empty)") : null;
-            let targetItem = dropElement ? dropElement.closest(".item-tag") : null;
-            if (targetItem === pressTarget) targetItem = null; // 자기 자신 제외
+      document.body.appendChild(dragGhost);
 
-            // 셀 안의 '보이는' 아이템 목록 (자기 자신·투명 placeholder 제외)
-            let visItems = targetCell ? Array.from(targetCell.querySelectorAll('.item-tag')).filter(el =>
-                el !== pressTarget && el.style.pointerEvents !== 'none' && el.style.opacity !== '0') : [];
-            let lastItem = visItems.length ? visItems[visItems.length - 1] : null;
-            let belowAll = lastItem && y > lastItem.getBoundingClientRect().bottom;
+      // 🚨 화면에 박자마자 즉시 좌표 적용! (입고 버그 픽스)
+      dragGhost.style.transform = `translate3d(${clientX - dragOffsetX}px, ${clientY - dragOffsetY}px, 0) scale(1.05)`;
+    }
+  }, 400);
+}
 
-            // 🛡️ [떨림 방지] 벌어진 갭(빈 자리) 위에 있으면 직전 결정을 그대로 유지
-            if (!belowAll && !targetItem && lastDropTarget && lastDropTarget.classList &&
-                lastDropTarget.classList.contains('item-tag') &&
-                targetCell && lastDropTarget.closest('.day-cell') === targetCell) {
-              dragReq = null; return;
-            }
+function updateGhostPosition(x, y) {
+  if (!dragGhost) return;
+  // 🚨 픽셀 단위 직접 주입으로 입고 달력 먹통 현상 완벽 해결!
+  dragGhost.style.left = x - dragOffsetX + "px";
+  dragGhost.style.top = y - dragOffsetY + "px";
+  dragGhost.style.transform = "scale(1.05)"; // 크기만 살짝 키움
 
-            let desiredTarget = null, desiredPos = null;
-            if (targetCell) {
-              if (belowAll) {
-                desiredTarget = lastItem; desiredPos = 'bottom';
-              } else if (targetItem) {
-                let rect = targetItem.getBoundingClientRect();
-                let ratio = (y - rect.top) / rect.height;
-                if (ratio < 0.4) desiredPos = 'top';
-                else if (ratio > 0.6) desiredPos = 'bottom';
-                else desiredPos = (lastDropTarget === targetItem && _lastInsertPos) ? _lastInsertPos : (ratio < 0.5 ? 'top' : 'bottom');
-                desiredTarget = targetItem;
-              } else {
-                desiredTarget = targetCell; desiredPos = 'cell';
-              }
-            }
+  if (!dragReq) {
+    dragReq = requestAnimationFrame(() => {
+      let dropElement = document.elementFromPoint(x, y);
+      let targetCell = dropElement ? dropElement.closest(".day-cell:not(.empty)") : null;
+      let targetItem = dropElement ? dropElement.closest(".item-tag") : null;
+      if (targetItem === pressTarget) targetItem = null; // 자기 자신 제외
 
-            if (desiredTarget === lastDropTarget && desiredPos === _lastInsertPos) {
-              dragReq = null; return;
-            }
+      // 셀 안의 '보이는' 아이템 목록 (자기 자신·투명 placeholder 제외)
+      let visItems = targetCell
+        ? Array.from(targetCell.querySelectorAll(".item-tag")).filter(
+            (el) => el !== pressTarget && el.style.pointerEvents !== "none" && el.style.opacity !== "0",
+          )
+        : [];
+      let lastItem = visItems.length ? visItems[visItems.length - 1] : null;
+      let belowAll = lastItem && y > lastItem.getBoundingClientRect().bottom;
 
-            document.querySelectorAll(".insert-line-top, .insert-line-bottom, .drag-over").forEach((el) => {
-              el.classList.remove("insert-line-top", "insert-line-bottom", "drag-over");
-            });
-            if (desiredTarget) {
-              if (desiredPos === 'top') desiredTarget.classList.add("insert-line-top");
-              else if (desiredPos === 'bottom') desiredTarget.classList.add("insert-line-bottom");
-              else desiredTarget.classList.add("drag-over");
-            }
-            lastDropTarget = desiredTarget;
-            _lastInsertPos = desiredPos;
-            dragReq = null;
-          });
+      // 🛡️ [떨림 방지] 벌어진 갭(빈 자리) 위에 있으면 직전 결정을 그대로 유지
+      if (
+        !belowAll &&
+        !targetItem &&
+        lastDropTarget &&
+        lastDropTarget.classList &&
+        lastDropTarget.classList.contains("item-tag") &&
+        targetCell &&
+        lastDropTarget.closest(".day-cell") === targetCell
+      ) {
+        dragReq = null;
+        return;
+      }
+
+      let desiredTarget = null,
+        desiredPos = null;
+      if (targetCell) {
+        if (belowAll) {
+          desiredTarget = lastItem;
+          desiredPos = "bottom";
+        } else if (targetItem) {
+          let rect = targetItem.getBoundingClientRect();
+          let ratio = (y - rect.top) / rect.height;
+          if (ratio < 0.4) desiredPos = "top";
+          else if (ratio > 0.6) desiredPos = "bottom";
+          else
+            desiredPos =
+              lastDropTarget === targetItem && _lastInsertPos ? _lastInsertPos : ratio < 0.5 ? "top" : "bottom";
+          desiredTarget = targetItem;
+        } else {
+          desiredTarget = targetCell;
+          desiredPos = "cell";
         }
       }
 
-      document.addEventListener("touchmove", function (e) {
-          if (isDragging) { e.preventDefault(); hasMovedDuringDrag = true; updateGhostPosition(e.touches[0].clientX, e.touches[0].clientY); }
-      }, { passive: false });
-      document.addEventListener("mousemove", function (e) {
-          if (isDragging) { hasMovedDuringDrag = true; updateGhostPosition(e.clientX, e.clientY); }
+      if (desiredTarget === lastDropTarget && desiredPos === _lastInsertPos) {
+        dragReq = null;
+        return;
+      }
+
+      document.querySelectorAll(".insert-line-top, .insert-line-bottom, .drag-over").forEach((el) => {
+        el.classList.remove("insert-line-top", "insert-line-bottom", "drag-over");
       });
-      document.addEventListener("touchend", endDrag); document.addEventListener("mouseup", endDrag);
-      document.addEventListener("touchcancel", endDrag); // 터치 취소 시 드래그 얼어붙음 방지
-
-      function endDrag(e) {
-        if (!isDragging) return;
-        isDragging = false;
-        if (dragReq) { cancelAnimationFrame(dragReq); dragReq = null; }
-
-        let x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
-        let y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
-        
-        if (dragGhost) { dragGhost.remove(); dragGhost = null; }
-        if (pressTarget) { pressTarget.style.opacity = "1"; }
-
-        let currentDropTarget = lastDropTarget;
-        let isTopInsert = currentDropTarget ? currentDropTarget.classList.contains('insert-line-top') : false;
-        if (lastDropTarget) {
-          lastDropTarget.classList.remove("drag-over", "insert-line-top", "insert-line-bottom");
-          lastDropTarget = null;
-        }
-        _lastInsertPos = null;
-
-        if (!hasMovedDuringDrag) return;
-        // 🚨 타겟 결정 안전장치 
-        let targetCell = currentDropTarget ? currentDropTarget.closest('.day-cell') : null;
-        let isOutsideCalendar = false;
-        let targetPending = false;
-        if (!targetCell) {
-            let dropElement = document.elementFromPoint(x, y);
-            targetCell = dropElement ? dropElement.closest(".day-cell") : null;
-            isOutsideCalendar = !dropElement || (!dropElement.closest(".calendar-container") && !dropElement.closest(".overlay-modal"));
-            targetPending = dropElement ? dropElement.closest(".pending-container") : null;
-        }
-
-        let item = dragData.day === "pending" ? serverData.pendingItems[dragData.idx] : serverData.monthData[dragData.day][dragData.idx];
-        let oldDateStr = dragData.day === "pending" ? "미정" : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
-        if (targetCell && !targetCell.classList.contains("empty")) {
-          let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
-          // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
-          // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
-          if (newDay === dragData.day && dragData.day !== "pending") {
-              let arr = serverData.monthData[dragData.day];
-              let targetIdx;
-              if (currentDropTarget && currentDropTarget.classList.contains('item-tag')) {
-                  targetIdx = parseInt(currentDropTarget.getAttribute('data-raw-idx'));
-              } else {
-                  // 같은 날 빈 공간(맨 아래)에 드롭 → 맨 끝으로 이동
-                  targetIdx = arr.length - 1;
-                  isTopInsert = false;
-              }
-              if (!isNaN(targetIdx) && arr) {
-                  let movedItem = arr[dragData.idx];
-
-                  arr.splice(dragData.idx, 1);
-                  if (targetIdx > dragData.idx) targetIdx--; 
-                  
-                  let insertIdx = isTopInsert ? targetIdx : targetIdx + 1;
-                  arr.splice(insertIdx, 0, movedItem);
-                  
-                  // 🚨 사용자가 만든 커스텀 순서를 무조건 유지하도록 도장 꽝!
-                  serverData.customOrderFlags = serverData.customOrderFlags || {};
-                  serverData.customOrderFlags[dragData.day] = true;
-
-                  // 🚨 [패치 4] Vercel 서버로 순서표 전송! (이게 빠져서 새로고침 시 튕겼음!)
-                  let orderPayload = { dailyOrders: {} };
-                  let dStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
-                  orderPayload.dailyOrders[dStr] = [];
-                  arr.forEach((it, i) => {
-                      it.sortIdx = i; // 로컬 반영
-                      orderPayload.dailyOrders[dStr].push({ id: it.id || null, company: it.bl, pal: String(it.pal || "").trim(), sortIdx: i });
-                  });
-
-                  localStorage.setItem(`cal_cache_${currentType}_${serverData.year}_${serverData.month}`, JSON.stringify(serverData));
-                  renderCalendar();
-                  
-                  apiCall({ source: 'vercel', domain: 'in', action: 'UPDATE_ORDER', data: orderPayload, token: adminToken, admin_id: localStorage.getItem('admin_id') });
-                  return;
-              }
-          }
-
-          if (newDay === dragData.day) return;
-          let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
-          let rawName = item.company || item.bl;
-          let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
-          if (confirm(`🚚 [${cleanName}] 일정을 ${newDay}일로 이동하시겠습니까?`)) {
-            executeMove(item, oldDateStr, newDateStr, dragData.idx);
-          }
-        } else if (isOutsideCalendar || targetPending) {
-          if (dragData.day === "pending") return;
-          let rawName = item.company || item.bl;
-          let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
-          if (confirm(`🚚 [${cleanName}] 일정을 '미정(대기)'으로 변경하시겠습니까?`)) {
-            executeMove(item, oldDateStr, "미정", dragData.idx);
-          }
-        }
+      if (desiredTarget) {
+        if (desiredPos === "top") desiredTarget.classList.add("insert-line-top");
+        else if (desiredPos === "bottom") desiredTarget.classList.add("insert-line-bottom");
+        else desiredTarget.classList.add("drag-over");
       }
+      lastDropTarget = desiredTarget;
+      _lastInsertPos = desiredPos;
+      dragReq = null;
+    });
+  }
+}
 
-      function executeMove(item, oldDateStr, newDateStr, idx) {
-        let payload = { 
-            action: 'EDIT', id: item.id, 
-            oldBL: item.bl, oldDate: oldDateStr, oldDone: item.isDone, oldPal: String(item.pal||""), 
-            newDate: newDateStr, newBL: item.bl, newPal: item.pal, newSType: item.sType, newFwd: item.fwd, newInvoice: item.invoice, newEtc: item.etc 
-        };
-        updateLocalState('EDIT', payload, idx); renderCalendar(); 
-        apiCall({ source: 'vercel', domain: 'in', action: 'EDIT', data: payload, token: adminToken, admin_id: localStorage.getItem('admin_id') })
-        .then(res => {
-          if (res === null || !res.success) { showToast('❌ 서버 저장 실패! 데이터를 다시 불러옵니다.', 2000); goToAsync(serverData.year, serverData.month); }
+document.addEventListener(
+  "touchmove",
+  function (e) {
+    if (isDragging) {
+      e.preventDefault();
+      hasMovedDuringDrag = true;
+      updateGhostPosition(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  },
+  { passive: false },
+);
+document.addEventListener("mousemove", function (e) {
+  if (isDragging) {
+    hasMovedDuringDrag = true;
+    updateGhostPosition(e.clientX, e.clientY);
+  }
+});
+document.addEventListener("touchend", endDrag);
+document.addEventListener("mouseup", endDrag);
+document.addEventListener("touchcancel", endDrag); // 터치 취소 시 드래그 얼어붙음 방지
+
+function endDrag(e) {
+  if (!isDragging) return;
+  isDragging = false;
+  if (dragReq) {
+    cancelAnimationFrame(dragReq);
+    dragReq = null;
+  }
+
+  let x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+  let y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+
+  if (dragGhost) {
+    dragGhost.remove();
+    dragGhost = null;
+  }
+  if (pressTarget) {
+    pressTarget.style.opacity = "1";
+  }
+
+  let currentDropTarget = lastDropTarget;
+  let isTopInsert = currentDropTarget ? currentDropTarget.classList.contains("insert-line-top") : false;
+  if (lastDropTarget) {
+    lastDropTarget.classList.remove("drag-over", "insert-line-top", "insert-line-bottom");
+    lastDropTarget = null;
+  }
+  _lastInsertPos = null;
+
+  if (!hasMovedDuringDrag) return;
+  // 🚨 타겟 결정 안전장치
+  let targetCell = currentDropTarget ? currentDropTarget.closest(".day-cell") : null;
+  let isOutsideCalendar = false;
+  let targetPending = false;
+  if (!targetCell) {
+    let dropElement = document.elementFromPoint(x, y);
+    targetCell = dropElement ? dropElement.closest(".day-cell") : null;
+    isOutsideCalendar =
+      !dropElement || (!dropElement.closest(".calendar-container") && !dropElement.closest(".overlay-modal"));
+    targetPending = dropElement ? dropElement.closest(".pending-container") : null;
+  }
+
+  let item =
+    dragData.day === "pending"
+      ? serverData.pendingItems[dragData.idx]
+      : serverData.monthData[dragData.day][dragData.idx];
+  let oldDateStr =
+    dragData.day === "pending"
+      ? "미정"
+      : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+  if (targetCell && !targetCell.classList.contains("empty")) {
+    let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
+    // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
+    // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
+    if (newDay === dragData.day && dragData.day !== "pending") {
+      let arr = serverData.monthData[dragData.day];
+      let targetIdx;
+      if (currentDropTarget && currentDropTarget.classList.contains("item-tag")) {
+        targetIdx = parseInt(currentDropTarget.getAttribute("data-raw-idx"));
+      } else {
+        // 같은 날 빈 공간(맨 아래)에 드롭 → 맨 끝으로 이동
+        targetIdx = arr.length - 1;
+        isTopInsert = false;
+      }
+      if (!isNaN(targetIdx) && arr) {
+        let movedItem = arr[dragData.idx];
+
+        arr.splice(dragData.idx, 1);
+        if (targetIdx > dragData.idx) targetIdx--;
+
+        let insertIdx = isTopInsert ? targetIdx : targetIdx + 1;
+        arr.splice(insertIdx, 0, movedItem);
+
+        // 🚨 사용자가 만든 커스텀 순서를 무조건 유지하도록 도장 꽝!
+        serverData.customOrderFlags = serverData.customOrderFlags || {};
+        serverData.customOrderFlags[dragData.day] = true;
+
+        // 🚨 [패치 4] Vercel 서버로 순서표 전송! (이게 빠져서 새로고침 시 튕겼음!)
+        let orderPayload = { dailyOrders: {} };
+        let dStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+        orderPayload.dailyOrders[dStr] = [];
+        arr.forEach((it, i) => {
+          it.sortIdx = i; // 로컬 반영
+          orderPayload.dailyOrders[dStr].push({
+            id: it.id || null,
+            company: it.bl,
+            pal: String(it.pal || "").trim(),
+            sortIdx: i,
+          });
         });
+
+        localStorage.setItem(
+          `cal_cache_${currentType}_${serverData.year}_${serverData.month}`,
+          JSON.stringify(serverData),
+        );
+        renderCalendar();
+
+        apiCall({
+          source: "vercel",
+          domain: "in",
+          action: "UPDATE_ORDER",
+          data: orderPayload,
+          token: adminToken,
+          admin_id: localStorage.getItem("admin_id"),
+        });
+        return;
       }
+    }
 
-      function handleItemClick(e, day, idx, bl, isDone) {
-        if (isMultiMode) {
-          const el = e.currentTarget;
-          let dateStr = day === 'pending' ? '미정' : `${serverData.year}-${String(serverData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-          let isItemDone = isDone === true || String(isDone) === "true";
-          let itemKey = `${bl}_${dateStr}_${isItemDone}_${idx}`;
-          let item = day === 'pending' ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
-          const safeStr = (val) => (val === "" || val == null) ? "" : String(val).trim();
-          let existingIdx = selectedItems.findIndex(i => i.key === itemKey);
-          if (existingIdx > -1) { selectedItems.splice(existingIdx, 1); el.classList.remove('multi-selected'); }
-          // 기존 코드 덮어쓰기
-          else { selectedItems.push({ key: itemKey, id: item.id, bl: bl, dateStr: dateStr, isDone: isItemDone, pal: safeStr(item.pal) });
-          el.classList.add('multi-selected'); }
-          document.getElementById('selCount').innerText = selectedItems.length; return;
-        }
-        if (isLongPress) { setTimeout(() => { isLongPress = false; }, 100); return; } showModal(day);
+    if (newDay === dragData.day) return;
+    let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
+    let rawName = item.company || item.bl;
+    let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
+    if (confirm(`🚚 [${cleanName}] 일정을 ${newDay}일로 이동하시겠습니까?`)) {
+      executeMove(item, oldDateStr, newDateStr, dragData.idx);
+    }
+  } else if (isOutsideCalendar || targetPending) {
+    if (dragData.day === "pending") return;
+    let rawName = item.company || item.bl;
+    let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
+    if (confirm(`🚚 [${cleanName}] 일정을 '미정(대기)'으로 변경하시겠습니까?`)) {
+      executeMove(item, oldDateStr, "미정", dragData.idx);
+    }
+  }
+}
+
+function executeMove(item, oldDateStr, newDateStr, idx) {
+  let payload = {
+    action: "EDIT",
+    id: item.id,
+    oldBL: item.bl,
+    oldDate: oldDateStr,
+    oldDone: item.isDone,
+    oldPal: String(item.pal || ""),
+    newDate: newDateStr,
+    newBL: item.bl,
+    newPal: item.pal,
+    newSType: item.sType,
+    newFwd: item.fwd,
+    newInvoice: item.invoice,
+    newEtc: item.etc,
+  };
+  updateLocalState("EDIT", payload, idx);
+  renderCalendar();
+  apiCall({
+    source: "vercel",
+    domain: "in",
+    action: "EDIT",
+    data: payload,
+    token: adminToken,
+    admin_id: localStorage.getItem("admin_id"),
+  }).then((res) => {
+    if (res === null || !res.success) {
+      showToast("❌ 서버 저장 실패! 데이터를 다시 불러옵니다.", 2000);
+      goToAsync(serverData.year, serverData.month);
+    }
+  });
+}
+
+function handleItemClick(e, day, idx, bl, isDone) {
+  if (isMultiMode) {
+    const el = e.currentTarget;
+    let dateStr =
+      day === "pending"
+        ? "미정"
+        : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    let isItemDone = isDone === true || String(isDone) === "true";
+    let itemKey = `${bl}_${dateStr}_${isItemDone}_${idx}`;
+    let item = day === "pending" ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
+    const safeStr = (val) => (val === "" || val == null ? "" : String(val).trim());
+    let existingIdx = selectedItems.findIndex((i) => i.key === itemKey);
+    if (existingIdx > -1) {
+      selectedItems.splice(existingIdx, 1);
+      el.classList.remove("multi-selected");
+    }
+    // 기존 코드 덮어쓰기
+    else {
+      selectedItems.push({
+        key: itemKey,
+        id: item.id,
+        bl: bl,
+        dateStr: dateStr,
+        isDone: isItemDone,
+        pal: safeStr(item.pal),
+      });
+      el.classList.add("multi-selected");
+    }
+    document.getElementById("selCount").innerText = selectedItems.length;
+    return;
+  }
+  if (isLongPress) {
+    setTimeout(() => {
+      isLongPress = false;
+    }, 100);
+    return;
+  }
+  showModal(day);
+}
+
+function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = false) {
+  if (action === "EDIT" || action === "DELETE") _editState = null; // 수정 세션 종료
+  let oldPal = "";
+  let itemId = null; // 🚨 ID 변수 추가
+  const safeStr = (val) => (val === "" || val == null ? "" : String(val).trim());
+  let currentIsDone = isDone === true || String(isDone) === "true";
+  if (idx !== null) {
+    let day = oldDate === "미정" ? "pending" : parseInt(oldDate.split("-")[2], 10);
+    let item =
+      day === "pending"
+        ? serverData.pendingItems[idx]
+        : serverData.monthData[day]
+          ? serverData.monthData[day][idx]
+          : null;
+    if (item) {
+      oldPal = safeStr(item.pal);
+      currentIsDone = item.isDone === true || String(item.isDone) === "true";
+      itemId = item.id; // 🚨 ID 획득!
+    }
+  }
+
+  let payload = { action: action, id: itemId, oldBL: oldBL, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal };
+  if (action === "DONE") {
+    if (!confirm(`✅ [${oldBL}] 입고를 완료 처리하시겠습니까?`)) return;
+  } else if (action === "UNDO_DONE") {
+    if (!confirm(`⏪ [${oldBL}] 입고 완료 상태를 취소하시겠습니까?`)) return;
+  } else if (action === "DELETE") {
+    if (!confirm(`⚠️ 정말 [${oldBL}] 입고 스케줄을 영구 삭제하시겠습니까?`)) return;
+  } else if (action === "EDIT") {
+    payload.newBL = document.getElementById(`edit-bl-${idx}`).value;
+    payload.newPal = document.getElementById(`edit-pal-${idx}`).value;
+    payload.newSType = document.getElementById(`edit-stype-${idx}`).value;
+    payload.newFwd = document.getElementById(`edit-fwd-${idx}`).value;
+    payload.newInvoice = document.getElementById(`edit-invoice-${idx}`).value;
+    payload.newDate = document.getElementById(`edit-date-${idx}`).value || "미정";
+    payload.newEtc = document.getElementById(`edit-etc-${idx}`).value;
+  }
+
+  document.getElementById("modal").style.display = "none";
+  setTimeout(() => {
+    updateLocalState(action, payload, idx);
+    renderCalendar();
+    apiCall({
+      source: "vercel",
+      domain: "in",
+      action: action,
+      data: payload,
+      token: adminToken,
+      admin_id: localStorage.getItem("admin_id"),
+    }).then(function (res) {
+      if (res === null || !res.success) {
+        showToast("❌ 서버 실패! 원상복구합니다.", 2500);
+        goToAsync(serverData.year, serverData.month);
       }
-      
+    });
+    // 💡 수정 후엔 모달을 닫지 않고 상세보기로 복귀
+    if (action === "EDIT") _reopenDetailAfter(payload.newDate || oldDate);
+  }, 50);
+}
 
-      function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = false) {
-        if (action === "EDIT" || action === "DELETE") _editState = null; // 수정 세션 종료
-        let oldPal = "";
-        let itemId = null; // 🚨 ID 변수 추가
-        const safeStr = (val) => (val === "" || val == null) ? "" : String(val).trim();
-        let currentIsDone = isDone === true || String(isDone) === "true";
-        if (idx !== null) {
-          let day = oldDate === '미정' ? 'pending' : parseInt(oldDate.split('-')[2], 10);
-          let item = day === 'pending' ? serverData.pendingItems[idx] : (serverData.monthData[day] ? serverData.monthData[day][idx] : null);
-          if (item) { 
-              oldPal = safeStr(item.pal); 
-              currentIsDone = item.isDone === true || String(item.isDone) === "true"; 
-              itemId = item.id; // 🚨 ID 획득!
-          }
-        }
-        
-        let payload = { action: action, id: itemId, oldBL: oldBL, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal };
-        if (action === 'DONE') { if (!confirm(`✅ [${oldBL}] 입고를 완료 처리하시겠습니까?`)) return; }
-        else if (action === 'UNDO_DONE') { if (!confirm(`⏪ [${oldBL}] 입고 완료 상태를 취소하시겠습니까?`)) return; }
-        else if (action === 'DELETE') { if (!confirm(`⚠️ 정말 [${oldBL}] 입고 스케줄을 영구 삭제하시겠습니까?`)) return; }
-        else if (action === 'EDIT') {
-            payload.newBL = document.getElementById(`edit-bl-${idx}`).value;
-            payload.newPal = document.getElementById(`edit-pal-${idx}`).value;
-            payload.newSType = document.getElementById(`edit-stype-${idx}`).value;
-            payload.newFwd = document.getElementById(`edit-fwd-${idx}`).value;
-            payload.newInvoice = document.getElementById(`edit-invoice-${idx}`).value;
-            payload.newDate = document.getElementById(`edit-date-${idx}`).value || "미정";
-            payload.newEtc = document.getElementById(`edit-etc-${idx}`).value;
-        }
+function executeMultiAction(action) {
+  if (selectedItems.length === 0) {
+    showToast("항목을 먼저 터치하여 선택해 주세요.", 2000);
+    return;
+  }
+  let actionName =
+    action === "MULTI_DONE" ? "입고 완료 처리" : action === "MULTI_UNDO_DONE" ? "완료 취소" : "영구 삭제";
+  if (!confirm(`⚠️ 선택된 ${selectedItems.length}개의 일정을 일괄 [${actionName}] 하시겠습니까?`)) return;
 
-        document.getElementById('modal').style.display = 'none';
-        setTimeout(() => {
-            updateLocalState(action, payload, idx);
-            renderCalendar();
-            apiCall({ source: 'vercel', domain: 'in', action: action, data: payload, token: adminToken, admin_id: localStorage.getItem('admin_id') })
-            .then(function(res) {
-                if (res === null || !res.success) { showToast('❌ 서버 실패! 원상복구합니다.', 2500); goToAsync(serverData.year, serverData.month); }
-            });
-            // 💡 수정 후엔 모달을 닫지 않고 상세보기로 복귀
-            if (action === "EDIT") _reopenDetailAfter(payload.newDate || oldDate);
-        }, 50);
+  let itemsToProcess = [...selectedItems];
+  toggleMultiMode();
+  setTimeout(() => {
+    updateMultiLocalState(action, itemsToProcess);
+    renderCalendar();
+    apiCall({
+      source: "vercel",
+      domain: "in",
+      action: action,
+      data: { items: itemsToProcess },
+      token: adminToken,
+      admin_id: localStorage.getItem("admin_id"),
+    }).then(function (res) {
+      if (res === null || !res.success) {
+        showToast("❌ 작업 실패! 복구합니다.", 2500);
+        goToAsync(serverData.year, serverData.month);
+      } else {
+        showToast(`✅ 다중 ${actionName} 완료!`, 2500);
       }
+    });
+  }, 50);
+}
 
-      function executeMultiAction(action) {
-        if (selectedItems.length === 0) { showToast('항목을 먼저 터치하여 선택해 주세요.', 2000); return; }
-        let actionName = action === 'MULTI_DONE' ? "입고 완료 처리" : action === 'MULTI_UNDO_DONE' ? "완료 취소" : "영구 삭제";
-        if (!confirm(`⚠️ 선택된 ${selectedItems.length}개의 일정을 일괄 [${actionName}] 하시겠습니까?`)) return;
+function showModal(day) {
+  let dayData = day === "pending" ? serverData.pendingItems : serverData.monthData[day];
+  if (!dayData || dayData.length === 0) return;
+  let titleText = "",
+    dateStr = "";
+  if (day === "pending") {
+    titleText = "⚠️ 입고 보류 / 대기 상세";
+    dateStr = "미정";
+  } else {
+    const dayOfWeekIdx = ["일", "월", "화", "수", "목", "금", "토"];
+    const dayOfWeek = dayOfWeekIdx[new Date(serverData.year, serverData.month - 1, day).getDay()];
+    titleText = `${serverData.month}월 ${day}일 (${dayOfWeek})`;
+    dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+  document.getElementById("modalTitle").innerText = titleText;
+  let contentHtml = "";
+  dayData.forEach((item, idx) => {
+    let isItemDone = item.isDone === true || String(item.isDone) === "true";
+    let typeIcon = item.sType === "SEA" ? "🚢" : "✈️";
 
-        let itemsToProcess = [...selectedItems];
-        toggleMultiMode();
-        setTimeout(() => {
-            updateMultiLocalState(action, itemsToProcess); renderCalendar();
-            apiCall({ source: 'vercel', domain: 'in', action: action, data: { items: itemsToProcess }, token: adminToken, admin_id: localStorage.getItem('admin_id') })
-            .then(function(res) {
-                if (res === null || !res.success) { showToast('❌ 작업 실패! 복구합니다.', 2500); goToAsync(serverData.year, serverData.month); }
-                else { showToast(`✅ 다중 ${actionName} 완료!`, 2500); }
-            });
-        }, 50);
+    let isAir = item.sType === "AIR";
+    let pastelBg = isAir ? "#ff7eff" : "#26e2fd";
+    let iconOpacity = isItemDone ? "0.8" : "1";
+
+    // 🚨 상세보기 창에만 예쁜 AI 알약 뱃지 장착!
+    //let aiBadgeHtml = item.isAi ? `<span style="background:rgba(10,132,255,0.1); color:#0a84ff; border:1px solid rgba(10,132,255,0.3); padding:2px 6px; border-radius:8px; font-size:0.75em; font-weight:900; margin-left:8px; vertical-align:middle;">🤖 AI수정됨</span>` : '';
+
+    let actionBtns = "";
+    if (isAdmin) {
+      if (!isItemDone) {
+        actionBtns = `<div class="action-btn-group"><button class="done-toggle-btn" onclick="submitCMS('DONE', '${_argq(item.bl)}', '${dateStr}', ${idx}, false)">✅ 완료</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${_argq(item.bl)}', '${dateStr}', '${item.pal}', '${_argq(item.etc || "")}')">✏️ 수정</button></div>`;
+      } else {
+        actionBtns = `<div class="action-btn-group"><button class="edit-toggle-btn" style="color:#ff9f0a; border: 1px solid #ff9f0a; background: rgba(255,159,10,0.1);" onclick="submitCMS('UNDO_DONE', '${_argq(item.bl)}', '${dateStr}', ${idx}, true)">⏪ 취소</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${_argq(item.bl)}', '${dateStr}', '${item.pal}', '${_argq(item.etc || "")}')">✏️ 수정</button></div>`;
       }
+    }
 
-      function showModal(day) {
-        let dayData = day === 'pending' ? serverData.pendingItems : serverData.monthData[day];
-        if(!dayData || dayData.length === 0) return;
-        let titleText = "", dateStr = "";
-        if (day === 'pending') { titleText = "⚠️ 입고 보류 / 대기 상세"; dateStr = "미정"; }
-        else { const dayOfWeekIdx = ['일','월','화','수','목','금','토'];
-          const dayOfWeek = dayOfWeekIdx[new Date(serverData.year, serverData.month - 1, day).getDay()]; titleText = `${serverData.month}월 ${day}일 (${dayOfWeek})`; dateStr = `${serverData.year}-${String(serverData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-        }
-        document.getElementById('modalTitle').innerText = titleText;
-        let contentHtml = "";
-        dayData.forEach((item, idx) => {
-          let isItemDone = item.isDone === true || String(item.isDone) === "true";
-          let typeIcon = item.sType === 'SEA' ? '🚢' : '✈️';
-          
-          let isAir = item.sType === 'AIR';
-          let pastelBg = isAir ? '#ff7eff' : '#26e2fd';
-          let iconOpacity = isItemDone ? '0.8' : '1';
+    let meaningfulEtc = item.etc
+      ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, "").trim()
+      : "";
+    let etcHtml = meaningfulEtc !== "" ? `<div class="modal-etc">📍 비고: ${_esc(meaningfulEtc)}</div>` : "";
+    let stampHtml = isItemDone
+      ? `<div class="status-badge"><span style="font-size: 1.1em; line-height: 1;">✔️</span> 입고 완료</div>`
+      : "";
 
-          // 🚨 상세보기 창에만 예쁜 AI 알약 뱃지 장착!
-          //let aiBadgeHtml = item.isAi ? `<span style="background:rgba(10,132,255,0.1); color:#0a84ff; border:1px solid rgba(10,132,255,0.3); padding:2px 6px; border-radius:8px; font-size:0.75em; font-weight:900; margin-left:8px; vertical-align:middle;">🤖 AI수정됨</span>` : '';
-
-          let actionBtns = '';
-          if (isAdmin) {
-            if (!isItemDone) { actionBtns = `<div class="action-btn-group"><button class="done-toggle-btn" onclick="submitCMS('DONE', '${_argq(item.bl)}', '${dateStr}', ${idx}, false)">✅ 완료</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${_argq(item.bl)}', '${dateStr}', '${item.pal}', '${_argq(item.etc || '')}')">✏️ 수정</button></div>`; }
-            else { actionBtns = `<div class="action-btn-group"><button class="edit-toggle-btn" style="color:#ff9f0a; border: 1px solid #ff9f0a; background: rgba(255,159,10,0.1);" onclick="submitCMS('UNDO_DONE', '${_argq(item.bl)}', '${dateStr}', ${idx}, true)">⏪ 취소</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${_argq(item.bl)}', '${dateStr}', '${item.pal}', '${_argq(item.etc || '')}')">✏️ 수정</button></div>`; }
-          }
-
-          let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
-          let etcHtml = meaningfulEtc !== '' ? `<div class="modal-etc">📍 비고: ${_esc(meaningfulEtc)}</div>` : '';
-          let stampHtml = isItemDone ? `<div class="status-badge"><span style="font-size: 1.1em; line-height: 1;">✔️</span> 입고 완료</div>` : '';
-
-          contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
+    contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
                               <div class="modal-icon" style="background-color: ${pastelBg}; opacity: ${iconOpacity}; box-shadow: 0 2px 5px rgba(0,0,0,0.15);"></div>
                               <div class="modal-info">
                                   <div class="modal-comp-row"><span class="modal-comp">${item.pal}P</span>${actionBtns}</div>
                                   <div class="modal-vol">📄 B/L: ${_esc(item.bl)} | ${typeIcon} 타입: ${_esc(item.sType)}</div>
-                                  <div class="modal-detail-text">🏢 FWD: ${_esc(item.fwd || '-')} | 🧾 INV: ${_esc(item.invoice || '-')}</div>
+                                  <div class="modal-detail-text">🏢 FWD: ${_esc(item.fwd || "-")} | 🧾 INV: ${_esc(item.invoice || "-")}</div>
                                   ${etcHtml}
                               </div>
                               ${stampHtml}
                           </div>`;
-        });
-        document.getElementById('modalContent').innerHTML = contentHtml; document.getElementById('modal').style.display = 'flex';
-      }
+  });
+  document.getElementById("modalContent").innerHTML = contentHtml;
+  document.getElementById("modal").style.display = "flex";
+}
 
-      // ── 상세 모달 인라인 수정 상태 관리 ──
-      let _editState = null; // { day, idx, snapshot, saveArgs }
+// ── 상세 모달 인라인 수정 상태 관리 ──
+let _editState = null; // { day, idx, snapshot, saveArgs }
 
-      function _snapshotEdit(idx) {
-        const g = (id) => { let e = document.getElementById(id); return e ? e.value : ''; };
-        return JSON.stringify([
-          g(`edit-bl-${idx}`), g(`edit-pal-${idx}`), g(`edit-stype-${idx}`),
-          g(`edit-fwd-${idx}`), g(`edit-invoice-${idx}`), g(`edit-date-${idx}`), g(`edit-etc-${idx}`)
-        ]);
-      }
-      function _isEditDirty() {
-        if (!_editState) return false;
-        return _snapshotEdit(_editState.idx) !== _editState.snapshot;
-      }
+function _snapshotEdit(idx) {
+  const g = (id) => {
+    let e = document.getElementById(id);
+    return e ? e.value : "";
+  };
+  return JSON.stringify([
+    g(`edit-bl-${idx}`),
+    g(`edit-pal-${idx}`),
+    g(`edit-stype-${idx}`),
+    g(`edit-fwd-${idx}`),
+    g(`edit-invoice-${idx}`),
+    g(`edit-date-${idx}`),
+    g(`edit-etc-${idx}`),
+  ]);
+}
+function _isEditDirty() {
+  if (!_editState) return false;
+  return _snapshotEdit(_editState.idx) !== _editState.snapshot;
+}
 
-      
+function closeEditForm(day, idx) {
+  if (_isEditDirty()) {
+    if (!confirm("⚠️ 저장하지 않은 변경사항이 있습니다.\n변경을 취소하고 상세보기로 돌아갈까요?")) return;
+  }
+  _editState = null;
+  renderCalendar();
+  showModal(day);
+}
 
-      function closeEditForm(day, idx) {
-        if (_isEditDirty()) {
-          if (!confirm("⚠️ 저장하지 않은 변경사항이 있습니다.\n변경을 취소하고 상세보기로 돌아갈까요?")) return;
-        }
+function openEditForm(day, idx, bl, dateStr, pal, etc) {
+  // 🔁 다른 일정 수정 중이면 변경사항 확인 후 전환 (아코디언)
+  if (_editState && _editState.idx !== idx) {
+    if (_isEditDirty()) {
+      const save = confirm("✏️ 수정 중인 변경사항이 있습니다.\n[확인] 저장하고 이동 / [취소] 변경 취소하고 이동");
+      if (save) {
+        const a = _editState.saveArgs;
         _editState = null;
-        renderCalendar();
-        showModal(day);
+        submitCMS("EDIT", a.bl, a.dateStr, a.idx);
+        return;
       }
+    }
+    _editState = null;
+    showModal(day);
+  }
 
-      function openEditForm(day, idx, bl, dateStr, pal, etc) {
-        // 🔁 다른 일정 수정 중이면 변경사항 확인 후 전환 (아코디언)
-        if (_editState && _editState.idx !== idx) {
-          if (_isEditDirty()) {
-            const save = confirm("✏️ 수정 중인 변경사항이 있습니다.\n[확인] 저장하고 이동 / [취소] 변경 취소하고 이동");
-            if (save) {
-              const a = _editState.saveArgs;
-              _editState = null;
-              submitCMS('EDIT', a.bl, a.dateStr, a.idx);
-              return;
-            }
-          }
-          _editState = null;
-          showModal(day);
-        }
+  const card = document.getElementById(`modal-card-${day}-${idx}`);
+  if (!card) return;
+  let inputDateVal = dateStr === "미정" ? "" : dateStr;
+  let item = day === "pending" ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
 
-        const card = document.getElementById(`modal-card-${day}-${idx}`);
-        if (!card) return;
-        let inputDateVal = dateStr === '미정' ? '' : dateStr;
-        let item = day === 'pending' ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
-        
-        let sType = item.sType || ''; let fwd = item.fwd || ''; let invoice = item.invoice || '';
+  let sType = item.sType || "";
+  let fwd = item.fwd || "";
+  let invoice = item.invoice || "";
 
-        card.style.flexDirection = ''; card.style.alignItems = '';
-        // 🚨 폼 레이블(글자) 위아래 여백을 줘서 인풋창에 절대 안 겹치게 만듭니다!
-        card.innerHTML = `
+  card.style.flexDirection = "";
+  card.style.alignItems = "";
+  // 🚨 폼 레이블(글자) 위아래 여백을 줘서 인풋창에 절대 안 겹치게 만듭니다!
+  card.innerHTML = `
           <div class="edit-form" style="width: 100%; padding:0; border:none; margin-top:0;">
             <div class="form-label" style="margin-bottom: 6px; margin-top: 5px;">📦 B/L 번호</div>
             <input type="text" id="edit-bl-${idx}" class="edit-input" value="${_esc(bl)}">
@@ -912,8 +1144,8 @@ if (document.readyState === "complete" || document.readyState === "interactive")
               <div style="flex:1;">
                 <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">운송 타입</div>
                 <select id="edit-stype-${idx}" class="edit-input" style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a0a0a0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E'); background-repeat: no-repeat; background-position: right 15px top 50%; background-size: 10px auto;">
-                  <option value="SEA" ${sType === 'SEA' ? 'selected' : ''}>🚢 해상 (SEA)</option>
-                  <option value="AIR" ${sType === 'AIR' ? 'selected' : ''}>✈️ 항공 (AIR)</option>
+                  <option value="SEA" ${sType === "SEA" ? "selected" : ""}>🚢 해상 (SEA)</option>
+                  <option value="AIR" ${sType === "AIR" ? "selected" : ""}>✈️ 항공 (AIR)</option>
                 </select>
               </div>
             </div>
@@ -936,7 +1168,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             <input type="date" id="edit-date-${idx}" class="edit-input" value="${inputDateVal}">
 
             <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">비고 (메모 입력)</div>
-            <input type="text" id="edit-etc-${idx}" class="edit-input" value="${_esc(etc !== 'undefined' ? etc : '')}">
+            <input type="text" id="edit-etc-${idx}" class="edit-input" value="${_esc(etc !== "undefined" ? etc : "")}">
             
             <div class="btn-row" style="margin-top: 15px; padding-bottom: 10px;">
               <button class="save-btn" onclick="submitCMS('EDIT', '${_argq(bl)}', '${dateStr}', ${idx})">💾 저장</button>
@@ -946,13 +1178,14 @@ if (document.readyState === "complete" || document.readyState === "interactive")
           </div>
         `;
 
-        // 수정 상태 기록
-        _editState = {
-          day, idx,
-          snapshot: _snapshotEdit(idx),
-          saveArgs: { bl, dateStr, idx }
-        };
-      }
+  // 수정 상태 기록
+  _editState = {
+    day,
+    idx,
+    snapshot: _snapshotEdit(idx),
+    saveArgs: { bl, dateStr, idx },
+  };
+}
 
 // =====================================================
 // 🚀 [OCR 최종 패치] 광활한 핀치 투 줌/이동 엔진 (먹통 버그 해결)
@@ -961,16 +1194,18 @@ let ocrTransform = { scale: 1, x: 0, y: 0 };
 let _ocrGesturesInitialized = false;
 
 function showLastOcrImage() {
-    document.getElementById('ocrImageModal').style.display = 'flex';
-    document.getElementById('ocrImageContent').innerHTML = '불러오는 중... ⏳';
-    ocrTransform = { scale: 1, x: 0, y: 0 }; 
+  document.getElementById("ocrImageModal").style.display = "flex";
+  document.getElementById("ocrImageContent").innerHTML = "불러오는 중... ⏳";
+  ocrTransform = { scale: 1, x: 0, y: 0 };
 
-    apiCall({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_IMAGE' }).then(function(res) {
-        if (res === null) { document.getElementById('ocrImageContent').innerHTML = '이미지 로딩 에러'; return; }
-        let url = (res && res.url) ? res.url : (typeof res === 'string' ? res : "");
-        if (url && url.startsWith("http")) {
-            
-            document.getElementById('ocrImageContent').innerHTML = `
+  apiCall({ source: "vercel", domain: "system", action: "GET_LAST_OCR_IMAGE" }).then(function (res) {
+    if (res === null) {
+      document.getElementById("ocrImageContent").innerHTML = "이미지 로딩 에러";
+      return;
+    }
+    let url = res && res.url ? res.url : typeof res === "string" ? res : "";
+    if (url && url.startsWith("http")) {
+      document.getElementById("ocrImageContent").innerHTML = `
                 <div style="display: flex; flex-direction: column; width: 100%; height: 80vh; max-height: 800px; overflow: hidden;">
                     
                     <div id="ocrImageWrapper" style="flex: 1 1 100%; position: relative; overflow: hidden; background: #e9ecef; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: center; transition: flex 0.3s ease;">
@@ -999,52 +1234,57 @@ function showLastOcrImage() {
                     </div>
                 </div>
             `;
-            setTimeout(initOcrGestures, 100); 
-        } else {
-            document.getElementById('ocrImageContent').innerHTML = '<div style="color:var(--text-sub); font-weight:800;">현재 서버에 등록된 최신 이미지가 없습니다.</div>';
-        }
-    });
+      setTimeout(initOcrGestures, 100);
+    } else {
+      document.getElementById("ocrImageContent").innerHTML =
+        '<div style="color:var(--text-sub); font-weight:800;">현재 서버에 등록된 최신 이미지가 없습니다.</div>';
+    }
+  });
 }
 
 function loadOcrVerificationData(btnElement) {
-    const container = document.getElementById('ocrVerifyTableContainer');
-    const imgWrapper = document.getElementById('ocrImageWrapper');
-    
-    // 이미 열려있으면 닫기
-    if (container.style.display === 'block') {
-        container.style.display = 'none';
-        imgWrapper.style.flex = '1 1 100%';
-        btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
-        btnElement.style.background = '#4a90e2';
-        return;
+  const container = document.getElementById("ocrVerifyTableContainer");
+  const imgWrapper = document.getElementById("ocrImageWrapper");
+
+  // 이미 열려있으면 닫기
+  if (container.style.display === "block") {
+    container.style.display = "none";
+    imgWrapper.style.flex = "1 1 100%";
+    btnElement.innerHTML = "📊 AI 파싱 데이터 대조하기";
+    btnElement.style.background = "#4a90e2";
+    return;
+  }
+
+  btnElement.innerHTML = "데이터 불러오는 중... ⏳";
+  btnElement.disabled = true;
+
+  // 💡 핵심: 서버에서 데이터를 받아오는 함수를 직접 호출합니다.
+  apiCall({ source: "vercel", domain: "system", action: "GET_LAST_OCR_DATA" }).then(function (data) {
+    if (data === null) {
+      btnElement.innerHTML = "📊 AI 파싱 데이터 대조하기";
+      btnElement.disabled = false;
+      return;
+    }
+    // 🔥 1. 데이터가 있는지 확인
+    if (!data || !data.parsedData || (Array.isArray(data.parsedData) && data.parsedData.length === 0)) {
+      showToast("⚠️ 저장된 파싱 데이터가 없습니다.", 2500);
+      btnElement.innerHTML = "📊 AI 파싱 데이터 대조하기";
+      btnElement.disabled = false;
+      return;
     }
 
-    btnElement.innerHTML = '데이터 불러오는 중... ⏳';
-    btnElement.disabled = true;
+    // 2. Raw 텍스트를 전역 변수에 강제로 저장 (버튼용)
+    // 🎯 서버가 새로 보내주는 순수 텍스트 원본(data.rawData)을 그대로 꽂아줍니다!
+    currentRawOcrString = data.rawData || "가져온 Raw 데이터가 존재하지 않습니다.";
 
-   // 💡 핵심: 서버에서 데이터를 받아오는 함수를 직접 호출합니다.
-apiCall({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_DATA' }).then(function(data) {
-        if (data === null) { btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기'; btnElement.disabled = false; return; }
-        // 🔥 1. 데이터가 있는지 확인
-        if (!data || !data.parsedData || (Array.isArray(data.parsedData) && data.parsedData.length === 0)) {
-            showToast("⚠️ 저장된 파싱 데이터가 없습니다.", 2500);
-            btnElement.innerHTML = '📊 AI 파싱 데이터 대조하기';
-            btnElement.disabled = false;
-            return;
-        }
+    // 3. UI 업데이트
+    btnElement.innerHTML = "🔽 데이터 대조창 닫기 (전체 이미지 보기)";
+    btnElement.disabled = false;
+    btnElement.style.background = "#e74c3c";
+    imgWrapper.style.flex = "1 1 40%";
 
-        // 2. Raw 텍스트를 전역 변수에 강제로 저장 (버튼용)
-        // 🎯 서버가 새로 보내주는 순수 텍스트 원본(data.rawData)을 그대로 꽂아줍니다!
-        currentRawOcrString = data.rawData || "가져온 Raw 데이터가 존재하지 않습니다.";
-                
-        // 3. UI 업데이트
-        btnElement.innerHTML = '🔽 데이터 대조창 닫기 (전체 이미지 보기)';
-        btnElement.disabled = false;
-        btnElement.style.background = '#e74c3c';
-        imgWrapper.style.flex = '1 1 40%';
-                
-        // 4. 테이블 렌더링 시작
-        let tableHtml = `
+    // 4. 테이블 렌더링 시작
+    let tableHtml = `
             <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; color: #333;">
                 <thead style="background: #f8f9fa; position: sticky; top: 0; z-index: 5;">
                     <tr>
@@ -1059,1295 +1299,1510 @@ apiCall({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_DATA' }).the
                     </tr>
                 </thead>
                 <tbody>`;
-        
-        // 🔥 4. 테이블 반복문 대상 수정 (data -> data.parsedData)
-        data.parsedData.forEach(r => {
-            tableHtml += `
+
+    // 🔥 4. 테이블 반복문 대상 수정 (data -> data.parsedData)
+    data.parsedData.forEach((r) => {
+      tableHtml += `
                 <tr>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.bl || ''}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.pal || '0'}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.eta || ''}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.inDate || '미정'}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.fwd || ''}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.sType || ''}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.invoice || ''}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd; text-align: left;">${r.etc || ''}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.bl || ""}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.pal || "0"}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.eta || ""}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.inDate || "미정"}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.fwd || ""}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.sType || ""}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.invoice || ""}</td>
+                    <td style="padding: 6px 4px; border: 1px solid #ddd; text-align: left;">${r.etc || ""}</td>
                 </tr>`;
-        });
-        tableHtml += `</tbody></table>`;
-        container.innerHTML = tableHtml;
-        container.style.display = 'block';
     });
+    tableHtml += `</tbody></table>`;
+    container.innerHTML = tableHtml;
+    container.style.display = "block";
+  });
 }
 
-      function initOcrGestures() {
-          const wrapper = document.getElementById('ocrImageWrapper');
-          if (!wrapper) return;
+function initOcrGestures() {
+  const wrapper = document.getElementById("ocrImageWrapper");
+  if (!wrapper) return;
 
-          if (_ocrGesturesInitialized) return;
-          _ocrGesturesInitialized = true;
+  if (_ocrGesturesInitialized) return;
+  _ocrGesturesInitialized = true;
 
-          let isDragging = false;
-          let lastX = 0, lastY = 0; // 🚨 기준점이 아니라 '마지막 위치' 추적으로 변경!
-          let initialPinchDist = 0;
-          let ocrStartScale = 1;
-          
-          const updateTransform = () => {
-              const currentImg = document.getElementById('ocrImgElement');
-              if(currentImg) currentImg.style.transform = `translate3d(${ocrTransform.x}px, ${ocrTransform.y}px, 0) scale(${ocrTransform.scale})`;
-          };
+  let isDragging = false;
+  let lastX = 0,
+    lastY = 0; // 🚨 기준점이 아니라 '마지막 위치' 추적으로 변경!
+  let initialPinchDist = 0;
+  let ocrStartScale = 1;
 
-          const getPinchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
-          const getMidpoint = (touches) => ({ x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 });
+  const updateTransform = () => {
+    const currentImg = document.getElementById("ocrImgElement");
+    if (currentImg)
+      currentImg.style.transform = `translate3d(${ocrTransform.x}px, ${ocrTransform.y}px, 0) scale(${ocrTransform.scale})`;
+  };
 
-          wrapper.addEventListener('touchstart', (e) => {
-              if (e.target.closest('.close-btn')) return;
-              e.preventDefault(); 
-              
-              if (e.touches.length === 1) {
-                  isDragging = true;
-                  lastX = e.touches[0].clientX;
-                  lastY = e.touches[0].clientY;
-              } else if (e.touches.length === 2) {
-                  isDragging = false;
-                  initialPinchDist = getPinchDistance(e.touches);
-                  ocrStartScale = ocrTransform.scale;
-                  const mid = getMidpoint(e.touches);
-                  lastX = mid.x;
-                  lastY = mid.y;
-              }
-          }, { passive: false });
+  const getPinchDistance = (touches) =>
+    Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  const getMidpoint = (touches) => ({
+    x: (touches[0].clientX + touches[1].clientX) / 2,
+    y: (touches[0].clientY + touches[1].clientY) / 2,
+  });
 
-          wrapper.addEventListener('touchmove', (e) => {
-              e.preventDefault();
-              if (e.touches.length === 1 && isDragging) {
-                  // ☝️ 한 손가락 이동: 움직인 만큼만 더해줌
-                  ocrTransform.x += e.touches[0].clientX - lastX;
-                  ocrTransform.y += e.touches[0].clientY - lastY;
-                  lastX = e.touches[0].clientX;
-                  lastY = e.touches[0].clientY;
-                  requestAnimationFrame(updateTransform);
-              } else if (e.touches.length === 2) {
-                  // ✌️ 두 손가락 줌(Zoom) + 이동(Pan) 완벽 동시 적용!
-                  const currentDist = getPinchDistance(e.touches);
-                  ocrTransform.scale = Math.max(1, Math.min(ocrStartScale * (currentDist / initialPinchDist), 6)); 
-                  
-                  const mid = getMidpoint(e.touches);
-                  // 🚨 확대 중에도 두 손가락 중심점이 움직인 만큼만 화면 좌표에 더해줍니다 (헛돌기 버그 해결)
-                  ocrTransform.x += mid.x - lastX;
-                  ocrTransform.y += mid.y - lastY;
-                  lastX = mid.x;
-                  lastY = mid.y;
-                  
-                  requestAnimationFrame(updateTransform);
-              }
-          }, { passive: false });
+  wrapper.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.target.closest(".close-btn")) return;
+      e.preventDefault();
 
-          wrapper.addEventListener('touchend', (e) => {
-              if (e.touches.length === 1) {
-                  isDragging = true;
-                  lastX = e.touches[0].clientX;
-                  lastY = e.touches[0].clientY;
-              } else if (e.touches.length === 0) {
-                  isDragging = false;
-                  if (ocrTransform.scale <= 1) {
-                      ocrTransform = { scale: 1, x: 0, y: 0 };
-                      const currentImg = document.getElementById('ocrImgElement');
-                      if (currentImg) {
-                          currentImg.style.transition = 'transform 0.2s ease-out';
-                          updateTransform();
-                          setTimeout(() => { if(currentImg) currentImg.style.transition = 'none'; }, 200);
-                      }
-                  }
-              }
-          });
-
-          // PC 마우스용
-          wrapper.addEventListener('mousedown', (e) => {
-              isDragging = true; lastX = e.clientX; lastY = e.clientY;
-          });
-          wrapper.addEventListener('mousemove', (e) => {
-              if (!isDragging) return; 
-              ocrTransform.x += e.clientX - lastX; 
-              ocrTransform.y += e.clientY - lastY; 
-              lastX = e.clientX; lastY = e.clientY; 
-              requestAnimationFrame(updateTransform);
-          });
-          window.addEventListener('mouseup', () => { isDragging = false; });
-          wrapper.addEventListener('wheel', (e) => {
-              e.preventDefault();
-              const delta = e.deltaY > 0 ? -0.15 : 0.15;
-              ocrTransform.scale = Math.max(1, Math.min(ocrTransform.scale + delta, 6));
-              if (ocrTransform.scale <= 1) { ocrTransform.x = 0; ocrTransform.y = 0; }
-              requestAnimationFrame(updateTransform);
-          }, { passive: false });
+      if (e.touches.length === 1) {
+        isDragging = true;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        isDragging = false;
+        initialPinchDist = getPinchDistance(e.touches);
+        ocrStartScale = ocrTransform.scale;
+        const mid = getMidpoint(e.touches);
+        lastX = mid.x;
+        lastY = mid.y;
       }
+    },
+    { passive: false },
+  );
 
-      function closeModalOnBgClick(e) { 
-        if (isLongPress || isMultiMode) return;
-        if(e.target === document.getElementById('modal')) { _editState = null; document.getElementById('modal').style.display = 'none'; } 
-        if(e.target === document.getElementById('ocrImageModal')) document.getElementById('ocrImageModal').style.display = 'none';
-        if(e.target === document.getElementById('dashboardModal')) document.getElementById('dashboardModal').style.display = 'none';
+  wrapper.addEventListener(
+    "touchmove",
+    (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1 && isDragging) {
+        // ☝️ 한 손가락 이동: 움직인 만큼만 더해줌
+        ocrTransform.x += e.touches[0].clientX - lastX;
+        ocrTransform.y += e.touches[0].clientY - lastY;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+        requestAnimationFrame(updateTransform);
+      } else if (e.touches.length === 2) {
+        // ✌️ 두 손가락 줌(Zoom) + 이동(Pan) 완벽 동시 적용!
+        const currentDist = getPinchDistance(e.touches);
+        ocrTransform.scale = Math.max(1, Math.min(ocrStartScale * (currentDist / initialPinchDist), 6));
+
+        const mid = getMidpoint(e.touches);
+        // 🚨 확대 중에도 두 손가락 중심점이 움직인 만큼만 화면 좌표에 더해줍니다 (헛돌기 버그 해결)
+        ocrTransform.x += mid.x - lastX;
+        ocrTransform.y += mid.y - lastY;
+        lastX = mid.x;
+        lastY = mid.y;
+
+        requestAnimationFrame(updateTransform);
       }
+    },
+    { passive: false },
+  );
 
-      
-      function toggleTheme() { const body = document.body;
-        const themeBtn = document.querySelector('.theme-toggle'); if (isDarkMode) { body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; localStorage.setItem('cal_theme', 'light'); document.documentElement.style.background = '#f4f6f9';
-        } else { body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; localStorage.setItem('cal_theme', 'dark'); document.documentElement.style.background = '#212225';
-        } }
-      function changeSize(size) { document.querySelectorAll('.size-btn').forEach(btn => btn.classList.remove('active')); const body = document.body;
-        if(size === 'S') { body.style.fontSize = '80%'; document.getElementById('btnS').classList.add('active'); } if(size === 'M') { body.style.fontSize = '95%'; document.getElementById('btnM').classList.add('active');
-        } if(size === 'L') { body.style.fontSize = '120%'; document.getElementById('btnL').classList.add('active'); } localStorage.setItem('cal_fontSize', size);
-      }
-
-      // =====================================================
-      // 🚀 [스텔스 자동 동기화 엔진] (귀신 데이터 & 가짜 토스트 완벽 차단)
-      // =====================================================
-      function silentBackgroundSync() {
-        // 🚨 스마트폰 네트워크가 기절해 있거나 끄고 켤 때, 드래그 중일 때는 무조건 스킵!
-        // 수정 — fabDragging도 함께 체크
-        if (!navigator.onLine || isDragging || window.fabDragging || activeRequests > 0) return;
-        let modal = document.getElementById('modal');
-        let addModal = document.getElementById('addModal');
-        let ocrModal = document.getElementById('ocrImageModal');
-        let dashModal = document.getElementById('dashboardModal');
-        if ((modal && modal.style.display === 'flex') || (addModal && addModal.style.display === 'flex') || (ocrModal && ocrModal.style.display === 'flex') || (dashModal && dashModal.style.display === 'flex')) return;
-        let fetchStartTime = Date.now();
-        
-        // 🚨 [핵심 1] 심부름 보내기 직전의 '연/월'과 '달력 번호표'를 박제해둡니다!
-        const reqYear = serverData.year;
-        const reqMonth = serverData.month;
-        const reqNavId = window.currentNavId;
-        
-        apiGet({ type: currentType, year: reqYear, month: reqMonth }).then(res => {
-            if (res === null) return;
-            if (reqYear !== serverData.year || reqMonth !== serverData.month || reqNavId !== window.currentNavId) return;
-            if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
-
-            res.year = reqYear;
-            res.month = reqMonth;
-            res.firstDay = new Date(reqYear, reqMonth - 1, 1).getDay();
-            res.daysInMonth = new Date(reqYear, reqMonth, 0).getDate();
-
-            const getScheduleSig = (dataObj) => {
-              if (!dataObj) return "";
-              const norm = (v) => { let s = (v == null || v === "") ? "" : String(v).trim(); return (s === "0" || s === "") ? "" : s; };
-              let sigs = [];
-              if (dataObj.pendingItems) dataObj.pendingItems.forEach(it => sigs.push(`P_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
-              if (dataObj.monthData) {
-                for (let d in dataObj.monthData) dataObj.monthData[d].forEach(it => sigs.push(`${d}_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`));
-              }
-              return sigs.sort().join("||");
-            };
-            let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
-            if (isScheduleChanged) {
-              serverData = res;
-              localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res));
-              renderCalendar();
-              showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
-            }
-            updateSyncTime();
-        });
-      }
-
-      // 수정
-setInterval(() => { if (!window.fabDragging && document.visibilityState === 'visible') silentBackgroundSync(); }, 60000);
-      // 수정 — 드래그 중이면 sync 건너뛰기
-document.addEventListener("visibilitychange", () => { 
-    if (document.visibilityState === 'visible' && !window.fabDragging) silentBackgroundSync(); 
-});
-
-      // =====================================================
-      // 📊 [개발 추가] 입고 통계 대시보드 스크립트 모음
-      // =====================================================
-      window.dashMode = 'month';
-      window.dashYear = new Date().getFullYear(); // 월간용 년도
-      window.dashMonth = new Date().getMonth() + 1;
-      window.dashYearlyYear = new Date().getFullYear(); // 🚨 연간 전용 년도 (완벽 분리!)
-      let yearlyCache = {};
-      let mainChartIns = null;
-      let shareChartIns = null;
-      window.dashCurrentData = null; 
-
-      function updateStatsSummary() {
-          let tPal = 0, dPal = 0;
-          const process = (it) => {
-              let rawName = String(it.bl || it.company || "").trim();
-              if (!rawName || rawName === "미정") return;
-              tPal += parseInt(it.pal) || 0;
-              // 🚨 입고(status='완료') 또는 출고(isDone=true) 로직을 모두 커버하여 완벽하게 카운트합니다!
-              if (it.isDone === true || String(it.isDone) === "true" || it.status === "완료") dPal += parseInt(it.pal) || 0;
-          };
-          
-          // 미정 데이터 제외하고 날짜 확정된 데이터만 계산 (기존 로직 완벽 유지)
-          for (let d = 1; d <= serverData.daysInMonth; d++) { 
-              if (serverData.monthData[d]) serverData.monthData[d].forEach(process); 
-          }
-          
-          let elD = document.getElementById("sumDonePal"); if(elD) elD.innerText = dPal;
-          let elT = document.getElementById("sumTotalPal"); if(elT) elT.innerText = tPal;
-
-          // 🚀 [V2 게이지 바 애니메이션 로직 탑재] 계산된 숫자를 바탕으로 즉시 게이지를 채웁니다.
-          const barEl = document.getElementById('progressBar');
-          if (barEl) {
-              let percent = tPal === 0 ? 0 : Math.round((dPal / tPal) * 100);
-              setTimeout(() => { 
-                  barEl.style.width = `${percent}%`; 
-                  if (percent === 100 && tPal > 0) {
-                      barEl.style.background = 'linear-gradient(90deg, #34c759 0%, #30d158 100%)';
-                  } else {
-                      barEl.style.background = 'linear-gradient(90deg, #0a84ff 0%, #34c759 100%)';
-                  }
-              }, 100); 
-          }
-      }
-
-      function openDashboard() {
-          window.dashYear = serverData.year;
-          window.dashMonth = serverData.month;
-          window.dashYearlyYear = serverData.year; 
-          window.dashCurrentData = serverData; 
-          document.getElementById('dashboardModal').style.display = 'flex';
-          setTimeout(renderDashCharts, 100);
-      }
-
-      function setDashMode(mode) {
-          window.dashMode = mode;
-          document.getElementById('btnDashMonth').classList.toggle('active', mode === 'month');
-          document.getElementById('btnDashYear').classList.toggle('active', mode === 'year');
-          
-          // 🚨 [5번 해결] 탭 바꿀 때마다 각자의 독립된 년도/월 데이터로 강제 리프레시!
-          if (mode === 'year') {
-              if (!yearlyCache[window.dashYearlyYear]) fetchYearlyAndRender();
-              else renderDashCharts();
-          } else {
-              fetchDashMonthAndRender(); 
-          }
-      }
-
-      function navDashDate(offset) {
-          if (window.dashMode === 'month') {
-              window.dashMonth += offset;
-              if (window.dashMonth > 12) { window.dashMonth = 1; window.dashYear++; }
-              else if (window.dashMonth < 1) { window.dashMonth = 12; window.dashYear--; }
-              fetchDashMonthAndRender();
-          } else {
-              window.dashYearlyYear += offset; // 🚨 연간 모드는 연간용 년도만 움직임
-              fetchYearlyAndRender();
-          }
-      }
-
-      function fetchDashMonthAndRender() {
-          document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
-          let sub = document.getElementById('dashSubTitleText');
-          if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약 (조회중)`;
-          
-          let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
-          let cached = localStorage.getItem(cacheKey);
-          let oldSig = null; // 🚨 [방어막 지문]
-
-          if (cached) { 
-              try { 
-                  window.dashCurrentData = JSON.parse(cached); 
-                  // 로컬 캐시 알맹이 지문
-                  oldSig = JSON.stringify(window.dashCurrentData.monthData || {}) + JSON.stringify(window.dashCurrentData.pendingItems || []);
-                  renderDashCharts(); 
-              } catch(e) {} 
-          } 
-          else {
-              window.dashCurrentData = { monthData: {}, pendingItems: [] };
-              renderDashCharts();
-              document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
-              document.getElementById('dashAvg').innerText = "⏳";
-          }
-
-          // 🚀 Vercel API 백그라운드 호출 (기존 래퍼 사용)
-          apiGet({ type: currentType, year: window.dashYear, month: window.dashMonth }).then(res => {
-              if (res === null) {
-                  if (window.dashMode === 'month' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲";
-                  return;
-              }
-              let finalData = typeof res === 'string' ? JSON.parse(res) : res;
-              let newSig = JSON.stringify(finalData.monthData || {}) + JSON.stringify(finalData.pendingItems || []);
-              if (oldSig === newSig) {
-                  localStorage.setItem(cacheKey, JSON.stringify(finalData));
-                  let subTxt = document.getElementById('dashSubTitleText');
-                  if (subTxt) subTxt.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
-                  return;
-              }
-              window.dashCurrentData = finalData;
-              localStorage.setItem(cacheKey, JSON.stringify(finalData));
-              if (window.dashMode === 'month') {
-                  let subTxt = document.getElementById('dashSubTitleText');
-                  if (subTxt) subTxt.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
-                  renderDashCharts();
-              }
-          });
-      }
-
-      function fetchYearlyAndRender() {
-          document.getElementById('dashTitleText').innerText = `${window.dashYearlyYear}년`;
-          let sub = document.getElementById('dashSubTitleText');
-          if (sub) sub.innerText = `${window.dashYearlyYear}년 연간 요약 (조회중)`;
-          
-          let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYearlyYear}`;
-          let cached = localStorage.getItem(cacheKey);
-          let oldSig = null; // 🚨 [방어막 지문]
-
-          if (cached) { 
-              try { 
-                  yearlyCache[window.dashYearlyYear] = JSON.parse(cached); 
-                  let yData = yearlyCache[window.dashYearlyYear];
-                  oldSig = JSON.stringify(yData.monthly || []) + JSON.stringify(yData.comp || {});
-                  renderDashCharts(); 
-              } catch(e) {} 
-          } 
-          else {
-              let dummyArr = [];
-              for(let i=0; i<12; i++) dummyArr.push({pal:0, box:0, details:{}});
-              yearlyCache[window.dashYearlyYear] = { year: window.dashYearlyYear, monthly: dummyArr, comp: {} };
-              renderDashCharts();
-              document.getElementById('dashCardTitle1').innerText = "데이터 불러오는 중...";
-              document.getElementById('dashAvg').innerText = "⏳";
-          }
-
-          // 🚀 Vercel API 백그라운드 호출
-          apiGet({ action: 'yearlyStats', type: currentType, year: window.dashYearlyYear }).then(res => {
-              if (res === null) {
-                  if (window.dashMode === 'year' && !cached) document.getElementById('dashTitleText').innerText = "불러오기 실패 🥲";
-                  return;
-              }
-              let newSig = JSON.stringify(res.monthly || []) + JSON.stringify(res.comp || {});
-              if (oldSig === newSig) {
-                  yearlyCache[res.year] = res;
-                  localStorage.setItem(cacheKey, JSON.stringify(res));
-                  let subTxt = document.getElementById('dashSubTitleText');
-                  if (subTxt) subTxt.innerText = `${window.dashYearlyYear}년 연간 요약`;
-                  return;
-              }
-              yearlyCache[res.year] = res;
-              localStorage.setItem(cacheKey, JSON.stringify(res));
-              if (window.dashMode === 'year' && window.dashYearlyYear === res.year) {
-                  let subTxt = document.getElementById('dashSubTitleText');
-                  if (subTxt) subTxt.innerText = `${window.dashYearlyYear}년 연간 요약`;
-                  renderDashCharts();
-              }
-          });
-      }
-
-      // 1. 도넛 가운데에 정보 띄우기 플러그인 유지
-      const pieCenterTextPlugin = {
-          id: 'pieCenterText',
-          beforeDraw(chart) {
-              if (chart.config.type !== 'doughnut') return;
-              const ctx = chart.ctx;
-              const centerX = chart.chartArea.left + chart.chartArea.width / 2;
-              const centerY = chart.chartArea.top + chart.chartArea.height / 2;
-
-              ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-
-              if (window.activePieIndex !== null) {
-                  const idx = window.activePieIndex;
-                  const data = chart.data.datasets[0].data;
-                  const colors = chart.data.datasets[0].backgroundColor;
-                  const fullNames = chart.data.fullNames; 
-                  const displayName = fullNames ? fullNames[idx] : chart.data.labels[idx];
-                  const totalSum = data.reduce((a, b) => a + b, 0);
-                  const percent = ((data[idx] / totalSum) * 100).toFixed(1);
-                  const unitStr = 'P';
-
-                  ctx.font = "bold 15px -apple-system, sans-serif";
-                  ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff";
-                  
-                  let textWidth = ctx.measureText(displayName).width;
-                  if (textWidth > 100) ctx.font = "bold 11px -apple-system, sans-serif";
-                  else if (textWidth > 80) ctx.font = "bold 13px -apple-system, sans-serif";
-                  
-                  ctx.fillText(displayName, centerX, centerY - 22, 100);
-
-                  ctx.font = "900 26px -apple-system, sans-serif";
-                  ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
-                  ctx.fillText(`${percent}%`, centerX, centerY + 6);
-
-                  ctx.font = "bold 15px -apple-system, sans-serif";
-                  ctx.fillStyle = "gray";
-                  ctx.fillText(`(${data[idx]}${unitStr})`, centerX, centerY + 30);
-              } else {
-                  ctx.font = "bold 14px -apple-system, sans-serif";
-                  ctx.fillStyle = "gray";
-                  ctx.fillText("👆 조각을", centerX, centerY - 10);
-                  ctx.fillText("터치하세요", centerX, centerY + 10);
-              }
-              ctx.restore();
-          }
-      };
-
-      const pieHybridLabelPlugin = {
-          id: 'pieHybridLabel',
-          afterDraw(chart) {
-              if (chart.config.type !== 'doughnut') return;
-              const ctx = chart.ctx; const meta = chart.getDatasetMeta(0); const data = chart.data.datasets[0].data;
-              const labels = chart.data.labels; const totalSum = data.reduce((a, b) => a + b, 0);
-              const centerX = chart.chartArea.left + chart.chartArea.width / 2; const centerY = chart.chartArea.top + chart.chartArea.height / 2;
-              let rightLabels = []; let leftLabels = []; const isLight = document.body.classList.contains("light-mode");
-              
-              meta.data.forEach((element, index) => {
-                  if (data[index] === 0) return;
-                  const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
-                  const circumference = element.endAngle - element.startAngle;
-                  const radius = element.outerRadius; const isRight = Math.cos(midAngle) > 0;
-                  const percent = ((data[index] / totalSum) * 100).toFixed(1);
-                  const isActive = (window.activePieIndex === null || window.activePieIndex === index);
-
-                  if (circumference > 0.35) {
-                      const r = element.innerRadius + (element.outerRadius - element.innerRadius) * 0.55;
-                      const x = centerX + Math.cos(midAngle) * r; const y = centerY + Math.sin(midAngle) * r;
-                      ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                      ctx.font = isActive ? "bold 13px -apple-system, sans-serif" : "13px -apple-system, sans-serif";
-                      ctx.fillStyle = isActive ? "#111" : "rgba(128,128,128,0.5)";
-                      ctx.fillText(labels[index], x, y - 6);
-                      ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
-                      ctx.fillText(`${percent}%`, x, y + 8); ctx.restore();
-                  } else {
-                      const startX = centerX + Math.cos(midAngle) * radius; const startY = centerY + Math.sin(midAngle) * radius;
-                      let elbowX = centerX + Math.cos(midAngle) * (radius + 15); let elbowY = centerY + Math.sin(midAngle) * (radius + 15);
-                      const text = `${labels[index]} (${percent}%)`;
-                      ctx.font = "bold 11px -apple-system, sans-serif";
-                      let obj = { index, text, textWidth: ctx.measureText(text).width, startX, startY, elbowX, elbowY, isRight };
-                      if (isRight) rightLabels.push(obj); else leftLabels.push(obj);
-                  }
-              });
-
-              const avoidCollision = (lbls) => {
-                  lbls.sort((a, b) => a.elbowY - b.elbowY); let prevY = -9999;
-                  lbls.forEach(lbl => { if (lbl.elbowY < prevY + 16) lbl.elbowY = prevY + 16; prevY = lbl.elbowY; });
-              };
-              avoidCollision(rightLabels); avoidCollision(leftLabels);
-
-              ctx.save(); ctx.textBaseline = 'middle';
-              const drawLabel = (lbl) => {
-                  let lineEndX, textX;
-                  if (lbl.isRight) { textX = chart.width - 2; ctx.textAlign = 'right'; lineEndX = textX - lbl.textWidth - 5; if (lineEndX < centerX + meta.data[0].outerRadius + 10) lineEndX = centerX + meta.data[0].outerRadius + 10; } 
-                  else { textX = 2; ctx.textAlign = 'left'; lineEndX = textX + lbl.textWidth + 5; if (lineEndX > centerX - meta.data[0].outerRadius - 10) lineEndX = centerX - meta.data[0].outerRadius - 10; }
-                  
-                  let safeElbowX = lbl.elbowX;
-                  if (!lbl.isRight && safeElbowX > centerX - meta.data[0].outerRadius - 10) safeElbowX = centerX - meta.data[0].outerRadius - 10;
-                  if (lbl.isRight && safeElbowX < centerX + meta.data[0].outerRadius + 10) safeElbowX = centerX + meta.data[0].outerRadius + 10;
-                  const isActive = (window.activePieIndex === null || window.activePieIndex === lbl.index);
-                  
-                  ctx.strokeStyle = isActive ? (isLight ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.3)") : "rgba(128,128,128,0.1)";
-                  ctx.beginPath(); ctx.moveTo(lbl.startX, lbl.startY); ctx.lineTo(safeElbowX, lbl.elbowY); ctx.lineTo(lineEndX, lbl.elbowY); ctx.lineWidth = 1; ctx.stroke();
-                  ctx.beginPath(); ctx.arc(lbl.startX, lbl.startY, 3.5, 0, 2 * Math.PI);
-                  ctx.fillStyle = isActive ? (isLight ? "rgba(100,100,100,0.7)" : "rgba(180,180,180,0.7)") : "rgba(128,128,128,0.1)"; ctx.fill();
-                  ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
-                  ctx.fillStyle = isActive ? (isLight ? "#444" : "#ccc") : "rgba(128,128,128,0.3)"; ctx.fillText(lbl.text, textX, lbl.elbowY);
-              };
-              rightLabels.forEach(drawLabel); leftLabels.forEach(drawLabel); ctx.restore();
-          }
-      };
-
-      // 🚨 chart.js(defer 로드) 준비 후에만 플러그인 등록 (Chart is not defined 방지)
-      
-      _registerChartPlugins();
-
-      function renderDashCharts() {
-          Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
-          Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
-          
-          let unitName = "PAL"; 
-          let labels = []; let seaData = []; let airData = []; 
-          let compMap = { '🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0 }; 
-          let barDetails = []; let totalQty = 0; let doneQty = 0;
-          document.getElementById("barDetailBox").style.display = "none";
-          const includePending = document.getElementById('includePendingCheck')?.checked;
-
-          if (window.dashMode === 'month') {
-              document.getElementById('dashTitleText').innerText = `${window.dashYear}년 ${window.dashMonth}월`;
-              let sub = document.getElementById('dashSubTitleText');
-              if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
-              
-              let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
-              for (let d = 1; d <= days; d++) { labels.push(`${d}일`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
-
-              const process = (it, dIdx) => {
-                  let clean = String(it.bl || "").trim();
-                  if (clean && clean !== "미정") {
-                      let qty = parseInt(it.pal) || 0;
-                      totalQty += qty;
-                      if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
-                      
-                      let isAir = it.sType === 'AIR';
-                      let typeLabel = isAir ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
-
-                      if (dIdx !== null) {
-                          if (isAir) airData[dIdx - 1] += qty; else seaData[dIdx - 1] += qty;
-                          barDetails[dIdx - 1][typeLabel] += qty;
-                      }
-                      if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
-                  }
-              };
-
-              if (window.dashCurrentData) {
-                  for (let d = 1; d <= days; d++) { 
-                      if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d]) window.dashCurrentData.monthData[d].forEach(it => process(it, d));
-                  }
-                  if (includePending && window.dashCurrentData.pendingItems) window.dashCurrentData.pendingItems.forEach(it => process(it, null));
-              }
-          } else {
-              // 🚨 [연간 차트 뻗음 버그 완벽 해결]
-              document.getElementById('dashTitleText').innerText = `${window.dashYearlyYear}년`;
-              let sub = document.getElementById('dashSubTitleText');
-              if (sub) sub.innerText = `${window.dashYearlyYear}년 연간 요약`;
-              for (let m = 1; m <= 12; m++) { labels.push(`${m}월`); seaData.push(0); airData.push(0); barDetails.push({'🚢 해상 (SEA)': 0, '✈️ 항공 (AIR)': 0}); }
-              
-              let yData = yearlyCache[window.dashYearlyYear];
-              if (yData) {
-                  for (let i = 0; i < 12; i++) {
-                      let mData = yData.monthly[i] || {};
-                      let details = mData.details || {};
-                      
-                      // 객체에서 .pal 수량을 명확하게 꺼내옵니다!
-                      let mSea = details['🚢 해상 (SEA)'] ? details['🚢 해상 (SEA)'].pal : 0;
-                      let mAir = details['✈️ 항공 (AIR)'] ? details['✈️ 항공 (AIR)'].pal : 0;
-                      
-                      seaData[i] = mSea; airData[i] = mAir; 
-                      totalQty += parseInt(mData.pal) || 0;
-                      
-                      barDetails[i]['🚢 해상 (SEA)'] = mSea;
-                      barDetails[i]['✈️ 항공 (AIR)'] = mAir;
-                  }
-                  let ySea = yData.comp['🚢 해상 (SEA)'] ? yData.comp['🚢 해상 (SEA)'].pal : 0;
-                  let yAir = yData.comp['✈️ 항공 (AIR)'] ? yData.comp['✈️ 항공 (AIR)'].pal : 0;
-                  compMap = { '🚢 해상 (SEA)': ySea, '✈️ 항공 (AIR)': yAir };
-              }
-
-              if (includePending && window.dashCurrentData && window.dashCurrentData.pendingItems) {
-                  window.dashCurrentData.pendingItems.forEach(it => {
-                      let clean = String(it.bl || "").trim();
-                      if (clean && clean !== "미정") {
-                          let qty = parseInt(it.pal) || 0;
-                          totalQty += qty;
-                          let isAir = it.sType === 'AIR';
-                          let typeLabel = isAir ? '✈️ 항공 (AIR)' : '🚢 해상 (SEA)';
-                          if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
-                      }
-                  });
-              }
-          }
-
-          // 상단 카드 요약 (기존 유지)
-          if (window.dashMode === 'month') {
-              let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
-              let now = new Date(); let isCurrentMonth = (window.dashYear === now.getFullYear() && window.dashMonth === now.getMonth() + 1);
-              let divider = isCurrentMonth ? Math.max(1, now.getDate()) : new Date(window.dashYear, window.dashMonth, 0).getDate();
-              let avgDaily = doneQty > 0 ? (doneQty / divider).toFixed(1) : 0;
-              document.getElementById("dashCardTitle1").innerText = "당월 총 예정 물량";
-              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
-              document.getElementById("dashVolDetail").innerText = `완료: ${doneQty.toLocaleString()} (${rate}%)`;
-              document.getElementById("dashVolDetail").style.color = rate >= 100 ? "#34c759" : (rate > 50 ? "#0a84ff" : "#ff9f0a");
-              document.getElementById("dashCardTitle2").innerText = "일일 평균 처리량";
-              document.getElementById("dashAvg").innerHTML = `${avgDaily} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/일</span>`;
-              document.getElementById("dashDaysDetail").innerText = `(월 누적: ${doneQty.toLocaleString()})`;
-          } else {
-              // 🚨 [핵심 패치] 해상/항공 물량이 1이라도 존재하는 월의 개수만 추출!
-              let activeMonths = 0;
-              for(let i=0; i<12; i++) {
-                  if((seaData[i] + airData[i]) > 0) activeMonths++;
-              }
-              let divider = activeMonths > 0 ? activeMonths : 1; // 0으로 나누기 방지
-              let avgMonthly = totalQty > 0 ? Math.round(totalQty / divider) : 0;
-              let avgDaily = totalQty > 0 ? (totalQty / 365).toFixed(1) : 0;
-
-              document.getElementById("dashCardTitle1").innerText = "연간 총 누적수량";
-              document.getElementById("dashTotal").innerHTML = `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
-              document.getElementById("dashVolDetail").innerText = `(1년 전체 합산)`; document.getElementById("dashVolDetail").style.color = "#0a84ff";
-              document.getElementById("dashCardTitle2").innerText = "월간 평균 처리량";
-              document.getElementById("dashAvg").innerHTML = `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/월</span>`;
-              document.getElementById("dashDaysDetail").innerText = `(${divider}개월 평균 / 일평균: 약 ${avgDaily})`;
-          }
-// 상단 카드 정보 업데이트 (기존 코드와 동일...)
-
-
-// 💡 스와이프(Hover) 선택을 위한 전역 공유 변수 할당
-          window.dashSeaData = seaData;
-          window.dashAirData = airData;
-          window.dashBarDetails = barDetails;
-
-         // 💡 1. 막대 색깔 하이라이트 + [빈 데이터 스킵(스냅) 로직]
-          window.lastHoveredBarIndex = -1;
-          window.highlightBarOnly = function(idx) {
-              if (idx === null || idx === undefined || idx < 0) {
-                  window.lastHoveredBarIndex = -1;
-                  
-                  // 🚨 [버그 수정 2] 리셋할 때도 배열(Array) 형태로 원래 색을 꽉 채워줘야 Chart.js가 꼬이지 않습니다!
-                  mainChartIns.data.datasets[0].backgroundColor = new Array(labels.length).fill('#26e2fd');
-                  mainChartIns.data.datasets[1].backgroundColor = new Array(labels.length).fill('#ff7eff');
-                  
-                  // 🚨 추가: 툴팁(말풍선) 잔상도 확실하게 지워버립니다.
-                  if (mainChartIns.tooltip) {
-                      mainChartIns.tooltip.setActiveElements([], { x: 0, y: 0 });
-                  }
-                  
-                  mainChartIns.update();
-                  return;
-              }
-              // ... (이하 기존 코드 유지) ...
-
-              let validIndices = [];
-              for(let i = 0; i < labels.length; i++) {
-                  if ((window.dashSeaData[i] + window.dashAirData[i]) > 0) validIndices.push(i);
-              }
-              if (validIndices.length === 0) return; 
-
-              let closestIdx = validIndices[0];
-              let minDiff = Math.abs(idx - closestIdx);
-              for(let i = 1; i < validIndices.length; i++) {
-                  let diff = Math.abs(idx - validIndices[i]);
-                  if(diff < minDiff) { minDiff = diff; closestIdx = validIndices[i]; }
-              }
-              idx = closestIdx; 
-
-              if (idx === window.lastHoveredBarIndex) return; 
-              window.lastHoveredBarIndex = idx;
-
-              let dimColor = document.body.classList.contains("light-mode") ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
-              let newSeaColors = new Array(labels.length).fill(dimColor); newSeaColors[idx] = '#26e2fd';
-              let newAirColors = new Array(labels.length).fill(dimColor); newAirColors[idx] = '#ff7eff';
-              
-              mainChartIns.data.datasets[0].backgroundColor = newSeaColors; 
-              mainChartIns.data.datasets[1].backgroundColor = newAirColors;
-              
-              if (mainChartIns.tooltip) {
-                  mainChartIns.tooltip.setActiveElements([{ datasetIndex: 0, index: idx }, { datasetIndex: 1, index: idx }], { x: 0, y: 0 });
-              }
-              mainChartIns.update();
-          };
-
-          // 💡 2. 손 뗐을 때 상세내역 스르륵 호출
-          window.showDetailBox = function(idx) {
-              let detailBox = document.getElementById("barDetailBox");
-              if (idx === null || idx === undefined || idx < 0) return;
-
-              let details = window.dashBarDetails[idx]; 
-              let total = window.dashSeaData[idx] + window.dashAirData[idx];
-              if (total === 0) { detailBox.style.display = 'none'; return; }
-              
-              let timeLabel = window.dashMode === 'month' ? `${idx+1}일` : `${idx+1}월`;
-              let html = `<div style="font-weight:900; margin-bottom:10px; color:var(--text-main);">📅 ${timeLabel} 입고 내역 <span style="color:#0a84ff; font-size:0.9em;">(총 ${total}P)</span></div>`;
-              html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
-              
-              if (details['🚢 해상 (SEA)'] > 0) {
-                  html += `<div style="display:flex; align-items:center; gap:6px; background:#26e2fd; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(1,221,251,0.4);">
-                      <span style="font-weight:900;">🚢 해상</span><span style="font-weight:800; opacity:0.9;">${details['🚢 해상 (SEA)']}P</span>
-                  </div>`;
-              }
-              if (details['✈️ 항공 (AIR)'] > 0) {
-                  html += `<div style="display:flex; align-items:center; gap:6px; background:#ff7eff; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(255,107,159,0.4);">
-                      <span style="font-weight:900;">✈️ 항공</span><span style="font-weight:800; opacity:0.9;">${details['✈️ 항공 (AIR)']}P</span>
-                  </div>`;
-              }
-              html += `</div>`; 
-              detailBox.innerHTML = html; 
-              detailBox.style.display = 'block';
-              detailBox.animate([{opacity: 0, transform: 'translateY(-5px)'}, {opacity: 1, transform: 'translateY(0)'}], {duration: 250, fill: 'forwards'});
-          };
-
-          if (mainChartIns) mainChartIns.destroy();
-          
-          // 🚨 [버그 수정 1] 차트 생성 시점부터 단일 색상(String)이 아닌 배열(Array)로 꽉 채워줍니다.
-          let seaBgColors = new Array(labels.length).fill('#26e2fd');
-          let airBgColors = new Array(labels.length).fill('#ff7eff');
-
-          mainChartIns = new Chart(document.getElementById('mainChart'), {
-              type: 'bar',
-              // 아래 backgroundColor를 배열 변수로 교체했습니다.
-              data: { labels: labels, datasets: [{ label: `🚢 해상`, data: seaData, backgroundColor: seaBgColors, stack: 'Stack 0', borderRadius: 4 }, { label: `✈️ 항공`, data: airData, backgroundColor: airBgColors, stack: 'Stack 0', borderRadius: 4 }] },
-              options: { 
-                  /* ... 기존 옵션 그대로 유지 ... */
-                  responsive: true, maintainAspectRatio: false, 
-                  interaction: { mode: 'index', intersect: false, axis: 'x' }, 
-                  plugins: { 
-                      legend: { display: false },
-                      tooltip: {
-                          enabled: true, mode: 'index', intersect: false,
-                          callbacks: {
-                              title: (items) => window.dashMode === 'month' ? `${items[0].label} 입고량` : `${items[0].label} 입고량`,
-                              label: () => null, 
-                              footer: (items) => `총 ${items.reduce((a, b) => a + b.parsed.y, 0)}P`
-                          }
-                      }
-                  }, 
-                  scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } },
-                  events: [] 
-              }
-          });
-
-          // 🚨 [커스텀 터치 엔진] 스킵 현상 및 손 뗄 때 튀는 현상 완벽 해결!
-          const mainCanvas = document.getElementById('mainChart');
-          mainCanvas.style.touchAction = 'pan-y'; 
-
-          let lastProcessedX = -999;
-          const triggerChartInteraction = (clientX, isForce = false) => {
-              if (!mainChartIns) return;
-              
-              // 💡 [수정된 핵심 데드존 로직]
-              // 8픽셀 미만의 미세한 떨림은 무시하되, lastProcessedX 기준점은 '갱신하지 않음'!!
-              // 이렇게 해야 천천히 움직여서 누적 거리가 8px을 넘었을 때 정상적으로 옆 칸으로 넘어갑니다 (스킵 버그 해결)
-              if (!isForce && Math.abs(clientX - lastProcessedX) < 8) return; 
-              
-              lastProcessedX = clientX; // 👈 8픽셀 이상 움직였을 때만 비로소 기준점 갱신!
-
-              const rect = mainCanvas.getBoundingClientRect();
-              const chartArea = mainChartIns.chartArea;
-              if (!chartArea) return;
-              
-              let xCoord = clientX - rect.left;
-              let x = Math.max(chartArea.left, Math.min(xCoord, chartArea.right));
-              let width = chartArea.right - chartArea.left;
-              let percent = (x - chartArea.left) / width;
-              
-              let idx = Math.floor(percent * labels.length);
-              idx = Math.min(Math.max(idx, 0), labels.length - 1);
-              window.highlightBarOnly(idx);
-          };
-
-          mainCanvas.ontouchstart = (e) => { triggerChartInteraction(e.touches[0].clientX, true); };
-          mainCanvas.ontouchmove = (e) => { triggerChartInteraction(e.touches[0].clientX, false); };
-          mainCanvas.ontouchend = () => { 
-              if(window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); 
-              else document.getElementById("barDetailBox").style.display = 'none';
-          };
-          
-          mainCanvas.onmousemove = (e) => { triggerChartInteraction(e.clientX, false); };
-          mainCanvas.onclick = (e) => { 
-              triggerChartInteraction(e.clientX, true); 
-              if (window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex); 
-              else document.getElementById("barDetailBox").style.display = 'none';
-          };
-          mainCanvas.onmouseleave = () => { window.highlightBarOnly(-1); };
-
-          // (이후 파이 차트 로직 유지)
-
-          // 🍩 파이 차트 
-          window.activePieIndex = null;
-          let sLabels = []; let sData = []; let sColors = [];
-          if (compMap['🚢 해상 (SEA)'] > 0) { sLabels.push('🚢 해상 (SEA)'); sData.push(compMap['🚢 해상 (SEA)']); sColors.push('#26e2fd'); }
-          if (compMap['✈️ 항공 (AIR)'] > 0) { sLabels.push('✈️ 항공 (AIR)'); sData.push(compMap['✈️ 항공 (AIR)']); sColors.push('#ff7eff'); }
-
-          window.highlightPieSlice = function(idx) {
-              if (!shareChartIns) return;
-              const dataset = shareChartIns.data.datasets[0];
-              let slider = document.getElementById('pieSlider');
-              if (idx === null || String(idx) === "-1") {
-                  window.activePieIndex = null; dataset.backgroundColor = [...dataset._originalColors];
-                  if (slider) slider.value = -1;
-              } else {
-                  window.activePieIndex = parseInt(idx, 10);
-                  dataset.backgroundColor = dataset._originalColors.map((color, i) => i === window.activePieIndex ? color : (document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)"));
-                  if (slider) slider.value = window.activePieIndex; 
-              }
-              shareChartIns.update();
-          };
-
-          if (shareChartIns) shareChartIns.destroy();
-          shareChartIns = new Chart(document.getElementById('shareChart'), {
-              type: 'doughnut',
-              data: { labels: sLabels, datasets: [{ data: sData, backgroundColor: [...sColors], _originalColors: [...sColors], borderWidth: 2, borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30" }] },
-              options: {
-                  responsive: true, maintainAspectRatio: false, cutout: '55%', layout: { padding: { left: 50, right: 50, top: 15, bottom: 15 } }, 
-                  // 💡 [디테일 4 수정] datalabels 옵션을 꺼서 조각 안의 하얀 글씨(퍼센트) 영구 제거
-                  plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
-                  onClick: (e, activeElements) => {
-                      if (!activeElements || activeElements.length === 0) window.highlightPieSlice(-1);
-                      else {
-                          const idx = activeElements[0].index;
-                          if (window.activePieIndex === idx) window.highlightPieSlice(-1); else window.highlightPieSlice(idx);
-                      }
-                  }
-              }
-          });
-      }
-
-
-    
-
-      // =====================================================
-      // 🚨 [패치] 바탕화면(빈 공간) 클릭 시 막대/파이차트 하이라이트 동시 해제
-      // =====================================================
-      document.getElementById("dashboardModal").addEventListener("click", function(e) {
-          // 모달 배경(검은 여백)을 눌러서 창을 닫는 동작은 방해하지 않음
-          if (e.target === this) return; 
-
-          // 1. 막대차트 리셋 (막대나 상세정보 박스가 아닌 빈 곳을 터치했을 때)
-          if (window.lastHoveredBarIndex !== -1 && typeof window.highlightBarOnly === 'function') {
-              if (e.target.tagName !== "CANVAS" && !e.target.closest("#barDetailBox")) {
-                  window.highlightBarOnly(-1);
-                  document.getElementById("barDetailBox").style.display = 'none';
-              }
-          }
-          
-          // 2. 파이차트 리셋 (파이나 슬라이더가 아닌 빈 곳을 터치했을 때)
-          if (window.activePieIndex !== null && typeof window.highlightPieSlice === 'function') {
-              if (e.target.tagName !== "CANVAS" && e.target.id !== "pieSlider" && !e.target.closest("#pieSliderWrapper")) {
-                  window.highlightPieSlice(-1);
-              }
-          }
-      });
-
- // 🚀 [앱 초기화] 
-      window.addEventListener('DOMContentLoaded', () => {
-
-        // 저장된 session_token 복원
-        window._sessionToken = localStorage.getItem('session_token') || sessionStorage.getItem('session_token') || null;
-        // bio_pw → bio_token 마이그레이션 (구형 등록 정리)
-        if (localStorage.getItem('bio_pw')) {
-            localStorage.removeItem('bio_pw');
-            localStorage.removeItem('bio_registered');
-            localStorage.removeItem('bio_id');
+  wrapper.addEventListener("touchend", (e) => {
+    if (e.touches.length === 1) {
+      isDragging = true;
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
+    } else if (e.touches.length === 0) {
+      isDragging = false;
+      if (ocrTransform.scale <= 1) {
+        ocrTransform = { scale: 1, x: 0, y: 0 };
+        const currentImg = document.getElementById("ocrImgElement");
+        if (currentImg) {
+          currentImg.style.transition = "transform 0.2s ease-out";
+          updateTransform();
+          setTimeout(() => {
+            if (currentImg) currentImg.style.transition = "none";
+          }, 200);
         }
-        // 과도기: 자동로그인 사용자인데 토큰이 없으면 조용히 발급받아 저장
-        (function() {
-            let isAdm = localStorage.getItem('isAdmin') === 'true' || sessionStorage.getItem('isAdmin') === 'true';
-            let aid = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id');
-            if (isAdm && aid && !window._sessionToken) {
-                apiCall({ source: 'vercel', action: 'ISSUE_LEGACY_TOKEN', admin_id: aid }).then(function(r) {
-                    if (r && r.success && r.session_token) {
-                        window._sessionToken = r.session_token;
-                        const isAuto = localStorage.getItem('auto_login') !== 'false';
-                        (isAuto ? localStorage : sessionStorage).setItem('session_token', r.session_token);
-                    }
-                });
-            }
-        })();
-
-        // 👇 🚨 [자동로그인 & GUEST 사이트 접속 추적기] 여기에 삽입! 👇
-        let isAdm = localStorage.getItem('isAdmin') === 'true' || sessionStorage.getItem('isAdmin') === 'true';
-        let currentAdminId = localStorage.getItem('admin_id') || sessionStorage.getItem('admin_id') || 'GUEST';
-        let accessType = isAdm ? 'AUTO_LOGIN' : 'GUEST';
-
-        // 사용자 환경 분석 (모바일/PC, 카카오/네이버/크롬/사파리 완벽 판별)
-        let ua = navigator.userAgent.toLowerCase();
-        let device = /mobile|android|iphone|ipad|ipod/.test(ua) ? 'Mobile' : 'PC';
-        let browser = 'Unknown';
-        if (ua.includes("whale")) browser = "Whale";
-        else if (ua.includes("samsungbrowser")) browser = "Samsung Internet";
-        else if (ua.includes("edg")) browser = "Edge";
-        else if (ua.includes("kakaotalk") || ua.includes("kakao")) browser = "KakaoTalk"; // 카톡 인앱 브라우저
-        else if (ua.includes("naver")) browser = "Naver App"; // 네이버 인앱 브라우저
-        else if (ua.includes("chrome") && !ua.includes("edg")) browser = "Chrome"; 
-        else if (ua.includes("safari") && !ua.includes("chrome")) browser = "Safari";
-        else if (ua.includes("firefox")) browser = "Firefox";
-        // 서버에 추적 로그 전송 (실패해도 앱 구동에 영향 안 주게 방어)
-        apiCall({
-            source: 'vercel',
-            action: 'LOG_SITE_ACCESS',
-            admin_id: currentAdminId,
-            access_type: accessType,
-            description: `기기: ${device} / 브라우저: ${browser}`
-        });
-        // 👆 -------------------------------------------------------- 👆
-        
-        // 🚨 세션 스토리지까지 함께 체크하도록 OR(||) 조건 추가!
-        if (localStorage.getItem('isAdmin') === 'true' || sessionStorage.getItem('isAdmin') === 'true') {
-            window.isAdmin = true;
-            isAdmin = true;
-            
-            // 초록색 관리자 버튼으로 변신! (이 4줄만 남기면 끝입니다)
-            const btn = document.getElementById("adminBtn");
-            if (btn) {
-                btn.innerHTML = '🔓 관리자';
-                btn.className = 'admin-btn unlocked'; 
-                btn.removeAttribute("style"); 
-            }
-            
-            const actions = document.getElementById("adminActions");
-            if (actions) actions.style.display = "flex";
-            
-            if (typeof updateFooterUI === 'function') updateFooterUI();
-            // 👇 🚨여기에 딱 꽂아주시면 됩니다!
-        if (typeof checkMasterAuthButtonVisibility === 'function') {
-            checkMasterAuthButtonVisibility();
-        }
-        } else {
-            window.isAdmin = false;
-            isAdmin = false;
-        }
-        
-        const savedTheme = localStorage.getItem('cal_theme') || 'light';
-        // ... (아래부터는 기존 코드 그대로 유지) ...
-        const themeBtn = document.querySelector('.theme-toggle');
-        if (savedTheme === 'light') { document.body.classList.add('light-mode'); isDarkMode = false; if(themeBtn) themeBtn.innerText = '🌙'; } else { document.body.classList.remove('light-mode'); isDarkMode = true; if(themeBtn) themeBtn.innerText = '☀️'; }
-        const savedSize = localStorage.getItem('cal_fontSize') || 'M'; changeSize(savedSize);
-
-        // 👇 🚨 여기에 추가해 주시면 됩니다! 🚨 👇
-        if (!isShowHoliday) {
-            const btnHoliday = document.getElementById('btnHolidayToggle');
-            if (btnHoliday) { 
-                btnHoliday.innerHTML = '🏖️ OFF'; 
-                btnHoliday.style.color = 'var(--text-sub)'; 
-            }
-        }
-        // 👆 ----------------------------------- 👆
-
-        updateFooterUI();
-
-        let now = new Date();
-        let currentYear = now.getFullYear();
-        let currentMonth = now.getMonth() + 1;
-        let cacheKey = `cal_cache_${currentType}_${currentYear}_${currentMonth}`;
-        
-        let cachedData = localStorage.getItem(cacheKey);
-        let isCacheValid = false;
-        // 💡 [여기에 딱 한 줄 추가!] 앱 켜자마자 올해 1년 치 빨간날부터 장전!
-        checkAndFetchHolidays(currentYear);
-        if (cachedData) {
-            try {
-                let parsed = JSON.parse(cachedData);
-                serverData = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
-                serverData.year = currentYear;
-                serverData.month = currentMonth;
-                serverData.firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
-                serverData.daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-                if (!isNaN(serverData.year)) isCacheValid = true;
-            } catch(e) { console.error("캐시 파싱 에러", e); }
-        } 
-        
-        if (!isCacheValid) {
-            let tempFirstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
-            let tempDays = new Date(currentYear, currentMonth, 0).getDate();
-            serverData = { year: currentYear, month: currentMonth, firstDay: tempFirstDay, daysInMonth: tempDays, monthData: {}, pendingItems: [] };
-        }
-        
-        renderCalendar();
-        let fetchStartTime = Date.now();
-
-        // 💡 OCR 통신도 백그라운드로 안전하게 요청
-        apiCall({ source: 'vercel', domain: 'system', action: 'GET_OCR_LAST_TIME' }).then(function(res) {
-            if (res === null) return;
-            let timeStr = (res && res.time) ? res.time : (typeof res === 'string' ? res : "최근 처리내역 없음");
-            const el = document.getElementById('ocrTimeText');
-            if(el) el.innerText = timeStr;
-        });
-
-        // 💡 입고 데이터 백그라운드 동기화
-        apiGet({ type: currentType, year: currentYear, month: currentMonth }).then(function(newData) {
-            if (newData === null) return;
-            if (typeof lastLocalUpdateTime !== 'undefined' && lastLocalUpdateTime > fetchStartTime) return;
-
-            newData.year = currentYear;
-            newData.month = currentMonth;
-            newData.firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
-            newData.daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-            localStorage.setItem(cacheKey, JSON.stringify(newData));
-            if (serverData.year === currentYear && serverData.month === currentMonth) {
-                serverData = newData; renderCalendar();
-            }
-        });
-        // 💡 [최종 위치] AI FAB 관리자 권한 확인 및 노출
-        if (typeof showAiFabIfAdmin === 'function') {
-            showAiFabIfAdmin();
-        }
-      });
-
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .catch(err => console.warn('서비스 워커 등록 실패:', err));
-        });
       }
+    }
+  });
 
+  // PC 마우스용
+  wrapper.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  });
+  wrapper.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    ocrTransform.x += e.clientX - lastX;
+    ocrTransform.y += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    requestAnimationFrame(updateTransform);
+  });
+  window.addEventListener("mouseup", () => {
+    isDragging = false;
+  });
+  wrapper.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.15 : 0.15;
+      ocrTransform.scale = Math.max(1, Math.min(ocrTransform.scale + delta, 6));
+      if (ocrTransform.scale <= 1) {
+        ocrTransform.x = 0;
+        ocrTransform.y = 0;
+      }
+      requestAnimationFrame(updateTransform);
+    },
+    { passive: false },
+  );
+}
+
+function closeModalOnBgClick(e) {
+  if (isLongPress || isMultiMode) return;
+  if (e.target === document.getElementById("modal")) {
+    _editState = null;
+    document.getElementById("modal").style.display = "none";
+  }
+  if (e.target === document.getElementById("ocrImageModal"))
+    document.getElementById("ocrImageModal").style.display = "none";
+  if (e.target === document.getElementById("dashboardModal"))
+    document.getElementById("dashboardModal").style.display = "none";
+}
+
+function toggleTheme() {
+  const body = document.body;
+  const themeBtn = document.querySelector(".theme-toggle");
+  if (isDarkMode) {
+    body.classList.add("light-mode");
+    isDarkMode = false;
+    if (themeBtn) themeBtn.innerText = "🌙";
+    localStorage.setItem("cal_theme", "light");
+    document.documentElement.style.background = "#f4f6f9";
+  } else {
+    body.classList.remove("light-mode");
+    isDarkMode = true;
+    if (themeBtn) themeBtn.innerText = "☀️";
+    localStorage.setItem("cal_theme", "dark");
+    document.documentElement.style.background = "#212225";
+  }
+}
+function changeSize(size) {
+  document.querySelectorAll(".size-btn").forEach((btn) => btn.classList.remove("active"));
+  const body = document.body;
+  if (size === "S") {
+    body.style.fontSize = "80%";
+    document.getElementById("btnS").classList.add("active");
+  }
+  if (size === "M") {
+    body.style.fontSize = "95%";
+    document.getElementById("btnM").classList.add("active");
+  }
+  if (size === "L") {
+    body.style.fontSize = "120%";
+    document.getElementById("btnL").classList.add("active");
+  }
+  localStorage.setItem("cal_fontSize", size);
+}
 
 // =====================================================
-      // 🚀 [네이티브 앱 감성 V3] 모달 스와이프(내려 닫기) 통합 엔진
-      // =====================================================
-      let swipeModalVars = {
-          activeBox: null, activeModal: null, startY: 0, currentY: 0, isDragging: false, startTime: 0
+// 🚀 [스텔스 자동 동기화 엔진] (귀신 데이터 & 가짜 토스트 완벽 차단)
+// =====================================================
+function silentBackgroundSync() {
+  // 🚨 스마트폰 네트워크가 기절해 있거나 끄고 켤 때, 드래그 중일 때는 무조건 스킵!
+  // 수정 — fabDragging도 함께 체크
+  if (!navigator.onLine || isDragging || window.fabDragging || activeRequests > 0) return;
+  let modal = document.getElementById("modal");
+  let addModal = document.getElementById("addModal");
+  let ocrModal = document.getElementById("ocrImageModal");
+  let dashModal = document.getElementById("dashboardModal");
+  if (
+    (modal && modal.style.display === "flex") ||
+    (addModal && addModal.style.display === "flex") ||
+    (ocrModal && ocrModal.style.display === "flex") ||
+    (dashModal && dashModal.style.display === "flex")
+  )
+    return;
+  let fetchStartTime = Date.now();
+
+  // 🚨 [핵심 1] 심부름 보내기 직전의 '연/월'과 '달력 번호표'를 박제해둡니다!
+  const reqYear = serverData.year;
+  const reqMonth = serverData.month;
+  const reqNavId = window.currentNavId;
+
+  apiGet({ type: currentType, year: reqYear, month: reqMonth }).then((res) => {
+    if (res === null) return;
+    if (reqYear !== serverData.year || reqMonth !== serverData.month || reqNavId !== window.currentNavId) return;
+    if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
+
+    res.year = reqYear;
+    res.month = reqMonth;
+    res.firstDay = new Date(reqYear, reqMonth - 1, 1).getDay();
+    res.daysInMonth = new Date(reqYear, reqMonth, 0).getDate();
+
+    const getScheduleSig = (dataObj) => {
+      if (!dataObj) return "";
+      const norm = (v) => {
+        let s = v == null || v === "" ? "" : String(v).trim();
+        return s === "0" || s === "" ? "" : s;
       };
+      let sigs = [];
+      if (dataObj.pendingItems)
+        dataObj.pendingItems.forEach((it) =>
+          sigs.push(`P_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`),
+        );
+      if (dataObj.monthData) {
+        for (let d in dataObj.monthData)
+          dataObj.monthData[d].forEach((it) =>
+            sigs.push(`${d}_${it.company || it.bl || ""}_${norm(it.pal)}_${norm(it.box)}_${it.etc || ""}_${it.isDone}`),
+          );
+      }
+      return sigs.sort().join("||");
+    };
+    let isScheduleChanged = getScheduleSig(serverData) !== getScheduleSig(res);
+    if (isScheduleChanged) {
+      serverData = res;
+      localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res));
+      renderCalendar();
+      showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
+    }
+    updateSyncTime();
+  });
+}
 
-      
+// 수정
+setInterval(() => {
+  if (!window.fabDragging && document.visibilityState === "visible") silentBackgroundSync();
+}, 60000);
+// 수정 — 드래그 중이면 sync 건너뛰기
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && !window.fabDragging) silentBackgroundSync();
+});
 
-      // 🚀 페이지가 로드되면 독립적으로 네이티브 스와이프 엔진 즉시 가동!
-      window.addEventListener('DOMContentLoaded', initNativeBottomSheet);
+// =====================================================
+// 📊 [개발 추가] 입고 통계 대시보드 스크립트 모음
+// =====================================================
+window.dashMode = "month";
+window.dashYear = new Date().getFullYear(); // 월간용 년도
+window.dashMonth = new Date().getMonth() + 1;
+window.dashYearlyYear = new Date().getFullYear(); // 🚨 연간 전용 년도 (완벽 분리!)
+let yearlyCache = {};
+let mainChartIns = null;
+let shareChartIns = null;
+window.dashCurrentData = null;
 
-      // 💡 [개선] Face ID 실패/취소 시 수동 로그인 창으로 자연스럽게 안내 (Fallback)
-      async function handleBioLogin() {
-          if (!window.PublicKeyCredential) {
-              openLoginModal();
-              return;
-          }
+function updateStatsSummary() {
+  let tPal = 0,
+    dPal = 0;
+  const process = (it) => {
+    let rawName = String(it.bl || it.company || "").trim();
+    if (!rawName || rawName === "미정") return;
+    tPal += parseInt(it.pal) || 0;
+    // 🚨 입고(status='완료') 또는 출고(isDone=true) 로직을 모두 커버하여 완벽하게 카운트합니다!
+    if (it.isDone === true || String(it.isDone) === "true" || it.status === "완료") dPal += parseInt(it.pal) || 0;
+  };
 
-          try {
-              // 🚨 [핵심 패치] 로그인할 때도 똑같이 랜덤 챌린지를 생성해야 비트워든이 의심하지 않음
-              const randomChallenge = new Uint8Array(32);
-              window.crypto.getRandomValues(randomChallenge);
+  // 미정 데이터 제외하고 날짜 확정된 데이터만 계산 (기존 로직 완벽 유지)
+  for (let d = 1; d <= serverData.daysInMonth; d++) {
+    if (serverData.monthData[d]) serverData.monthData[d].forEach(process);
+  }
 
-              const publicKey = {
-                  challenge: randomChallenge,
-                  rpId: window.location.hostname,
-                  userVerification: "required",
-                  timeout: 60000
-              };
-              
-              const assertion = await navigator.credentials.get({ publicKey });
-              
-              if (assertion) {
-                  const savedId = localStorage.getItem('bio_id');
-                  const savedToken = localStorage.getItem('bio_token');
+  let elD = document.getElementById("sumDonePal");
+  if (elD) elD.innerText = dPal;
+  let elT = document.getElementById("sumTotalPal");
+  if (elT) elT.innerText = tPal;
 
-                  if (savedId && savedToken) {
-                      document.getElementById('adminLoginModal').style.display = 'none';
-                      showToast("🔒 생체 인증 성공! 서버 확인 중...", 0);
+  // 🚀 [V2 게이지 바 애니메이션 로직 탑재] 계산된 숫자를 바탕으로 즉시 게이지를 채웁니다.
+  const barEl = document.getElementById("progressBar");
+  if (barEl) {
+    let percent = tPal === 0 ? 0 : Math.round((dPal / tPal) * 100);
+    setTimeout(() => {
+      barEl.style.width = `${percent}%`;
+      if (percent === 100 && tPal > 0) {
+        barEl.style.background = "linear-gradient(90deg, #34c759 0%, #30d158 100%)";
+      } else {
+        barEl.style.background = "linear-gradient(90deg, #0a84ff 0%, #34c759 100%)";
+      }
+    }, 100);
+  }
+}
 
-                      apiCall({ source: 'vercel', action: 'VERIFY_SESSION', session_token: savedToken }).then(function(res) {
-                          if (res === null || !res.success) {
-                              showToast("❌ 세션이 만료되었습니다. 다시 로그인하세요.", 2500);
-                              localStorage.removeItem('bio_registered'); localStorage.removeItem('bio_id'); localStorage.removeItem('bio_token');
-                              openLoginModal();
-                              return;
-                          }
-                          window.isAdmin = true; isAdmin = true;
-                          saveAuthData(res.admin_id, res.role, true, savedToken);
+function openDashboard() {
+  window.dashYear = serverData.year;
+  window.dashMonth = serverData.month;
+  window.dashYearlyYear = serverData.year;
+  window.dashCurrentData = serverData;
+  document.getElementById("dashboardModal").style.display = "flex";
+  setTimeout(renderDashCharts, 100);
+}
 
-                          const btn = document.getElementById("adminBtn");
-                          if (btn) { btn.innerHTML = '🔓 관리자'; btn.className = 'admin-btn unlocked'; btn.removeAttribute("style"); }
+function setDashMode(mode) {
+  window.dashMode = mode;
+  document.getElementById("btnDashMonth").classList.toggle("active", mode === "month");
+  document.getElementById("btnDashYear").classList.toggle("active", mode === "year");
 
-                          const actions = document.getElementById('adminActions');
-                          if (actions) actions.style.display = 'flex';
-                          const fab = document.getElementById("fabBtn");
-                          if (fab) fab.style.display = "flex";
+  // 🚨 [5번 해결] 탭 바꿀 때마다 각자의 독립된 년도/월 데이터로 강제 리프레시!
+  if (mode === "year") {
+    if (!yearlyCache[window.dashYearlyYear]) fetchYearlyAndRender();
+    else renderDashCharts();
+  } else {
+    fetchDashMonthAndRender();
+  }
+}
 
-                          showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
-                          if (typeof renderCalendar === 'function') renderCalendar();
-                          if (typeof updateFooterUI === 'function') updateFooterUI();
-                          if (typeof showAiFabIfAdmin === 'function') showAiFabIfAdmin();
-                      });
-                  }
-              }
-          } catch (err) {
-              openLoginModal();
-          }
+function navDashDate(offset) {
+  if (window.dashMode === "month") {
+    window.dashMonth += offset;
+    if (window.dashMonth > 12) {
+      window.dashMonth = 1;
+      window.dashYear++;
+    } else if (window.dashMonth < 1) {
+      window.dashMonth = 12;
+      window.dashYear--;
+    }
+    fetchDashMonthAndRender();
+  } else {
+    window.dashYearlyYear += offset; // 🚨 연간 모드는 연간용 년도만 움직임
+    fetchYearlyAndRender();
+  }
+}
+
+function fetchDashMonthAndRender() {
+  document.getElementById("dashTitleText").innerText = `${window.dashYear}년 ${window.dashMonth}월`;
+  let sub = document.getElementById("dashSubTitleText");
+  if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약 (조회중)`;
+
+  let cacheKey = `cal_cache_${currentType}_${window.dashYear}_${window.dashMonth}`;
+  let cached = localStorage.getItem(cacheKey);
+  let oldSig = null; // 🚨 [방어막 지문]
+
+  if (cached) {
+    try {
+      window.dashCurrentData = JSON.parse(cached);
+      // 로컬 캐시 알맹이 지문
+      oldSig =
+        JSON.stringify(window.dashCurrentData.monthData || {}) +
+        JSON.stringify(window.dashCurrentData.pendingItems || []);
+      renderDashCharts();
+    } catch (e) {}
+  } else {
+    window.dashCurrentData = { monthData: {}, pendingItems: [] };
+    renderDashCharts();
+    document.getElementById("dashCardTitle1").innerText = "데이터 불러오는 중...";
+    document.getElementById("dashAvg").innerText = "⏳";
+  }
+
+  // 🚀 Vercel API 백그라운드 호출 (기존 래퍼 사용)
+  apiGet({ type: currentType, year: window.dashYear, month: window.dashMonth }).then((res) => {
+    if (res === null) {
+      if (window.dashMode === "month" && !cached)
+        document.getElementById("dashTitleText").innerText = "불러오기 실패 🥲";
+      return;
+    }
+    let finalData = typeof res === "string" ? JSON.parse(res) : res;
+    let newSig = JSON.stringify(finalData.monthData || {}) + JSON.stringify(finalData.pendingItems || []);
+    if (oldSig === newSig) {
+      localStorage.setItem(cacheKey, JSON.stringify(finalData));
+      let subTxt = document.getElementById("dashSubTitleText");
+      if (subTxt) subTxt.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
+      return;
+    }
+    window.dashCurrentData = finalData;
+    localStorage.setItem(cacheKey, JSON.stringify(finalData));
+    if (window.dashMode === "month") {
+      let subTxt = document.getElementById("dashSubTitleText");
+      if (subTxt) subTxt.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
+      renderDashCharts();
+    }
+  });
+}
+
+function fetchYearlyAndRender() {
+  document.getElementById("dashTitleText").innerText = `${window.dashYearlyYear}년`;
+  let sub = document.getElementById("dashSubTitleText");
+  if (sub) sub.innerText = `${window.dashYearlyYear}년 연간 요약 (조회중)`;
+
+  let cacheKey = `yearly_stats_cache_${currentType}_${window.dashYearlyYear}`;
+  let cached = localStorage.getItem(cacheKey);
+  let oldSig = null; // 🚨 [방어막 지문]
+
+  if (cached) {
+    try {
+      yearlyCache[window.dashYearlyYear] = JSON.parse(cached);
+      let yData = yearlyCache[window.dashYearlyYear];
+      oldSig = JSON.stringify(yData.monthly || []) + JSON.stringify(yData.comp || {});
+      renderDashCharts();
+    } catch (e) {}
+  } else {
+    let dummyArr = [];
+    for (let i = 0; i < 12; i++) dummyArr.push({ pal: 0, box: 0, details: {} });
+    yearlyCache[window.dashYearlyYear] = { year: window.dashYearlyYear, monthly: dummyArr, comp: {} };
+    renderDashCharts();
+    document.getElementById("dashCardTitle1").innerText = "데이터 불러오는 중...";
+    document.getElementById("dashAvg").innerText = "⏳";
+  }
+
+  // 🚀 Vercel API 백그라운드 호출
+  apiGet({ action: "yearlyStats", type: currentType, year: window.dashYearlyYear }).then((res) => {
+    if (res === null) {
+      if (window.dashMode === "year" && !cached)
+        document.getElementById("dashTitleText").innerText = "불러오기 실패 🥲";
+      return;
+    }
+    let newSig = JSON.stringify(res.monthly || []) + JSON.stringify(res.comp || {});
+    if (oldSig === newSig) {
+      yearlyCache[res.year] = res;
+      localStorage.setItem(cacheKey, JSON.stringify(res));
+      let subTxt = document.getElementById("dashSubTitleText");
+      if (subTxt) subTxt.innerText = `${window.dashYearlyYear}년 연간 요약`;
+      return;
+    }
+    yearlyCache[res.year] = res;
+    localStorage.setItem(cacheKey, JSON.stringify(res));
+    if (window.dashMode === "year" && window.dashYearlyYear === res.year) {
+      let subTxt = document.getElementById("dashSubTitleText");
+      if (subTxt) subTxt.innerText = `${window.dashYearlyYear}년 연간 요약`;
+      renderDashCharts();
+    }
+  });
+}
+
+// 1. 도넛 가운데에 정보 띄우기 플러그인 유지
+const pieCenterTextPlugin = {
+  id: "pieCenterText",
+  beforeDraw(chart) {
+    if (chart.config.type !== "doughnut") return;
+    const ctx = chart.ctx;
+    const centerX = chart.chartArea.left + chart.chartArea.width / 2;
+    const centerY = chart.chartArea.top + chart.chartArea.height / 2;
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    if (window.activePieIndex !== null) {
+      const idx = window.activePieIndex;
+      const data = chart.data.datasets[0].data;
+      const colors = chart.data.datasets[0].backgroundColor;
+      const fullNames = chart.data.fullNames;
+      const displayName = fullNames ? fullNames[idx] : chart.data.labels[idx];
+      const totalSum = data.reduce((a, b) => a + b, 0);
+      const percent = ((data[idx] / totalSum) * 100).toFixed(1);
+      const unitStr = "P";
+
+      ctx.font = "bold 15px -apple-system, sans-serif";
+      ctx.fillStyle = colors[idx] !== "rgba(128,128,128,0.1)" ? colors[idx] : "#0a84ff";
+
+      let textWidth = ctx.measureText(displayName).width;
+      if (textWidth > 100) ctx.font = "bold 11px -apple-system, sans-serif";
+      else if (textWidth > 80) ctx.font = "bold 13px -apple-system, sans-serif";
+
+      ctx.fillText(displayName, centerX, centerY - 22, 100);
+
+      ctx.font = "900 26px -apple-system, sans-serif";
+      ctx.fillStyle = document.body.classList.contains("light-mode") ? "#222" : "#eee";
+      ctx.fillText(`${percent}%`, centerX, centerY + 6);
+
+      ctx.font = "bold 15px -apple-system, sans-serif";
+      ctx.fillStyle = "gray";
+      ctx.fillText(`(${data[idx]}${unitStr})`, centerX, centerY + 30);
+    } else {
+      ctx.font = "bold 14px -apple-system, sans-serif";
+      ctx.fillStyle = "gray";
+      ctx.fillText("👆 조각을", centerX, centerY - 10);
+      ctx.fillText("터치하세요", centerX, centerY + 10);
+    }
+    ctx.restore();
+  },
+};
+
+const pieHybridLabelPlugin = {
+  id: "pieHybridLabel",
+  afterDraw(chart) {
+    if (chart.config.type !== "doughnut") return;
+    const ctx = chart.ctx;
+    const meta = chart.getDatasetMeta(0);
+    const data = chart.data.datasets[0].data;
+    const labels = chart.data.labels;
+    const totalSum = data.reduce((a, b) => a + b, 0);
+    const centerX = chart.chartArea.left + chart.chartArea.width / 2;
+    const centerY = chart.chartArea.top + chart.chartArea.height / 2;
+    let rightLabels = [];
+    let leftLabels = [];
+    const isLight = document.body.classList.contains("light-mode");
+
+    meta.data.forEach((element, index) => {
+      if (data[index] === 0) return;
+      const midAngle = element.startAngle + (element.endAngle - element.startAngle) / 2;
+      const circumference = element.endAngle - element.startAngle;
+      const radius = element.outerRadius;
+      const isRight = Math.cos(midAngle) > 0;
+      const percent = ((data[index] / totalSum) * 100).toFixed(1);
+      const isActive = window.activePieIndex === null || window.activePieIndex === index;
+
+      if (circumference > 0.35) {
+        const r = element.innerRadius + (element.outerRadius - element.innerRadius) * 0.55;
+        const x = centerX + Math.cos(midAngle) * r;
+        const y = centerY + Math.sin(midAngle) * r;
+        ctx.save();
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = isActive ? "bold 13px -apple-system, sans-serif" : "13px -apple-system, sans-serif";
+        ctx.fillStyle = isActive ? "#111" : "rgba(128,128,128,0.5)";
+        ctx.fillText(labels[index], x, y - 6);
+        ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
+        ctx.fillText(`${percent}%`, x, y + 8);
+        ctx.restore();
+      } else {
+        const startX = centerX + Math.cos(midAngle) * radius;
+        const startY = centerY + Math.sin(midAngle) * radius;
+        let elbowX = centerX + Math.cos(midAngle) * (radius + 15);
+        let elbowY = centerY + Math.sin(midAngle) * (radius + 15);
+        const text = `${labels[index]} (${percent}%)`;
+        ctx.font = "bold 11px -apple-system, sans-serif";
+        let obj = { index, text, textWidth: ctx.measureText(text).width, startX, startY, elbowX, elbowY, isRight };
+        if (isRight) rightLabels.push(obj);
+        else leftLabels.push(obj);
+      }
+    });
+
+    const avoidCollision = (lbls) => {
+      lbls.sort((a, b) => a.elbowY - b.elbowY);
+      let prevY = -9999;
+      lbls.forEach((lbl) => {
+        if (lbl.elbowY < prevY + 16) lbl.elbowY = prevY + 16;
+        prevY = lbl.elbowY;
+      });
+    };
+    avoidCollision(rightLabels);
+    avoidCollision(leftLabels);
+
+    ctx.save();
+    ctx.textBaseline = "middle";
+    const drawLabel = (lbl) => {
+      let lineEndX, textX;
+      if (lbl.isRight) {
+        textX = chart.width - 2;
+        ctx.textAlign = "right";
+        lineEndX = textX - lbl.textWidth - 5;
+        if (lineEndX < centerX + meta.data[0].outerRadius + 10) lineEndX = centerX + meta.data[0].outerRadius + 10;
+      } else {
+        textX = 2;
+        ctx.textAlign = "left";
+        lineEndX = textX + lbl.textWidth + 5;
+        if (lineEndX > centerX - meta.data[0].outerRadius - 10) lineEndX = centerX - meta.data[0].outerRadius - 10;
       }
 
-           
-      // 📡 특정 관리자 접속 정보 팝업 엔진
-      function showAdminConnInfo(adminId, adminName) {
-          const modal = document.getElementById('adminConnModal');
-          const list = document.getElementById('adminConnList');
-          document.getElementById('adminConnTitle').innerText = `[${adminName}] 접속 이력`;
-          list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--text-sub); font-weight:bold;'>접속망 트래킹 중... ⏳</div>";
-          modal.style.display = 'flex';
+      let safeElbowX = lbl.elbowX;
+      if (!lbl.isRight && safeElbowX > centerX - meta.data[0].outerRadius - 10)
+        safeElbowX = centerX - meta.data[0].outerRadius - 10;
+      if (lbl.isRight && safeElbowX < centerX + meta.data[0].outerRadius + 10)
+        safeElbowX = centerX + meta.data[0].outerRadius + 10;
+      const isActive = window.activePieIndex === null || window.activePieIndex === lbl.index;
 
-          apiCall({ source: 'vercel', action: 'GET_ADMIN_CONN_LOGS', data: { targetId: adminId } })
-          .then(function(res) {
-              if (res === null || !res.success || !res.logs || res.logs.length === 0) {
-                  list.innerHTML = "<div style='text-align:center; padding:20px; color:var(--text-sub);'>최근 기록이 없습니다.</div>";
-                  return;
-              }
-              let html = "";
-              res.logs.forEach(log => {
-                  let rawDate = log.created_at || '';
-let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace('-', '.') : rawDate;
-                  let cleanDesc = log.description.replace('[접속성공] ', '');
+      ctx.strokeStyle = isActive ? (isLight ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.3)") : "rgba(128,128,128,0.1)";
+      ctx.beginPath();
+      ctx.moveTo(lbl.startX, lbl.startY);
+      ctx.lineTo(safeElbowX, lbl.elbowY);
+      ctx.lineTo(lineEndX, lbl.elbowY);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(lbl.startX, lbl.startY, 3.5, 0, 2 * Math.PI);
+      ctx.fillStyle = isActive
+        ? isLight
+          ? "rgba(100,100,100,0.7)"
+          : "rgba(180,180,180,0.7)"
+        : "rgba(128,128,128,0.1)";
+      ctx.fill();
+      ctx.font = isActive ? "bold 11px -apple-system, sans-serif" : "11px -apple-system, sans-serif";
+      ctx.fillStyle = isActive ? (isLight ? "#444" : "#ccc") : "rgba(128,128,128,0.3)";
+      ctx.fillText(lbl.text, textX, lbl.elbowY);
+    };
+    rightLabels.forEach(drawLabel);
+    leftLabels.forEach(drawLabel);
+    ctx.restore();
+  },
+};
 
-                  html += `
+// 🚨 chart.js(defer 로드) 준비 후에만 플러그인 등록 (Chart is not defined 방지)
+
+_registerChartPlugins();
+
+function renderDashCharts() {
+  Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
+  Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
+
+  let unitName = "PAL";
+  let labels = [];
+  let seaData = [];
+  let airData = [];
+  let compMap = { "🚢 해상 (SEA)": 0, "✈️ 항공 (AIR)": 0 };
+  let barDetails = [];
+  let totalQty = 0;
+  let doneQty = 0;
+  document.getElementById("barDetailBox").style.display = "none";
+  const includePending = document.getElementById("includePendingCheck")?.checked;
+
+  if (window.dashMode === "month") {
+    document.getElementById("dashTitleText").innerText = `${window.dashYear}년 ${window.dashMonth}월`;
+    let sub = document.getElementById("dashSubTitleText");
+    if (sub) sub.innerText = `${window.dashYear}년 ${window.dashMonth}월 요약`;
+
+    let days = new Date(window.dashYear, window.dashMonth, 0).getDate();
+    for (let d = 1; d <= days; d++) {
+      labels.push(`${d}일`);
+      seaData.push(0);
+      airData.push(0);
+      barDetails.push({ "🚢 해상 (SEA)": 0, "✈️ 항공 (AIR)": 0 });
+    }
+
+    const process = (it, dIdx) => {
+      let clean = String(it.bl || "").trim();
+      if (clean && clean !== "미정") {
+        let qty = parseInt(it.pal) || 0;
+        totalQty += qty;
+        if (it.isDone === true || String(it.isDone) === "true") doneQty += qty;
+
+        let isAir = it.sType === "AIR";
+        let typeLabel = isAir ? "✈️ 항공 (AIR)" : "🚢 해상 (SEA)";
+
+        if (dIdx !== null) {
+          if (isAir) airData[dIdx - 1] += qty;
+          else seaData[dIdx - 1] += qty;
+          barDetails[dIdx - 1][typeLabel] += qty;
+        }
+        if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
+      }
+    };
+
+    if (window.dashCurrentData) {
+      for (let d = 1; d <= days; d++) {
+        if (window.dashCurrentData.monthData && window.dashCurrentData.monthData[d])
+          window.dashCurrentData.monthData[d].forEach((it) => process(it, d));
+      }
+      if (includePending && window.dashCurrentData.pendingItems)
+        window.dashCurrentData.pendingItems.forEach((it) => process(it, null));
+    }
+  } else {
+    // 🚨 [연간 차트 뻗음 버그 완벽 해결]
+    document.getElementById("dashTitleText").innerText = `${window.dashYearlyYear}년`;
+    let sub = document.getElementById("dashSubTitleText");
+    if (sub) sub.innerText = `${window.dashYearlyYear}년 연간 요약`;
+    for (let m = 1; m <= 12; m++) {
+      labels.push(`${m}월`);
+      seaData.push(0);
+      airData.push(0);
+      barDetails.push({ "🚢 해상 (SEA)": 0, "✈️ 항공 (AIR)": 0 });
+    }
+
+    let yData = yearlyCache[window.dashYearlyYear];
+    if (yData) {
+      for (let i = 0; i < 12; i++) {
+        let mData = yData.monthly[i] || {};
+        let details = mData.details || {};
+
+        // 객체에서 .pal 수량을 명확하게 꺼내옵니다!
+        let mSea = details["🚢 해상 (SEA)"] ? details["🚢 해상 (SEA)"].pal : 0;
+        let mAir = details["✈️ 항공 (AIR)"] ? details["✈️ 항공 (AIR)"].pal : 0;
+
+        seaData[i] = mSea;
+        airData[i] = mAir;
+        totalQty += parseInt(mData.pal) || 0;
+
+        barDetails[i]["🚢 해상 (SEA)"] = mSea;
+        barDetails[i]["✈️ 항공 (AIR)"] = mAir;
+      }
+      let ySea = yData.comp["🚢 해상 (SEA)"] ? yData.comp["🚢 해상 (SEA)"].pal : 0;
+      let yAir = yData.comp["✈️ 항공 (AIR)"] ? yData.comp["✈️ 항공 (AIR)"].pal : 0;
+      compMap = { "🚢 해상 (SEA)": ySea, "✈️ 항공 (AIR)": yAir };
+    }
+
+    if (includePending && window.dashCurrentData && window.dashCurrentData.pendingItems) {
+      window.dashCurrentData.pendingItems.forEach((it) => {
+        let clean = String(it.bl || "").trim();
+        if (clean && clean !== "미정") {
+          let qty = parseInt(it.pal) || 0;
+          totalQty += qty;
+          let isAir = it.sType === "AIR";
+          let typeLabel = isAir ? "✈️ 항공 (AIR)" : "🚢 해상 (SEA)";
+          if (compMap[typeLabel] !== undefined) compMap[typeLabel] += qty;
+        }
+      });
+    }
+  }
+
+  // 상단 카드 요약 (기존 유지)
+  if (window.dashMode === "month") {
+    let rate = totalQty > 0 ? Math.round((doneQty / totalQty) * 100) : 0;
+    let now = new Date();
+    let isCurrentMonth = window.dashYear === now.getFullYear() && window.dashMonth === now.getMonth() + 1;
+    let divider = isCurrentMonth
+      ? Math.max(1, now.getDate())
+      : new Date(window.dashYear, window.dashMonth, 0).getDate();
+    let avgDaily = doneQty > 0 ? (doneQty / divider).toFixed(1) : 0;
+    document.getElementById("dashCardTitle1").innerText = "당월 총 예정 물량";
+    document.getElementById("dashTotal").innerHTML =
+      `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
+    document.getElementById("dashVolDetail").innerText = `완료: ${doneQty.toLocaleString()} (${rate}%)`;
+    document.getElementById("dashVolDetail").style.color = rate >= 100 ? "#34c759" : rate > 50 ? "#0a84ff" : "#ff9f0a";
+    document.getElementById("dashCardTitle2").innerText = "일일 평균 처리량";
+    document.getElementById("dashAvg").innerHTML =
+      `${avgDaily} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/일</span>`;
+    document.getElementById("dashDaysDetail").innerText = `(월 누적: ${doneQty.toLocaleString()})`;
+  } else {
+    // 🚨 [핵심 패치] 해상/항공 물량이 1이라도 존재하는 월의 개수만 추출!
+    let activeMonths = 0;
+    for (let i = 0; i < 12; i++) {
+      if (seaData[i] + airData[i] > 0) activeMonths++;
+    }
+    let divider = activeMonths > 0 ? activeMonths : 1; // 0으로 나누기 방지
+    let avgMonthly = totalQty > 0 ? Math.round(totalQty / divider) : 0;
+    let avgDaily = totalQty > 0 ? (totalQty / 365).toFixed(1) : 0;
+
+    document.getElementById("dashCardTitle1").innerText = "연간 총 누적수량";
+    document.getElementById("dashTotal").innerHTML =
+      `${totalQty.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}</span>`;
+    document.getElementById("dashVolDetail").innerText = `(1년 전체 합산)`;
+    document.getElementById("dashVolDetail").style.color = "#0a84ff";
+    document.getElementById("dashCardTitle2").innerText = "월간 평균 처리량";
+    document.getElementById("dashAvg").innerHTML =
+      `${avgMonthly.toLocaleString()} <span style="font-size:0.5em; color:var(--text-sub);">${unitName}/월</span>`;
+    document.getElementById("dashDaysDetail").innerText = `(${divider}개월 평균 / 일평균: 약 ${avgDaily})`;
+  }
+  // 상단 카드 정보 업데이트 (기존 코드와 동일...)
+
+  // 💡 스와이프(Hover) 선택을 위한 전역 공유 변수 할당
+  window.dashSeaData = seaData;
+  window.dashAirData = airData;
+  window.dashBarDetails = barDetails;
+
+  // 💡 1. 막대 색깔 하이라이트 + [빈 데이터 스킵(스냅) 로직]
+  window.lastHoveredBarIndex = -1;
+  window.highlightBarOnly = function (idx) {
+    if (idx === null || idx === undefined || idx < 0) {
+      window.lastHoveredBarIndex = -1;
+
+      // 🚨 [버그 수정 2] 리셋할 때도 배열(Array) 형태로 원래 색을 꽉 채워줘야 Chart.js가 꼬이지 않습니다!
+      mainChartIns.data.datasets[0].backgroundColor = new Array(labels.length).fill("#26e2fd");
+      mainChartIns.data.datasets[1].backgroundColor = new Array(labels.length).fill("#ff7eff");
+
+      // 🚨 추가: 툴팁(말풍선) 잔상도 확실하게 지워버립니다.
+      if (mainChartIns.tooltip) {
+        mainChartIns.tooltip.setActiveElements([], { x: 0, y: 0 });
+      }
+
+      mainChartIns.update();
+      return;
+    }
+    // ... (이하 기존 코드 유지) ...
+
+    let validIndices = [];
+    for (let i = 0; i < labels.length; i++) {
+      if (window.dashSeaData[i] + window.dashAirData[i] > 0) validIndices.push(i);
+    }
+    if (validIndices.length === 0) return;
+
+    let closestIdx = validIndices[0];
+    let minDiff = Math.abs(idx - closestIdx);
+    for (let i = 1; i < validIndices.length; i++) {
+      let diff = Math.abs(idx - validIndices[i]);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIdx = validIndices[i];
+      }
+    }
+    idx = closestIdx;
+
+    if (idx === window.lastHoveredBarIndex) return;
+    window.lastHoveredBarIndex = idx;
+
+    let dimColor = document.body.classList.contains("light-mode") ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)";
+    let newSeaColors = new Array(labels.length).fill(dimColor);
+    newSeaColors[idx] = "#26e2fd";
+    let newAirColors = new Array(labels.length).fill(dimColor);
+    newAirColors[idx] = "#ff7eff";
+
+    mainChartIns.data.datasets[0].backgroundColor = newSeaColors;
+    mainChartIns.data.datasets[1].backgroundColor = newAirColors;
+
+    if (mainChartIns.tooltip) {
+      mainChartIns.tooltip.setActiveElements(
+        [
+          { datasetIndex: 0, index: idx },
+          { datasetIndex: 1, index: idx },
+        ],
+        { x: 0, y: 0 },
+      );
+    }
+    mainChartIns.update();
+  };
+
+  // 💡 2. 손 뗐을 때 상세내역 스르륵 호출
+  window.showDetailBox = function (idx) {
+    let detailBox = document.getElementById("barDetailBox");
+    if (idx === null || idx === undefined || idx < 0) return;
+
+    let details = window.dashBarDetails[idx];
+    let total = window.dashSeaData[idx] + window.dashAirData[idx];
+    if (total === 0) {
+      detailBox.style.display = "none";
+      return;
+    }
+
+    let timeLabel = window.dashMode === "month" ? `${idx + 1}일` : `${idx + 1}월`;
+    let html = `<div style="font-weight:900; margin-bottom:10px; color:var(--text-main);">📅 ${timeLabel} 입고 내역 <span style="color:#0a84ff; font-size:0.9em;">(총 ${total}P)</span></div>`;
+    html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
+
+    if (details["🚢 해상 (SEA)"] > 0) {
+      html += `<div style="display:flex; align-items:center; gap:6px; background:#26e2fd; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(1,221,251,0.4);">
+                      <span style="font-weight:900;">🚢 해상</span><span style="font-weight:800; opacity:0.9;">${details["🚢 해상 (SEA)"]}P</span>
+                  </div>`;
+    }
+    if (details["✈️ 항공 (AIR)"] > 0) {
+      html += `<div style="display:flex; align-items:center; gap:6px; background:#ff7eff; color:#111; padding:6px 12px; border-radius:8px; font-size:0.95em; box-shadow: 0 2px 6px rgba(255,107,159,0.4);">
+                      <span style="font-weight:900;">✈️ 항공</span><span style="font-weight:800; opacity:0.9;">${details["✈️ 항공 (AIR)"]}P</span>
+                  </div>`;
+    }
+    html += `</div>`;
+    detailBox.innerHTML = html;
+    detailBox.style.display = "block";
+    detailBox.animate(
+      [
+        { opacity: 0, transform: "translateY(-5px)" },
+        { opacity: 1, transform: "translateY(0)" },
+      ],
+      { duration: 250, fill: "forwards" },
+    );
+  };
+
+  if (mainChartIns) mainChartIns.destroy();
+
+  // 🚨 [버그 수정 1] 차트 생성 시점부터 단일 색상(String)이 아닌 배열(Array)로 꽉 채워줍니다.
+  let seaBgColors = new Array(labels.length).fill("#26e2fd");
+  let airBgColors = new Array(labels.length).fill("#ff7eff");
+
+  mainChartIns = new Chart(document.getElementById("mainChart"), {
+    type: "bar",
+    // 아래 backgroundColor를 배열 변수로 교체했습니다.
+    data: {
+      labels: labels,
+      datasets: [
+        { label: `🚢 해상`, data: seaData, backgroundColor: seaBgColors, stack: "Stack 0", borderRadius: 4 },
+        { label: `✈️ 항공`, data: airData, backgroundColor: airBgColors, stack: "Stack 0", borderRadius: 4 },
+      ],
+    },
+    options: {
+      /* ... 기존 옵션 그대로 유지 ... */
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false, axis: "x" },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          mode: "index",
+          intersect: false,
+          callbacks: {
+            title: (items) => (window.dashMode === "month" ? `${items[0].label} 입고량` : `${items[0].label} 입고량`),
+            label: () => null,
+            footer: (items) => `총 ${items.reduce((a, b) => a + b.parsed.y, 0)}P`,
+          },
+        },
+      },
+      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } },
+      events: [],
+    },
+  });
+
+  // 🚨 [커스텀 터치 엔진] 스킵 현상 및 손 뗄 때 튀는 현상 완벽 해결!
+  const mainCanvas = document.getElementById("mainChart");
+  mainCanvas.style.touchAction = "pan-y";
+
+  let lastProcessedX = -999;
+  const triggerChartInteraction = (clientX, isForce = false) => {
+    if (!mainChartIns) return;
+
+    // 💡 [수정된 핵심 데드존 로직]
+    // 8픽셀 미만의 미세한 떨림은 무시하되, lastProcessedX 기준점은 '갱신하지 않음'!!
+    // 이렇게 해야 천천히 움직여서 누적 거리가 8px을 넘었을 때 정상적으로 옆 칸으로 넘어갑니다 (스킵 버그 해결)
+    if (!isForce && Math.abs(clientX - lastProcessedX) < 8) return;
+
+    lastProcessedX = clientX; // 👈 8픽셀 이상 움직였을 때만 비로소 기준점 갱신!
+
+    const rect = mainCanvas.getBoundingClientRect();
+    const chartArea = mainChartIns.chartArea;
+    if (!chartArea) return;
+
+    let xCoord = clientX - rect.left;
+    let x = Math.max(chartArea.left, Math.min(xCoord, chartArea.right));
+    let width = chartArea.right - chartArea.left;
+    let percent = (x - chartArea.left) / width;
+
+    let idx = Math.floor(percent * labels.length);
+    idx = Math.min(Math.max(idx, 0), labels.length - 1);
+    window.highlightBarOnly(idx);
+  };
+
+  mainCanvas.ontouchstart = (e) => {
+    triggerChartInteraction(e.touches[0].clientX, true);
+  };
+  mainCanvas.ontouchmove = (e) => {
+    triggerChartInteraction(e.touches[0].clientX, false);
+  };
+  mainCanvas.ontouchend = () => {
+    if (window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex);
+    else document.getElementById("barDetailBox").style.display = "none";
+  };
+
+  mainCanvas.onmousemove = (e) => {
+    triggerChartInteraction(e.clientX, false);
+  };
+  mainCanvas.onclick = (e) => {
+    triggerChartInteraction(e.clientX, true);
+    if (window.lastHoveredBarIndex >= 0) window.showDetailBox(window.lastHoveredBarIndex);
+    else document.getElementById("barDetailBox").style.display = "none";
+  };
+  mainCanvas.onmouseleave = () => {
+    window.highlightBarOnly(-1);
+  };
+
+  // (이후 파이 차트 로직 유지)
+
+  // 🍩 파이 차트
+  window.activePieIndex = null;
+  let sLabels = [];
+  let sData = [];
+  let sColors = [];
+  if (compMap["🚢 해상 (SEA)"] > 0) {
+    sLabels.push("🚢 해상 (SEA)");
+    sData.push(compMap["🚢 해상 (SEA)"]);
+    sColors.push("#26e2fd");
+  }
+  if (compMap["✈️ 항공 (AIR)"] > 0) {
+    sLabels.push("✈️ 항공 (AIR)");
+    sData.push(compMap["✈️ 항공 (AIR)"]);
+    sColors.push("#ff7eff");
+  }
+
+  window.highlightPieSlice = function (idx) {
+    if (!shareChartIns) return;
+    const dataset = shareChartIns.data.datasets[0];
+    let slider = document.getElementById("pieSlider");
+    if (idx === null || String(idx) === "-1") {
+      window.activePieIndex = null;
+      dataset.backgroundColor = [...dataset._originalColors];
+      if (slider) slider.value = -1;
+    } else {
+      window.activePieIndex = parseInt(idx, 10);
+      dataset.backgroundColor = dataset._originalColors.map((color, i) =>
+        i === window.activePieIndex
+          ? color
+          : document.body.classList.contains("light-mode")
+            ? "rgba(0,0,0,0.05)"
+            : "rgba(255,255,255,0.05)",
+      );
+      if (slider) slider.value = window.activePieIndex;
+    }
+    shareChartIns.update();
+  };
+
+  if (shareChartIns) shareChartIns.destroy();
+  shareChartIns = new Chart(document.getElementById("shareChart"), {
+    type: "doughnut",
+    data: {
+      labels: sLabels,
+      datasets: [
+        {
+          data: sData,
+          backgroundColor: [...sColors],
+          _originalColors: [...sColors],
+          borderWidth: 2,
+          borderColor: document.body.classList.contains("light-mode") ? "#fff" : "#2a2c30",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "55%",
+      layout: { padding: { left: 50, right: 50, top: 15, bottom: 15 } },
+      // 💡 [디테일 4 수정] datalabels 옵션을 꺼서 조각 안의 하얀 글씨(퍼센트) 영구 제거
+      plugins: { legend: { display: false }, tooltip: { enabled: false }, datalabels: { display: false } },
+      onClick: (e, activeElements) => {
+        if (!activeElements || activeElements.length === 0) window.highlightPieSlice(-1);
+        else {
+          const idx = activeElements[0].index;
+          if (window.activePieIndex === idx) window.highlightPieSlice(-1);
+          else window.highlightPieSlice(idx);
+        }
+      },
+    },
+  });
+}
+
+// =====================================================
+// 🚨 [패치] 바탕화면(빈 공간) 클릭 시 막대/파이차트 하이라이트 동시 해제
+// =====================================================
+document.getElementById("dashboardModal").addEventListener("click", function (e) {
+  // 모달 배경(검은 여백)을 눌러서 창을 닫는 동작은 방해하지 않음
+  if (e.target === this) return;
+
+  // 1. 막대차트 리셋 (막대나 상세정보 박스가 아닌 빈 곳을 터치했을 때)
+  if (window.lastHoveredBarIndex !== -1 && typeof window.highlightBarOnly === "function") {
+    if (e.target.tagName !== "CANVAS" && !e.target.closest("#barDetailBox")) {
+      window.highlightBarOnly(-1);
+      document.getElementById("barDetailBox").style.display = "none";
+    }
+  }
+
+  // 2. 파이차트 리셋 (파이나 슬라이더가 아닌 빈 곳을 터치했을 때)
+  if (window.activePieIndex !== null && typeof window.highlightPieSlice === "function") {
+    if (e.target.tagName !== "CANVAS" && e.target.id !== "pieSlider" && !e.target.closest("#pieSliderWrapper")) {
+      window.highlightPieSlice(-1);
+    }
+  }
+});
+
+// 🚀 [앱 초기화]
+window.addEventListener("DOMContentLoaded", () => {
+  // 저장된 session_token 복원
+  window._sessionToken = localStorage.getItem("session_token") || sessionStorage.getItem("session_token") || null;
+  // bio_pw → bio_token 마이그레이션 (구형 등록 정리)
+  if (localStorage.getItem("bio_pw")) {
+    localStorage.removeItem("bio_pw");
+    localStorage.removeItem("bio_registered");
+    localStorage.removeItem("bio_id");
+  }
+  // 과도기: 자동로그인 사용자인데 토큰이 없으면 조용히 발급받아 저장
+  (function () {
+    let isAdm = localStorage.getItem("isAdmin") === "true" || sessionStorage.getItem("isAdmin") === "true";
+    let aid = localStorage.getItem("admin_id") || sessionStorage.getItem("admin_id");
+    if (isAdm && aid && !window._sessionToken) {
+      apiCall({ source: "vercel", action: "ISSUE_LEGACY_TOKEN", admin_id: aid }).then(function (r) {
+        if (r && r.success && r.session_token) {
+          window._sessionToken = r.session_token;
+          const isAuto = localStorage.getItem("auto_login") !== "false";
+          (isAuto ? localStorage : sessionStorage).setItem("session_token", r.session_token);
+        }
+      });
+    }
+  })();
+
+  // 👇 🚨 [자동로그인 & GUEST 사이트 접속 추적기] 여기에 삽입! 👇
+  let isAdm = localStorage.getItem("isAdmin") === "true" || sessionStorage.getItem("isAdmin") === "true";
+  let currentAdminId = localStorage.getItem("admin_id") || sessionStorage.getItem("admin_id") || "GUEST";
+  let accessType = isAdm ? "AUTO_LOGIN" : "GUEST";
+
+  // 사용자 환경 분석 (모바일/PC, 카카오/네이버/크롬/사파리 완벽 판별)
+  let ua = navigator.userAgent.toLowerCase();
+  let device = /mobile|android|iphone|ipad|ipod/.test(ua) ? "Mobile" : "PC";
+  let browser = "Unknown";
+  if (ua.includes("whale")) browser = "Whale";
+  else if (ua.includes("samsungbrowser")) browser = "Samsung Internet";
+  else if (ua.includes("edg")) browser = "Edge";
+  else if (ua.includes("kakaotalk") || ua.includes("kakao"))
+    browser = "KakaoTalk"; // 카톡 인앱 브라우저
+  else if (ua.includes("naver"))
+    browser = "Naver App"; // 네이버 인앱 브라우저
+  else if (ua.includes("chrome") && !ua.includes("edg")) browser = "Chrome";
+  else if (ua.includes("safari") && !ua.includes("chrome")) browser = "Safari";
+  else if (ua.includes("firefox")) browser = "Firefox";
+  // 서버에 추적 로그 전송 (실패해도 앱 구동에 영향 안 주게 방어)
+  apiCall({
+    source: "vercel",
+    action: "LOG_SITE_ACCESS",
+    admin_id: currentAdminId,
+    access_type: accessType,
+    description: `기기: ${device} / 브라우저: ${browser}`,
+  });
+  // 👆 -------------------------------------------------------- 👆
+
+  // 🚨 세션 스토리지까지 함께 체크하도록 OR(||) 조건 추가!
+  if (localStorage.getItem("isAdmin") === "true" || sessionStorage.getItem("isAdmin") === "true") {
+    window.isAdmin = true;
+    isAdmin = true;
+
+    // 초록색 관리자 버튼으로 변신! (이 4줄만 남기면 끝입니다)
+    const btn = document.getElementById("adminBtn");
+    if (btn) {
+      btn.innerHTML = "🔓 관리자";
+      btn.className = "admin-btn unlocked";
+      btn.removeAttribute("style");
+    }
+
+    const actions = document.getElementById("adminActions");
+    if (actions) actions.style.display = "flex";
+
+    if (typeof updateFooterUI === "function") updateFooterUI();
+    // 👇 🚨여기에 딱 꽂아주시면 됩니다!
+    if (typeof checkMasterAuthButtonVisibility === "function") {
+      checkMasterAuthButtonVisibility();
+    }
+  } else {
+    window.isAdmin = false;
+    isAdmin = false;
+  }
+
+  const savedTheme = localStorage.getItem("cal_theme") || "light";
+  // ... (아래부터는 기존 코드 그대로 유지) ...
+  const themeBtn = document.querySelector(".theme-toggle");
+  if (savedTheme === "light") {
+    document.body.classList.add("light-mode");
+    isDarkMode = false;
+    if (themeBtn) themeBtn.innerText = "🌙";
+  } else {
+    document.body.classList.remove("light-mode");
+    isDarkMode = true;
+    if (themeBtn) themeBtn.innerText = "☀️";
+  }
+  const savedSize = localStorage.getItem("cal_fontSize") || "M";
+  changeSize(savedSize);
+
+  // 👇 🚨 여기에 추가해 주시면 됩니다! 🚨 👇
+  if (!isShowHoliday) {
+    const btnHoliday = document.getElementById("btnHolidayToggle");
+    if (btnHoliday) {
+      btnHoliday.innerHTML = "🏖️ OFF";
+      btnHoliday.style.color = "var(--text-sub)";
+    }
+  }
+  // 👆 ----------------------------------- 👆
+
+  updateFooterUI();
+
+  let now = new Date();
+  let currentYear = now.getFullYear();
+  let currentMonth = now.getMonth() + 1;
+  let cacheKey = `cal_cache_${currentType}_${currentYear}_${currentMonth}`;
+
+  let cachedData = localStorage.getItem(cacheKey);
+  let isCacheValid = false;
+  // 💡 [여기에 딱 한 줄 추가!] 앱 켜자마자 올해 1년 치 빨간날부터 장전!
+  checkAndFetchHolidays(currentYear);
+  if (cachedData) {
+    try {
+      let parsed = JSON.parse(cachedData);
+      serverData = typeof parsed === "string" ? JSON.parse(parsed) : parsed;
+      serverData.year = currentYear;
+      serverData.month = currentMonth;
+      serverData.firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
+      serverData.daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+      if (!isNaN(serverData.year)) isCacheValid = true;
+    } catch (e) {
+      console.error("캐시 파싱 에러", e);
+    }
+  }
+
+  if (!isCacheValid) {
+    let tempFirstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
+    let tempDays = new Date(currentYear, currentMonth, 0).getDate();
+    serverData = {
+      year: currentYear,
+      month: currentMonth,
+      firstDay: tempFirstDay,
+      daysInMonth: tempDays,
+      monthData: {},
+      pendingItems: [],
+    };
+  }
+
+  renderCalendar();
+  let fetchStartTime = Date.now();
+
+  // 💡 OCR 통신도 백그라운드로 안전하게 요청
+  apiCall({ source: "vercel", domain: "system", action: "GET_OCR_LAST_TIME" }).then(function (res) {
+    if (res === null) return;
+    let timeStr = res && res.time ? res.time : typeof res === "string" ? res : "최근 처리내역 없음";
+    const el = document.getElementById("ocrTimeText");
+    if (el) el.innerText = timeStr;
+  });
+
+  // 💡 입고 데이터 백그라운드 동기화
+  apiGet({ type: currentType, year: currentYear, month: currentMonth }).then(function (newData) {
+    if (newData === null) return;
+    if (typeof lastLocalUpdateTime !== "undefined" && lastLocalUpdateTime > fetchStartTime) return;
+
+    newData.year = currentYear;
+    newData.month = currentMonth;
+    newData.firstDay = new Date(currentYear, currentMonth - 1, 1).getDay();
+    newData.daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+    localStorage.setItem(cacheKey, JSON.stringify(newData));
+    if (serverData.year === currentYear && serverData.month === currentMonth) {
+      serverData = newData;
+      renderCalendar();
+    }
+  });
+  // 💡 [최종 위치] AI FAB 관리자 권한 확인 및 노출
+  if (typeof showAiFabIfAdmin === "function") {
+    showAiFabIfAdmin();
+  }
+});
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("서비스 워커 등록 실패:", err));
+  });
+}
+
+// =====================================================
+// 🚀 [네이티브 앱 감성 V3] 모달 스와이프(내려 닫기) 통합 엔진
+// =====================================================
+let swipeModalVars = {
+  activeBox: null,
+  activeModal: null,
+  startY: 0,
+  currentY: 0,
+  isDragging: false,
+  startTime: 0,
+};
+
+// 🚀 페이지가 로드되면 독립적으로 네이티브 스와이프 엔진 즉시 가동!
+window.addEventListener("DOMContentLoaded", initNativeBottomSheet);
+
+// 💡 [개선] Face ID 실패/취소 시 수동 로그인 창으로 자연스럽게 안내 (Fallback)
+async function handleBioLogin() {
+  if (!window.PublicKeyCredential) {
+    openLoginModal();
+    return;
+  }
+
+  try {
+    // 🚨 [핵심 패치] 로그인할 때도 똑같이 랜덤 챌린지를 생성해야 비트워든이 의심하지 않음
+    const randomChallenge = new Uint8Array(32);
+    window.crypto.getRandomValues(randomChallenge);
+
+    const publicKey = {
+      challenge: randomChallenge,
+      rpId: window.location.hostname,
+      userVerification: "required",
+      timeout: 60000,
+    };
+
+    const assertion = await navigator.credentials.get({ publicKey });
+
+    if (assertion) {
+      const savedId = localStorage.getItem("bio_id");
+      const savedToken = localStorage.getItem("bio_token");
+
+      if (savedId && savedToken) {
+        document.getElementById("adminLoginModal").style.display = "none";
+        showToast("🔒 생체 인증 성공! 서버 확인 중...", 0);
+
+        apiCall({ source: "vercel", action: "VERIFY_SESSION", session_token: savedToken }).then(function (res) {
+          if (res === null || !res.success) {
+            showToast("❌ 세션이 만료되었습니다. 다시 로그인하세요.", 2500);
+            localStorage.removeItem("bio_registered");
+            localStorage.removeItem("bio_id");
+            localStorage.removeItem("bio_token");
+            openLoginModal();
+            return;
+          }
+          window.isAdmin = true;
+          isAdmin = true;
+          saveAuthData(res.admin_id, res.role, true, savedToken);
+
+          const btn = document.getElementById("adminBtn");
+          if (btn) {
+            btn.innerHTML = "🔓 관리자";
+            btn.className = "admin-btn unlocked";
+            btn.removeAttribute("style");
+          }
+
+          const actions = document.getElementById("adminActions");
+          if (actions) actions.style.display = "flex";
+          const fab = document.getElementById("fabBtn");
+          if (fab) fab.style.display = "flex";
+
+          showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
+          if (typeof renderCalendar === "function") renderCalendar();
+          if (typeof updateFooterUI === "function") updateFooterUI();
+          if (typeof showAiFabIfAdmin === "function") showAiFabIfAdmin();
+        });
+      }
+    }
+  } catch (err) {
+    openLoginModal();
+  }
+}
+
+// 📡 특정 관리자 접속 정보 팝업 엔진
+function showAdminConnInfo(adminId, adminName) {
+  const modal = document.getElementById("adminConnModal");
+  const list = document.getElementById("adminConnList");
+  document.getElementById("adminConnTitle").innerText = `[${adminName}] 접속 이력`;
+  list.innerHTML =
+    "<div style='text-align:center; padding:20px; color:var(--text-sub); font-weight:bold;'>접속망 트래킹 중... ⏳</div>";
+  modal.style.display = "flex";
+
+  apiCall({ source: "vercel", action: "GET_ADMIN_CONN_LOGS", data: { targetId: adminId } }).then(function (res) {
+    if (res === null || !res.success || !res.logs || res.logs.length === 0) {
+      list.innerHTML =
+        "<div style='text-align:center; padding:20px; color:var(--text-sub);'>최근 기록이 없습니다.</div>";
+      return;
+    }
+    let html = "";
+    res.logs.forEach((log) => {
+      let rawDate = log.created_at || "";
+      let timeStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace("-", ".") : rawDate;
+      let cleanDesc = log.description.replace("[접속성공] ", "");
+
+      html += `
                   <div style="background:var(--card-bg); border:1px solid var(--border-color); border-radius:8px; padding:10px; font-size:0.85em;">
                       <div style="color:#0a84ff; font-weight:900; margin-bottom:6px;">⏱️ ${timeStr}</div>
                       <div style="color:var(--text-main); line-height:1.4; word-break:keep-all;">${cleanDesc}</div>
                   </div>`;
-              });
-              list.innerHTML = html;
-          });
-      }
+    });
+    list.innerHTML = html;
+  });
+}
 
 // =====================================================
-      // 👑 시스템 관리 (Admin Operations Pipeline) 엔진
-      // =====================================================
-      // 제어실 오픈 시 모드에 따라 필터 글씨를 강제로 직관적으로 세팅해 주는 인터락
-      function openMasterDashboard() {
-          let role = localStorage.getItem('admin_role') || '';
-          let adminId = localStorage.getItem('admin_id') || '';
-          
-          const isMasterUser = adminId.toLowerCase() === 'admin' || 
-                               adminId.toLowerCase() === 'silverscent' ||
-                               role.toUpperCase().includes('SUPER') || 
-                               role.toUpperCase().includes('MASTER') ||
-                               role.toUpperCase().includes('SYSTEM');
+// 👑 시스템 관리 (Admin Operations Pipeline) 엔진
+// =====================================================
+// 제어실 오픈 시 모드에 따라 필터 글씨를 강제로 직관적으로 세팅해 주는 인터락
+function openMasterDashboard() {
+  let role = localStorage.getItem("admin_role") || "";
+  let adminId = localStorage.getItem("admin_id") || "";
 
-          if (!isMasterUser) {
-              showToast("🚨 접근 거부: 최상위 시스템 관리자 계정이 아닙니다.", 3000);
-              return;
-          }
-          
-          // 각 모드(입고/출고)에 맞게 명칭 변경
-          setTimeout(() => {
-              const nameOpt = document.getElementById('filterOptName');
-              const dateOpt = document.getElementById('filterOptDate');
-              if(nameOpt && dateOpt) {
-                  if(currentType === 'out') {
-                      nameOpt.innerText = "🏢 거래처명 검색 (company)";
-                      dateOpt.innerText = "📅 출고일자 검색 (out_date)";
-                  } else {
-                      nameOpt.innerText = "📄 B/L 번호 검색 (bl_number)";
-                      dateOpt.innerText = "📅 입고일자 검색 (receive_date)";
-                  }
-              }
-          }, 100);
+  const isMasterUser =
+    adminId.toLowerCase() === "admin" ||
+    adminId.toLowerCase() === "silverscent" ||
+    role.toUpperCase().includes("SUPER") ||
+    role.toUpperCase().includes("MASTER") ||
+    role.toUpperCase().includes("SYSTEM");
 
-          document.getElementById('masterDashboardModal').style.transform = 'translateX(-100%)';
-          switchMasterTab('admin-mgr');
-          refreshAdminList();
-          loadOcrFilterWords(); // 👈 🚨 이 한 줄만 추가! 창 열 때 필터 단어를 긁어옵니다.
+  if (!isMasterUser) {
+    showToast("🚨 접근 거부: 최상위 시스템 관리자 계정이 아닙니다.", 3000);
+    return;
+  }
+
+  // 각 모드(입고/출고)에 맞게 명칭 변경
+  setTimeout(() => {
+    const nameOpt = document.getElementById("filterOptName");
+    const dateOpt = document.getElementById("filterOptDate");
+    if (nameOpt && dateOpt) {
+      if (currentType === "out") {
+        nameOpt.innerText = "🏢 거래처명 검색 (company)";
+        dateOpt.innerText = "📅 출고일자 검색 (out_date)";
+      } else {
+        nameOpt.innerText = "📄 B/L 번호 검색 (bl_number)";
+        dateOpt.innerText = "📅 입고일자 검색 (receive_date)";
       }
+    }
+  }, 100);
 
-      
+  document.getElementById("masterDashboardModal").style.transform = "translateX(-100%)";
+  switchMasterTab("admin-mgr");
+  refreshAdminList();
+  loadOcrFilterWords(); // 👈 🚨 이 한 줄만 추가! 창 열 때 필터 단어를 긁어옵니다.
+}
 
-      
+// 🚨 [접속 로그 전용 엔진]
+let connLogCurrentPage = 1;
 
-      // 🚨 [접속 로그 전용 엔진]
-      let connLogCurrentPage = 1;
-      
+// 1. 계정 추가 실행
 
-      
+// 💡 5번 요구사항: 발급 창 부드러운 토글 제어 엔진
 
-      // 1. 계정 추가 실행
+// 👤 2, 4번 요구사항: 활성/비활성 완벽 분리 및 구분선 렌더링 빌더
 
-      // 💡 5번 요구사항: 발급 창 부드러운 토글 제어 엔진
-      
+// 🛑 2번 요구사항: 비활성화 경고문구 정교화 및 전송 처리
 
-      // 👤 2, 4번 요구사항: 활성/비활성 완벽 분리 및 구분선 렌더링 빌더
-      
+// 🔒 6번 요구사항: 본인 비밀번호 실시간 변경 연동 엔진 (SHA-256 연동)
 
-      // 🛑 2번 요구사항: 비활성화 경고문구 정교화 및 전송 처리
-      
+// ♻️ 계정 복구(활성화) 실행 함수
 
-      // 🔒 6번 요구사항: 본인 비밀번호 실시간 변경 연동 엔진 (SHA-256 연동)
+// 💥 계정 완전 삭제 실행 함수
 
+// 🔑 비밀번호 초기화 실행 함수
 
-      // ♻️ 계정 복구(활성화) 실행 함수
-      
+// 🚨 [로그 엔진 상태 변수 및 페이지 이동 함수 추가]
+let logCurrentPage = 1;
 
-      // 💥 계정 완전 삭제 실행 함수
-      
-      
-      // 🔑 비밀번호 초기화 실행 함수
+// 📜 3. 감사 로그 수집 및 서버 기반 검색 엔진 (페이지네이션 연동)
 
+// 🚨 DB 페이지네이션 관리 상태 변수
+let dbCurrentPage = 1;
 
-      // 🚨 [로그 엔진 상태 변수 및 페이지 이동 함수 추가]
-      let logCurrentPage = 1;
+// 검색어나 줄 수가 바뀔 때 무조건 1페이지로 리셋하고 검색하는 함수
 
-      
+// 페이지 이동(이전/다음) 트리거 함수
 
-      // 📜 3. 감사 로그 수집 및 서버 기반 검색 엔진 (페이지네이션 연동)
-      
-      // 🚨 DB 페이지네이션 관리 상태 변수
-      let dbCurrentPage = 1;
+// 🚨 [정렬 엔진 상태 변수 및 헬퍼 함수]
+let dbSortCol = "id";
+let dbSortDir = "DESC";
 
-      // 검색어나 줄 수가 바뀔 때 무조건 1페이지로 리셋하고 검색하는 함수
-      
+// 🗄️ 고도화된 DB 제어실 렌더링 (전체 컬럼 + 페이지네이션 + 열 정렬 기능)
 
-      // 페이지 이동(이전/다음) 트리거 함수
-      
+// 🟢 [DB제어실 전용] 1. 신규 행 강제 주입 엔진 (누락되어 새로 추가하는 부분)
 
-      // 🚨 [정렬 엔진 상태 변수 및 헬퍼 함수]
-      let dbSortCol = 'id';
-      let dbSortDir = 'DESC';
+// ✏️ 인라인 폼 데이터 취합 및 백엔드 전송
 
-      
+// ✏️ DB 로우 식별명 다이렉트 수정
 
-      
+// 💡 [보안/디버깅 강화] 마스터 권한 판별 인터락 (localStorage + sessionStorage 동시 검사)
 
-      // 🗄️ 고도화된 DB 제어실 렌더링 (전체 컬럼 + 페이지네이션 + 열 정렬 기능)
-      
-
-      // 🟢 [DB제어실 전용] 1. 신규 행 강제 주입 엔진 (누락되어 새로 추가하는 부분)
-      
-
-      // ✏️ 인라인 폼 데이터 취합 및 백엔드 전송
-      
-
-      // ✏️ DB 로우 식별명 다이렉트 수정
-      
-
-      
-
-      // 💡 [보안/디버깅 강화] 마스터 권한 판별 인터락 (localStorage + sessionStorage 동시 검사)
-      
-
-      // 🚨 [전역 변수] 원본 텍스트 보관용
+// 🚨 [전역 변수] 원본 텍스트 보관용
 let currentRawOcrString = "";
 
 // 📄 Raw 값 보기 토글 함수
 function toggleRawOcrView() {
-    const container = document.getElementById('raw-ocr-textarea-container');
-    const area = document.getElementById('rawOcrTextArea');
-    if (!container || !area) return;
+  const container = document.getElementById("raw-ocr-textarea-container");
+  const area = document.getElementById("rawOcrTextArea");
+  if (!container || !area) return;
 
-    if (container.style.display === 'none') {
-        area.value = currentRawOcrString || "가져온 Raw 데이터가 존재하지 않습니다.";
-        container.style.display = 'block';
-    } else {
-        container.style.display = 'none';
-    }
+  if (container.style.display === "none") {
+    area.value = currentRawOcrString || "가져온 Raw 데이터가 존재하지 않습니다.";
+    container.style.display = "block";
+  } else {
+    container.style.display = "none";
+  }
 }
 
 // 📋 RAW 텍스트 복사 실행 함수
 function copyRawOcrText() {
-    const area = document.getElementById('rawOcrTextArea');
-    if (!area || !area.value || area.value === "가져온 Raw 데이터가 존재하지 않습니다.") {
-        showToast("복사할 데이터가 없습니다.", 2000);
-        return;
-    }
-    
-    // 텍스트 복사 프로세스
-    area.select();
-    area.setSelectionRange(0, 99999); // 모바일 대응
-    
-    navigator.clipboard.writeText(area.value)
-        .then(() => {
-            showToast("📋 RAW 텍스트가 클립보드에 전체 복사되었습니다!", 2000);
-        })
-        .catch(err => {
-            // 구형 기기 등 navigator 나이 미지원 시 백업용 복사
-            document.execCommand('copy');
-            showToast("📋 텍스트가 복사되었습니다.", 2000);
-        });
+  const area = document.getElementById("rawOcrTextArea");
+  if (!area || !area.value || area.value === "가져온 Raw 데이터가 존재하지 않습니다.") {
+    showToast("복사할 데이터가 없습니다.", 2000);
+    return;
+  }
+
+  // 텍스트 복사 프로세스
+  area.select();
+  area.setSelectionRange(0, 99999); // 모바일 대응
+
+  navigator.clipboard
+    .writeText(area.value)
+    .then(() => {
+      showToast("📋 RAW 텍스트가 클립보드에 전체 복사되었습니다!", 2000);
+    })
+    .catch((err) => {
+      // 구형 기기 등 navigator 나이 미지원 시 백업용 복사
+      document.execCommand("copy");
+      showToast("📋 텍스트가 복사되었습니다.", 2000);
+    });
 }
 
 // 🚀 [해결책] 페이지 로드 시 백그라운드에서 OCR 데이터를 미리 가져오는 자동 호출 수신부
-document.addEventListener("DOMContentLoaded", function() {
-    setTimeout(function() {
-        apiCall({ source: 'vercel', domain: 'system', action: 'GET_LAST_OCR_DATA' }).then(function(data) {
-            if (data && data.rawData) currentRawOcrString = data.rawData;
-        });
-    }, 1000); // 안전하게 1초 뒤 백그라운드 자동 실행
+document.addEventListener("DOMContentLoaded", function () {
+  setTimeout(function () {
+    apiCall({ source: "vercel", domain: "system", action: "GET_LAST_OCR_DATA" }).then(function (data) {
+      if (data && data.rawData) currentRawOcrString = data.rawData;
+    });
+  }, 1000); // 안전하게 1초 뒤 백그라운드 자동 실행
 });
 
-    // 💡 UI가 새로고침되거나 로그아웃되어도 상시 작동하도록 document 전역 위임 패턴 적용
-document.addEventListener('click', function(event) {
-    // 수정 (정확히 lock-btn 요소이거나, 잠김 버튼 자체를 클릭했을 때만)
-if (event.target.id === 'lock-btn' || event.target.closest('#lock-btn')) {
-        event.preventDefault();
-        const token = localStorage.getItem('accessToken');
+// 💡 UI가 새로고침되거나 로그아웃되어도 상시 작동하도록 document 전역 위임 패턴 적용
+document.addEventListener("click", function (event) {
+  // 수정 (정확히 lock-btn 요소이거나, 잠김 버튼 자체를 클릭했을 때만)
+  if (event.target.id === "lock-btn" || event.target.closest("#lock-btn")) {
+    event.preventDefault();
+    const token = localStorage.getItem("accessToken");
 
-        // 🔒 로그아웃 상태(토큰 없음)일 때 무반응으로 끝나지 않고 페이지를 새로고침하여 로그인 유도
-        if (!token) {
-            console.warn("로그아웃 상태에서 잠김 클릭됨 -> 초기화");
-            window.location.reload(); 
-            return;
-        }
+    // 🔒 로그아웃 상태(토큰 없음)일 때 무반응으로 끝나지 않고 페이지를 새로고침하여 로그인 유도
+    if (!token) {
+      console.warn("로그아웃 상태에서 잠김 클릭됨 -> 초기화");
+      window.location.reload();
+      return;
     }
+  }
 });
 
-    // 👇 🚨 [여기에 추가하세요!] 필터 제어용 자바스크립트
+// 👇 🚨 [여기에 추가하세요!] 필터 제어용 자바스크립트
 let globalOcrFilters = [];
-
-
-
-
-
-
-
-
-
 
 // 👆 ----------------------------------------------------
