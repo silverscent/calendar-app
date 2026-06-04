@@ -100,7 +100,7 @@
             let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
             let etcTag = meaningfulEtc !== '' ? `<div class="pending-etc">${_esc(meaningfulEtc)}</div>` : '';
             let isItemDone = item.isDone === true || String(item.isDone) === "true";
-            let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.bl}', ${isItemDone})"`;
+            let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${_argq(item.bl)}', ${isItemDone})"`;
             let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : '';
             
             let isPendingAir = item.sType === 'AIR';
@@ -189,9 +189,9 @@
               let shortName = item.bl.length > 4 ? item.bl.slice(-4) : item.bl;
               if (item.bl.startsWith('발행전')) shortName = '발행전';
               
-              let innerHtml = `<span class="pal-main">${item.pal}</span><span class="bl-sub">${iconHtml}${shortName}</span>`;
+              let innerHtml = `<span class="pal-main">${_esc(item.pal)}</span><span class="bl-sub">${iconHtml}${_esc(shortName)}</span>`;
               let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
-              let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.bl}', ${isItemDone})"`;
+              let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${_argq(item.bl)}', ${isItemDone})"`;
 
               // 💡 [디테일 2 수정] 완료 여부에 따른 극명한 글씨색 대비
               let textColor = isItemDone ? '#ffffff' : '#111111';
@@ -824,20 +824,20 @@ if (document.readyState === "complete" || document.readyState === "interactive")
 
           let actionBtns = '';
           if (isAdmin) {
-            if (!isItemDone) { actionBtns = `<div class="action-btn-group"><button class="done-toggle-btn" onclick="submitCMS('DONE', '${item.bl}', '${dateStr}', ${idx}, false)">✅ 완료</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${item.bl}', '${dateStr}', '${item.pal}', '${item.etc || ''}')">✏️ 수정</button></div>`; }
-            else { actionBtns = `<div class="action-btn-group"><button class="edit-toggle-btn" style="color:#ff9f0a; border: 1px solid #ff9f0a; background: rgba(255,159,10,0.1);" onclick="submitCMS('UNDO_DONE', '${item.bl}', '${dateStr}', ${idx}, true)">⏪ 취소</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${item.bl}', '${dateStr}', '${item.pal}', '${item.etc || ''}')">✏️ 수정</button></div>`; }
+            if (!isItemDone) { actionBtns = `<div class="action-btn-group"><button class="done-toggle-btn" onclick="submitCMS('DONE', '${_argq(item.bl)}', '${dateStr}', ${idx}, false)">✅ 완료</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${_argq(item.bl)}', '${dateStr}', '${item.pal}', '${_argq(item.etc || '')}')">✏️ 수정</button></div>`; }
+            else { actionBtns = `<div class="action-btn-group"><button class="edit-toggle-btn" style="color:#ff9f0a; border: 1px solid #ff9f0a; background: rgba(255,159,10,0.1);" onclick="submitCMS('UNDO_DONE', '${_argq(item.bl)}', '${dateStr}', ${idx}, true)">⏪ 취소</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${_argq(item.bl)}', '${dateStr}', '${item.pal}', '${_argq(item.etc || '')}')">✏️ 수정</button></div>`; }
           }
 
           let meaningfulEtc = item.etc ? item.etc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, '').trim() : '';
-          let etcHtml = meaningfulEtc !== '' ? `<div class="modal-etc">📍 비고: ${meaningfulEtc}</div>` : '';
+          let etcHtml = meaningfulEtc !== '' ? `<div class="modal-etc">📍 비고: ${_esc(meaningfulEtc)}</div>` : '';
           let stampHtml = isItemDone ? `<div class="status-badge"><span style="font-size: 1.1em; line-height: 1;">✔️</span> 입고 완료</div>` : '';
 
           contentHtml += `<div class="modal-card" id="modal-card-${day}-${idx}">
                               <div class="modal-icon" style="background-color: ${pastelBg}; opacity: ${iconOpacity}; box-shadow: 0 2px 5px rgba(0,0,0,0.15);"></div>
                               <div class="modal-info">
                                   <div class="modal-comp-row"><span class="modal-comp">${item.pal}P</span>${actionBtns}</div>
-                                  <div class="modal-vol">📄 B/L: ${item.bl} | ${typeIcon} 타입: ${item.sType}</div>
-                                  <div class="modal-detail-text">🏢 FWD: ${item.fwd || '-'} | 🧾 INV: ${item.invoice || '-'}</div>
+                                  <div class="modal-vol">📄 B/L: ${_esc(item.bl)} | ${typeIcon} 타입: ${_esc(item.sType)}</div>
+                                  <div class="modal-detail-text">🏢 FWD: ${_esc(item.fwd || '-')} | 🧾 INV: ${_esc(item.invoice || '-')}</div>
                                   ${etcHtml}
                               </div>
                               ${stampHtml}
@@ -900,7 +900,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
         card.innerHTML = `
           <div class="edit-form" style="width: 100%; padding:0; border:none; margin-top:0;">
             <div class="form-label" style="margin-bottom: 6px; margin-top: 5px;">📦 B/L 번호</div>
-            <input type="text" id="edit-bl-${idx}" class="edit-input" value="${bl}">
+            <input type="text" id="edit-bl-${idx}" class="edit-input" value="${_esc(bl)}">
             
             <div style="display:flex; gap:10px;">
               <div style="flex:1;">
@@ -919,11 +919,11 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             <div style="display:flex; gap:10px;">
               <div style="flex:1;">
                 <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">포워더 (FWD)</div>
-                <input type="text" id="edit-fwd-${idx}" class="edit-input" value="${fwd}">
+                <input type="text" id="edit-fwd-${idx}" class="edit-input" value="${_esc(fwd)}">
               </div>
               <div style="flex:1;">
                 <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">인보이스</div>
-                <input type="text" id="edit-invoice-${idx}" class="edit-input" value="${invoice}">
+                <input type="text" id="edit-invoice-${idx}" class="edit-input" value="${_esc(invoice)}">
               </div>
             </div>
 
@@ -934,13 +934,13 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             <input type="date" id="edit-date-${idx}" class="edit-input" value="${inputDateVal}">
 
             <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">비고 (메모 입력)</div>
-            <input type="text" id="edit-etc-${idx}" class="edit-input" value="${etc !== 'undefined' ? etc : ''}">
+            <input type="text" id="edit-etc-${idx}" class="edit-input" value="${_esc(etc !== 'undefined' ? etc : '')}">
             
             <div class="btn-row" style="margin-top: 15px; padding-bottom: 10px;">
-              <button class="save-btn" onclick="submitCMS('EDIT', '${bl}', '${dateStr}', ${idx})">💾 저장</button>
+              <button class="save-btn" onclick="submitCMS('EDIT', '${_argq(bl)}', '${dateStr}', ${idx})">💾 저장</button>
               <button class="cancel-btn" onclick="closeEditForm('${day}', ${idx})">취소</button>
             </div>
-            <button class="delete-btn" style="margin-bottom: 15px;" onclick="submitCMS('DELETE', '${bl}', '${dateStr}', ${idx})">🗑️ 이 스케줄 삭제</button>
+            <button class="delete-btn" style="margin-bottom: 15px;" onclick="submitCMS('DELETE', '${_argq(bl)}', '${dateStr}', ${idx})">🗑️ 이 스케줄 삭제</button>
           </div>
         `;
 

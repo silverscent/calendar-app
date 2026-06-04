@@ -64,11 +64,11 @@ function searchRawDatabaseRows() {
 
                   res.rows.forEach(r => {
                       html += `<tr style='border-bottom:1px solid var(--border-color);'><td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
-                          <td><input type="text" id="db-o-comp-${r.id}" value="${r.company || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-o-comp-${r.id}" value="${_esc(r.company || '')}" class="db-input"></td>
                           <td><input type="number" id="db-o-pal-${r.id}" value="${r.pal || 0}" class="db-input"></td>
                           <td><input type="number" id="db-o-box-${r.id}" value="${r.box || 0}" class="db-input"></td>
                           <td><input type="text" id="db-o-date-${r.id}" value="${r.outbound_date || ''}" class="db-input"></td>
-                          <td><input type="text" id="db-o-etc-${r.id}" value="${r.etc || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-o-etc-${r.id}" value="${_esc(r.etc || '')}" class="db-input"></td>
                           <td><input type="text" id="db-o-cre-${r.id}" value="${r.created_at || ''}" class="db-input"></td>
                           <td><input type="number" id="db-o-sort-${r.id}" value="${r.sort_idx || 0}" class="db-input"></td>
                           <td><input type="number" id="db-o-done-${r.id}" value="${r.isDone || 0}" class="db-input"></td>
@@ -102,17 +102,17 @@ function searchRawDatabaseRows() {
 
                   res.rows.forEach(r => {
                       html += `<tr style='border-bottom:1px solid var(--border-color);'><td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
-                          <td><input type="text" id="db-i-bl-${r.id}" value="${r.bl_number || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-bl-${r.id}" value="${_esc(r.bl_number || '')}" class="db-input"></td>
                           <td><input type="number" id="db-i-pal-${r.id}" value="${r.pallets || 0}" class="db-input"></td>
                           <td><input type="text" id="db-i-eta-${r.id}" value="${r.eta || ''}" class="db-input"></td>
                           <td><input type="text" id="db-i-date-${r.id}" value="${r.receive_date || ''}" class="db-input"></td>
-                          <td><input type="text" id="db-i-fwd-${r.id}" value="${r.fwd || ''}" class="db-input"></td>
-                          <td><input type="text" id="db-i-stype-${r.id}" value="${r.s_type || ''}" class="db-input"></td>
-                          <td><input type="text" id="db-i-inv-${r.id}" value="${r.invoice || ''}" class="db-input"></td>
-                          <td><input type="text" id="db-i-rem-${r.id}" value="${r.remarks || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-fwd-${r.id}" value="${_esc(r.fwd || '')}" class="db-input"></td>
+                          <td><input type="text" id="db-i-stype-${r.id}" value="${_esc(r.s_type || '')}" class="db-input"></td>
+                          <td><input type="text" id="db-i-inv-${r.id}" value="${_esc(r.invoice || '')}" class="db-input"></td>
+                          <td><input type="text" id="db-i-rem-${r.id}" value="${_esc(r.remarks || '')}" class="db-input"></td>
                           <td><input type="text" id="db-i-upd-${r.id}" value="${r.last_updated || ''}" class="db-input"></td>
                           <td><input type="number" id="db-i-sort-${r.id}" value="${r.sort_idx || 0}" class="db-input"></td>
-                          <td><input type="text" id="db-i-stat-${r.id}" value="${r.status || ''}" class="db-input"></td>
+                          <td><input type="text" id="db-i-stat-${r.id}" value="${_esc(r.status || '')}" class="db-input"></td>
                           <td><input type="number" id="db-i-ai-${r.id}" value="${r.is_ai_modified || 0}" class="db-input"></td>
                           <td style='text-align:center;'><button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button><button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button></td></tr>`;
                   });

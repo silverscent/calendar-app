@@ -11,6 +11,11 @@ function _esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── onclick="fn('${...}')" 안에 안전하게 넣기 위한 JS+HTML 이중 이스케이프
+function _argq(s) {
+    return _esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+}
+
 // ── 네트워크 에러 중 조용히 넘길 것들 판별 (오프라인·abort·fetch실패)
 function _isSilentError(e) {
     if (!navigator.onLine) return true;

@@ -118,11 +118,6 @@
         return fullName.substring(0, 2);
       }
 
-      // onclick="fn('${...}')" 안에 안전하게 넣기 위한 JS+HTML 이중 이스케이프
-      function _argq(s) {
-        return _esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
-      }
-
       // 💡 [지능형 마스터 이름 추출기]
       function getFullName(name) {
         if (!name) return "";
@@ -780,7 +775,7 @@ document.addEventListener("visibilitychange", () => {
             let etcTag = meaningfulEtc !== "" ? `<div class="pending-etc">${_esc(meaningfulEtc)}</div>` : "";
             let isItemDone = item.isDone === true || String(item.isDone) === "true";
             let cleanComp = item.company.replace(/\[TASK\]/gi, "").trim();
-            let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${item.company}', ${isItemDone})"`;
+            let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${_argq(item.company)}', ${isItemDone})"`;
             let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : "";
             let pCount = parseInt(item.pal) || 0; let bCount = parseInt(item.box) || 0;
             let qtyText = ""; if (pCount > 0) qtyText = `📦 ${pCount}P`; else if (bCount > 0) qtyText = `📦 ${bCount}B`;
@@ -916,7 +911,7 @@ document.addEventListener("visibilitychange", () => {
 
                 let taskDoneHtml = isItemDone ? `<div class="task-done-border"></div>` : "";
                 if (isBlockStart) {
-                  let letters = cleanCompany.split("").map(l => `<span>${l}</span>`).join("");
+                  let letters = cleanCompany.split("").map(l => `<span>${_esc(l)}</span>`).join("");
                   let displayQty = qtyText !== "" ? `<span style="font-size:0.8em; margin-left:5px;">(${qtyText})</span>` : "";
                   let spanWidth = `calc(${colspan * 100}% + ${(colspan - 1) * 9}px)`;
                   innerHtml = `<div class="task-span-text" style="width: ${spanWidth};">${letters}${displayQty}</div><span style="opacity:0;">-</span>${taskDoneHtml}`;
@@ -937,10 +932,10 @@ document.addEventListener("visibilitychange", () => {
                 let txtStyle = `color: ${isTaskMode ? "#fff" : colorObj.cMain} !important; text-shadow: ${isTaskMode ? "none" : colorObj.txtShadow} !important;`;
                 let subStyle = `color: ${isTaskMode ? "#fff" : colorObj.cSub} !important;`;
                 let subHtml = qtyText !== "" || isItemDone ? `<span class="pal-sub" style="${subStyle}">${iconHtml}${qtyText}</span>` : "";
-                innerHtml = `<div style="width:100%; text-align:center; position:relative; z-index:2;"><span class="comp-name" style="${txtStyle}">${shortName}</span></div>${subHtml}`;
+                innerHtml = `<div style="width:100%; text-align:center; position:relative; z-index:2;"><span class="comp-name" style="${txtStyle}">${_esc(shortName)}</span></div>${subHtml}`;
               }
 
-              let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${item.company}', ${isItemDone})"`;
+              let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${_argq(item.company)}', ${isItemDone})"`;
 
               // 🚨 핵심: 드래그가 먹히도록 data-raw-idx 강제 추가!
               cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}" style="${bgStyle}" ${bindItem}>${innerHtml}</div>`;
@@ -2180,9 +2175,9 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             }
 
             if (!isItemDone) {
-              actionBtns = `<div class="action-btn-group"><button class="done-toggle-btn" onclick="submitCMS('DONE', '${item.company}', '${dateStr}', ${idx}, false)">✅ 완료</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${item.company}', '${dateStr}', '${item.pal}', '${item.box}', '${item.etc || ""}', false, '${blockStartDateStr}', '${blockEndDateStr}')">✏️ 수정</button></div>`;
+              actionBtns = `<div class="action-btn-group"><button class="done-toggle-btn" onclick="submitCMS('DONE', '${_argq(item.company)}', '${dateStr}', ${idx}, false)">✅ 완료</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${_argq(item.company)}', '${dateStr}', '${item.pal}', '${item.box}', '${_argq(item.etc || "")}', false, '${blockStartDateStr}', '${blockEndDateStr}')">✏️ 수정</button></div>`;
             } else {
-              actionBtns = `<div class="action-btn-group"><button class="edit-toggle-btn" style="color:#ff9f0a; border: 1px solid #ff9f0a; background: rgba(255,159,10,0.1);" onclick="submitCMS('UNDO_DONE', '${item.company}', '${dateStr}', ${idx}, true)">⏪ 취소</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${item.company}', '${dateStr}', '${item.pal}', '${item.box}', '${item.etc || ""}', true, '${blockStartDateStr}', '${blockEndDateStr}')">✏️ 수정</button></div>`;
+              actionBtns = `<div class="action-btn-group"><button class="edit-toggle-btn" style="color:#ff9f0a; border: 1px solid #ff9f0a; background: rgba(255,159,10,0.1);" onclick="submitCMS('UNDO_DONE', '${_argq(item.company)}', '${dateStr}', ${idx}, true)">⏪ 취소</button><button class="edit-toggle-btn" onclick="openEditForm('${day}', ${idx}, '${_argq(item.company)}', '${dateStr}', '${item.pal}', '${item.box}', '${_argq(item.etc || "")}', true, '${blockStartDateStr}', '${blockEndDateStr}')">✏️ 수정</button></div>`;
             }
           }
 
@@ -2195,7 +2190,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             .replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi, "")
             .replace(histRegex, "")
             .trim();
-          let etcHtml = meaningfulEtc !== "" ? `<div class="modal-etc">📍 비고: ${meaningfulEtc}</div>` : "";
+          let etcHtml = meaningfulEtc !== "" ? `<div class="modal-etc">📍 비고: ${_esc(meaningfulEtc)}</div>` : "";
 
           let histHtml = '';
           if (matches.length > 0) {
@@ -2251,7 +2246,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             <div style="display:flex; gap:8px; align-items:stretch;">
                <input type="number" id="add-q-pal-${idx}" class="edit-input" placeholder="+ 파레트" style="padding:10px; flex:1;">
                <input type="number" id="add-q-box-${idx}" class="edit-input" placeholder="+ 박스" style="padding:10px; flex:1;">
-               <button onclick="submitCMS('ADD_QTY', '${item.company}', '${dateStr}', ${idx})" class="save-btn" style="padding:10px; flex:0.6; font-size:0.9em; border-radius:8px;">추가</button>
+               <button onclick="submitCMS('ADD_QTY', '${_argq(item.company)}', '${dateStr}', ${idx})" class="save-btn" style="padding:10px; flex:0.6; font-size:0.9em; border-radius:8px;">추가</button>
             </div>
           </div>
         `
@@ -2419,10 +2414,10 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             
             <div class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
               <span>업체명 (필수)</span>
-              <button type="button" id="edit-${idx}-shuffle-btn" style="display:${isTaskMode ? "none" : "block"}; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:4px 10px; font-size:0.85em; cursor:pointer; font-weight:800; transition:0.2s;" onclick="shuffleColorInModal('${cleanComp}', ${idx})" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">🎨 색상 셔플</button>
+              <button type="button" id="edit-${idx}-shuffle-btn" style="display:${isTaskMode ? "none" : "block"}; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:4px 10px; font-size:0.85em; cursor:pointer; font-weight:800; transition:0.2s;" onclick="shuffleColorInModal('${_argq(cleanComp)}', ${idx})" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">🎨 색상 셔플</button>
             </div>
             <div class="input-wrapper">
-              <input type="text" id="edit-comp-${idx}" class="edit-input" value="${getFullName(cleanComp)}" autocomplete="off">
+              <input type="text" id="edit-comp-${idx}" class="edit-input" value="${_esc(getFullName(cleanComp))}" autocomplete="off">
             </div>
             
             <div id="edit-${idx}-color-preview" style="display:none; margin-top:10px; padding:15px; background:rgba(0,0,0,0.1); border-radius:12px; border:1px solid var(--border-color); align-items:center; justify-content:center; gap:20px; animation: fadeIn 0.3s;">
@@ -2466,13 +2461,13 @@ if (document.readyState === "complete" || document.readyState === "interactive")
             ${histHtml}
 
             <div class="form-label">비고 (메모 입력)</div>
-            <input type="text" id="edit-etc-${idx}" class="edit-input" value="${cleanEtc !== "undefined" ? cleanEtc : ""}">
+            <input type="text" id="edit-etc-${idx}" class="edit-input" value="${_esc(cleanEtc !== "undefined" ? cleanEtc : "")}">
             
             <div class="btn-row">
-              <button class="save-btn" onclick="submitCMS('EDIT', '${comp}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">💾 저장</button>
+              <button class="save-btn" onclick="submitCMS('EDIT', '${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">💾 저장</button>
               <button class="cancel-btn" onclick="closeEditForm('${day}', ${idx})">취소</button>
             </div>
-            <button class="delete-btn" onclick="submitCMS('DELETE', '${comp}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">🗑️ 이 스케줄 삭제</button>
+            <button class="delete-btn" onclick="submitCMS('DELETE', '${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">🗑️ 이 스케줄 삭제</button>
           </div>
         `;
         attachAutocomplete(`edit-comp-${idx}`);
@@ -4130,7 +4125,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
               let stateClass = usedBy ? 'reserved' : 'available';
               if (isCurrent) stateClass += ' selected';
               
-              let clickAction = `onclick="selectPaletteColor('${stdName}', ${idx}, '${usedBy || ''}')"`;
+              let clickAction = `onclick="selectPaletteColor('${_argq(stdName)}', ${idx}, '${_argq(usedBy || '')}')"`;
               html += `<div class="color-seat ${stateClass}" style="background:${p.bg};" ${clickAction}></div>`;
           });
           html += `</div>`;
