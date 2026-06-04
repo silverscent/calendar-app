@@ -1555,6 +1555,19 @@ ${question}
           if (/;/.test(safeSql)) {
             return res.status(200).json({ success: false, msg: "단일 쿼리만 허용됩니다." });
           }
+          // 🔒 민감 테이블/파일/스키마 접근 차단 (입·출고 데이터만 허용)
+          if (
+            /\b(admins|admin_audit_logs|system_settings|processed_images|mysql|information_schema|performance_schema)\b/i.test(
+              safeSql,
+            ) ||
+            /into\s+(outfile|dumpfile)|load_file\s*\(|\bsys\./i.test(safeSql)
+          ) {
+            return res
+              .status(200)
+              .json({ success: false, msg: "입·출고 데이터만 조회할 수 있어요. (허용되지 않은 테이블/구문)" });
+          }
+          // LIMIT 없으면 안전 상한 부여 (과도한 조회 방지)
+          if (!/\blimit\b/i.test(safeSql)) safeSql += " LIMIT 100";
 
           // SQL 실행
           const [rows] = await pool.query(safeSql);
