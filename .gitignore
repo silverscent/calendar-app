@@ -1,4 +1,5 @@
 .env
+.env*
 .vercel
 verify_polyfill.py
 공통분리_실행절차서.md

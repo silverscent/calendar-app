@@ -78,6 +78,11 @@ module.exports = async function handler(req, res) {
         // ⏰ [1차 관문] Vercel Cron 알림 자동 수신부 (GET 방식 허용)
         // =================================================================
         if (req.method === 'GET' && req.query.action === 'AUTO_ALERT_CHECK') {
+            // 🔒 [크론 인증] CRON_SECRET 설정 시 Vercel이 자동으로 보내는 Authorization 헤더 검증
+            //    (env 미설정 시엔 검증 안 함 → 안전한 점진 적용)
+            if (process.env.CRON_SECRET && req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
+                return res.status(401).json({ success: false, msg: 'Unauthorized' });
+            }
             const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
             const currentDay = now.getDay();
 
@@ -151,8 +156,16 @@ module.exports = async function handler(req, res) {
 
         if (!payload || !payload.message) return res.status(200).send('OK');
 
+        // 🔒 [웹훅 시크릿 검증] 텔레그램 업데이트 위조 방지
+        //    텔레그램은 setWebhook 시 등록한 secret_token을 이 헤더로 보냄.
+        //    (TELEGRAM_WEBHOOK_SECRET 미설정 시엔 검증 안 함 → 안전한 점진 적용)
+        if (process.env.TELEGRAM_WEBHOOK_SECRET &&
+            req.headers['x-telegram-bot-api-secret-token'] !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+            return res.status(401).send('Unauthorized');
+        }
+
         const message = payload.message;
-        const chatId = message.chat.id;        
+        const chatId = message.chat.id;
         const senderId = message.from.id;      
         const text = message.text || '';
         const isAdmin = String(senderId) === String(process.env.ADMIN_TELEGRAM_USER_ID);
