@@ -702,6 +702,8 @@ function handleLogin() {
             if (typeof updateFooterUI === 'function') updateFooterUI();
             if (typeof checkMasterAuthButtonVisibility === 'function') checkMasterAuthButtonVisibility();
             if (typeof showAiFabIfAdmin === 'function') showAiFabIfAdmin();
+            // 로그인 후 연락처 포함 최신 CRM 재동기화 (비로그인 땐 연락처 빠진 상태였음)
+            if (typeof syncCrmDataBackground === 'function') syncCrmDataBackground();
             idElem.value = ''; pwElem.value = '';
         } else {
             showToast(`❌ ${res.msg}`, 2500);

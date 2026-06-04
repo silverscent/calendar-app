@@ -4216,6 +4216,7 @@ if (document.readyState === "complete" || document.readyState === "interactive")
                           if (typeof updateFooterUI === 'function') updateFooterUI();
                           if (typeof checkMasterAuthButtonVisibility === 'function') checkMasterAuthButtonVisibility();
                           if (typeof showAiFabIfAdmin === 'function') showAiFabIfAdmin();
+                          if (typeof syncCrmDataBackground === 'function') syncCrmDataBackground();
                       });
                   }
               }

@@ -778,7 +778,19 @@ module.exports = async function(req, res) {
             
             else if (action === 'GET_COMP_INFO_DB') {
                 const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`);
-                return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {});
+                let db = rows.length > 0 ? parseJSON(rows[0].setting_value) : {};
+                // 🔒 비로그인(토큰 무효)에겐 연락처(전화/주소/배송시간/특이사항) 제거.
+                //    달력 렌더링에 필요한 약어·IC/OC/WC만 공개.
+                const authed = payload.session_token && verifyToken(payload.session_token);
+                if (!authed && db && typeof db === 'object') {
+                    const safe = {};
+                    for (const k in db) {
+                        const v = db[k] || {};
+                        safe[k] = { shortName: v.shortName || '', ic: !!v.ic, oc: !!v.oc, wc: !!v.wc };
+                    }
+                    db = safe;
+                }
+                return res.status(200).json(db);
             }
             else if (action === 'SAVE_COMP_INFO_DB') {
                 const jsonStr = JSON.stringify(data);
