@@ -207,8 +207,10 @@
         rowHtml += '</div>'; grid.innerHTML = rowHtml;
         
         renderPending();
-        
+
         updateStatsSummary(); updateSyncTime();
+        const _bl = document.getElementById('bootLoader');
+        if (_bl) _bl.classList.add('hide');
       }
 
       function navMonth(offset) { 

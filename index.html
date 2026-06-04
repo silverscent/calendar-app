@@ -19,6 +19,10 @@
           var t = localStorage.getItem('cal_theme') || 'light';
           document.documentElement.style.background = (t === 'light') ? '#f4f6f9' : '#212225';
         } catch(e) {}
+        // 부트 로더 안전장치: 렌더 실패해도 5초 후 강제 숨김
+        window.addEventListener('load', function(){
+          setTimeout(function(){ var b=document.getElementById('bootLoader'); if(b) b.classList.add('hide'); }, 5000);
+        });
       })();
     </script>
     <script src="common-core.js"></script>
@@ -1186,6 +1190,20 @@
         }
       }
 
+      /* 콜드스타트 부트 로더: 기본 표시 → 첫 렌더 후 JS가 숨김 (검은 화면 대신 스피너) */
+      #bootLoader {
+        position: fixed; inset: 0; z-index: 100000;
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center; gap: 14px;
+        background: transparent;
+      }
+      #bootLoader .spinner {
+        border: 4px solid rgba(128,128,128,0.25);
+        border-top: 4px solid #0a84ff;
+      }
+      #bootLoader .boot-text { color: #8a8f98; font-weight: 700; font-size: 0.95em; }
+      #bootLoader.hide { display: none; }
+
       #globalLoader {
         display: none;
         position: fixed;
@@ -2236,6 +2254,14 @@ body.light-mode .ai-ans-bubble {
     </style>
   </head>
   <body>
+    <script>
+      // 테마 깜빡임 방지: 본문 그려지기 전 light-mode 클래스를 즉시 적용
+      try { if ((localStorage.getItem('cal_theme') || 'light') === 'light') document.body.classList.add('light-mode'); } catch(e) {}
+    </script>
+    <div id="bootLoader">
+      <div class="spinner"></div>
+      <div class="boot-text">달력 불러오는 중…</div>
+    </div>
     <div id="globalLoader">
       <div class="spinner"></div>
       <div id="loaderText">데이터 처리 중...</div>

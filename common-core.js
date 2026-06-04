@@ -5,6 +5,12 @@
 
 const VERCEL_API_URL = "/api/calendar";
 
+// 에러 알림: 가능하면 비차단 토스트, 없으면 alert 폴백
+function _notify(msg) {
+    if (typeof showToast === 'function') showToast(msg, 2500);
+    else alert(msg);
+}
+
 // ── 사용자 입력을 innerHTML에 삽입할 때 XSS 방지
 function _esc(s) {
     if (s == null) return '';
@@ -44,14 +50,14 @@ async function apiCall(payload) {
             return null;
         }
         if (d && d.error) {
-            alert("🔥 서버 에러: " + d.error);
+            _notify("🔥 서버 에러: " + d.error);
             return null;
         }
         return d;
     } catch(e) {
         clearTimeout(timeoutId);
         if (_isSilentError(e)) { console.warn("스텔스 차단 (POST):", e.message); return null; }
-        alert("🔥 통신 에러: " + e.message);
+        _notify("🔥 통신 에러: " + e.message);
         return null;
     } finally {
         setLoadingState(false);
@@ -65,11 +71,11 @@ async function apiGet(params) {
         const qs = new URLSearchParams({ api: 'true', ...params, t: Date.now() }).toString();
         const r = await fetch(`${VERCEL_API_URL}?${qs}`);
         const d = await r.json();
-        if (d && d.error) { alert("🔥 에러: " + d.error); return null; }
+        if (d && d.error) { _notify("🔥 에러: " + d.error); return null; }
         return d;
     } catch(e) {
         if (_isSilentError(e)) { console.warn("스텔스 차단 (GET):", e.message); return null; }
-        alert("🔥 통신 에러: " + e.message);
+        _notify("🔥 통신 에러: " + e.message);
         return null;
     } finally {
         setLoadingState(false);

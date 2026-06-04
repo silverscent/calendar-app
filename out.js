@@ -102,7 +102,6 @@
         "메디멕 주식회사 2층": "(주)메디맥 2층", // 멕/맥 오타까지 방어
         "메디멕 주식회사 3층": "(주)메디맥 3층",
         "제니스": "제니스엠지",
-        "세람": "세람메디칼",
         "국제의료기": "백년가게국제의료기"
       };
 
@@ -953,6 +952,9 @@ document.addEventListener("visibilitychange", () => {
         updateSyncTime();
         // 🚨 [추가] 달력을 다 그리고 나면, 하단 통계 수치도 실시간으로 업데이트!
         updateStatsSummary();
+        // 콜드스타트 부트 로더 제거 (첫 렌더 완료)
+        const _bl = document.getElementById('bootLoader');
+        if (_bl) _bl.classList.add('hide');
       }
 
       // 💡 [미니 CRM] 데이터 조용히 백그라운드 동기화하는 함수
