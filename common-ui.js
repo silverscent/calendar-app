@@ -1195,3 +1195,72 @@ function changeLogPage(dir) {
       }
 
 function changeConnLogPage(dir) { connLogCurrentPage += dir; refreshConnLogs(); }
+
+// ── 당겨서 새로고침 (Pull-to-Refresh, 원형 게이지 + 햅틱) ── 출고/입고 공통
+(function initPullToRefresh() {
+    let startY = 0, pulling = false, reached = false, el = null, ring = null, ic = null;
+    const THRESH = 230; // 손가락 당김 임계값 (iOS 사파리 새로고침 느낌으로 길게)
+    function ind() {
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'ptrIndicator';
+            el.style.cssText = 'position:fixed;top:8px;left:50%;z-index:99998;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--card-bg,#2a2c30);box-shadow:0 4px 14px rgba(0,0,0,0.3);transform:translate(-50%,-70px);transition:transform 0.18s cubic-bezier(0.2,0.8,0.2,1);pointer-events:none;';
+            ring = document.createElement('div'); // 게이지 링 (conic-gradient)
+            ring.style.cssText = 'position:absolute;inset:0;border-radius:50%;background:conic-gradient(#0a84ff 0deg, rgba(128,128,128,0.25) 0deg);';
+            const hole = document.createElement('div'); // 가운데 구멍(링 효과)
+            hole.style.cssText = 'position:absolute;inset:4px;border-radius:50%;background:var(--card-bg,#2a2c30);';
+            ic = document.createElement('span'); // 화살표/스피너 아이콘
+            ic.textContent = '↓';
+            ic.style.cssText = 'position:relative;z-index:1;font-weight:900;color:#0a84ff;font-size:1.1em;transition:transform 0.15s;';
+            el.appendChild(ring); el.appendChild(hole); el.appendChild(ic);
+            document.body.appendChild(el);
+        }
+        return el;
+    }
+    const blocked = (t) => !t || (t.closest && (t.closest('.item-tag') || t.closest('.overlay-modal') || t.closest('.modal') || t.closest('#dashboardModal') || t.closest('.pending-item')));
+
+    document.addEventListener('touchstart', (e) => {
+        if (window.scrollY > 0 || blocked(e.target)) { pulling = false; return; }
+        startY = e.touches[0].clientY; pulling = true; reached = false;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!pulling) return;
+        let dy = e.touches[0].clientY - startY;
+        const box = ind();
+        if (dy <= 0) { box.style.transform = 'translate(-50%,-70px)'; return; }
+        let pct = Math.min(dy / THRESH, 1);                 // 0~1 진행률
+        let shown = Math.min(dy * 0.4, 80);                  // 고무줄 저항
+        box.style.transition = 'none';
+        box.style.transform = `translate(-50%, ${Math.min(shown - 50, 18)}px)`;
+        ring.style.background = `conic-gradient(#0a84ff ${pct * 360}deg, rgba(128,128,128,0.25) ${pct * 360}deg)`;
+        ic.style.transform = pct >= 1 ? 'rotate(180deg)' : 'rotate(0deg)';
+        if (pct >= 1 && !reached) {           // 임계값 도달 순간: 햅틱 1회
+            reached = true;
+            if (navigator.vibrate) navigator.vibrate(20);
+        } else if (pct < 1 && reached) {
+            reached = false;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+        if (!pulling) return;
+        pulling = false;
+        let dy = e.changedTouches[0].clientY - startY;
+        const box = ind();
+        box.style.transition = 'transform 0.18s cubic-bezier(0.2,0.8,0.2,1)';
+        if (dy >= THRESH && window.scrollY <= 0 && typeof navMonth === 'function') {
+            ic.textContent = '↻'; ic.style.transform = '';
+            ic.style.animation = 'spin 0.7s linear infinite';
+            box.style.transform = 'translate(-50%, 14px)';
+            try { navMonth(0); } catch (err) {}
+            setTimeout(() => {
+                box.style.transform = 'translate(-50%,-70px)';
+                ic.style.animation = ''; ic.textContent = '↓';
+            }, 800);
+        } else {
+            box.style.transform = 'translate(-50%,-70px)';
+        }
+        reached = false;
+    }, { passive: true });
+})();
