@@ -367,7 +367,7 @@ module.exports = async function (req, res) {
           return res.status(200).json({ success: true });
         } catch (e) {
           console.error("접속 로그 기록 에러:", e);
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -388,7 +388,7 @@ module.exports = async function (req, res) {
           return res.status(200).json({ success: true });
         } catch (e) {
           console.error("로그아웃 기록 에러:", e);
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -430,7 +430,7 @@ module.exports = async function (req, res) {
             totalPages: Math.ceil(totalCount / limit),
           });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
       // 👆 ---------------------------------------------------- 👆
@@ -452,7 +452,7 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -465,7 +465,7 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true, list: rows });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -481,7 +481,7 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -505,7 +505,7 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -534,7 +534,7 @@ module.exports = async function (req, res) {
 
           return res.status(200).json({ success: true });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -569,7 +569,7 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -585,7 +585,7 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -640,7 +640,7 @@ module.exports = async function (req, res) {
             totalPages: Math.ceil(totalCount / limit),
           });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -735,7 +735,7 @@ module.exports = async function (req, res) {
               totalPages: Math.ceil(totalCount / limit),
             });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -750,7 +750,7 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -804,7 +804,7 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -854,7 +854,7 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -1002,7 +1002,7 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true, logs: rows });
         } catch (e) {
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -1626,7 +1626,7 @@ ${JSON.stringify(rows, null, 2)}
           });
         } catch (e) {
           console.error("AI_QUERY 에러:", e);
-          return res.status(200).json({ success: false, msg: e.message });
+          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       } else {
         const targetBL = data?.oldBL || "알수없음";
@@ -1803,6 +1803,6 @@ ${JSON.stringify(rows, null, 2)}
     }
   } catch (error) {
     console.error("🔥 API 에러:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "서버 오류가 발생했습니다." });
   }
 };
