@@ -9,19 +9,22 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
 
-    <link rel="icon" type="image/png" href="/favicon.png">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <link rel="manifest" href="/manifest_in_v2.json?v=2">
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest_in_v2.json?v=2" />
     <script>
       // ── 첫 페인트 전에 html 배경만 즉시 적용해 검은 화면(FOUC) 제거 ──
       //    (body 배경/클래스는 페이지 로드 후 CSS 변수가 처리하므로 건드리지 않음)
-      (function(){
+      (function () {
         try {
-          var t = localStorage.getItem('cal_theme') || 'light';
-          document.documentElement.style.background = (t === 'light') ? '#f4f6f9' : '#212225';
-        } catch(e) {}
-        window.addEventListener('load', function(){
-          setTimeout(function(){ var b=document.getElementById('bootLoader'); if(b) b.classList.add('hide'); }, 5000);
+          var t = localStorage.getItem("cal_theme") || "light";
+          document.documentElement.style.background = t === "light" ? "#f4f6f9" : "#212225";
+        } catch (e) {}
+        window.addEventListener("load", function () {
+          setTimeout(function () {
+            var b = document.getElementById("bootLoader");
+            if (b) b.classList.add("hide");
+          }, 5000);
         });
       })();
     </script>
@@ -31,11 +34,14 @@
     <style>
       /* 첫 페인트 안정화: html 배경은 위 인라인 스크립트가 즉시 칠함.
          아래는 혹시 JS 비활성/지연 시의 안전 기본값(다크) */
-      html { background: #212225; }
+      html {
+        background: #212225;
+      }
 
-      html, body {
-    overscroll-behavior-y: contain;
-}
+      html,
+      body {
+        overscroll-behavior-y: contain;
+      }
       /* 💡 눈이 편안한 다크 차콜 색상 적용 */
       :root {
         --base-font-size: 100%;
@@ -67,8 +73,7 @@
         --btn-active-text: #ffffff;
       }
       body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
         background-color: var(--bg-color);
         color: var(--text-main);
         margin: 0;
@@ -100,7 +105,7 @@
         align-items: center;
         justify-content: space-between;
         /* 🚨 위아래 여백을 기존 12px에서 8px로 더 줄여 타이트하게 설정 */
-        padding-bottom: 8px; 
+        padding-bottom: 8px;
         margin-bottom: 6px;
         border-bottom: 1px dashed var(--border-color);
       }
@@ -109,26 +114,26 @@
         align-items: center;
       }
       .branding-logo {
-  /* 📐 크기 및 간격 유지 */
-  width: 24px; 
-  height: 24px;
-  margin-right: 8px; 
-  object-fit: contain; /* 원형 로고 비율이 일그러지지 않도록 안전하게 고정 */
+        /* 📐 크기 및 간격 유지 */
+        width: 24px;
+        height: 24px;
+        margin-right: 8px;
+        object-fit: contain; /* 원형 로고 비율이 일그러지지 않도록 안전하게 고정 */
 
-  /* ❌ 불필요한 외곽 효과 완전 제거 */
-  border-radius: 0 !important;   /* 둥근 사각형 틀 제거 */
-  box-shadow: none !important;    /* 그림자 효과 제거 */
-  background: transparent !important; /* 혹시 모를 배경색 원천 차단 */
-}
+        /* ❌ 불필요한 외곽 효과 완전 제거 */
+        border-radius: 0 !important; /* 둥근 사각형 틀 제거 */
+        box-shadow: none !important; /* 그림자 효과 제거 */
+        background: transparent !important; /* 혹시 모를 배경색 원천 차단 */
+      }
       .branding-title {
         font-weight: 900;
-        font-size: 1.1em; 
-        color: var(--text-main); 
+        font-size: 1.1em;
+        color: var(--text-main);
         letter-spacing: -0.5px;
       }
       /* 라이트 모드일 때만 파비콘의 '어두운 네이비 블루' 적용 */
       body.light-mode .branding-title {
-        color: #002b5e; 
+        color: #002b5e;
       }
 
       .title-area {
@@ -279,21 +284,21 @@
         box-shadow: 0 4px 10px rgba(255, 59, 48, 0.3);
       }
       /* 🛠️ 최근OCR 버튼을 다른 버튼들과 동일한 회색 톤으로 통일 */
-.ocr-btn {
-  background: var(--btn-bg);
-  color: var(--text-main);
-  border: none;
-  padding: 6px 12px;
-  border-radius: 10px;
-  font-size: 0.85em;
-  font-weight: 800;
-  cursor: pointer;
-  transition: 0.2s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-.ocr-btn:active {
-  transform: scale(0.95);
-}
+      .ocr-btn {
+        background: var(--btn-bg);
+        color: var(--text-main);
+        border: none;
+        padding: 6px 12px;
+        border-radius: 10px;
+        font-size: 0.85em;
+        font-weight: 800;
+        cursor: pointer;
+        transition: 0.2s;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+      .ocr-btn:active {
+        transform: scale(0.95);
+      }
 
       .legend-bar-wrapper {
         display: flex;
@@ -360,7 +365,7 @@
       /* 💡 달력 요일 헤더 세련된 디자인 (얇은 높이 + 완벽 정렬 세로선 + 하단 굵은 마감선) */
       .calendar-container > .grid-row:first-child {
         /* 🚨 줄 배경을 투명하게 비워서 그리드 본연의 gap(세로선)이 뚫려 보이게 만듦! */
-        background: transparent; 
+        background: transparent;
         border-bottom: 2px solid #111111; /* 다크모드 하단 마감선 */
       }
       .calendar-container > .grid-row:first-child .day-header {
@@ -369,9 +374,9 @@
         font-size: 0.8em;
         padding: 8px 0; /* 🚨 기존 14px에서 8px로 대폭 줄여 얇고 슬림하게 변경 */
         letter-spacing: 1px;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
       }
-      
+
       /* 라이트 모드일 때의 요일 헤더 디자인 */
       body.light-mode .calendar-container > .grid-row:first-child {
         background: transparent;
@@ -401,11 +406,11 @@
         background: var(--header-bg);
         cursor: default;
       }
-      .day-cell.drag-over { 
-        background: rgba(10,132,255,0.1) !important;
-        outline: 2px dashed #0a84ff !important; 
+      .day-cell.drag-over {
+        background: rgba(10, 132, 255, 0.1) !important;
+        outline: 2px dashed #0a84ff !important;
         outline-offset: -2px;
-        transform: scale(0.96); 
+        transform: scale(0.96);
         z-index: 10;
       }
 
@@ -438,13 +443,12 @@
 
       .today-cell {
         background: rgba(255, 59, 48, 0.05) !important;
-        box-shadow: inset 0 0 0 1px rgba(255, 59, 48, 0.3) !important; 
+        box-shadow: inset 0 0 0 1px rgba(255, 59, 48, 0.3) !important;
         border-radius: 4px;
         z-index: 1;
       }
       /* 💡 [2번 패치] 오늘 날짜 붉은 바탕은 유지하되, 글자 색깔은 요일 본연의 색 유지 */
       .today-cell .date-num {
-       
         font-weight: 900;
       }
 
@@ -561,9 +565,9 @@
       .pending-comp {
         font-weight: 800;
         font-size: 0.95em;
-        flex: 1;                   /* 남은 공간을 모두 차지하되 */
-        white-space: normal;       /* 🚨 강제로 한 줄로 만드는 옵션을 끄고 줄바꿈 허용 */
-        word-break: keep-all;      /* 단어 단위로 예쁘게 줄바꿈 */
+        flex: 1; /* 남은 공간을 모두 차지하되 */
+        white-space: normal; /* 🚨 강제로 한 줄로 만드는 옵션을 끄고 줄바꿈 허용 */
+        word-break: keep-all; /* 단어 단위로 예쁘게 줄바꿈 */
         overflow-wrap: break-word; /* 띄어쓰기 없는 긴 B/L 넘버 등도 강제로 끊어서 줄바꿈 */
         line-height: 1.3;
         margin-right: 8px;
@@ -571,7 +575,7 @@
       .pending-vol {
         color: var(--text-sub);
         font-size: 0.85em;
-        flex-shrink: 0;            /* 🚨 수량 텍스트는 겹치거나 찌그러지지 않고 무조건 자기 영역 유지 */
+        flex-shrink: 0; /* 🚨 수량 텍스트는 겹치거나 찌그러지지 않고 무조건 자기 영역 유지 */
         font-weight: 600;
       }
       .pending-etc {
@@ -581,7 +585,7 @@
         padding: 3px 8px;
         border-radius: 6px;
         font-weight: bold;
-        flex-shrink: 0;            /* 🚨 비고(태그) 역시 찌그러지지 않고 영역 무조건 사수 */
+        flex-shrink: 0; /* 🚨 비고(태그) 역시 찌그러지지 않고 영역 무조건 사수 */
         margin-left: 6px;
       }
 
@@ -635,11 +639,17 @@
       .multi-action-btn:active {
         transform: scale(0.95);
       }
-      .btn-multi-done { background: #34c759; color: white;
+      .btn-multi-done {
+        background: #34c759;
+        color: white;
       }
-      .btn-multi-undo { background: #ff9f0a; color: white;
+      .btn-multi-undo {
+        background: #ff9f0a;
+        color: white;
       }
-      .btn-multi-del { background: #ff3b30; color: white;
+      .btn-multi-del {
+        background: #ff3b30;
+        color: white;
       }
 
       .overlay-modal {
@@ -885,7 +895,8 @@
         transition: 0.2s;
         box-shadow: 0 4px 10px rgba(10, 132, 255, 0.3);
       }
-      .save-btn:active { transform: scale(0.97);
+      .save-btn:active {
+        transform: scale(0.97);
       }
       .cancel-btn {
         flex: 1;
@@ -898,7 +909,8 @@
         cursor: pointer;
         transition: 0.2s;
       }
-      .cancel-btn:active { transform: scale(0.97);
+      .cancel-btn:active {
+        transform: scale(0.97);
       }
       .delete-btn {
         width: 100%;
@@ -912,77 +924,255 @@
         margin-top: 5px;
         transition: 0.2s;
       }
-      .delete-btn:active { transform: scale(0.97);
-      background: rgba(255, 59, 48, 0.2); }
-
-      .picker-year-row { display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 25px; font-size: 1.3em; font-weight: 900; }
-      .year-btn { background: var(--btn-bg); border: none; width: 44px;
-      height: 44px; border-radius: 12px; font-weight: bold; cursor: pointer; color: var(--text-main); transition: 0.2s;
-      }
-      .year-btn:active { transform: scale(0.9); }
-      .month-grid-ui { display: grid;
-      grid-template-columns: repeat(4, 1fr); gap: 12px; }
-      .month-btn { background: var(--card-bg); color: var(--text-main);
-      border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 0; font-size: 1.05em; font-weight: 800; cursor: pointer; transition: 0.2s;
-      }
-      .month-btn:active { transform: scale(0.95);
-      }
-      .month-btn.current { background: rgba(10, 132, 255, 0.1); border-color: #0a84ff; color: #0a84ff;
+      .delete-btn:active {
+        transform: scale(0.97);
+        background: rgba(255, 59, 48, 0.2);
       }
 
-      #toast { visibility: hidden; min-width: 250px; background: rgba(40, 44, 52, 0.95); backdrop-filter: blur(15px);
-      -webkit-backdrop-filter: blur(15px); color: #fff; text-align: center; border-radius: 30px; padding: 14px 24px; position: fixed; z-index: 99999; left: 50%; top: env(safe-area-inset-top, 10px);
-      transform: translate3d(-50%, -150%, 0) scale(0.9); font-size: 0.95em; font-weight: 900; opacity: 0;
-      transition: visibility 0.5s, opacity 0.4s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); letter-spacing: -0.3px; border: 2px solid transparent; background-clip: padding-box;
-      animation: rainbowGlow 3s linear infinite; }
-      body.light-mode #toast { background: rgba(255, 255, 255, 0.95);
-      color: #222; border: 2px solid transparent; }
-      #toast.show { visibility: visible; opacity: 1;
-      transform: translate3d(-50%, 20px, 0) scale(1); }
-      @keyframes rainbowGlow { 0% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.5);
-      border-color: rgba(255, 59, 48, 0.7); } 20% { box-shadow: 0 0 15px rgba(255, 159, 10, 0.5);
-      border-color: rgba(255, 159, 10, 0.7); } 40% { box-shadow: 0 0 15px rgba(52, 199, 89, 0.5);
-      border-color: rgba(52, 199, 89, 0.7); } 60% { box-shadow: 0 0 15px rgba(10, 132, 255, 0.5);
-      border-color: rgba(10, 132, 255, 0.7); } 80% { box-shadow: 0 0 15px rgba(175, 82, 222, 0.5);
-      border-color: rgba(175, 82, 222, 0.7); } 100% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.5);
-      border-color: rgba(255, 59, 48, 0.7); } }
+      .picker-year-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        font-size: 1.3em;
+        font-weight: 900;
+      }
+      .year-btn {
+        background: var(--btn-bg);
+        border: none;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        color: var(--text-main);
+        transition: 0.2s;
+      }
+      .year-btn:active {
+        transform: scale(0.9);
+      }
+      .month-grid-ui {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
+      .month-btn {
+        background: var(--card-bg);
+        color: var(--text-main);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 16px 0;
+        font-size: 1.05em;
+        font-weight: 800;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .month-btn:active {
+        transform: scale(0.95);
+      }
+      .month-btn.current {
+        background: rgba(10, 132, 255, 0.1);
+        border-color: #0a84ff;
+        color: #0a84ff;
+      }
 
-      #bootLoader { position: fixed; inset: 0; z-index: 100000; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; background: transparent; }
-      #bootLoader .spinner { border: 4px solid rgba(128,128,128,0.25); border-top: 4px solid #0a84ff; }
-      #bootLoader .boot-text { color: #8a8f98; font-weight: 700; font-size: 0.95em; }
-      #bootLoader.hide { display: none; }
+      #toast {
+        visibility: hidden;
+        min-width: 250px;
+        background: rgba(40, 44, 52, 0.95);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        color: #fff;
+        text-align: center;
+        border-radius: 30px;
+        padding: 14px 24px;
+        position: fixed;
+        z-index: 99999;
+        left: 50%;
+        top: env(safe-area-inset-top, 10px);
+        transform: translate3d(-50%, -150%, 0) scale(0.9);
+        font-size: 0.95em;
+        font-weight: 900;
+        opacity: 0;
+        transition:
+          visibility 0.5s,
+          opacity 0.4s ease,
+          transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        letter-spacing: -0.3px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+        animation: rainbowGlow 3s linear infinite;
+      }
+      body.light-mode #toast {
+        background: rgba(255, 255, 255, 0.95);
+        color: #222;
+        border: 2px solid transparent;
+      }
+      #toast.show {
+        visibility: visible;
+        opacity: 1;
+        transform: translate3d(-50%, 20px, 0) scale(1);
+      }
+      @keyframes rainbowGlow {
+        0% {
+          box-shadow: 0 0 15px rgba(255, 59, 48, 0.5);
+          border-color: rgba(255, 59, 48, 0.7);
+        }
+        20% {
+          box-shadow: 0 0 15px rgba(255, 159, 10, 0.5);
+          border-color: rgba(255, 159, 10, 0.7);
+        }
+        40% {
+          box-shadow: 0 0 15px rgba(52, 199, 89, 0.5);
+          border-color: rgba(52, 199, 89, 0.7);
+        }
+        60% {
+          box-shadow: 0 0 15px rgba(10, 132, 255, 0.5);
+          border-color: rgba(10, 132, 255, 0.7);
+        }
+        80% {
+          box-shadow: 0 0 15px rgba(175, 82, 222, 0.5);
+          border-color: rgba(175, 82, 222, 0.7);
+        }
+        100% {
+          box-shadow: 0 0 15px rgba(255, 59, 48, 0.5);
+          border-color: rgba(255, 59, 48, 0.7);
+        }
+      }
+
+      #bootLoader {
+        position: fixed;
+        inset: 0;
+        z-index: 100000;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 14px;
+        background: transparent;
+      }
+      #bootLoader .spinner {
+        border: 4px solid rgba(128, 128, 128, 0.25);
+        border-top: 4px solid #0a84ff;
+      }
+      #bootLoader .boot-text {
+        color: #8a8f98;
+        font-weight: 700;
+        font-size: 0.95em;
+      }
+      #bootLoader.hide {
+        display: none;
+      }
       /* 버튼 터치 피드백 (드래그 transform과 충돌 없게 opacity 방식) */
-      button { transition: opacity 0.08s ease; }
-      button:active { opacity: 0.55; }
-      .spinner { border: 4px solid rgba(255, 255, 255, 0.2);
-      border-top: 4px solid #fff; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin-bottom: 12px;
+      button {
+        transition: opacity 0.08s ease;
       }
-      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg);
-      } }
-      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1;
-      } }
-      @keyframes slideUpSheet { from { transform: translateY(100%); } to { transform: translateY(0);
-      } }
+      button:active {
+        opacity: 0.55;
+      }
+      .spinner {
+        border: 4px solid rgba(255, 255, 255, 0.2);
+        border-top: 4px solid #fff;
+        border-radius: 50%;
+        width: 44px;
+        height: 44px;
+        animation: spin 1s linear infinite;
+        margin-bottom: 12px;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes slideUpSheet {
+        from {
+          transform: translateY(100%);
+        }
+        to {
+          transform: translateY(0);
+        }
+      }
 
-      .top-wrapper { position: relative; overflow: hidden; border: 2px solid transparent;
-      transition: box-shadow 0.3s, border-color 0.3s, transform 0.2s; box-sizing: border-box; }
-      .top-wrapper.syncing-glow { transform: scale(1.005);
-      border-color: rgba(10, 132, 255, 0.7) !important; animation: frameNeonGlowOptimal 3s linear infinite !important;
+      .top-wrapper {
+        position: relative;
+        overflow: hidden;
+        border: 2px solid transparent;
+        transition:
+          box-shadow 0.3s,
+          border-color 0.3s,
+          transform 0.2s;
+        box-sizing: border-box;
       }
-      @keyframes frameNeonGlowOptimal { 0% { border-color: rgba(255,59,48,0.7);
-      box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1); } 33% { border-color: rgba(52,199,89,0.7);
-      box-shadow: 0 0 14px rgba(52,199,89,0.5), 0 0 7px rgba(52,199,89,0.3), inset 0 0 7px rgba(52,199,89,0.1); } 66% { border-color: rgba(10,132,255,0.7);
-      box-shadow: 0 0 14px rgba(10,132,255,0.5), 0 0 7px rgba(10,132,255,0.3), inset 0 0 7px rgba(10,132,255,0.1); } 100% { border-color: rgba(255,59,48,0.7);
-      box-shadow: 0 0 14px rgba(255,59,48,0.5), 0 0 7px rgba(255,59,48,0.3), inset 0 0 7px rgba(255,59,48,0.1);
-      } }
-      .top-wrapper::after { content: ''; position: absolute; bottom: 0; left: -50%; width: 50%;
-      height: 2px; background: linear-gradient(90deg, transparent, #0a84ff, #34c759, #ffd60a, transparent); opacity: 0; transition: opacity 0.2s; pointer-events: none;
+      .top-wrapper.syncing-glow {
+        transform: scale(1.005);
+        border-color: rgba(10, 132, 255, 0.7) !important;
+        animation: frameNeonGlowOptimal 3s linear infinite !important;
       }
-      .top-wrapper.syncing-glow::after { opacity: 1; animation: loadingBarSweep 0.8s infinite cubic-bezier(0.4, 0, 0.2, 1);
+      @keyframes frameNeonGlowOptimal {
+        0% {
+          border-color: rgba(255, 59, 48, 0.7);
+          box-shadow:
+            0 0 14px rgba(255, 59, 48, 0.5),
+            0 0 7px rgba(255, 59, 48, 0.3),
+            inset 0 0 7px rgba(255, 59, 48, 0.1);
+        }
+        33% {
+          border-color: rgba(52, 199, 89, 0.7);
+          box-shadow:
+            0 0 14px rgba(52, 199, 89, 0.5),
+            0 0 7px rgba(52, 199, 89, 0.3),
+            inset 0 0 7px rgba(52, 199, 89, 0.1);
+        }
+        66% {
+          border-color: rgba(10, 132, 255, 0.7);
+          box-shadow:
+            0 0 14px rgba(10, 132, 255, 0.5),
+            0 0 7px rgba(10, 132, 255, 0.3),
+            inset 0 0 7px rgba(10, 132, 255, 0.1);
+        }
+        100% {
+          border-color: rgba(255, 59, 48, 0.7);
+          box-shadow:
+            0 0 14px rgba(255, 59, 48, 0.5),
+            0 0 7px rgba(255, 59, 48, 0.3),
+            inset 0 0 7px rgba(255, 59, 48, 0.1);
+        }
       }
-      @keyframes loadingBarSweep { 0% { left: -50%; } 100% { left: 100%;
-      } }
+      .top-wrapper::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: -50%;
+        width: 50%;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, #0a84ff, #34c759, #ffd60a, transparent);
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+      }
+      .top-wrapper.syncing-glow::after {
+        opacity: 1;
+        animation: loadingBarSweep 0.8s infinite cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      @keyframes loadingBarSweep {
+        0% {
+          left: -50%;
+        }
+        100% {
+          left: 100%;
+        }
+      }
 
       /* 🚀 [추가] OCR 이미지 모달 광활화 & 핀치투줌 대응 */
       #ocrImageModal .modal-box {
@@ -997,13 +1187,13 @@
       #ocrImageWrapper {
         flex: 1;
         width: 100%;
-        overflow: hidden !important; 
+        overflow: hidden !important;
         background: #ffffff !important; /* 💡 검정색(#111)에서 흰색으로 변경!
         */
         border-radius: 0;
         border: none !important;
         position: relative;
-        touch-action: none; 
+        touch-action: none;
         cursor: grab;
         display: flex;
         align-items: center;
@@ -1040,16 +1230,27 @@
         flex-wrap: nowrap !important;
         gap: 1.5vw !important;
       }
-      .title-area, .controls-area, .action-row-right, .sync-area, .admin-actions {
+      .title-area,
+      .controls-area,
+      .action-row-right,
+      .sync-area,
+      .admin-actions {
         flex-wrap: nowrap !important;
         gap: 1vw !important;
         white-space: nowrap !important;
       }
       /* 🚨 화살표(.nav-arrow) 추가 완료!
       */
-      .title-btn, .admin-btn, .size-btn, .theme-toggle, .sync-btn, .multi-btn, .ocr-btn, .nav-arrow {
+      .title-btn,
+      .admin-btn,
+      .size-btn,
+      .theme-toggle,
+      .sync-btn,
+      .multi-btn,
+      .ocr-btn,
+      .nav-arrow {
         white-space: nowrap !important;
-        font-size: clamp(0.7em, 3vw, 1.15em) !important; 
+        font-size: clamp(0.7em, 3vw, 1.15em) !important;
         padding: clamp(4px, 1.5vw, 8px) clamp(6px, 2vw, 14px) !important;
       }
       .sync-time {
@@ -1060,7 +1261,7 @@
       /* 2. 상세 모달창 - 긴 글씨 완벽 줄바꿈 (Flexbox 탈출 방지) */
       .modal-comp-row {
         flex-wrap: nowrap !important;
-        align-items: flex-start !important; 
+        align-items: flex-start !important;
       }
       .modal-comp {
         flex: 1 1 0% !important;
@@ -1069,7 +1270,7 @@
         /* 🚨 핵심: 긴 텍스트가 버튼을 밀어내는 현상 완벽 차단 */
         white-space: normal !important;
         word-break: keep-all !important;
-        overflow-wrap: break-word !important; 
+        overflow-wrap: break-word !important;
         line-height: 1.3 !important;
         margin-right: 10px !important;
       }
@@ -1097,24 +1298,27 @@
         white-space: nowrap !important;
         gap: 1vw !important;
       }
-      .ocr-time-info, .legend-bar, .legend-item {
+      .ocr-time-info,
+      .legend-bar,
+      .legend-item {
         flex-wrap: nowrap !important;
         white-space: nowrap !important;
       }
-      .ocr-time-info span, .legend-item {
+      .ocr-time-info span,
+      .legend-item {
         font-size: clamp(0.7em, 2.5vw, 0.85em) !important;
       }
       /* 💡 [수정] 부모 태그(검정/흰색)의 색상을 그대로 상속받도록 inherit 적용 */
       .pal-main {
         font-size: 1.25em !important;
         letter-spacing: -1px !important;
-        color: inherit !important; 
+        color: inherit !important;
       }
       .bl-sub {
         font-size: clamp(0.55em, 2.2vw, 0.75em) !important;
         letter-spacing: -0.5px !important;
         white-space: nowrap !important;
-        color: inherit !important; 
+        color: inherit !important;
         opacity: 0.9;
       }
       /* 완료된 건은 파스텔 배경 위에서 흰색 글씨 + 그림자 유지 */
@@ -1126,366 +1330,617 @@
         letter-spacing: -0.5px !important;
       }
       /* 💡 드래그 시 드롭 위치에 갭이 벌어지며 들어갈 자리를 직관적으로 표시 */
-      .item-tag { transition: margin 0.18s ease-out; }
-      .insert-line-top { position: relative; margin-top: 34px !important; }
-      .insert-line-top::before {
-        content: ""; position: absolute; left: 0; right: 0; top: -31px; height: 27px;
-        border: 2px dashed #0a84ff; border-radius: 8px; background: rgba(10,132,255,0.12);
-        box-sizing: border-box; pointer-events: none;
+      .item-tag {
+        transition: margin 0.18s ease-out;
       }
-      .insert-line-bottom { position: relative; margin-bottom: 34px !important; }
+      .insert-line-top {
+        position: relative;
+        margin-top: 34px !important;
+      }
+      .insert-line-top::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: -31px;
+        height: 27px;
+        border: 2px dashed #0a84ff;
+        border-radius: 8px;
+        background: rgba(10, 132, 255, 0.12);
+        box-sizing: border-box;
+        pointer-events: none;
+      }
+      .insert-line-bottom {
+        position: relative;
+        margin-bottom: 34px !important;
+      }
       .insert-line-bottom::before {
-        content: ""; position: absolute; left: 0; right: 0; bottom: -31px; height: 27px;
-        border: 2px dashed #0a84ff; border-radius: 8px; background: rgba(10,132,255,0.12);
-        box-sizing: border-box; pointer-events: none;
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -31px;
+        height: 27px;
+        border: 2px dashed #0a84ff;
+        border-radius: 8px;
+        background: rgba(10, 132, 255, 0.12);
+        box-sizing: border-box;
+        pointer-events: none;
       }
       /* 💡 관리자 로그인 창 키보드 가림 방지 (화면 중앙 팝업으로 변경) */
-      #adminLoginModal { align-items: center !important;
-      padding: 20px; }
-      #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important;
+      #adminLoginModal {
+        align-items: center !important;
+        padding: 20px;
       }
-    
-      .done-icon { font-size: clamp(9px, 2.5vw, 12px) !important;
+      #adminLoginModal .modal-box {
+        border-radius: 24px !important;
+        margin-bottom: 10vh !important;
+      }
+
+      .done-icon {
+        font-size: clamp(9px, 2.5vw, 12px) !important;
       }
 
       /* ===================================================== */
       /* 📊 [개발 추가] 대시보드 전용 디자인 추가 */
       /* ===================================================== */
-      .stats-summary-bar { margin-top: 15px;
-        background: linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(52, 199, 89, 0.05)); border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px;
-        padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+      .stats-summary-bar {
+        margin-top: 15px;
+        background: linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(52, 199, 89, 0.05));
+        border: 1px solid rgba(10, 132, 255, 0.3);
+        border-radius: 16px;
+        padding: 16px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
       }
-      .stats-title { font-size: 1.05em; font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 8px;
+      .stats-title {
+        font-size: 1.05em;
+        font-weight: 900;
+        color: var(--text-main);
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
-      .stats-numbers { font-size: 1.2em; font-weight: 900; color: var(--text-main); letter-spacing: -0.5px;
+      .stats-numbers {
+        font-size: 1.2em;
+        font-weight: 900;
+        color: var(--text-main);
+        letter-spacing: -0.5px;
       }
-      .stats-numbers .done { color: #34c759; } .stats-numbers .total { color: var(--text-sub); font-size: 0.85em;
+      .stats-numbers .done {
+        color: #34c759;
       }
-      .dash-control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
+      .stats-numbers .total {
+        color: var(--text-sub);
+        font-size: 0.85em;
       }
-      .dash-nav { display: flex; align-items: center; gap: 10px; font-size: 1.2em; font-weight: 900;
+      .dash-control-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
       }
-      .dash-nav button { background: var(--btn-bg); border: none; color: var(--text-main); width: 32px; height: 32px;
-        border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-      .dash-nav button:active { transform: scale(0.9);
+      .dash-nav {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1.2em;
+        font-weight: 900;
       }
-      .dash-toggles { display: flex; background: var(--btn-bg); padding: 4px; border-radius: 10px; gap: 2px;
+      .dash-nav button {
+        background: var(--btn-bg);
+        border: none;
+        color: var(--text-main);
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.2s;
       }
-      .dash-toggles button { background: transparent; border: none; color: var(--text-sub); padding: 4px 15px; font-weight: 800;
-        font-size: 0.9em; border-radius: 8px; cursor: pointer; transition: 0.2s; }
-      .dash-toggles button.active { background: #0a84ff;
-        color: white; }
-      .dashboard-grid { display: grid;
-        grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
-      .dash-card { background: var(--card-bg);
-        border: 1px solid var(--border-color); border-radius: 14px; padding: 16px; text-align: center; }
-      .dash-card-title { font-size: 0.85em;
-        font-weight: 800; color: var(--text-sub); margin-bottom: 8px; }
-      .dash-card-value { font-size: 1.5em; font-weight: 900; color: var(--text-main);
+      .dash-nav button:active {
+        transform: scale(0.9);
       }
-      .chart-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 15px; display: flex;
-        align-items: center; justify-content: center; margin-bottom: 12px; }
-        /* 💡 입고 달력 관리자 로그인 창 센터링 픽스 */
-      #adminLoginModal { align-items: center !important; padding: 20px; box-sizing: border-box; }
-      #adminLoginModal .modal-box { border-radius: 24px !important; margin-bottom: 10vh !important; }
-    
-    /* 🚀 iOS 스타일 토글 스위치 */
-      .ios-toggle { position: relative; display: inline-block; width: 50px; height: 30px; }
-      .ios-toggle input { opacity: 0; width: 0; height: 0; }
-      .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border-color); transition: .3s; border-radius: 30px; }
-      .toggle-slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-      .ios-toggle input:checked + .toggle-slider { background-color: #34c759; }
-      .ios-toggle input:checked + .toggle-slider:before { transform: translateX(20px); }
-      .ios-toggle input:disabled + .toggle-slider { opacity: 0.5; cursor: not-allowed; }
+      .dash-toggles {
+        display: flex;
+        background: var(--btn-bg);
+        padding: 4px;
+        border-radius: 10px;
+        gap: 2px;
+      }
+      .dash-toggles button {
+        background: transparent;
+        border: none;
+        color: var(--text-sub);
+        padding: 4px 15px;
+        font-weight: 800;
+        font-size: 0.9em;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .dash-toggles button.active {
+        background: #0a84ff;
+        color: white;
+      }
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .dash-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 16px;
+        text-align: center;
+      }
+      .dash-card-title {
+        font-size: 0.85em;
+        font-weight: 800;
+        color: var(--text-sub);
+        margin-bottom: 8px;
+      }
+      .dash-card-value {
+        font-size: 1.5em;
+        font-weight: 900;
+        color: var(--text-main);
+      }
+      .chart-container {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 12px;
+      }
+      /* 💡 입고 달력 관리자 로그인 창 센터링 픽스 */
+      #adminLoginModal {
+        align-items: center !important;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+      #adminLoginModal .modal-box {
+        border-radius: 24px !important;
+        margin-bottom: 10vh !important;
+      }
 
-      .master-tab-btn.active { background-color: var(--bg-color) !important; color: #0a84ff !important; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-    
+      /* 🚀 iOS 스타일 토글 스위치 */
+      .ios-toggle {
+        position: relative;
+        display: inline-block;
+        width: 50px;
+        height: 30px;
+      }
+      .ios-toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--border-color);
+        transition: 0.3s;
+        border-radius: 30px;
+      }
+      .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 22px;
+        width: 22px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: 0.3s;
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+      .ios-toggle input:checked + .toggle-slider {
+        background-color: #34c759;
+      }
+      .ios-toggle input:checked + .toggle-slider:before {
+        transform: translateX(20px);
+      }
+      .ios-toggle input:disabled + .toggle-slider {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .master-tab-btn.active {
+        background-color: var(--bg-color) !important;
+        color: #0a84ff !important;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+      }
+
       /* 🤖 단독 AI 버튼 스타일 */
-.fab-single-ai {
-    position: fixed;
-    right: 20px;
-    bottom: max(30px, env(safe-area-inset-bottom));
-    width: 60px; height: 60px; border-radius: 50%;
-    background: linear-gradient(135deg, #5e5ce6, #bf5af2);
-    color: white; border: none; font-size: 28px;
-    box-shadow: 0 8px 25px rgba(94, 92, 230, 0.5);
-    z-index: 1500; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-    -webkit-tap-highlight-color: transparent;
-    touch-action: none;              /* 👈 추가 — 브라우저 제스처 완전 차단 */
-    overscroll-behavior: contain;    /* 👈 추가 */
-}
-.fab-single-ai:active {
-    transform: scale(0.9) translateY(4px);
-    box-shadow: 0 4px 15px rgba(94, 92, 230, 0.4);
-}
+      .fab-single-ai {
+        position: fixed;
+        right: 20px;
+        bottom: max(30px, env(safe-area-inset-bottom));
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #5e5ce6, #bf5af2);
+        color: white;
+        border: none;
+        font-size: 28px;
+        box-shadow: 0 8px 25px rgba(94, 92, 230, 0.5);
+        z-index: 1500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none; /* 👈 추가 — 브라우저 제스처 완전 차단 */
+        overscroll-behavior: contain; /* 👈 추가 */
+      }
+      .fab-single-ai:active {
+        transform: scale(0.9) translateY(4px);
+        box-shadow: 0 4px 15px rgba(94, 92, 230, 0.4);
+      }
 
-/* ════════════════════════════════════════
+      /* ════════════════════════════════════════
    🤖 AI 질의 모달 — 세련된 디자인
    ════════════════════════════════════════ */
 
-/* 모달 오버레이 */
-#aiQueryModal {
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    background: rgba(0,0,0,0.45) !important;
-}
+      /* 모달 오버레이 */
+      #aiQueryModal {
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        background: rgba(0, 0, 0, 0.45) !important;
+      }
 
-/* 모달 패널 (유리 질감 + 부드러운 등장) */
-/* 기존 스와이프 엔진용 modal-box 클래스를 붙이되, 레이아웃은 AI 디자인 유지 */
-.ai-modal-panel.modal-box {
-    padding: 0;
-    overflow: hidden;            /* 패널 자체 스크롤 금지 (내부 ai-chat-log 만 스크롤) */
-    max-width: 480px;
-    animation: aiPanelUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.ai-modal-panel {
-    background: linear-gradient(180deg, #1e1e22 0%, #161618 100%);
-    width: 100%;
-    max-width: 480px;
-    border-radius: 28px 28px 0 0;
-    padding: 0;
-    max-height: 85vh;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 -8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
-    animation: aiPanelUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-    overflow: hidden;
-}
-body.light-mode .ai-modal-panel {
-    background: linear-gradient(180deg, #ffffff 0%, #f4f6f9 100%);
-    box-shadow: 0 -8px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
-}
-@keyframes aiPanelUp {
-    from { transform: translateY(40px); opacity: 0; }
-    to   { transform: translateY(0); opacity: 1; }
-}
+      /* 모달 패널 (유리 질감 + 부드러운 등장) */
+      /* 기존 스와이프 엔진용 modal-box 클래스를 붙이되, 레이아웃은 AI 디자인 유지 */
+      .ai-modal-panel.modal-box {
+        padding: 0;
+        overflow: hidden; /* 패널 자체 스크롤 금지 (내부 ai-chat-log 만 스크롤) */
+        max-width: 480px;
+        animation: aiPanelUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .ai-modal-panel {
+        background: linear-gradient(180deg, #1e1e22 0%, #161618 100%);
+        width: 100%;
+        max-width: 480px;
+        border-radius: 28px 28px 0 0;
+        padding: 0;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow:
+          0 -8px 40px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(255, 255, 255, 0.06);
+        animation: aiPanelUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+        overflow: hidden;
+      }
+      body.light-mode .ai-modal-panel {
+        background: linear-gradient(180deg, #ffffff 0%, #f4f6f9 100%);
+        box-shadow:
+          0 -8px 40px rgba(0, 0, 0, 0.15),
+          0 0 0 1px rgba(0, 0, 0, 0.05);
+      }
+      @keyframes aiPanelUp {
+        from {
+          transform: translateY(40px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
 
-/* 드래그 핸들 */
-.ai-handle {
-    width: 38px; height: 4px;
-    background: rgba(255,255,255,0.18);
-    border-radius: 99px;
-    margin: 12px auto 4px;
-    flex-shrink: 0;
-}
-body.light-mode .ai-handle { background: rgba(0,0,0,0.15); }
+      /* 드래그 핸들 */
+      .ai-handle {
+        width: 38px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 99px;
+        margin: 12px auto 4px;
+        flex-shrink: 0;
+      }
+      body.light-mode .ai-handle {
+        background: rgba(0, 0, 0, 0.15);
+      }
 
-/* 헤더 */
-.ai-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 20px 14px;
-    flex-shrink: 0;
-}
-.ai-header-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 1.05em;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    color: var(--text-main, #fff);
-}
-.ai-header-badge {
-    width: 32px; height: 32px;
-    border-radius: 10px;
-    display: grid;
-    place-items: center;
-    background: linear-gradient(135deg, #6e6cf0, #bf5af2);
-    box-shadow: 0 4px 12px rgba(110,108,240,0.4);
-    font-size: 1em;
-}
-.ai-close-btn {
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(255,255,255,0.08);
-    color: #999;
-    font-size: 1.1em;
-    cursor: pointer;
-    display: grid;
-    place-items: center;
-    transition: all 0.18s ease;
-}
-.ai-close-btn:hover { background: rgba(255,255,255,0.16); color: #fff; transform: rotate(90deg); }
-body.light-mode .ai-close-btn { background: rgba(0,0,0,0.05); color: #888; }
-body.light-mode .ai-close-btn:hover { background: rgba(0,0,0,0.1); color: #222; }
+      /* 헤더 */
+      .ai-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px 14px;
+        flex-shrink: 0;
+      }
+      .ai-header-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1.05em;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--text-main, #fff);
+      }
+      .ai-header-badge {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, #6e6cf0, #bf5af2);
+        box-shadow: 0 4px 12px rgba(110, 108, 240, 0.4);
+        font-size: 1em;
+      }
+      .ai-close-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(255, 255, 255, 0.08);
+        color: #999;
+        font-size: 1.1em;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        transition: all 0.18s ease;
+      }
+      .ai-close-btn:hover {
+        background: rgba(255, 255, 255, 0.16);
+        color: #fff;
+        transform: rotate(90deg);
+      }
+      body.light-mode .ai-close-btn {
+        background: rgba(0, 0, 0, 0.05);
+        color: #888;
+      }
+      body.light-mode .ai-close-btn:hover {
+        background: rgba(0, 0, 0, 0.1);
+        color: #222;
+      }
 
-/* 칩 영역 */
-.ai-chip-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-    padding: 0 20px 14px;
-    flex-shrink: 0;
-}
-.ai-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 8px 13px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 99px;
-    font-size: 0.8em;
-    font-weight: 500;
-    color: #c8c7d6;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.18s cubic-bezier(0.16,1,0.3,1);
-    user-select: none;
-}
-.ai-chip:hover, .ai-chip:active {
-    background: linear-gradient(135deg, rgba(110,108,240,0.22), rgba(191,90,242,0.22));
-    border-color: rgba(191,90,242,0.5);
-    color: #fff;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 14px rgba(110,108,240,0.25);
-}
-body.light-mode .ai-chip {
-    background: rgba(110,108,240,0.06);
-    color: #5e5ce6;
-    border-color: rgba(110,108,240,0.2);
-}
+      /* 칩 영역 */
+      .ai-chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        padding: 0 20px 14px;
+        flex-shrink: 0;
+      }
+      .ai-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 13px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 99px;
+        font-size: 0.8em;
+        font-weight: 500;
+        color: #c8c7d6;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        user-select: none;
+      }
+      .ai-chip:hover,
+      .ai-chip:active {
+        background: linear-gradient(135deg, rgba(110, 108, 240, 0.22), rgba(191, 90, 242, 0.22));
+        border-color: rgba(191, 90, 242, 0.5);
+        color: #fff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 14px rgba(110, 108, 240, 0.25);
+      }
+      body.light-mode .ai-chip {
+        background: rgba(110, 108, 240, 0.06);
+        color: #5e5ce6;
+        border-color: rgba(110, 108, 240, 0.2);
+      }
 
-/* 채팅 로그 */
-.ai-chat-log {
-    flex: 1 1 auto;
-    display: block;              /* flex column 의 위쪽 오버플로우 잘림 방지 → block 스크롤 */
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 6px 20px 10px;
-    min-height: 0;
-}
-/* flex 대신 block 이므로 말풍선 간격은 margin 으로 */
-.ai-chat-log > * { margin-bottom: 14px; }
-.ai-chat-log > *:last-child { margin-bottom: 0; }
-.ai-chat-log::-webkit-scrollbar { width: 5px; }
-.ai-chat-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 99px; }
+      /* 채팅 로그 */
+      .ai-chat-log {
+        flex: 1 1 auto;
+        display: block; /* flex column 의 위쪽 오버플로우 잘림 방지 → block 스크롤 */
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 6px 20px 10px;
+        min-height: 0;
+      }
+      /* flex 대신 block 이므로 말풍선 간격은 margin 으로 */
+      .ai-chat-log > * {
+        margin-bottom: 14px;
+      }
+      .ai-chat-log > *:last-child {
+        margin-bottom: 0;
+      }
+      .ai-chat-log::-webkit-scrollbar {
+        width: 5px;
+      }
+      .ai-chat-log::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 99px;
+      }
 
-/* 말풍선 등장 애니메이션 */
-.ai-bubble-in { animation: aiBubbleIn 0.3s cubic-bezier(0.16,1,0.3,1); }
-@keyframes aiBubbleIn {
-    from { transform: translateY(8px); opacity: 0; }
-    to   { transform: translateY(0); opacity: 1; }
-}
+      /* 말풍선 등장 애니메이션 */
+      .ai-bubble-in {
+        animation: aiBubbleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes aiBubbleIn {
+        from {
+          transform: translateY(8px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
 
-/* 로딩 (타이핑 점) */
-.ai-typing {
-    display: flex; gap: 4px; padding: 14px 18px;
-    align-items: center;
-}
-.ai-typing span {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: #6e6cf0;
-    animation: aiTyping 1.2s infinite ease-in-out;
-}
-.ai-typing span:nth-child(2) { animation-delay: 0.18s; }
-.ai-typing span:nth-child(3) { animation-delay: 0.36s; }
-@keyframes aiTyping {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-    30% { transform: translateY(-6px); opacity: 1; }
-}
+      /* 로딩 (타이핑 점) */
+      .ai-typing {
+        display: flex;
+        gap: 4px;
+        padding: 14px 18px;
+        align-items: center;
+      }
+      .ai-typing span {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #6e6cf0;
+        animation: aiTyping 1.2s infinite ease-in-out;
+      }
+      .ai-typing span:nth-child(2) {
+        animation-delay: 0.18s;
+      }
+      .ai-typing span:nth-child(3) {
+        animation-delay: 0.36s;
+      }
+      @keyframes aiTyping {
+        0%,
+        60%,
+        100% {
+          transform: translateY(0);
+          opacity: 0.4;
+        }
+        30% {
+          transform: translateY(-6px);
+          opacity: 1;
+        }
+      }
 
-/* 하단 입력 바 */
-.ai-input-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid rgba(255,255,255,0.07);
-    background: rgba(255,255,255,0.02);
-    flex-shrink: 0;
-}
-body.light-mode .ai-input-bar { border-top-color: rgba(0,0,0,0.06); background: rgba(0,0,0,0.015); }
+      /* 하단 입력 바 */
+      .ai-input-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        background: rgba(255, 255, 255, 0.02);
+        flex-shrink: 0;
+      }
+      body.light-mode .ai-input-bar {
+        border-top-color: rgba(0, 0, 0, 0.06);
+        background: rgba(0, 0, 0, 0.015);
+      }
 
-.ai-input-field {
-    flex: 1;
-    padding: 13px 16px;
-    border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.06);
-    color: var(--text-main, #fff);
-    font-size: 0.92em;
-    outline: none;
-    transition: all 0.2s ease;
-}
-.ai-input-field::placeholder { color: #777; }
-.ai-input-field:focus {
-    border-color: rgba(110,108,240,0.6);
-    background: rgba(110,108,240,0.08);
-    box-shadow: 0 0 0 3px rgba(110,108,240,0.12);
-}
-body.light-mode .ai-input-field {
-    background: #fff; border-color: rgba(0,0,0,0.1); color: #222;
-}
-body.light-mode .ai-chat-log::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
-body.light-mode .ai-chip:hover, body.light-mode .ai-chip:active {
-    background: linear-gradient(135deg, rgba(110,108,240,0.16), rgba(191,90,242,0.16));
-    border-color: rgba(191,90,242,0.4);
-    color: #5e3bd4;
-}
-/* AI 답변 말풍선 라이트모드 */
-body.light-mode .ai-ans-bubble {
-    background: #eceef3 !important;
-    color: #2a2a2e !important;
-}
-/* 타이핑 점은 양쪽 공통 보라색이라 OK */
+      .ai-input-field {
+        flex: 1;
+        padding: 13px 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text-main, #fff);
+        font-size: 0.92em;
+        outline: none;
+        transition: all 0.2s ease;
+      }
+      .ai-input-field::placeholder {
+        color: #777;
+      }
+      .ai-input-field:focus {
+        border-color: rgba(110, 108, 240, 0.6);
+        background: rgba(110, 108, 240, 0.08);
+        box-shadow: 0 0 0 3px rgba(110, 108, 240, 0.12);
+      }
+      body.light-mode .ai-input-field {
+        background: #fff;
+        border-color: rgba(0, 0, 0, 0.1);
+        color: #222;
+      }
+      body.light-mode .ai-chat-log::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.15);
+      }
+      body.light-mode .ai-chip:hover,
+      body.light-mode .ai-chip:active {
+        background: linear-gradient(135deg, rgba(110, 108, 240, 0.16), rgba(191, 90, 242, 0.16));
+        border-color: rgba(191, 90, 242, 0.4);
+        color: #5e3bd4;
+      }
+      /* AI 답변 말풍선 라이트모드 */
+      body.light-mode .ai-ans-bubble {
+        background: #eceef3 !important;
+        color: #2a2a2e !important;
+      }
+      /* 타이핑 점은 양쪽 공통 보라색이라 OK */
 
+      .ai-send-btn {
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        border: none;
+        background: linear-gradient(135deg, #6e6cf0, #bf5af2);
+        color: #fff;
+        font-size: 1.15em;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 14px rgba(110, 108, 240, 0.35);
+      }
+      .ai-send-btn:hover {
+        transform: translateY(-1px) scale(1.03);
+        box-shadow: 0 6px 18px rgba(110, 108, 240, 0.5);
+      }
+      .ai-send-btn:active {
+        transform: scale(0.96);
+      }
+      .ai-send-btn:disabled {
+        opacity: 0.5;
+        cursor: default;
+        transform: none;
+        box-shadow: none;
+      }
 
-.ai-send-btn {
-    width: 46px; height: 46px;
-    border-radius: 14px;
-    border: none;
-    background: linear-gradient(135deg, #6e6cf0, #bf5af2);
-    color: #fff;
-    font-size: 1.15em;
-    cursor: pointer;
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 14px rgba(110,108,240,0.35);
-}
-.ai-send-btn:hover { transform: translateY(-1px) scale(1.03); box-shadow: 0 6px 18px rgba(110,108,240,0.5); }
-.ai-send-btn:active { transform: scale(0.96); }
-.ai-send-btn:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: none; }
+      /* 대화 지우기 (헤더 우측 작게) */
+      .ai-clear-btn {
+        background: none;
+        border: none;
+        font-size: 0.72em;
+        color: #777;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 8px;
+        transition: all 0.16s ease;
+      }
+      .ai-clear-btn:hover {
+        color: #ff6b6b;
+        background: rgba(255, 107, 107, 0.1);
+      }
 
-/* 대화 지우기 (헤더 우측 작게) */
-.ai-clear-btn {
-    background: none; border: none;
-    font-size: 0.72em; color: #777;
-    cursor: pointer; padding: 4px 8px;
-    border-radius: 8px;
-    transition: all 0.16s ease;
-}
-.ai-clear-btn:hover { color: #ff6b6b; background: rgba(255,107,107,0.1); }
+      /* 구버전 호환 (안 쓰임) */
+      #ai-summary {
+        background: #3a3a3c !important; /* 배경을 좀 더 어둡고 확실하게 */
+        color: #ffffff !important; /* 글자를 무조건 흰색으로 */
+        padding: 15px !important;
+        border-radius: 12px;
+        font-weight: 500;
+      }
 
-/* 구버전 호환 (안 쓰임) */
-#ai-summary {
-    background: #3a3a3c !important; /* 배경을 좀 더 어둡고 확실하게 */
-    color: #ffffff !important;      /* 글자를 무조건 흰색으로 */
-    padding: 15px !important;
-    border-radius: 12px;
-    font-weight: 500;
-}
-
-/* 테이블 헤더 */
-#ai-data-table th {
-    background-color: #333;
-    color: #fff;
-    padding: 10px;
-}
-
+      /* 테이블 헤더 */
+      #ai-data-table th {
+        background-color: #333;
+        color: #fff;
+        padding: 10px;
+      }
     </style>
   </head>
   <body>
     <script>
       // 테마 깜빡임 방지: 본문 그려지기 전 light-mode 클래스를 즉시 적용
-      try { if ((localStorage.getItem('cal_theme') || 'light') === 'light') document.body.classList.add('light-mode'); } catch(e) {}
+      try {
+        if ((localStorage.getItem("cal_theme") || "light") === "light") document.body.classList.add("light-mode");
+      } catch (e) {}
     </script>
     <div id="bootLoader">
       <div class="spinner"></div>
@@ -1503,7 +1958,7 @@ body.light-mode .ai-ans-bubble {
     <div class="top-wrapper">
       <div class="app-branding-header">
         <div class="branding-left">
-          <img src="/apple-touch-icon.png" alt="Logo" class="branding-logo">
+          <img src="/apple-touch-icon.png" alt="Logo" class="branding-logo" />
           <span class="branding-title">Coloplast 입고캘린더</span>
         </div>
         <div class="controls-area">
@@ -1512,39 +1967,94 @@ body.light-mode .ai-ans-bubble {
         </div>
       </div>
 
-      <div class="top-row" style="margin-bottom: 6px;">
+      <div class="top-row" style="margin-bottom: 6px">
         <div class="title-area">
-          <button class="nav-arrow" style="display:flex; align-items:center; justify-content:center; padding: 6px 12px;" onclick="navMonth(-1)" aria-label="이전 달">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          <button
+            class="nav-arrow"
+            style="display: flex; align-items: center; justify-content: center; padding: 6px 12px"
+            onclick="navMonth(-1)"
+            aria-label="이전 달"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
           </button>
-          
-          <button class="title-btn" onclick="openPicker()" style="display:flex; align-items:center; justify-content:center; gap:4px;" aria-label="연월 선택">
-            📥 <span id="calTitle"></span> 
-            <span class="drop-icon" style="display:flex; align-items:center; margin-left: 2px;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+
+          <button
+            class="title-btn"
+            onclick="openPicker()"
+            style="display: flex; align-items: center; justify-content: center; gap: 4px"
+            aria-label="연월 선택"
+          >
+            📥 <span id="calTitle"></span>
+            <span class="drop-icon" style="display: flex; align-items: center; margin-left: 2px">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
             </span>
           </button>
-          
-          <button class="nav-arrow" style="display:flex; align-items:center; justify-content:center; padding: 6px 12px;" onclick="navMonth(1)" aria-label="다음 달">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+
+          <button
+            class="nav-arrow"
+            style="display: flex; align-items: center; justify-content: center; padding: 6px 12px"
+            onclick="navMonth(1)"
+            aria-label="다음 달"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
           </button>
         </div>
-        
+
         <div class="admin-actions" id="adminActions">
           <button class="multi-btn" id="multiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
         </div>
       </div>
-      
+
       <div class="top-row">
         <div class="size-toggle">
           <button class="size-btn" id="btnS" onclick="changeSize('S')">A-</button>
           <button class="size-btn active" id="btnM" onclick="changeSize('M')">A</button>
           <button class="size-btn" id="btnL" onclick="changeSize('L')">A+</button>
-          
-          <div style="width:1px; background:var(--border-color); margin:0 2px;"></div>
-          <button class="size-btn" id="btnHolidayToggle" onclick="toggleHoliday()" style="font-weight:900; color:#ff3b30;">🏖️ ON</button>
+
+          <div style="width: 1px; background: var(--border-color); margin: 0 2px"></div>
+          <button
+            class="size-btn"
+            id="btnHolidayToggle"
+            onclick="toggleHoliday()"
+            style="font-weight: 900; color: #ff3b30"
+          >
+            🏖️ ON
+          </button>
         </div>
-        
+
         <div class="action-row-right">
           <button class="ocr-btn" onclick="showLastOcrImage()">최근OCR 🖼️</button>
           <div class="sync-area" id="syncArea" style="display: flex">
@@ -1556,13 +2066,32 @@ body.light-mode .ai-ans-bubble {
     </div>
 
     <div class="legend-bar-wrapper">
-      <div class="ocr-time-info" style="font-size: 0.85em; font-weight: 800; display: flex; align-items: center; gap: 6px;">
-        <span style="background: #0a84ff; color: white; padding: 3px 8px; border-radius: 8px; font-size: 0.85em; box-shadow: 0 2px 4px rgba(10, 132, 255, 0.3);">최근OCR</span>
+      <div
+        class="ocr-time-info"
+        style="font-size: 0.85em; font-weight: 800; display: flex; align-items: center; gap: 6px"
+      >
+        <span
+          style="
+            background: #0a84ff;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            box-shadow: 0 2px 4px rgba(10, 132, 255, 0.3);
+          "
+          >최근OCR</span
+        >
         <span id="ocrTimeText" style="color: var(--text-main)">불러오는 중...</span>
       </div>
       <div class="legend-bar">
-        <div class="legend-item"><div class="legend-color" style="background:#26e2fd; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">🚢 해상</span></div>
-        <div class="legend-item"><div class="legend-color" style="background:#ff7eff; border:1px solid rgba(0,0,0,0.1);"></div> <span style="font-weight:900;">✈️ 항공</span></div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #26e2fd; border: 1px solid rgba(0, 0, 0, 0.1)"></div>
+          <span style="font-weight: 900">🚢 해상</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #ff7eff; border: 1px solid rgba(0, 0, 0, 0.1)"></div>
+          <span style="font-weight: 900">✈️ 항공</span>
+        </div>
       </div>
     </div>
 
@@ -1584,13 +2113,48 @@ body.light-mode .ai-ans-bubble {
       <div class="pending-list" id="pendingList"></div>
     </div>
 
-    <div id="statsSummaryBar" onclick="openDashboard()" style="margin-top: 15px; padding: 20px; background: var(--card-bg); border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); cursor: pointer; border: 1px solid var(--border-color); width: 100%; box-sizing: border-box;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <span style="font-weight: 800; color: var(--text-main); font-size: 1.05em;">📊 당월 <span id="statsLabelType">입고</span> 진척률</span>
-        <span style="font-weight: 900; color: #0a84ff; font-size: 1.1em;"><span id="sumDonePal">0</span> / <span id="sumTotalPal">0</span> P</span>
+    <div
+      id="statsSummaryBar"
+      onclick="openDashboard()"
+      style="
+        margin-top: 15px;
+        padding: 20px;
+        background: var(--card-bg);
+        border-radius: 16px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        cursor: pointer;
+        border: 1px solid var(--border-color);
+        width: 100%;
+        box-sizing: border-box;
+      "
+    >
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px">
+        <span style="font-weight: 800; color: var(--text-main); font-size: 1.05em"
+          >📊 당월 <span id="statsLabelType">입고</span> 진척률</span
+        >
+        <span style="font-weight: 900; color: #0a84ff; font-size: 1.1em"
+          ><span id="sumDonePal">0</span> / <span id="sumTotalPal">0</span> P</span
+        >
       </div>
-      <div style="width: 100%; background: rgba(128,128,128,0.1); border-radius: 12px; height: 14px; overflow: hidden; position: relative;">
-        <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #0a84ff 0%, #34c759 100%); transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);"></div>
+      <div
+        style="
+          width: 100%;
+          background: rgba(128, 128, 128, 0.1);
+          border-radius: 12px;
+          height: 14px;
+          overflow: hidden;
+          position: relative;
+        "
+      >
+        <div
+          id="progressBar"
+          style="
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #0a84ff 0%, #34c759 100%);
+            transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+          "
+        ></div>
       </div>
     </div>
 
@@ -1601,7 +2165,15 @@ body.light-mode .ai-ans-bubble {
         <div class="bottom-sheet-handle"></div>
         <div class="modal-header">
           <div class="modal-title" id="modalTitle">상세 내역</div>
-          <button class="close-btn" onclick="_editState = null; document.getElementById('modal').style.display = 'none'">✕</button>
+          <button
+            class="close-btn"
+            onclick="
+              _editState = null;
+              document.getElementById('modal').style.display = 'none';
+            "
+          >
+            ✕
+          </button>
         </div>
         <div id="modalContent"></div>
       </div>
@@ -1610,24 +2182,68 @@ body.light-mode .ai-ans-bubble {
     <div id="ocrImageModal" class="overlay-modal" onclick="closeModalOnBgClick(event)">
       <div class="modal-box" onclick="event.stopPropagation()">
         <div class="bottom-sheet-handle"></div>
-        <div class="modal-header" style="margin-bottom: 10px; padding: 0 15px 10px 15px;">
-          <div class="modal-title" style="font-size: 1.1em;">📄 최근 스케쥴 이미지 <span style="font-size:0.7em; color:var(--text-sub); font-weight:normal;">(두 손가락 확대/이동)</span></div>
+        <div class="modal-header" style="margin-bottom: 10px; padding: 0 15px 10px 15px">
+          <div class="modal-title" style="font-size: 1.1em">
+            📄 최근 스케쥴 이미지
+            <span style="font-size: 0.7em; color: var(--text-sub); font-weight: normal">(두 손가락 확대/이동)</span>
+          </div>
           <button class="close-btn" onclick="document.getElementById('ocrImageModal').style.display = 'none'">✕</button>
         </div>
-        <div style="padding: 0 15px 10px 15px;">
-    <button onclick="toggleRawOcrView()" style="width: 100%; background: var(--border-color); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; font-weight: bold; cursor: pointer; font-size: 0.9em;">
-        📄 Raw 파싱 텍스트 보기
-    </button>
-</div>
+        <div style="padding: 0 15px 10px 15px">
+          <button
+            onclick="toggleRawOcrView()"
+            style="
+              width: 100%;
+              background: var(--border-color);
+              color: var(--text-main);
+              border: 1px solid var(--border-color);
+              border-radius: 8px;
+              padding: 8px;
+              font-weight: bold;
+              cursor: pointer;
+              font-size: 0.9em;
+            "
+          >
+            📄 Raw 파싱 텍스트 보기
+          </button>
+        </div>
 
-<div id="raw-ocr-textarea-container" style="display: none; margin-top: 10px;">
-    <div style="display: flex; justify-content: flex-end; margin-bottom: 6px;">
-        <button onclick="copyRawOcrText()" style="background: #3498db; color: white; border: none; padding: 6px 12px; font-size: 12px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s;">
-            📋 RAW 텍스트 전체 복사
-        </button>
-    </div>
-    <textarea id="rawOcrTextArea" style="width: 100%; height: 200px; background: #1a1b1e; color: #f0f0f0; border: 1px solid #383a3f; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 13px; resize: vertical;" readonly></textarea>
-</div>
+        <div id="raw-ocr-textarea-container" style="display: none; margin-top: 10px">
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 6px">
+            <button
+              onclick="copyRawOcrText()"
+              style="
+                background: #3498db;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                font-size: 12px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: bold;
+                transition: background 0.2s;
+              "
+            >
+              📋 RAW 텍스트 전체 복사
+            </button>
+          </div>
+          <textarea
+            id="rawOcrTextArea"
+            style="
+              width: 100%;
+              height: 200px;
+              background: #1a1b1e;
+              color: #f0f0f0;
+              border: 1px solid #383a3f;
+              border-radius: 6px;
+              padding: 10px;
+              font-family: monospace;
+              font-size: 13px;
+              resize: vertical;
+            "
+            readonly
+          ></textarea>
+        </div>
         <div id="ocrImageWrapper">
           <div id="ocrImageContent">로딩 중... ⏳</div>
         </div>
@@ -1638,377 +2254,1469 @@ body.light-mode .ai-ans-bubble {
       <div class="modal-box" onclick="event.stopPropagation()">
         <div class="bottom-sheet-handle"></div>
         <div class="picker-year-row">
-          <button class="year-btn" onclick="changePickerYear(-1)">◀</button><span id="pickerYearText"></span><button class="year-btn" onclick="changePickerYear(1)">▶</button>
+          <button class="year-btn" onclick="changePickerYear(-1)">◀</button><span id="pickerYearText"></span
+          ><button class="year-btn" onclick="changePickerYear(1)">▶</button>
         </div>
         <div class="month-grid-ui" id="pickerMonthGrid"></div>
       </div>
     </div>
 
-    <div id="bioPwConfirmModal" class="overlay-modal" style="align-items: center; padding: 20px; box-sizing: border-box; z-index: 3100;" onclick="if (event.target === this) closeBioPwModal();">
-  <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; max-width: 320px; padding: 25px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); margin-bottom: 10vh;">
-    <div style="font-size: 2.5rem; margin-bottom: 10px;">🔐</div>
-    <div style="font-size: 1.15em; font-weight: 900; color: var(--text-main); margin-bottom: 10px;">보안 인증 확인</div>
-    <div style="font-size: 0.85em; color: var(--text-sub); margin-bottom: 20px; word-break: keep-all; line-height: 1.4;">
-      안전한 패스키 발급을 위해<br>현재 계정의 비밀번호를 입력해 주세요.
-    </div>
-    <input type="password" id="bioConfirmPwInput" class="edit-input" placeholder="비밀번호 입력" style="margin-bottom: 20px; text-align: center; font-size: 1.1em;">
-    <div style="display: flex; gap: 10px;">
-      <button type="button" id="bioCancelBtn" class="cancel-btn" style="flex: 1; padding: 14px; border-radius: 12px; background: var(--bg-color); border: 1px solid var(--border-color);">취소</button>
-      <button type="button" id="bioSubmitBtn" class="save-btn" style="flex: 1; padding: 14px; border-radius: 12px; font-size: 0.95em;">등록 진행</button>
-    </div>
-  </div>
-</div>
-
-    <div id="adminLoginModal" class="overlay-modal" style="align-items: center; padding: 20px; box-sizing: border-box;" onclick="if (event.target === this) this.style.display = 'none';">
-      <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; margin-bottom: 10vh; max-width: 340px; padding: 35px 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
-        
-        <div class="modal-header" style="border: none; margin-bottom: 5px; padding-bottom: 0;">
-          <div class="modal-title" style="font-size: 1.5em; text-align: center; width: 100%; color: var(--text-main);">🔒 시스템 제어</div>
+    <div
+      id="bioPwConfirmModal"
+      class="overlay-modal"
+      style="align-items: center; padding: 20px; box-sizing: border-box; z-index: 3100"
+      onclick="if (event.target === this) closeBioPwModal();"
+    >
+      <div
+        class="modal-box"
+        onclick="event.stopPropagation()"
+        style="
+          border-radius: 24px;
+          max-width: 320px;
+          padding: 25px;
+          text-align: center;
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+          margin-bottom: 10vh;
+        "
+      >
+        <div style="font-size: 2.5rem; margin-bottom: 10px">🔐</div>
+        <div style="font-size: 1.15em; font-weight: 900; color: var(--text-main); margin-bottom: 10px">
+          보안 인증 확인
         </div>
-        <div style="text-align: center; font-size: 0.85em; color: var(--text-sub); margin-bottom: 30px; font-weight: 600;">
+        <div
+          style="font-size: 0.85em; color: var(--text-sub); margin-bottom: 20px; word-break: keep-all; line-height: 1.4"
+        >
+          안전한 패스키 발급을 위해<br />현재 계정의 비밀번호를 입력해 주세요.
+        </div>
+        <input
+          type="password"
+          id="bioConfirmPwInput"
+          class="edit-input"
+          placeholder="비밀번호 입력"
+          style="margin-bottom: 20px; text-align: center; font-size: 1.1em"
+        />
+        <div style="display: flex; gap: 10px">
+          <button
+            type="button"
+            id="bioCancelBtn"
+            class="cancel-btn"
+            style="
+              flex: 1;
+              padding: 14px;
+              border-radius: 12px;
+              background: var(--bg-color);
+              border: 1px solid var(--border-color);
+            "
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            id="bioSubmitBtn"
+            class="save-btn"
+            style="flex: 1; padding: 14px; border-radius: 12px; font-size: 0.95em"
+          >
+            등록 진행
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="adminLoginModal"
+      class="overlay-modal"
+      style="align-items: center; padding: 20px; box-sizing: border-box"
+      onclick="if (event.target === this) this.style.display = 'none';"
+    >
+      <div
+        class="modal-box"
+        onclick="event.stopPropagation()"
+        style="
+          border-radius: 24px;
+          margin-bottom: 10vh;
+          max-width: 340px;
+          padding: 35px 25px;
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        "
+      >
+        <div class="modal-header" style="border: none; margin-bottom: 5px; padding-bottom: 0">
+          <div class="modal-title" style="font-size: 1.5em; text-align: center; width: 100%; color: var(--text-main)">
+            🔒 시스템 제어
+          </div>
+        </div>
+        <div
+          style="text-align: center; font-size: 0.85em; color: var(--text-sub); margin-bottom: 30px; font-weight: 600"
+        >
           관리자 권한을 활성화하려면 로그인하세요.
         </div>
 
-        <form onsubmit="event.preventDefault(); handleLogin();" style="width: 100%; margin: 0; padding: 0;">
-          
-          <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 12px; display: flex; align-items: center; transition: 0.3s; box-sizing: border-box; width: 100%;" 
-               onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
-               onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
-            <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0;">👤</span>
-            <input type="text" id="adminIdInput" style="flex: 1; min-width: 0; width: 100%; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="아이디" autocomplete="username">
+        <form
+          onsubmit="
+            event.preventDefault();
+            handleLogin();
+          "
+          style="width: 100%; margin: 0; padding: 0"
+        >
+          <div
+            style="
+              background: var(--bg-color);
+              border: 2px solid var(--border-color);
+              border-radius: 14px;
+              padding: 6px 14px;
+              margin-bottom: 12px;
+              display: flex;
+              align-items: center;
+              transition: 0.3s;
+              box-sizing: border-box;
+              width: 100%;
+            "
+            onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';"
+            onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';"
+          >
+            <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0">👤</span>
+            <input
+              type="text"
+              id="adminIdInput"
+              style="
+                flex: 1;
+                min-width: 0;
+                width: 100%;
+                border: none;
+                background: transparent;
+                color: var(--text-main);
+                padding: 12px 0;
+                font-size: 1.05em;
+                outline: none;
+                font-weight: 900;
+              "
+              placeholder="아이디"
+              autocomplete="username"
+            />
           </div>
 
-          <div style="background: var(--bg-color); border: 2px solid var(--border-color); border-radius: 14px; padding: 6px 14px; margin-bottom: 28px; display: flex; align-items: center; transition: 0.3s; box-sizing: border-box; width: 100%;"
-               onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';" 
-               onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
-            <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0;">🔑</span>
-            <input type="password" id="adminPwInput" style="flex: 1; min-width: 0; width: 100%; border: none; background: transparent; color: var(--text-main); padding: 12px 0; font-size: 1.05em; outline: none; font-weight: 900;" placeholder="비밀번호" autocomplete="current-password">
-            <span id="pwToggleIcon" style="font-size: 1.2em; cursor: pointer; padding: 5px; color: var(--text-sub); transition: 0.2s; flex-shrink: 0; margin-left: 4px; display: flex; align-items: center; justify-content: center;" onclick="togglePwView()" onmousedown="this.style.transform='scale(0.8)'" onmouseup="this.style.transform='scale(1)'">👁️</span>
+          <div
+            style="
+              background: var(--bg-color);
+              border: 2px solid var(--border-color);
+              border-radius: 14px;
+              padding: 6px 14px;
+              margin-bottom: 28px;
+              display: flex;
+              align-items: center;
+              transition: 0.3s;
+              box-sizing: border-box;
+              width: 100%;
+            "
+            onfocusin="this.style.borderColor='#0a84ff'; this.style.boxShadow='0 0 0 3px rgba(10,132,255,0.2)';"
+            onfocusout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';"
+          >
+            <span style="font-size: 1.2em; margin-right: 10px; color: var(--text-sub); flex-shrink: 0">🔑</span>
+            <input
+              type="password"
+              id="adminPwInput"
+              style="
+                flex: 1;
+                min-width: 0;
+                width: 100%;
+                border: none;
+                background: transparent;
+                color: var(--text-main);
+                padding: 12px 0;
+                font-size: 1.05em;
+                outline: none;
+                font-weight: 900;
+              "
+              placeholder="비밀번호"
+              autocomplete="current-password"
+            />
+            <span
+              id="pwToggleIcon"
+              style="
+                font-size: 1.2em;
+                cursor: pointer;
+                padding: 5px;
+                color: var(--text-sub);
+                transition: 0.2s;
+                flex-shrink: 0;
+                margin-left: 4px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              "
+              onclick="togglePwView()"
+              onmousedown="this.style.transform = 'scale(0.8)'"
+              onmouseup="this.style.transform = 'scale(1)'"
+              >👁️</span
+            >
           </div>
 
-          <div style="display: flex; gap: 12px;">
-            <button type="button" class="cancel-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: var(--bg-color); border: 1px solid var(--border-color);" onclick="document.getElementById('adminLoginModal').style.display='none'">닫기</button>
-            <button type="submit" style="flex: 1.5; padding: 16px; background: linear-gradient(135deg, #0a84ff, #005bb5); color: #fff; border: none; border-radius: 14px; font-size: 1.05em; font-weight: 900; cursor: pointer; box-shadow: 0 6px 15px rgba(10,132,255,0.35); transition: 0.2s;" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'">
+          <div style="display: flex; gap: 12px">
+            <button
+              type="button"
+              class="cancel-btn"
+              style="
+                flex: 1;
+                padding: 16px;
+                border-radius: 14px;
+                background: var(--bg-color);
+                border: 1px solid var(--border-color);
+              "
+              onclick="document.getElementById('adminLoginModal').style.display = 'none'"
+            >
+              닫기
+            </button>
+            <button
+              type="submit"
+              style="
+                flex: 1.5;
+                padding: 16px;
+                background: linear-gradient(135deg, #0a84ff, #005bb5);
+                color: #fff;
+                border: none;
+                border-radius: 14px;
+                font-size: 1.05em;
+                font-weight: 900;
+                cursor: pointer;
+                box-shadow: 0 6px 15px rgba(10, 132, 255, 0.35);
+                transition: 0.2s;
+              "
+              onmousedown="this.style.transform = 'scale(0.96)'"
+              onmouseup="this.style.transform = 'scale(1)'"
+            >
               로그인
             </button>
           </div>
-
         </form>
-        <button id="btnBioLogin" onclick="handleBioLogin()" style="width: 100%; margin-top: 15px; padding: 16px; background: transparent; color: var(--text-main); border: 1.5px solid var(--border-color); border-radius: 14px; font-size: 1.05em; font-weight: 900; cursor: pointer; display: none; transition: 0.2s;" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'">
-           지문 / Face ID 로그인
+        <button
+          id="btnBioLogin"
+          onclick="handleBioLogin()"
+          style="
+            width: 100%;
+            margin-top: 15px;
+            padding: 16px;
+            background: transparent;
+            color: var(--text-main);
+            border: 1.5px solid var(--border-color);
+            border-radius: 14px;
+            font-size: 1.05em;
+            font-weight: 900;
+            cursor: pointer;
+            display: none;
+            transition: 0.2s;
+          "
+          onmousedown="this.style.transform = 'scale(0.96)'"
+          onmouseup="this.style.transform = 'scale(1)'"
+        >
+          지문 / Face ID 로그인
         </button>
       </div>
     </div>
 
-    <div id="logoutConfirmModal" class="overlay-modal" style="align-items: center; z-index: 3500; padding: 20px; box-sizing: border-box;" onclick="if (event.target === this) this.style.display = 'none';">
-      <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px; max-width: 320px; padding: 35px 25px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); margin-bottom: 10vh;">
-        <div style="font-size: 3.5rem; margin-bottom: 15px; line-height: 1;">👋</div>
-        <div style="font-size: 1.3em; font-weight: 900; color: var(--text-main); margin-bottom: 12px;">로그아웃 하시겠습니까?</div>
-        <div style="font-size: 0.9em; color: var(--text-sub); margin-bottom: 30px; line-height: 1.4; word-break: keep-all;">
-          관리자 권한이 해제되며<br>일반 읽기 모드로 전환됩니다.
+    <div
+      id="logoutConfirmModal"
+      class="overlay-modal"
+      style="align-items: center; z-index: 3500; padding: 20px; box-sizing: border-box"
+      onclick="if (event.target === this) this.style.display = 'none';"
+    >
+      <div
+        class="modal-box"
+        onclick="event.stopPropagation()"
+        style="
+          border-radius: 24px;
+          max-width: 320px;
+          padding: 35px 25px;
+          text-align: center;
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+          margin-bottom: 10vh;
+        "
+      >
+        <div style="font-size: 3.5rem; margin-bottom: 15px; line-height: 1">👋</div>
+        <div style="font-size: 1.3em; font-weight: 900; color: var(--text-main); margin-bottom: 12px">
+          로그아웃 하시겠습니까?
         </div>
-        <div style="display: flex; gap: 10px;">
-          <button class="cancel-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: var(--bg-color); border: 1px solid var(--border-color);" onclick="document.getElementById('logoutConfirmModal').style.display='none'">취소</button>
-          <button class="save-btn" style="flex: 1; padding: 16px; border-radius: 14px; background: #ff3b30; box-shadow: 0 6px 15px rgba(255, 59, 48, 0.35);" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'" onclick="executeLogout()">로그아웃</button>
+        <div
+          style="font-size: 0.9em; color: var(--text-sub); margin-bottom: 30px; line-height: 1.4; word-break: keep-all"
+        >
+          관리자 권한이 해제되며<br />일반 읽기 모드로 전환됩니다.
+        </div>
+        <div style="display: flex; gap: 10px">
+          <button
+            class="cancel-btn"
+            style="
+              flex: 1;
+              padding: 16px;
+              border-radius: 14px;
+              background: var(--bg-color);
+              border: 1px solid var(--border-color);
+            "
+            onclick="document.getElementById('logoutConfirmModal').style.display = 'none'"
+          >
+            취소
+          </button>
+          <button
+            class="save-btn"
+            style="
+              flex: 1;
+              padding: 16px;
+              border-radius: 14px;
+              background: #ff3b30;
+              box-shadow: 0 6px 15px rgba(255, 59, 48, 0.35);
+            "
+            onmousedown="this.style.transform = 'scale(0.96)'"
+            onmouseup="this.style.transform = 'scale(1)'"
+            onclick="executeLogout()"
+          >
+            로그아웃
+          </button>
         </div>
       </div>
     </div>
 
-  <div id="myInfoModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
-      <div class="modal-box" onclick="event.stopPropagation()" style="border-radius: 24px 24px 0 0; padding: 25px 20px 40px 20px;">
+    <div id="myInfoModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
+      <div
+        class="modal-box"
+        onclick="event.stopPropagation()"
+        style="border-radius: 24px 24px 0 0; padding: 25px 20px 40px 20px"
+      >
         <div class="bottom-sheet-handle"></div>
-        
-        <div class="modal-header" style="justify-content: center; border-bottom: none; margin-bottom: 5px;">
-          <div class="modal-title" style="font-size: 1.3em;">내 정보 및 설정</div>
+
+        <div class="modal-header" style="justify-content: center; border-bottom: none; margin-bottom: 5px">
+          <div class="modal-title" style="font-size: 1.3em">내 정보 및 설정</div>
         </div>
 
-        <div style="display: flex; align-items: center; background: var(--bg-color); border: 1px solid var(--border-color); padding: 16px; border-radius: 16px; margin-bottom: 24px; box-sizing: border-box;">
-          <div id="myInfoAdminIcon" style="width: 50px; height: 50px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1.5em; margin-right: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); transition: 0.3s; flex-shrink: 0;">
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            padding: 16px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            box-sizing: border-box;
+          "
+        >
+          <div
+            id="myInfoAdminIcon"
+            style="
+              width: 50px;
+              height: 50px;
+              border-radius: 50%;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              font-size: 1.5em;
+              margin-right: 15px;
+              box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+              transition: 0.3s;
+              flex-shrink: 0;
+            "
+          >
             🧑‍💻
           </div>
           <div>
-            <div id="myInfoAdminRole" style="font-size: 1.15em; font-weight: 900; color: var(--text-main); margin-bottom: 4px;">관리자</div>
-            <div style="font-size: 0.85em; font-weight: 800; color: var(--text-sub);" id="myInfoAdminId">admin_id</div>
+            <div
+              id="myInfoAdminRole"
+              style="font-size: 1.15em; font-weight: 900; color: var(--text-main); margin-bottom: 4px"
+            >
+              관리자
+            </div>
+            <div style="font-size: 0.85em; font-weight: 800; color: var(--text-sub)" id="myInfoAdminId">admin_id</div>
           </div>
         </div>
 
-        <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 16px; overflow: hidden; margin-bottom: 15px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border-color);">
+        <div
+          style="
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 15px;
+          "
+        >
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 16px;
+              border-bottom: 1px solid var(--border-color);
+            "
+          >
             <div>
-              <div style="font-size: 1.05em; font-weight: 800; color: var(--text-main);">로그인 상태 유지</div>
-              <div style="font-size: 0.8em; color: var(--text-sub); margin-top: 4px;">앱을 종료해도 로그아웃되지 않습니다.</div>
+              <div style="font-size: 1.05em; font-weight: 800; color: var(--text-main)">로그인 상태 유지</div>
+              <div style="font-size: 0.8em; color: var(--text-sub); margin-top: 4px">
+                앱을 종료해도 로그아웃되지 않습니다.
+              </div>
             </div>
             <label class="ios-toggle">
-              <input type="checkbox" id="toggleAutoLogin" onchange="handleAutoLoginToggle(this)">
+              <input type="checkbox" id="toggleAutoLogin" onchange="handleAutoLoginToggle(this)" />
               <span class="toggle-slider"></span>
             </label>
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px">
             <div>
-              <div style="font-size: 1.05em; font-weight: 800; color: var(--text-main);">생체 인증 (지문 / Face ID)</div>
-              <div style="font-size: 0.8em; color: var(--text-sub); margin-top: 4px;">빠르고 안전하게 시스템에 접근합니다.</div>
+              <div style="font-size: 1.05em; font-weight: 800; color: var(--text-main)">생체 인증 (지문 / Face ID)</div>
+              <div style="font-size: 0.8em; color: var(--text-sub); margin-top: 4px">
+                빠르고 안전하게 시스템에 접근합니다.
+              </div>
             </div>
             <label class="ios-toggle">
-              <input type="checkbox" id="toggleBioAuth" onchange="handleBioToggleChange(this)">
+              <input type="checkbox" id="toggleBioAuth" onchange="handleBioToggleChange(this)" />
               <span class="toggle-slider"></span>
             </label>
           </div>
         </div>
 
-        <div style="background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 16px; margin-bottom: 24px; box-sizing: border-box; overflow: hidden;">
-            <button onclick="const f = document.getElementById('pwChangeFormContainer'); f.style.display = f.style.display === 'none' ? 'flex' : 'none';" style="width: 100%; padding: 16px; background: transparent; border: none; text-align: left; font-size: 1.05em; font-weight: 900; color: var(--text-main); cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                <span>🔒 비밀번호 변경</span>
-                <span style="color: var(--text-sub); font-size: 0.8em;">열기/닫기 ▼</span>
+        <div
+          style="
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            margin-bottom: 24px;
+            box-sizing: border-box;
+            overflow: hidden;
+          "
+        >
+          <button
+            onclick="
+              const f = document.getElementById('pwChangeFormContainer');
+              f.style.display = f.style.display === 'none' ? 'flex' : 'none';
+            "
+            style="
+              width: 100%;
+              padding: 16px;
+              background: transparent;
+              border: none;
+              text-align: left;
+              font-size: 1.05em;
+              font-weight: 900;
+              color: var(--text-main);
+              cursor: pointer;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <span>🔒 비밀번호 변경</span>
+            <span style="color: var(--text-sub); font-size: 0.8em">열기/닫기 ▼</span>
+          </button>
+          <div
+            id="pwChangeFormContainer"
+            style="display: none; flex-direction: column; gap: 8px; padding: 0 16px 16px 16px"
+          >
+            <input
+              type="password"
+              id="mySettingsCurrentPw"
+              placeholder="현재 비밀번호 입력"
+              style="
+                width: 100%;
+                padding: 12px;
+                border-radius: 10px;
+                border: 1px solid var(--border-color);
+                background: var(--card-bg);
+                color: var(--text-main);
+                font-weight: bold;
+                box-sizing: border-box;
+              "
+            />
+            <input
+              type="password"
+              id="mySettingsNewPw"
+              placeholder="새로운 비밀번호 입력"
+              style="
+                width: 100%;
+                padding: 12px;
+                border-radius: 10px;
+                border: 1px solid var(--border-color);
+                background: var(--card-bg);
+                color: var(--text-main);
+                font-weight: bold;
+                box-sizing: border-box;
+              "
+            />
+            <button
+              onclick="executeMyPasswordChange()"
+              style="
+                width: 100%;
+                background: #0a84ff;
+                color: white;
+                border: none;
+                padding: 12px;
+                border-radius: 10px;
+                font-weight: 900;
+                cursor: pointer;
+                box-shadow: 0 4px 12px rgba(10, 132, 255, 0.2);
+                transition: 0.2s;
+              "
+            >
+              비밀번호 변경 적용
             </button>
-            <div id="pwChangeFormContainer" style="display: none; flex-direction: column; gap: 8px; padding: 0 16px 16px 16px;">
-                <input type="password" id="mySettingsCurrentPw" placeholder="현재 비밀번호 입력" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: bold; box-sizing: border-box;">
-                <input type="password" id="mySettingsNewPw" placeholder="새로운 비밀번호 입력" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: bold; box-sizing: border-box;">
-                <button onclick="executeMyPasswordChange()" style="width: 100%; background: #0a84ff; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 12px rgba(10,132,255,0.2); transition: 0.2s;">비밀번호 변경 적용</button>
-            </div>
+          </div>
         </div>
 
-        <button id="masterDashboardBtn" onclick="openMasterDashboard()" style="width: 100%; padding: 16px; background: rgba(10, 132, 255, 0.1); color: #0a84ff; border: 1px solid rgba(10, 132, 255, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; margin-bottom: 12px; display: none; transition: 0.2s; box-sizing: border-box;">
+        <button
+          id="masterDashboardBtn"
+          onclick="openMasterDashboard()"
+          style="
+            width: 100%;
+            padding: 16px;
+            background: rgba(10, 132, 255, 0.1);
+            color: #0a84ff;
+            border: 1px solid rgba(10, 132, 255, 0.3);
+            border-radius: 16px;
+            font-size: 1.05em;
+            font-weight: 900;
+            cursor: pointer;
+            margin-bottom: 12px;
+            display: none;
+            transition: 0.2s;
+            box-sizing: border-box;
+          "
+        >
           ⚙️ 시스템 관리
         </button>
 
-        <button onclick="document.getElementById('myInfoModal').style.display='none'; document.getElementById('logoutConfirmModal').style.display='flex';" style="width: 100%; padding: 16px; background: rgba(255, 59, 48, 0.1); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.3); border-radius: 16px; font-size: 1.05em; font-weight: 900; cursor: pointer; transition: 0.2s;">
+        <button
+          onclick="
+            document.getElementById('myInfoModal').style.display = 'none';
+            document.getElementById('logoutConfirmModal').style.display = 'flex';
+          "
+          style="
+            width: 100%;
+            padding: 16px;
+            background: rgba(255, 59, 48, 0.1);
+            color: #ff3b30;
+            border: 1px solid rgba(255, 59, 48, 0.3);
+            border-radius: 16px;
+            font-size: 1.05em;
+            font-weight: 900;
+            cursor: pointer;
+            transition: 0.2s;
+          "
+        >
           로그아웃
         </button>
       </div>
     </div>
 
-    <div id="adminConnModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:99999; justify-content:center; align-items:center; backdrop-filter:blur(3px);">
-        <div style="background:var(--bg-color); width:90%; max-width:400px; border-radius:16px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h3 id="adminConnTitle" style="color:var(--text-main); margin:0;">접속 이력</h3>
-                <button onclick="document.getElementById('adminConnModal').style.display='none'" style="background:transparent; border:none; color:var(--text-sub); font-size:1.5em; cursor:pointer;">&times;</button>
-            </div>
-            <div id="adminConnList" style="max-height:400px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
-                </div>
+    <div
+      id="adminConnModal"
+      style="
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 99999;
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(3px);
+      "
+    >
+      <div
+        style="
+          background: var(--bg-color);
+          width: 90%;
+          max-width: 400px;
+          border-radius: 16px;
+          padding: 20px;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        "
+      >
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px">
+          <h3 id="adminConnTitle" style="color: var(--text-main); margin: 0">접속 이력</h3>
+          <button
+            onclick="document.getElementById('adminConnModal').style.display = 'none'"
+            style="background: transparent; border: none; color: var(--text-sub); font-size: 1.5em; cursor: pointer"
+          >
+            &times;
+          </button>
         </div>
+        <div
+          id="adminConnList"
+          style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px"
+        ></div>
+      </div>
     </div>
 
-    <div id="masterDashboardModal" style="position: fixed; top: 0; left: 100%; width: 100%; height: 100%; background: var(--bg-color); transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1); z-index: 2500; display: flex; flex-direction: column; box-sizing: border-box; padding-top: env(safe-area-inset-top); overflow: hidden;">
-      
-      <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid var(--border-color); background: var(--header-bg); box-sizing: border-box; flex-shrink: 0;">
-        <button onclick="closeMasterDashboard()" style="background: none; border: none; color: var(--text-main); font-size: 1.4em; cursor: pointer; padding: 0 5px;">◀</button>
-        <div style="font-size: 1.15em; font-weight: 900; color: var(--text-main);">시스템 관리</div>
-        <div style="width: 30px;"></div>
+    <div
+      id="masterDashboardModal"
+      style="
+        position: fixed;
+        top: 0;
+        left: 100%;
+        width: 100%;
+        height: 100%;
+        background: var(--bg-color);
+        transition: transform 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
+        z-index: 2500;
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+        padding-top: env(safe-area-inset-top);
+        overflow: hidden;
+      "
+    >
+      <div
+        style="
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 15px 20px;
+          border-bottom: 1px solid var(--border-color);
+          background: var(--header-bg);
+          box-sizing: border-box;
+          flex-shrink: 0;
+        "
+      >
+        <button
+          onclick="closeMasterDashboard()"
+          style="
+            background: none;
+            border: none;
+            color: var(--text-main);
+            font-size: 1.4em;
+            cursor: pointer;
+            padding: 0 5px;
+          "
+        >
+          ◀
+        </button>
+        <div style="font-size: 1.15em; font-weight: 900; color: var(--text-main)">시스템 관리</div>
+        <div style="width: 30px"></div>
       </div>
 
-      <div style="display: flex; background: var(--card-bg); padding: 4px; border-radius: 10px; margin: 15px 20px; border: 1px solid var(--border-color); box-sizing: border-box; flex-shrink: 0;">
-        <button class="master-tab-btn active" onclick="switchMasterTab('admin-mgr')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-main); font-weight: 900; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">어드민</button>
-        <button class="master-tab-btn" onclick="switchMasterTab('conn-log')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">접속로그</button>
-        <button class="master-tab-btn" onclick="switchMasterTab('audit-log')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">보안로그</button>
-        <button class="master-tab-btn" onclick="switchMasterTab('db-mgr')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">DB제어</button>
-        <button class="master-tab-btn" onclick="switchMasterTab('filter-mgr')" style="flex: 1; padding: 10px 2px; background: none; border: none; color: var(--text-sub); font-weight: 800; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.85em;">필터관리</button>
+      <div
+        style="
+          display: flex;
+          background: var(--card-bg);
+          padding: 4px;
+          border-radius: 10px;
+          margin: 15px 20px;
+          border: 1px solid var(--border-color);
+          box-sizing: border-box;
+          flex-shrink: 0;
+        "
+      >
+        <button
+          class="master-tab-btn active"
+          onclick="switchMasterTab('admin-mgr')"
+          style="
+            flex: 1;
+            padding: 10px 2px;
+            background: none;
+            border: none;
+            color: var(--text-main);
+            font-weight: 900;
+            border-radius: 8px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 0.85em;
+          "
+        >
+          어드민
+        </button>
+        <button
+          class="master-tab-btn"
+          onclick="switchMasterTab('conn-log')"
+          style="
+            flex: 1;
+            padding: 10px 2px;
+            background: none;
+            border: none;
+            color: var(--text-sub);
+            font-weight: 800;
+            border-radius: 8px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 0.85em;
+          "
+        >
+          접속로그
+        </button>
+        <button
+          class="master-tab-btn"
+          onclick="switchMasterTab('audit-log')"
+          style="
+            flex: 1;
+            padding: 10px 2px;
+            background: none;
+            border: none;
+            color: var(--text-sub);
+            font-weight: 800;
+            border-radius: 8px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 0.85em;
+          "
+        >
+          보안로그
+        </button>
+        <button
+          class="master-tab-btn"
+          onclick="switchMasterTab('db-mgr')"
+          style="
+            flex: 1;
+            padding: 10px 2px;
+            background: none;
+            border: none;
+            color: var(--text-sub);
+            font-weight: 800;
+            border-radius: 8px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 0.85em;
+          "
+        >
+          DB제어
+        </button>
+        <button
+          class="master-tab-btn"
+          onclick="switchMasterTab('filter-mgr')"
+          style="
+            flex: 1;
+            padding: 10px 2px;
+            background: none;
+            border: none;
+            color: var(--text-sub);
+            font-weight: 800;
+            border-radius: 8px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 0.85em;
+          "
+        >
+          필터관리
+        </button>
       </div>
 
-      <div style="flex: 1; overflow-y: auto; padding: 0 20px 40px 20px; box-sizing: border-box; -webkit-overflow-scrolling: touch;">
-        
-        <div id="master-tab-admin-mgr" class="master-tab-content" style="box-sizing: border-box;">
-          
-          <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 15px; margin-bottom: 20px; box-sizing: border-box;">
-            <button id="toggleAdminFormBtn" onclick="toggleNewAdminForm()" style="width: 100%; padding: 12px; background: rgba(10, 132, 255, 0.1); border: 1px solid #0a84ff; color: #0a84ff; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 0.95em; transition: 0.2s;">➕ 신규 어드민 계정 발급실 열기</button>
-            
-            <div id="newAdminFormContainer" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-color); animation: fadeIn 0.3s;">
-              <div style="font-weight: 900; font-size: 1.05em; margin-bottom: 15px; color: var(--text-main);">🆕 신규 어드민 계정 발급</div>
-              <input type="text" id="newAdminId" placeholder="어드민 ID" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 12px; font-weight: 800; box-sizing: border-box;">
-              <input type="text" id="newAdminName" placeholder="담당자 이름 (예: 홍길동)" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 12px; font-weight: 800; box-sizing: border-box;">
-              <input type="password" id="newAdminPw" placeholder="초기 비밀번호" style="width: 100%; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); margin-bottom: 16px; font-weight: 800; box-sizing: border-box;">
-              <button onclick="createNewAdminAccount()" style="width: 100%; padding: 15px; background: #34c759; color: #fff; border: none; border-radius: 12px; font-weight: 900; cursor: pointer; box-sizing: border-box; font-size: 1em;">계정 생성 및 활성화</button>
+      <div
+        style="
+          flex: 1;
+          overflow-y: auto;
+          padding: 0 20px 40px 20px;
+          box-sizing: border-box;
+          -webkit-overflow-scrolling: touch;
+        "
+      >
+        <div id="master-tab-admin-mgr" class="master-tab-content" style="box-sizing: border-box">
+          <div
+            style="
+              background: var(--card-bg);
+              border: 1px solid var(--border-color);
+              border-radius: 16px;
+              padding: 15px;
+              margin-bottom: 20px;
+              box-sizing: border-box;
+            "
+          >
+            <button
+              id="toggleAdminFormBtn"
+              onclick="toggleNewAdminForm()"
+              style="
+                width: 100%;
+                padding: 12px;
+                background: rgba(10, 132, 255, 0.1);
+                border: 1px solid #0a84ff;
+                color: #0a84ff;
+                border-radius: 12px;
+                font-weight: 900;
+                cursor: pointer;
+                font-size: 0.95em;
+                transition: 0.2s;
+              "
+            >
+              ➕ 신규 어드민 계정 발급실 열기
+            </button>
+
+            <div
+              id="newAdminFormContainer"
+              style="
+                display: none;
+                margin-top: 15px;
+                padding-top: 15px;
+                border-top: 1px dashed var(--border-color);
+                animation: fadeIn 0.3s;
+              "
+            >
+              <div style="font-weight: 900; font-size: 1.05em; margin-bottom: 15px; color: var(--text-main)">
+                🆕 신규 어드민 계정 발급
+              </div>
+              <input
+                type="text"
+                id="newAdminId"
+                placeholder="어드민 ID"
+                style="
+                  width: 100%;
+                  padding: 14px;
+                  background: var(--bg-color);
+                  border: 1px solid var(--border-color);
+                  border-radius: 12px;
+                  color: var(--text-main);
+                  margin-bottom: 12px;
+                  font-weight: 800;
+                  box-sizing: border-box;
+                "
+              />
+              <input
+                type="text"
+                id="newAdminName"
+                placeholder="담당자 이름 (예: 홍길동)"
+                style="
+                  width: 100%;
+                  padding: 14px;
+                  background: var(--bg-color);
+                  border: 1px solid var(--border-color);
+                  border-radius: 12px;
+                  color: var(--text-main);
+                  margin-bottom: 12px;
+                  font-weight: 800;
+                  box-sizing: border-box;
+                "
+              />
+              <input
+                type="password"
+                id="newAdminPw"
+                placeholder="초기 비밀번호"
+                style="
+                  width: 100%;
+                  padding: 14px;
+                  background: var(--bg-color);
+                  border: 1px solid var(--border-color);
+                  border-radius: 12px;
+                  color: var(--text-main);
+                  margin-bottom: 16px;
+                  font-weight: 800;
+                  box-sizing: border-box;
+                "
+              />
+              <button
+                onclick="createNewAdminAccount()"
+                style="
+                  width: 100%;
+                  padding: 15px;
+                  background: #34c759;
+                  color: #fff;
+                  border: none;
+                  border-radius: 12px;
+                  font-weight: 900;
+                  cursor: pointer;
+                  box-sizing: border-box;
+                  font-size: 1em;
+                "
+              >
+                계정 생성 및 활성화
+              </button>
             </div>
           </div>
 
-          <div style="font-weight: 900; margin-bottom: 12px; color: var(--text-sub); font-size: 0.95em;">시스템 등록 어드민 목록</div>
-          <div id="masterAdminListContainer" style="display: flex; flex-direction: column; gap: 10px; box-sizing: border-box;"></div>
+          <div style="font-weight: 900; margin-bottom: 12px; color: var(--text-sub); font-size: 0.95em">
+            시스템 등록 어드민 목록
+          </div>
+          <div
+            id="masterAdminListContainer"
+            style="display: flex; flex-direction: column; gap: 10px; box-sizing: border-box"
+          ></div>
         </div>
 
-        <div id="master-tab-conn-log" class="master-tab-content" style="display: none; box-sizing: border-box;">
-          <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; box-sizing: border-box;">
-            <select id="logConnLimit" class="db-input" style="width: auto; padding: 10px; border-radius: 10px; font-weight: bold; background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color);" onchange="connLogCurrentPage=1; refreshConnLogs();">
+        <div id="master-tab-conn-log" class="master-tab-content" style="display: none; box-sizing: border-box">
+          <div
+            style="
+              display: flex;
+              gap: 8px;
+              margin-bottom: 15px;
+              flex-wrap: wrap;
+              align-items: center;
+              box-sizing: border-box;
+            "
+          >
+            <select
+              id="logConnLimit"
+              class="db-input"
+              style="
+                width: auto;
+                padding: 10px;
+                border-radius: 10px;
+                font-weight: bold;
+                background: var(--bg-color);
+                color: var(--text-main);
+                border: 1px solid var(--border-color);
+              "
+              onchange="
+                connLogCurrentPage = 1;
+                refreshConnLogs();
+              "
+            >
               <option value="50">50줄씩 보기</option>
               <option value="100" selected>100줄씩 보기</option>
               <option value="300">300줄씩 보기</option>
             </select>
-            <input type="text" id="logConnKeyword" placeholder="🔍 ID, GUEST, AUTO 등 검색" style="flex: 1; min-width: 150px; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: 800; font-size: 0.9em; box-sizing: border-box;" onkeydown="if(event.key==='Enter') { connLogCurrentPage=1; refreshConnLogs(); }">
-            <button onclick="connLogCurrentPage=1; refreshConnLogs();" style="background: #0a84ff; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">조회</button>
+            <input
+              type="text"
+              id="logConnKeyword"
+              placeholder="🔍 ID, GUEST, AUTO 등 검색"
+              style="
+                flex: 1;
+                min-width: 150px;
+                padding: 10px 14px;
+                background: var(--bg-color);
+                border: 1px solid var(--border-color);
+                border-radius: 10px;
+                color: var(--text-main);
+                font-weight: 800;
+                font-size: 0.9em;
+                box-sizing: border-box;
+              "
+              onkeydown="
+                if (event.key === 'Enter') {
+                  connLogCurrentPage = 1;
+                  refreshConnLogs();
+                }
+              "
+            />
+            <button
+              onclick="
+                connLogCurrentPage = 1;
+                refreshConnLogs();
+              "
+              style="
+                background: #0a84ff;
+                color: #fff;
+                border: none;
+                border-radius: 10px;
+                padding: 10px 16px;
+                font-weight: 900;
+                cursor: pointer;
+                white-space: nowrap;
+              "
+            >
+              조회
+            </button>
           </div>
 
-          <div style="width: 100%; overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px 12px; box-sizing: border-box; -webkit-overflow-scrolling: touch;">
-              <div style="min-width: 750px;"> <div style="display:flex; font-size:0.8em; color:var(--text-sub); font-weight:bold; padding:0 5px 8px 5px; border-bottom:2px solid var(--border-color); margin-bottom:5px;">
-                      <span style="width:110px; flex-shrink:0;">접속일시</span>
-                      <span style="width:50px; flex-shrink:0; text-align:center;">타입</span>
-                      <span style="width:80px; flex-shrink:0; margin-left:8px;">접속자</span>
-                      <span style="flex:1; margin-left:12px;">접속 환경 (IP / 기기 / 브라우저)</span>
-                  </div>
-                  
-                  <div id="masterConnTimeline" style="display: flex; flex-direction: column;">
-                     <div style="text-align: center; color: var(--text-sub); padding: 20px;">데이터를 불러오는 중...</div>
-                  </div>
+          <div
+            style="
+              width: 100%;
+              overflow-x: auto;
+              background: var(--card-bg);
+              border: 1px solid var(--border-color);
+              border-radius: 12px;
+              padding: 15px 12px;
+              box-sizing: border-box;
+              -webkit-overflow-scrolling: touch;
+            "
+          >
+            <div style="min-width: 750px">
+              <div
+                style="
+                  display: flex;
+                  font-size: 0.8em;
+                  color: var(--text-sub);
+                  font-weight: bold;
+                  padding: 0 5px 8px 5px;
+                  border-bottom: 2px solid var(--border-color);
+                  margin-bottom: 5px;
+                "
+              >
+                <span style="width: 110px; flex-shrink: 0">접속일시</span>
+                <span style="width: 50px; flex-shrink: 0; text-align: center">타입</span>
+                <span style="width: 80px; flex-shrink: 0; margin-left: 8px">접속자</span>
+                <span style="flex: 1; margin-left: 12px">접속 환경 (IP / 기기 / 브라우저)</span>
               </div>
+
+              <div id="masterConnTimeline" style="display: flex; flex-direction: column">
+                <div style="text-align: center; color: var(--text-sub); padding: 20px">데이터를 불러오는 중...</div>
+              </div>
+            </div>
           </div>
-          <div id="logConnPaginationBar" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px;"></div>
+          <div
+            id="logConnPaginationBar"
+            style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px"
+          ></div>
         </div>
 
-        <div id="master-tab-audit-log" class="master-tab-content" style="display: none; box-sizing: border-box;">
-          <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; box-sizing: border-box;">
-            <select id="logMasterLimit" class="db-input" style="width: auto; padding: 10px; border-radius: 10px; font-weight: bold; background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color);" onchange="logCurrentPage=1; refreshAuditLogs();">
+        <div id="master-tab-audit-log" class="master-tab-content" style="display: none; box-sizing: border-box">
+          <div
+            style="
+              display: flex;
+              gap: 8px;
+              margin-bottom: 15px;
+              flex-wrap: wrap;
+              align-items: center;
+              box-sizing: border-box;
+            "
+          >
+            <select
+              id="logMasterLimit"
+              class="db-input"
+              style="
+                width: auto;
+                padding: 10px;
+                border-radius: 10px;
+                font-weight: bold;
+                background: var(--bg-color);
+                color: var(--text-main);
+                border: 1px solid var(--border-color);
+              "
+              onchange="
+                logCurrentPage = 1;
+                refreshAuditLogs();
+              "
+            >
               <option value="20">20줄씩 보기</option>
               <option value="50" selected>50줄씩 보기</option>
               <option value="100">100줄씩 보기</option>
             </select>
-            
-            <input type="date" id="logStartDate" class="db-input" style="width: auto; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: bold; box-sizing: border-box;">
-            <span style="color: var(--text-main); font-weight: 900;">~</span>
-            <input type="date" id="logEndDate" class="db-input" style="width: auto; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: bold; box-sizing: border-box;">
-            
-            <input type="text" id="logKeyword" placeholder="🔍 ID, 액션 또는 내용 검색..." style="flex: 1; min-width: 150px; padding: 10px 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-main); font-weight: 800; font-size: 0.9em; box-sizing: border-box;" onkeydown="if(event.key==='Enter') { logCurrentPage=1; refreshAuditLogs(); }">
-            <button onclick="logCurrentPage=1; refreshAuditLogs();" style="background: #ff9f0a; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">검색</button>
-            <button onclick="document.getElementById('logStartDate').value=''; document.getElementById('logEndDate').value=''; document.getElementById('logKeyword').value=''; logCurrentPage=1; refreshAuditLogs();" style="background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 16px; font-weight: 900; cursor: pointer; white-space: nowrap;">초기화</button>
+
+            <input
+              type="date"
+              id="logStartDate"
+              class="db-input"
+              style="
+                width: auto;
+                padding: 10px 14px;
+                background: var(--bg-color);
+                border: 1px solid var(--border-color);
+                border-radius: 10px;
+                color: var(--text-main);
+                font-weight: bold;
+                box-sizing: border-box;
+              "
+            />
+            <span style="color: var(--text-main); font-weight: 900">~</span>
+            <input
+              type="date"
+              id="logEndDate"
+              class="db-input"
+              style="
+                width: auto;
+                padding: 10px 14px;
+                background: var(--bg-color);
+                border: 1px solid var(--border-color);
+                border-radius: 10px;
+                color: var(--text-main);
+                font-weight: bold;
+                box-sizing: border-box;
+              "
+            />
+
+            <input
+              type="text"
+              id="logKeyword"
+              placeholder="🔍 ID, 액션 또는 내용 검색..."
+              style="
+                flex: 1;
+                min-width: 150px;
+                padding: 10px 14px;
+                background: var(--bg-color);
+                border: 1px solid var(--border-color);
+                border-radius: 10px;
+                color: var(--text-main);
+                font-weight: 800;
+                font-size: 0.9em;
+                box-sizing: border-box;
+              "
+              onkeydown="
+                if (event.key === 'Enter') {
+                  logCurrentPage = 1;
+                  refreshAuditLogs();
+                }
+              "
+            />
+            <button
+              onclick="
+                logCurrentPage = 1;
+                refreshAuditLogs();
+              "
+              style="
+                background: #ff9f0a;
+                color: #fff;
+                border: none;
+                border-radius: 10px;
+                padding: 10px 16px;
+                font-weight: 900;
+                cursor: pointer;
+                white-space: nowrap;
+              "
+            >
+              검색
+            </button>
+            <button
+              onclick="
+                document.getElementById('logStartDate').value = '';
+                document.getElementById('logEndDate').value = '';
+                document.getElementById('logKeyword').value = '';
+                logCurrentPage = 1;
+                refreshAuditLogs();
+              "
+              style="
+                background: var(--card-bg);
+                color: var(--text-main);
+                border: 1px solid var(--border-color);
+                border-radius: 10px;
+                padding: 10px 16px;
+                font-weight: 900;
+                cursor: pointer;
+                white-space: nowrap;
+              "
+            >
+              초기화
+            </button>
           </div>
 
-          <div id="masterLogTimeline" style="display: flex; flex-direction: column; gap: 12px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 15px; box-sizing: border-box;">
-             <div style="text-align: center; color: var(--text-sub); padding: 20px;">로그 데이터를 불러오는 중...</div>
+          <div
+            id="masterLogTimeline"
+            style="
+              display: flex;
+              flex-direction: column;
+              gap: 12px;
+              background: var(--card-bg);
+              border: 1px solid var(--border-color);
+              border-radius: 16px;
+              padding: 15px;
+              box-sizing: border-box;
+            "
+          >
+            <div style="text-align: center; color: var(--text-sub); padding: 20px">로그 데이터를 불러오는 중...</div>
           </div>
 
-          <div id="logMasterPaginationBar" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px;"></div>
+          <div
+            id="logMasterPaginationBar"
+            style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px"
+          ></div>
         </div>
 
-        <div id="master-tab-db-mgr" class="master-tab-content" style="display: none; box-sizing: border-box;">
-          <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; margin-bottom: 20px; box-sizing: border-box;">
-            <div style="font-weight: 900; color: var(--text-main); margin-bottom: 6px; font-size: 1em;">⚠️ DB 다이렉트 긴급 제어실</div>
-            <div style="font-size: 0.85em; color: var(--text-sub); line-height: 1.45;">데이터베이스 테이블의 원본 데이터를 직접 검색하여 긴급 삭제할 수 있는 위험 영역 관리 화면입니다.</div>
+        <div id="master-tab-db-mgr" class="master-tab-content" style="display: none; box-sizing: border-box">
+          <div
+            style="
+              background: var(--card-bg);
+              border: 1px solid var(--border-color);
+              border-radius: 16px;
+              padding: 16px;
+              margin-bottom: 20px;
+              box-sizing: border-box;
+            "
+          >
+            <div style="font-weight: 900; color: var(--text-main); margin-bottom: 6px; font-size: 1em">
+              ⚠️ DB 다이렉트 긴급 제어실
+            </div>
+            <div style="font-size: 0.85em; color: var(--text-sub); line-height: 1.45">
+              데이터베이스 테이블의 원본 데이터를 직접 검색하여 긴급 삭제할 수 있는 위험 영역 관리 화면입니다.
+            </div>
           </div>
-          <div style="display: flex; gap: 8px; margin-bottom: 15px; box-sizing: border-box; flex-wrap: wrap;">
-            <select id="dbMasterFilterCol" style="padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; outline: none;">
+          <div style="display: flex; gap: 8px; margin-bottom: 15px; box-sizing: border-box; flex-wrap: wrap">
+            <select
+              id="dbMasterFilterCol"
+              style="
+                padding: 14px;
+                background: var(--card-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 12px;
+                color: var(--text-main);
+                font-weight: 800;
+                outline: none;
+              "
+            >
               <option value="all">🔍 전체 검색</option>
               <option value="name" id="filterOptName">식별명 검색</option>
               <option value="date" id="filterOptDate">날짜 검색</option>
             </select>
-            
-            <select id="dbMasterLimit" onchange="dbPageResetAndSearch()" style="padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; outline: none;">
+
+            <select
+              id="dbMasterLimit"
+              onchange="dbPageResetAndSearch()"
+              style="
+                padding: 14px;
+                background: var(--card-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 12px;
+                color: var(--text-main);
+                font-weight: 800;
+                outline: none;
+              "
+            >
               <option value="20">20줄씩 보기</option>
               <option value="50">50줄씩 보기</option>
               <option value="100">100줄씩 보기</option>
             </select>
 
-            <input type="text" id="dbMasterSearchKeyword" placeholder="검색어 입력..." style="flex: 1; min-width: 150px; padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; box-sizing: border-box;">
-            <button onclick="dbPageResetAndSearch()" style="padding: 0 22px; background: #0a84ff; color:#fff; border:none; border-radius:12px; font-weight:900; cursor:pointer; height: 48px;">조회</button>
+            <input
+              type="text"
+              id="dbMasterSearchKeyword"
+              placeholder="검색어 입력..."
+              style="
+                flex: 1;
+                min-width: 150px;
+                padding: 14px;
+                background: var(--card-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 12px;
+                color: var(--text-main);
+                font-weight: 800;
+                box-sizing: border-box;
+              "
+            />
+            <button
+              onclick="dbPageResetAndSearch()"
+              style="
+                padding: 0 22px;
+                background: #0a84ff;
+                color: #fff;
+                border: none;
+                border-radius: 12px;
+                font-weight: 900;
+                cursor: pointer;
+                height: 48px;
+              "
+            >
+              조회
+            </button>
           </div>
-          <div id="dbMasterRowsContainer" style="overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch; box-sizing: border-box;"></div>
-          <div id="dbMasterPaginationBar" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px; box-sizing: border-box;"></div>
+          <div
+            id="dbMasterRowsContainer"
+            style="
+              overflow-x: auto;
+              background: var(--card-bg);
+              border: 1px solid var(--border-color);
+              border-radius: 16px;
+              width: 100%;
+              max-width: 100%;
+              -webkit-overflow-scrolling: touch;
+              box-sizing: border-box;
+            "
+          ></div>
+          <div
+            id="dbMasterPaginationBar"
+            style="
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              gap: 15px;
+              margin-top: 20px;
+              box-sizing: border-box;
+            "
+          ></div>
         </div>
 
-        <div id="master-tab-filter-mgr" class="master-tab-content" style="display: none; box-sizing: border-box;">
-  <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; box-sizing: border-box;">
-    
-    <div style="font-weight: 900; margin-bottom: 15px; color: var(--text-main); font-size: 1.05em;">⚙️ OCR ETC 필터 단어 관리</div>
-    
-    <div style="display: flex; gap: 8px; margin-bottom: 20px; box-sizing: border-box;">
-      <input type="text" id="newOcrFilterWord" placeholder="제외할 단어 입력 (예: 미정, 확인요망)" style="flex: 1; padding: 14px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 800; font-size: 0.95em; box-sizing: border-box;" onkeydown="if(event.key==='Enter') addOcrFilterWord();">
-      <button onclick="addOcrFilterWord()" style="padding: 0 20px; background: #0a84ff; color: #fff; border: none; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 0.95em; flex-shrink: 0;">추가</button>
-    </div>
+        <div id="master-tab-filter-mgr" class="master-tab-content" style="display: none; box-sizing: border-box">
+          <div
+            style="
+              background: var(--card-bg);
+              border: 1px solid var(--border-color);
+              border-radius: 16px;
+              padding: 20px;
+              box-sizing: border-box;
+            "
+          >
+            <div style="font-weight: 900; margin-bottom: 15px; color: var(--text-main); font-size: 1.05em">
+              ⚙️ OCR ETC 필터 단어 관리
+            </div>
 
-    <div style="font-weight: 900; margin-bottom: 10px; color: var(--text-sub); font-size: 0.85em;">현재 등록된 필터</div>
-    <div id="ocrFilterBadgeContainer" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 50px; box-sizing: border-box;">
-      <div style="color: var(--text-sub); font-size: 0.85em; font-weight: 800;">데이터를 불러오는 중...</div>
-    </div>
-    
-  </div>
-</div>
+            <div style="display: flex; gap: 8px; margin-bottom: 20px; box-sizing: border-box">
+              <input
+                type="text"
+                id="newOcrFilterWord"
+                placeholder="제외할 단어 입력 (예: 미정, 확인요망)"
+                style="
+                  flex: 1;
+                  padding: 14px;
+                  background: var(--bg-color);
+                  border: 1px solid var(--border-color);
+                  border-radius: 12px;
+                  color: var(--text-main);
+                  font-weight: 800;
+                  font-size: 0.95em;
+                  box-sizing: border-box;
+                "
+                onkeydown="if (event.key === 'Enter') addOcrFilterWord();"
+              />
+              <button
+                onclick="addOcrFilterWord()"
+                style="
+                  padding: 0 20px;
+                  background: #0a84ff;
+                  color: #fff;
+                  border: none;
+                  border-radius: 12px;
+                  font-weight: 900;
+                  cursor: pointer;
+                  font-size: 0.95em;
+                  flex-shrink: 0;
+                "
+              >
+                추가
+              </button>
+            </div>
 
+            <div style="font-weight: 900; margin-bottom: 10px; color: var(--text-sub); font-size: 0.85em">
+              현재 등록된 필터
+            </div>
+            <div
+              id="ocrFilterBadgeContainer"
+              style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 50px; box-sizing: border-box"
+            >
+              <div style="color: var(--text-sub); font-size: 0.85em; font-weight: 800">데이터를 불러오는 중...</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div id="dashboardModal" class="overlay-modal" style="display:none;" onclick="closeModalOnBgClick(event)">
-      <div class="modal-box" style="max-height: 90vh;">
+    <div id="dashboardModal" class="overlay-modal" style="display: none" onclick="closeModalOnBgClick(event)">
+      <div class="modal-box" style="max-height: 90vh">
         <div class="bottom-sheet-handle"></div>
-        <div class="modal-header" style="margin-bottom: 10px;">
-          <div class="modal-title" style="color: #0a84ff;">📈 입고 통계 대시보드</div>
-          <button class="close-btn" onclick="document.getElementById('dashboardModal').style.display = 'none'">✕</button>
+        <div class="modal-header" style="margin-bottom: 10px">
+          <div class="modal-title" style="color: #0a84ff">📈 입고 통계 대시보드</div>
+          <button class="close-btn" onclick="document.getElementById('dashboardModal').style.display = 'none'">
+            ✕
+          </button>
         </div>
 
         <div class="dash-control-row">
           <div class="dash-nav">
-            <button onclick="navDashDate(-1)">◀</button><span id="dashTitleText">조회중...</span><button onclick="navDashDate(1)">▶</button>
+            <button onclick="navDashDate(-1)">◀</button><span id="dashTitleText">조회중...</span
+            ><button onclick="navDashDate(1)">▶</button>
           </div>
           <div class="dash-toggles">
-             <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월별</button>
-             <button id="btnDashYear" onclick="setDashMode('year')">연간</button>
+            <button id="btnDashMonth" class="active" onclick="setDashMode('month')">월별</button>
+            <button id="btnDashYear" onclick="setDashMode('year')">연간</button>
           </div>
         </div>
-        
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 4px;">
-          <span id="dashSubTitleText" style="font-weight: 900; color: var(--text-main); font-size: 1.05em;">조회중...</span>
-          <div style="display: flex; align-items: center; gap: 5px; font-size: 0.85em; font-weight: 800; color: var(--text-sub);">
-            <input type="checkbox" id="includePendingCheck" onchange="renderDashCharts()" style="width:16px; height:16px; cursor:pointer;">
-            <label for="includePendingCheck" style="cursor:pointer;">미정건 포함</label>
+
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 0 4px;
+          "
+        >
+          <span id="dashSubTitleText" style="font-weight: 900; color: var(--text-main); font-size: 1.05em"
+            >조회중...</span
+          >
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 5px;
+              font-size: 0.85em;
+              font-weight: 800;
+              color: var(--text-sub);
+            "
+          >
+            <input
+              type="checkbox"
+              id="includePendingCheck"
+              onchange="renderDashCharts()"
+              style="width: 16px; height: 16px; cursor: pointer"
+            />
+            <label for="includePendingCheck" style="cursor: pointer">미정건 포함</label>
           </div>
         </div>
-        
+
         <div class="dashboard-grid">
           <div class="dash-card">
             <div class="dash-card-title" id="dashCardTitle1">당월 총 입고 예정</div>
-            <div class="dash-card-value" id="dashTotal" style="color:var(--text-main);">0</div>
-            <div id="dashVolDetail" style="font-size:0.9em; color:#0a84ff; margin-top:6px; font-weight:900;">완료: 0 (0%)</div>
+            <div class="dash-card-value" id="dashTotal" style="color: var(--text-main)">0</div>
+            <div id="dashVolDetail" style="font-size: 0.9em; color: #0a84ff; margin-top: 6px; font-weight: 900">
+              완료: 0 (0%)
+            </div>
           </div>
           <div class="dash-card">
             <div class="dash-card-title" id="dashCardTitle2">일일 평균 입고량</div>
             <div class="dash-card-value" id="dashAvg">0</div>
-            <div id="dashDaysDetail" style="font-size:0.85em; color:var(--text-sub); margin-top:6px; font-weight:800;">(월간 총합: 0)</div>
+            <div
+              id="dashDaysDetail"
+              style="font-size: 0.85em; color: var(--text-sub); margin-top: 6px; font-weight: 800"
+            >
+              (월간 총합: 0)
+            </div>
           </div>
         </div>
 
-        <div class="chart-container" style="height: 220px; display:block; margin-bottom: 8px;">
+        <div class="chart-container" style="height: 220px; display: block; margin-bottom: 8px">
           <canvas id="mainChart"></canvas>
         </div>
-        
-        <div id="barDetailBox" style="display: none; background: var(--card-bg); border: 1px solid #0a84ff; border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 0.9em; box-shadow: 0 2px 10px rgba(10, 132, 255, 0.1);"></div>
 
-        <div class="chart-container" style="height: 380px; display:flex; flex-direction:column; align-items:center;">
-          <div style="font-weight:900; color:var(--text-main); margin-bottom: 5px;">🚢/✈️ 타입별 점유율 <span style="font-size:0.75em; color:var(--text-sub);">(조각을 터치해 보세요)</span></div>
-          <div style="position: relative; width: 100%; flex: 1;">
+        <div
+          id="barDetailBox"
+          style="
+            display: none;
+            background: var(--card-bg);
+            border: 1px solid #0a84ff;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 12px;
+            font-size: 0.9em;
+            box-shadow: 0 2px 10px rgba(10, 132, 255, 0.1);
+          "
+        ></div>
+
+        <div class="chart-container" style="height: 380px; display: flex; flex-direction: column; align-items: center">
+          <div style="font-weight: 900; color: var(--text-main); margin-bottom: 5px">
+            🚢/✈️ 타입별 점유율 <span style="font-size: 0.75em; color: var(--text-sub)">(조각을 터치해 보세요)</span>
+          </div>
+          <div style="position: relative; width: 100%; flex: 1">
             <canvas id="shareChart"></canvas>
           </div>
         </div>
       </div>
     </div>
 
-    
     <script src="in.js"></script>
-    <div class="fab-single-ai" id="inboundAiFab" style="display: none; position: fixed; right: 20px; bottom: 30px; z-index: 1500;">🤖</div>
+    <div
+      class="fab-single-ai"
+      id="inboundAiFab"
+      style="display: none; position: fixed; right: 20px; bottom: 30px; z-index: 1500"
+    >
+      🤖
+    </div>
 
-<div id="aiQueryModal" class="overlay-modal" style="display:none; position:fixed; inset:0; z-index:3000; align-items:flex-end; justify-content:center;" onclick="if(event.target===this) closeAiQuery()">
-    <div class="ai-modal-panel modal-box" onclick="event.stopPropagation()">
+    <div
+      id="aiQueryModal"
+      class="overlay-modal"
+      style="display: none; position: fixed; inset: 0; z-index: 3000; align-items: flex-end; justify-content: center"
+      onclick="if (event.target === this) closeAiQuery();"
+    >
+      <div class="ai-modal-panel modal-box" onclick="event.stopPropagation()">
         <div class="ai-handle bottom-sheet-handle"></div>
         <div class="ai-header modal-header">
-            <div class="ai-header-title">
-                <span class="ai-header-badge">🤖</span>
-                <span>AI 데이터 질의</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:4px;">
-                <button class="ai-clear-btn" onclick="clearAiChat()">대화 지우기</button>
-                <button class="ai-close-btn" onclick="closeAiQuery()">✕</button>
-            </div>
+          <div class="ai-header-title">
+            <span class="ai-header-badge">🤖</span>
+            <span>AI 데이터 질의</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px">
+            <button class="ai-clear-btn" onclick="clearAiChat()">대화 지우기</button>
+            <button class="ai-close-btn" onclick="closeAiQuery()">✕</button>
+          </div>
         </div>
         <div class="ai-chip-row" id="ai-chip-row">
-            <span class="ai-chip" onclick="setAiQuestion(this)" data-q="이번 주 입고 예정 목록">🚢 이번 주 입고</span>
-            <span class="ai-chip" onclick="setAiQuestion(this)" data-q="이번 달 입고 팔레트 합계">📦 이번 달 물량</span>
-            <span class="ai-chip" onclick="setAiQuestion(this)" data-q="현재 입고 대기중인 목록">⏳ 입고 대기</span>
-            <span class="ai-chip" onclick="setAiQuestion(this)" data-q="이번 달 항공과 해상 입고 비율">✈️ 항공/해상</span>
+          <span class="ai-chip" onclick="setAiQuestion(this)" data-q="이번 주 입고 예정 목록">🚢 이번 주 입고</span>
+          <span class="ai-chip" onclick="setAiQuestion(this)" data-q="이번 달 입고 팔레트 합계">📦 이번 달 물량</span>
+          <span class="ai-chip" onclick="setAiQuestion(this)" data-q="현재 입고 대기중인 목록">⏳ 입고 대기</span>
+          <span class="ai-chip" onclick="setAiQuestion(this)" data-q="이번 달 항공과 해상 입고 비율">✈️ 항공/해상</span>
         </div>
-        <div class="ai-chat-log" id="ai-chat-log" style="display:none;"></div>
-        <div id="ai-loading" style="display:none;">
-            <div class="ai-typing"><span></span><span></span><span></span></div>
+        <div class="ai-chat-log" id="ai-chat-log" style="display: none"></div>
+        <div id="ai-loading" style="display: none">
+          <div class="ai-typing"><span></span><span></span><span></span></div>
         </div>
         <div class="ai-input-bar">
-            <input id="ai-question-input" class="ai-input-field" type="text" placeholder="무엇이든 물어보세요..." onkeydown="if(event.key==='Enter') runAiQuery()">
-            <button id="ai-send-btn" class="ai-send-btn" onclick="runAiQuery()">↑</button>
+          <input
+            id="ai-question-input"
+            class="ai-input-field"
+            type="text"
+            placeholder="무엇이든 물어보세요..."
+            onkeydown="if (event.key === 'Enter') runAiQuery();"
+          />
+          <button id="ai-send-btn" class="ai-send-btn" onclick="runAiQuery()">↑</button>
         </div>
+      </div>
     </div>
-</div>
-<script src="script.js"></script>
+    <script src="script.js"></script>
   </body>
 </html>
