@@ -367,7 +367,8 @@ module.exports = async function (req, res) {
           return res.status(200).json({ success: true });
         } catch (e) {
           console.error("접속 로그 기록 에러:", e);
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -388,7 +389,8 @@ module.exports = async function (req, res) {
           return res.status(200).json({ success: true });
         } catch (e) {
           console.error("로그아웃 기록 에러:", e);
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -406,6 +408,25 @@ module.exports = async function (req, res) {
           let countQueryStr =
             "SELECT COUNT(*) as cnt FROM admin_audit_logs WHERE action_type IN ('LOGIN', 'AUTO_LOGIN', 'GUEST', 'LOGOUT')";
           let params = [];
+
+          // 접속 타입 필터 (전체면 생략)
+          const connType = payload.connType;
+          if (connType && ["LOGIN", "AUTO_LOGIN", "GUEST", "LOGOUT"].includes(connType)) {
+            queryStr += " AND action_type = ?";
+            countQueryStr += " AND action_type = ?";
+            params.push(connType);
+          }
+          // 기간 필터 (KST 기준 입력 → UTC 보정)
+          if (payload.startDate) {
+            queryStr += " AND created_at >= DATE_SUB(?, INTERVAL 9 HOUR)";
+            countQueryStr += " AND created_at >= DATE_SUB(?, INTERVAL 9 HOUR)";
+            params.push(payload.startDate + " 00:00:00");
+          }
+          if (payload.endDate) {
+            queryStr += " AND created_at <= DATE_SUB(?, INTERVAL 9 HOUR)";
+            countQueryStr += " AND created_at <= DATE_SUB(?, INTERVAL 9 HOUR)";
+            params.push(payload.endDate + " 23:59:59");
+          }
 
           if (keyword) {
             const subClause =
@@ -430,7 +451,8 @@ module.exports = async function (req, res) {
             totalPages: Math.ceil(totalCount / limit),
           });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
       // 👆 ---------------------------------------------------- 👆
@@ -452,20 +474,22 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
       // 👤 관리자 리스트 조회 (🚨 기존 GET_ADMIN_LIST를 이걸로 교체! status 컬럼을 가져와야 함)
       else if (action === "GET_ADMIN_LIST") {
         try {
-          // status 값을 가져와야 잠겼는지 활성 상태인지 프론트에서 구분 가능
+          // status·역할·마지막 로그인·등록일까지 함께 (정보 디테일 강화)
           const [rows] = await pool.query(
-            "SELECT admin_id, admin_name, role, status FROM admins ORDER BY created_at ASC",
+            "SELECT admin_id, admin_name, role, status, DATE_ADD(last_login_at, INTERVAL 9 HOUR) AS last_login_at, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at FROM admins ORDER BY created_at ASC",
           );
           return res.status(200).json({ success: true, list: rows });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -481,7 +505,8 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -505,7 +530,8 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -534,7 +560,8 @@ module.exports = async function (req, res) {
 
           return res.status(200).json({ success: true });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -569,7 +596,8 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -585,7 +613,8 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -616,6 +645,30 @@ module.exports = async function (req, res) {
             countQueryStr += subClause;
             params.push(endDate + " 23:59:59");
           }
+          // 액션 종류 필터 (카테고리 → 해당 action_type 목록으로 변환)
+          const ACT_GROUPS = {
+            ACCOUNT: ["CREATE_ADMIN", "DELETE_ADMIN", "REACTIVATE_ADMIN", "HARD_DELETE_ADMIN"],
+            PASSWORD: ["CHANGE_PW", "RESET_PW"],
+            CALENDAR: [
+              "CAL_ADD",
+              "CAL_EDIT",
+              "CAL_DELETE",
+              "CAL_STATUS",
+              "CAL_SORT",
+              "CAL_MULTI_DEL",
+              "CAL_MULTI_STAT",
+            ],
+            DB: ["DB_RAW_ADD", "DB_RAW_UPDATE", "DB_RAW_DELETE"],
+            LOGIN: ["LOGIN_SUCCESS", "LOGIN_FAILED"],
+            OCR: ["SYS_OCR_SAVE"],
+          };
+          if (payload.actGroup && ACT_GROUPS[payload.actGroup]) {
+            const list = ACT_GROUPS[payload.actGroup];
+            const ph = list.map(() => "?").join(", ");
+            queryStr += ` AND action_type IN (${ph})`;
+            countQueryStr += ` AND action_type IN (${ph})`;
+            params.push(...list);
+          }
           if (keyword) {
             // 🚨 [패치] admin_id, description 뿐만 아니라 action_type(액션)까지 검색 대상에 포함!
             const subClause =
@@ -640,7 +693,8 @@ module.exports = async function (req, res) {
             totalPages: Math.ceil(totalCount / limit),
           });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -725,17 +779,16 @@ module.exports = async function (req, res) {
           [countRows] = await pool.query(countQueryStr, countParams);
           const totalCount = countRows[0].cnt;
 
-          return res
-            .status(200)
-            .json({
-              success: true,
-              rows: rows,
-              totalCount: totalCount,
-              page: page,
-              totalPages: Math.ceil(totalCount / limit),
-            });
+          return res.status(200).json({
+            success: true,
+            rows: rows,
+            totalCount: totalCount,
+            page: page,
+            totalPages: Math.ceil(totalCount / limit),
+          });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -750,7 +803,8 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -804,7 +858,8 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -854,7 +909,8 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -913,23 +969,19 @@ module.exports = async function (req, res) {
                 [ip, masterCheck[0].admin_id, connInfo],
               );
               const session_token = generateToken(masterCheck[0].admin_id);
-              return res
-                .status(200)
-                .json({
-                  success: true,
-                  admin_id: masterCheck[0].admin_id,
-                  name: masterCheck[0].admin_name,
-                  role: masterCheck[0].role,
-                  session_token,
-                  msg: "비상 우회 통로로 안전하게 로그인되었습니다.",
-                });
-            }
-            return res
-              .status(200)
-              .json({
-                success: false,
-                msg: "⚠️ 비밀번호 5회 실패로 로그인이 임시 제한되었습니다. 10분 후 다시 시도하세요.",
+              return res.status(200).json({
+                success: true,
+                admin_id: masterCheck[0].admin_id,
+                name: masterCheck[0].admin_name,
+                role: masterCheck[0].role,
+                session_token,
+                msg: "비상 우회 통로로 안전하게 로그인되었습니다.",
               });
+            }
+            return res.status(200).json({
+              success: false,
+              msg: "⚠️ 비밀번호 5회 실패로 로그인이 임시 제한되었습니다. 10분 후 다시 시도하세요.",
+            });
           }
 
           const [rows] = await pool.query(
@@ -978,12 +1030,10 @@ module.exports = async function (req, res) {
               "INSERT INTO admin_audit_logs (ip_address, admin_id, action_type, description) VALUES (?, ?, 'LOGIN_FAILED', ?)",
               [ip, user.admin_id, connInfo],
             );
-            return res
-              .status(200)
-              .json({
-                success: false,
-                msg: `❌ 비밀번호가 일치하지 않습니다. (현재 10분 내 연속 실패: ${failCount + 1}회 / 5회 실패 시 10분간 자동 잠금)`,
-              });
+            return res.status(200).json({
+              success: false,
+              msg: `❌ 비밀번호가 일치하지 않습니다. (현재 10분 내 연속 실패: ${failCount + 1}회 / 5회 실패 시 10분간 자동 잠금)`,
+            });
           }
         } catch (error) {
           console.error("🔥 로그인 내부 처리 오류:", error);
@@ -1002,7 +1052,8 @@ module.exports = async function (req, res) {
           );
           return res.status(200).json({ success: true, logs: rows });
         } catch (e) {
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
 
@@ -1626,7 +1677,8 @@ ${JSON.stringify(rows, null, 2)}
           });
         } catch (e) {
           console.error("AI_QUERY 에러:", e);
-          console.error("API 처리 오류:", e); return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+          console.error("API 처리 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       } else {
         const targetBL = data?.oldBL || "알수없음";

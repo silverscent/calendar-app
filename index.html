@@ -2176,6 +2176,34 @@
         box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
       }
 
+      /* 관리자 탭 설명 카드 — 각 메뉴가 뭘 하는 곳인지 안내 */
+      .tab-intro {
+        background: rgba(10, 132, 255, 0.06);
+        border: 1px solid rgba(10, 132, 255, 0.2);
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        box-sizing: border-box;
+      }
+      .tab-intro .ti-title {
+        font-weight: 900;
+        color: var(--text-main);
+        font-size: 0.98em;
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tab-intro .ti-desc {
+        font-size: 0.82em;
+        color: var(--text-sub);
+        line-height: 1.55;
+      }
+      .tab-intro .ti-desc b {
+        color: var(--text-main);
+        font-weight: 800;
+      }
+
       /* 🚀 확장형 FAB 전용 스타일 */
       /* style.css (또는 관련 CSS 파일) */
       .fab-wrapper {
@@ -3988,7 +4016,7 @@
             font-size: 0.85em;
           "
         >
-          어드민
+          👤 어드민
         </button>
         <button
           class="master-tab-btn"
@@ -4006,7 +4034,7 @@
             font-size: 0.85em;
           "
         >
-          접속로그
+          📡 접속
         </button>
         <button
           class="master-tab-btn"
@@ -4024,7 +4052,7 @@
             font-size: 0.85em;
           "
         >
-          보안로그
+          🛡️ 보안
         </button>
         <button
           class="master-tab-btn"
@@ -4042,7 +4070,7 @@
             font-size: 0.85em;
           "
         >
-          DB제어
+          🗄️ DB
         </button>
         <button
           class="master-tab-btn"
@@ -4060,7 +4088,7 @@
             font-size: 0.85em;
           "
         >
-          필터관리
+          🔤 필터
         </button>
       </div>
 
@@ -4074,6 +4102,13 @@
         "
       >
         <div id="master-tab-admin-mgr" class="master-tab-content" style="box-sizing: border-box">
+          <div class="tab-intro">
+            <div class="ti-title">👤 관리자 계정 관리</div>
+            <div class="ti-desc">
+              운영 관리자 계정을 <b>발급·비활성화·복구·완전삭제</b>하고 <b>비밀번호를 초기화</b>합니다.<br />
+              각 계정 카드의 <b>📡 접속확인</b>으로 해당 관리자의 접속 이력을 볼 수 있어요.
+            </div>
+          </div>
           <div
             style="
               background: var(--card-bg);
@@ -4187,6 +4222,45 @@
           <div style="font-weight: 900; margin-bottom: 12px; color: var(--text-sub); font-size: 0.95em">
             시스템 등록 어드민 목록
           </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; box-sizing: border-box">
+            <input
+              type="text"
+              id="adminSearchKeyword"
+              placeholder="🔍 ID·이름 검색"
+              style="
+                flex: 1;
+                min-width: 130px;
+                padding: 9px 12px;
+                background: var(--bg-color);
+                border: 1px solid var(--border-color);
+                border-radius: 10px;
+                color: var(--text-main);
+                font-weight: 700;
+                font-size: 0.9em;
+                box-sizing: border-box;
+              "
+              onkeydown="if (event.key === 'Enter') refreshAdminList();"
+              oninput="refreshAdminList()"
+            />
+            <select
+              id="adminStatusFilter"
+              class="db-input"
+              style="
+                width: auto;
+                padding: 9px;
+                border-radius: 10px;
+                font-weight: bold;
+                background: var(--bg-color);
+                color: var(--text-main);
+                border: 1px solid var(--border-color);
+              "
+              onchange="refreshAdminList()"
+            >
+              <option value="">전체 상태</option>
+              <option value="active">✅ 활성</option>
+              <option value="locked">🛑 비활성</option>
+            </select>
+          </div>
           <div
             id="masterAdminListContainer"
             style="display: flex; flex-direction: column; gap: 10px; box-sizing: border-box"
@@ -4194,6 +4268,14 @@
         </div>
 
         <div id="master-tab-conn-log" class="master-tab-content" style="display: none; box-sizing: border-box">
+          <div class="tab-intro">
+            <div class="ti-title">📡 접속 이력</div>
+            <div class="ti-desc">
+              누가 <b>언제·어디서</b> 접속했는지 기록입니다. <b>IP/기기/브라우저</b>와
+              <b>로그인·자동로그인·손님(GUEST)</b> 구분이 보여요.<br />
+              검색창에 <b>ID나 GUEST/AUTO</b>를 넣어 거를 수 있습니다.
+            </div>
+          </div>
           <div
             style="
               display: flex;
@@ -4204,6 +4286,67 @@
               box-sizing: border-box;
             "
           >
+            <select
+              id="logConnType"
+              class="db-input"
+              style="
+                width: auto;
+                padding: 10px;
+                border-radius: 10px;
+                font-weight: bold;
+                background: var(--bg-color);
+                color: var(--text-main);
+                border: 1px solid var(--border-color);
+              "
+              onchange="
+                connLogCurrentPage = 1;
+                refreshConnLogs();
+              "
+            >
+              <option value="">전체 타입</option>
+              <option value="LOGIN">🔑 로그인</option>
+              <option value="AUTO_LOGIN">⚡ 자동로그인</option>
+              <option value="GUEST">👤 손님</option>
+              <option value="LOGOUT">🚪 로그아웃</option>
+            </select>
+            <input
+              type="date"
+              id="logConnStart"
+              class="db-input"
+              title="시작일"
+              style="
+                width: auto;
+                padding: 9px;
+                border-radius: 10px;
+                background: var(--bg-color);
+                color: var(--text-main);
+                border: 1px solid var(--border-color);
+                font-weight: bold;
+              "
+              onchange="
+                connLogCurrentPage = 1;
+                refreshConnLogs();
+              "
+            />
+            <input
+              type="date"
+              id="logConnEnd"
+              class="db-input"
+              title="종료일"
+              style="
+                width: auto;
+                padding: 9px;
+                border-radius: 10px;
+                background: var(--bg-color);
+                color: var(--text-main);
+                border: 1px solid var(--border-color);
+                font-weight: bold;
+              "
+              onchange="
+                connLogCurrentPage = 1;
+                refreshConnLogs();
+              "
+            />
             <select
               id="logConnLimit"
               class="db-input"
@@ -4310,6 +4453,13 @@
         </div>
 
         <div id="master-tab-audit-log" class="master-tab-content" style="display: none; box-sizing: border-box">
+          <div class="tab-intro">
+            <div class="ti-title">🛡️ 보안 감사 로그</div>
+            <div class="ti-desc">
+              계정 생성/삭제, 비번 변경, 데이터 수정 등 <b>모든 관리 활동</b>이 시간순으로 남습니다.<br />
+              <b>기간·키워드</b>로 검색해 "누가 무엇을 바꿨는지" 추적할 때 씁니다.
+            </div>
+          </div>
           <div
             style="
               display: flex;
@@ -4320,6 +4470,32 @@
               box-sizing: border-box;
             "
           >
+            <select
+              id="logActGroup"
+              class="db-input"
+              style="
+                width: auto;
+                padding: 10px;
+                border-radius: 10px;
+                font-weight: bold;
+                background: var(--bg-color);
+                color: var(--text-main);
+                border: 1px solid var(--border-color);
+              "
+              onchange="
+                logCurrentPage = 1;
+                refreshAuditLogs();
+              "
+            >
+              <option value="">전체 활동</option>
+              <option value="ACCOUNT">👤 계정(생성/삭제/복구)</option>
+              <option value="PASSWORD">🔑 비밀번호(변경/초기화)</option>
+              <option value="CALENDAR">📅 달력(추가/수정/삭제)</option>
+              <option value="DB">🗄️ DB 직접편집</option>
+              <option value="LOGIN">🔓 로그인(성공/실패)</option>
+              <option value="OCR">🔤 OCR 동기화</option>
+            </select>
+
             <select
               id="logMasterLimit"
               class="db-input"
@@ -4461,6 +4637,14 @@
         </div>
 
         <div id="master-tab-db-mgr" class="master-tab-content" style="display: none; box-sizing: border-box">
+          <div class="tab-intro" style="background: rgba(255, 59, 48, 0.06); border-color: rgba(255, 59, 48, 0.25)">
+            <div class="ti-title">🗄️ DB 제어실 <span style="color: #ff3b30; font-size: 0.8em">⚠️ 전문가용</span></div>
+            <div class="ti-desc">
+              원본 데이터를 <b>행 단위로 직접 추가/수정/삭제</b>합니다. 검색·정렬·페이지 이동 지원.<br />
+              <b style="color: #ff3b30">저장 즉시 DB에 반영되고 되돌릴 수 없으니</b> 달력 동기화 꼬임 등 정밀 수정 때만
+              사용하세요.
+            </div>
+          </div>
           <div
             style="
               background: var(--card-bg);
@@ -4572,6 +4756,13 @@
           ></div>
         </div>
         <div id="master-tab-filter-mgr" class="master-tab-content" style="display: none; box-sizing: border-box">
+          <div class="tab-intro">
+            <div class="ti-title">🔤 OCR 필터 단어</div>
+            <div class="ti-desc">
+              텔레그램 봇이 사진(스케줄표)을 <b>OCR로 읽을 때 무시할 단어</b>를 등록합니다.<br />
+              머리글·합계·반복되는 잡텍스트를 넣어두면 <b>인식 정확도</b>가 올라갑니다.
+            </div>
+          </div>
           <div
             style="
               background: var(--card-bg);

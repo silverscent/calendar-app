@@ -146,9 +146,32 @@ function refreshAdminList() {
     }
     container.innerHTML = "";
 
+    // 검색어 + 상태 필터 적용 (클라이언트)
+    const kw = (document.getElementById("adminSearchKeyword")?.value || "").trim().toLowerCase();
+    const statusFilter = document.getElementById("adminStatusFilter")?.value || "";
+    let list = res.list;
+    if (kw) list = list.filter((u) => (u.admin_id + " " + (u.admin_name || "")).toLowerCase().includes(kw));
+    if (statusFilter === "active") list = list.filter((u) => u.status !== "LOCKED");
+    else if (statusFilter === "locked") list = list.filter((u) => u.status === "LOCKED");
+
+    // 건수 요약
+    const total = res.list.length;
+    const lockedTotal = res.list.filter((u) => u.status === "LOCKED").length;
+    container.insertAdjacentHTML(
+      "beforeend",
+      `<div style="font-size:0.8em; color:var(--text-sub); font-weight:700; margin-bottom:10px;">전체 <b style="color:#0a84ff;">${total}</b>명 (활성 ${total - lockedTotal} · 비활성 ${lockedTotal})${kw || statusFilter ? ` · 검색결과 ${list.length}명` : ""}</div>`,
+    );
+    if (list.length === 0) {
+      container.insertAdjacentHTML(
+        "beforeend",
+        "<div style='color:var(--text-sub); text-align:center; padding:20px;'>조건에 맞는 관리자가 없습니다.</div>",
+      );
+      return;
+    }
+
     // 활성과 비활성(LOCKED) 그룹 분리
-    const activeUsers = res.list.filter((u) => u.status !== "LOCKED");
-    const lockedUsers = res.list.filter((u) => u.status === "LOCKED");
+    const activeUsers = list.filter((u) => u.status !== "LOCKED");
+    const lockedUsers = list.filter((u) => u.status === "LOCKED");
 
     // 로우 생성 헬퍼 (5번 요구사항: 모바일 찌그러짐 방지 2단 레이아웃)
     const buildCard = (item, isLocked) => {
@@ -183,6 +206,7 @@ function refreshAdminList() {
                                   ${item.admin_name} <span style='font-size:0.85em; font-weight:500; color:var(--text-sub);'>(${item.admin_id})</span> ${statusBadge}
                               </div>
                               <div style='font-size:0.8em; color:var(--text-sub); margin-top:4px;'>등급: ${item.role === "SYSTEM" ? "System Admin" : "일반 관리자"}</div>
+                              <div style='font-size:0.75em; color:var(--text-sub); margin-top:3px;'>🕒 최근 로그인: ${item.last_login_at ? String(item.last_login_at).substring(0, 16).replace("T", " ") : "기록 없음"}</div>
                           </div>
                           <button onclick="showAdminConnInfo('${item.admin_id}', '${item.admin_name}')" style="flex-shrink:0; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:6px 10px; font-size:0.8em; cursor:pointer; font-weight:900; white-space:nowrap;">📡 접속확인</button>
                       </div>
@@ -435,6 +459,7 @@ function refreshAuditLogs() {
   const endDate = document.getElementById("logEndDate") ? document.getElementById("logEndDate").value : "";
   const keyword = document.getElementById("logKeyword") ? document.getElementById("logKeyword").value.trim() : "";
   const limit = document.getElementById("logMasterLimit") ? document.getElementById("logMasterLimit").value : 50;
+  const actGroup = document.getElementById("logActGroup") ? document.getElementById("logActGroup").value : "";
 
   timeline.innerHTML =
     "<div style='color:var(--text-sub); text-align:center; padding:15px; font-weight:800;'>보안 로그 동기화 및 검색 중...</div>";
@@ -446,6 +471,7 @@ function refreshAuditLogs() {
     startDate: startDate,
     endDate: endDate,
     keyword: keyword,
+    actGroup: actGroup,
     limit: Number(limit),
     page: logCurrentPage,
   }).then(function (res) {
@@ -456,6 +482,13 @@ function refreshAuditLogs() {
     }
 
     timeline.innerHTML = "";
+    // 결과 건수 요약
+    const _s = (res.page - 1) * Number(limit) + 1;
+    const _e = (res.page - 1) * Number(limit) + res.logs.length;
+    timeline.insertAdjacentHTML(
+      "beforeend",
+      `<div style="font-size:0.8em; color:var(--text-sub); font-weight:700; margin-bottom:10px;">총 <b style="color:#0a84ff;">${res.totalCount}</b>건 중 ${_s}~${_e} 표시</div>`,
+    );
 
     res.logs.forEach((log) => {
       const item = document.createElement("div");
@@ -497,6 +530,9 @@ function refreshConnLogs() {
     ? document.getElementById("logConnKeyword").value.trim()
     : "";
   const limit = document.getElementById("logConnLimit") ? document.getElementById("logConnLimit").value : 100;
+  const connType = document.getElementById("logConnType") ? document.getElementById("logConnType").value : "";
+  const startDate = document.getElementById("logConnStart") ? document.getElementById("logConnStart").value : "";
+  const endDate = document.getElementById("logConnEnd") ? document.getElementById("logConnEnd").value : "";
 
   timeline.innerHTML =
     "<div style='color:var(--text-sub); text-align:center; padding:15px; font-weight:800;'>접속망 트래킹 중... ⏳</div>";
@@ -506,6 +542,9 @@ function refreshConnLogs() {
     source: "vercel",
     action: "GET_ALL_CONN_LOGS",
     keyword: keyword,
+    connType: connType,
+    startDate: startDate,
+    endDate: endDate,
     limit: Number(limit),
     page: connLogCurrentPage,
     admin_id: localStorage.getItem("admin_id"),
@@ -516,7 +555,9 @@ function refreshConnLogs() {
       return;
     }
 
-    let html = "";
+    const _s = (res.page - 1) * Number(limit) + 1;
+    const _e = (res.page - 1) * Number(limit) + res.logs.length;
+    let html = `<div style="font-size:0.8em; color:var(--text-sub); font-weight:700; padding:0 0 8px 5px;">총 <b style="color:#0a84ff;">${res.totalCount}</b>건 중 ${_s}~${_e} 표시</div>`;
     res.logs.forEach((log) => {
       let dateStr = log.created_at ? log.created_at.substring(5, 19).replace("-", ".") : "";
       let tColor = log.action_type === "GUEST" ? "#ff9f0a" : log.action_type === "AUTO_LOGIN" ? "#34c759" : "#0a84ff";
