@@ -285,6 +285,7 @@ module.exports = async function (req, res) {
         "SAVE_GLOBAL_COLOR",
         "SAVE_OCR_INFO",
         "SAVE_OCR_FILTERS",
+        "APPLY_OCR_DATA",
         "AI_QUERY",
       ]);
 
@@ -1485,6 +1486,90 @@ module.exports = async function (req, res) {
         } catch (err) {
           console.error("OCR 데이터 조회 에러:", err);
           return res.status(500).json({ success: false, error: err.message });
+        }
+      } else if (action === "APPLY_OCR_DATA") {
+        // 웹 OCR 대조창에서 셀 수정 후 '확정' → inbound 테이블에 upsert (텔레그램 /ocr 과 동일 로직)
+        try {
+          const rows = data && Array.isArray(data.rows) ? data.rows : [];
+          if (rows.length === 0) {
+            return res.status(200).json({ success: false, msg: "적용할 데이터가 없습니다." });
+          }
+          if (rows.length > 200) {
+            return res.status(200).json({ success: false, msg: "한 번에 적용 가능한 행 수(200)를 초과했습니다." });
+          }
+
+          // 날짜 정규화: YYYY-MM-DD 만 허용, 그 외/미정/빈값은 null
+          const normDate = (v) => {
+            const s = safeDate(v);
+            if (!s) return null;
+            const m = String(s).match(/(\d{4})\D?(\d{1,2})\D?(\d{1,2})/);
+            if (!m) return null;
+            return `${m[1]}-${String(m[2]).padStart(2, "0")}-${String(m[3]).padStart(2, "0")}`;
+          };
+
+          let insertCount = 0;
+          let updateCount = 0;
+          const cleanRows = [];
+
+          for (const r of rows) {
+            const bl = String(r.bl || "").replace(/[\s•·\-\*]/g, "");
+            const pal = parseInt(r.pal) || 0;
+            const inDate = normDate(r.inDate);
+            const eta = normDate(r.eta);
+            const fwd = String(r.fwd || "").slice(0, 100);
+            const sType = String(r.sType || "")
+              .toUpperCase()
+              .slice(0, 20);
+            const invoice = String(r.invoice || "").slice(0, 100);
+            const etc = String(r.etc || "").slice(0, 500);
+
+            let exist = [];
+            if (invoice) {
+              [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
+            }
+            if (exist.length === 0 && bl !== "발행전" && bl !== "") {
+              [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
+            }
+
+            if (exist.length > 0) {
+              await pool.query(
+                `UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=1 WHERE id=?`,
+                [bl, pal, inDate, etc, sType, fwd, invoice, eta, exist[0].id],
+              );
+              updateCount++;
+            } else {
+              await pool.query(
+                `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, 1)`,
+                [bl, pal, inDate, sType, fwd, invoice, eta, etc],
+              );
+              insertCount++;
+            }
+            const keep = { bl, pal, eta: eta || "", inDate: inDate || "미정", fwd, sType, invoice, etc };
+            if (typeof r.iy === "number") keep.iy = r.iy;
+            if (typeof r.ih === "number") keep.ih = r.ih;
+            cleanRows.push(keep);
+          }
+
+          // 캐시(LAST_OCR_DATA)도 수정본으로 갱신 → 다음 대조창 열 때 일치
+          await pool.query(
+            `INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
+            [JSON.stringify(cleanRows), JSON.stringify(cleanRows)],
+          );
+
+          // 감사 로그
+          try {
+            let ip = req.headers["x-forwarded-for"] || req.connection?.remoteAddress || "IP 알수없음";
+            if (ip.includes(",")) ip = ip.split(",")[0];
+            await pool.query(
+              "INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, 'OCR_APPLY', ?, ?)",
+              [currentAdmin, `OCR 대조 수정 확정 (신규 ${insertCount}건 / 수정 ${updateCount}건)`, ip],
+            );
+          } catch (e) {}
+
+          return res.status(200).json({ success: true, insertCount, updateCount, total: cleanRows.length });
+        } catch (err) {
+          console.error("OCR 적용 에러:", err);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       } else if (action === "AI_QUERY") {
         try {

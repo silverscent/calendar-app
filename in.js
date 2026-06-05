@@ -1191,7 +1191,34 @@ function openEditForm(day, idx, bl, dateStr, pal, etc) {
 // 🚀 [OCR 최종 패치] 광활한 핀치 투 줌/이동 엔진 (먹통 버그 해결)
 // =====================================================
 let ocrTransform = { scale: 1, x: 0, y: 0 };
-let _ocrGesturesInitialized = false;
+let ocrImgFit = { w: 0, h: 0 }; // 패널에 맞춘 기준 크기(scale=1 기준) — 크기 기반 줌으로 선명도 유지
+let ocrBakedScale = 1; // 현재 width/height 로 구워진(crisp) 배율. 제스처 중엔 transform 으로 그 위에 덧씌움
+let _ocrBakeTimer = null;
+let ocrEditRows = []; // 대조창에서 수정 중인 행 데이터(확정 시 서버로 전송)
+let ocrHiliteIdx = null; // 현재 하이라이트 중인 행 index (왼쪽 이미지 밴드 + 오른쪽 셀)
+const _ocrG = {
+  dragging: false,
+  moved: false,
+  lastX: 0,
+  lastY: 0,
+  startX: 0,
+  startY: 0,
+  pinchDist: 0,
+  startScale: 1,
+  downTarget: null,
+};
+let _ocrWinBound = false;
+// 대조 표 컬럼 정의 (key = ocrEditRows 의 필드명)
+const OCR_COLS = [
+  { key: "bl", label: "B/L번호", w: 92, align: "center" },
+  { key: "pal", label: "PAL", w: 40, align: "center" },
+  { key: "eta", label: "ETA", w: 84, align: "center" },
+  { key: "inDate", label: "입고일", w: 84, align: "center" },
+  { key: "fwd", label: "Fwd", w: 52, align: "center" },
+  { key: "sType", label: "Type", w: 46, align: "center" },
+  { key: "invoice", label: "인보이스", w: 80, align: "center" },
+  { key: "etc", label: "비고", w: 120, align: "left" },
+];
 
 function showLastOcrImage() {
   document.getElementById("ocrImageModal").style.display = "flex";
@@ -1206,35 +1233,30 @@ function showLastOcrImage() {
     let url = res && res.url ? res.url : typeof res === "string" ? res : "";
     if (url && url.startsWith("http")) {
       document.getElementById("ocrImageContent").innerHTML = `
-                <div style="display: flex; flex-direction: column; width: 100%; height: 80vh; max-height: 800px; overflow: hidden;">
-                    
-                    <div id="ocrImageWrapper" style="flex: 1 1 100%; position: relative; overflow: hidden; background: #e9ecef; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: center; transition: flex 0.3s ease;">
-                        
-                        <img id="ocrImgElement" src="${url}" alt="마지막 스케줄 이미지" draggable="false" style="max-width: 100%; max-height: 100%; display: block; object-fit: contain; user-select: none; -webkit-user-drag: none; -moz-user-select: none;">
-                    
-                    </div>
-                    
-                    <div style="flex: 0 0 auto; padding: 10px; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 10;">
-                        <button id="ocrVerifyBtn" onclick="loadOcrVerificationData(this)" 
-                                ontouchstart="event.stopPropagation()" 
-                                onmousedown="event.stopPropagation()" 
-                                style="padding: 12px 20px; background: #4a90e2; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; font-size: 15px;">
-                            📊 AI 파싱 데이터 대조하기
-                        </button>
-                    </div>
-                    
-                    <div id="ocrVerifyTableContainer" 
-                         ontouchstart="event.stopPropagation()" 
-                         ontouchmove="event.stopPropagation()" 
-                         ontouchend="event.stopPropagation()" 
-                         onmousedown="event.stopPropagation()" 
-                         onmousemove="event.stopPropagation()" 
-                         onwheel="event.stopPropagation()" 
-                         style="flex: 1 1 60%; overflow-y: auto; overflow-x: auto; background: #fff; display: none; padding: 0px 5px; border-top: 1px solid #eee; touch-action: pan-x pan-y; overscroll-behavior: contain;">
-                    </div>
-                </div>
-            `;
-      setTimeout(initOcrGestures, 100);
+        <div style="display:flex; flex-direction:column; width:100%; height:80vh; max-height:820px; overflow:hidden;">
+          <div id="ocrHint" style="flex:0 0 auto; font-size:11px; color:var(--text-sub,#888); padding:0 2px 6px; text-align:center; line-height:1.4;">
+            두 손가락=확대 · 한 손가락=이동
+          </div>
+          <div id="ocrSplitWrap" style="flex:1 1 auto; display:flex; overflow:hidden; background:#e9ecef; border-radius:8px; position:relative;">
+            <div id="ocrPaneImg" style="flex:1 1 100%; min-width:0; overflow:hidden; position:relative; touch-action:none;">
+              <img id="ocrImgElement" src="${url}" alt="스케줄 이미지" draggable="false" onload="ocrImgLoaded()" style="position:absolute; left:0; top:0; display:block; transform-origin:center center; user-select:none; -webkit-user-drag:none; -moz-user-select:none; will-change:transform;">
+            </div>
+            <div id="ocrPaneTable" style="flex:0 0 0%; width:0; min-width:0; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff; position:relative; display:none; border-left:2px solid #fff;">
+              <div id="ocrTableInner" style="padding:2px; min-width:max-content; transform-origin:0 0;"></div>
+            </div>
+          </div>
+          <div style="flex:0 0 auto; padding:8px 4px 2px; display:flex; gap:6px;">
+            <button onclick="resetOcrTransform()" style="flex:0 0 auto; padding:11px 14px; background:var(--border-color,#444); color:var(--text-main,#fff); border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">↺ 원위치</button>
+            ${
+              isAdmin
+                ? `<button id="ocrCompareBtn" onclick="toggleOcrCompare(this)" style="flex:1 1 auto; padding:11px 14px; background:#4a90e2; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:15px;">📊 대조·수정 켜기</button>
+            <button id="ocrApplyBtn" onclick="applyOcrEdits(this)" style="display:none; flex:1 1 auto; padding:11px 14px; background:#27ae60; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:15px;">📌 수정 확정</button>`
+                : ``
+            }
+          </div>
+        </div>
+      `;
+      initOcrSplitGestures();
     } else {
       document.getElementById("ocrImageContent").innerHTML =
         '<div style="color:var(--text-sub); font-weight:800;">현재 서버에 등록된 최신 이미지가 없습니다.</div>';
@@ -1242,213 +1264,399 @@ function showLastOcrImage() {
   });
 }
 
-function loadOcrVerificationData(btnElement) {
-  const container = document.getElementById("ocrVerifyTableContainer");
-  const imgWrapper = document.getElementById("ocrImageWrapper");
-
-  // 이미 열려있으면 닫기
-  if (container.style.display === "block") {
-    container.style.display = "none";
-    imgWrapper.style.flex = "1 1 100%";
-    btnElement.innerHTML = "📊 AI 파싱 데이터 대조하기";
-    btnElement.style.background = "#4a90e2";
-    return;
+// 대조·수정 모드 토글 (로그인 관리자 전용) — 기본은 이미지만, 켜면 우측에 편집 표
+function toggleOcrCompare(btn) {
+  if (!isAdmin) return;
+  const pane = document.getElementById("ocrPaneTable");
+  const imgPane = document.getElementById("ocrPaneImg");
+  const applyBtn = document.getElementById("ocrApplyBtn");
+  const hint = document.getElementById("ocrHint");
+  if (!pane || !imgPane) return;
+  const isOn = pane.style.display !== "none";
+  if (isOn) {
+    // 끄기 → 이미지 전체
+    pane.style.display = "none";
+    pane.style.flex = "0 0 0%";
+    imgPane.style.flex = "1 1 100%";
+    if (applyBtn) applyBtn.style.display = "none";
+    btn.innerHTML = "📊 대조·수정 켜기";
+    btn.style.background = "#4a90e2";
+    if (hint) hint.innerHTML = "두 손가락=확대 · 한 손가락=이동";
+    resetOcrTransform();
+  } else {
+    // 켜기 → 좌우 분할 + 데이터 로드
+    pane.style.display = "block";
+    pane.style.flex = "1 1 50%";
+    imgPane.style.flex = "1 1 50%";
+    if (applyBtn) applyBtn.style.display = "block";
+    btn.innerHTML = "🖼️ 이미지만 보기";
+    btn.style.background = "#e74c3c";
+    if (hint)
+      hint.innerHTML = "오른쪽 <b style='color:#4a90e2;'>셀 탭=수정</b> + 왼쪽 이미지에 그 줄 표시 · 왼쪽 핀치=확대";
+    resetOcrTransform();
+    loadOcrSplitData();
   }
+}
 
-  btnElement.innerHTML = "데이터 불러오는 중... ⏳";
-  btnElement.disabled = true;
-
-  // 💡 핵심: 서버에서 데이터를 받아오는 함수를 직접 호출합니다.
+// 대조창 데이터 로드 → 편집용 배열 생성 → 표 렌더 (제스처는 모달 열 때 이미 바인딩됨)
+function loadOcrSplitData() {
+  ocrHiliteIdx = null;
+  const inner = document.getElementById("ocrTableInner");
+  if (!inner) return;
+  inner.innerHTML = `<div style="padding:20px; text-align:center; color:#888; font-size:12px;">데이터 불러오는 중... ⏳</div>`;
   apiCall({ source: "vercel", domain: "system", action: "GET_LAST_OCR_DATA" }).then(function (data) {
-    if (data === null) {
-      btnElement.innerHTML = "📊 AI 파싱 데이터 대조하기";
-      btnElement.disabled = false;
+    const innerNow = document.getElementById("ocrTableInner");
+    if (!innerNow) return;
+    if (!data || !data.parsedData || !Array.isArray(data.parsedData) || data.parsedData.length === 0) {
+      ocrEditRows = [];
+      innerNow.innerHTML = `<div style="padding:20px; text-align:center; color:#888; font-size:12px;">저장된 파싱 데이터가 없습니다.</div>`;
+      currentRawOcrString = (data && data.rawData) || "가져온 Raw 데이터가 존재하지 않습니다.";
       return;
     }
-    // 🔥 1. 데이터가 있는지 확인
-    if (!data || !data.parsedData || (Array.isArray(data.parsedData) && data.parsedData.length === 0)) {
-      showToast("⚠️ 저장된 파싱 데이터가 없습니다.", 2500);
-      btnElement.innerHTML = "📊 AI 파싱 데이터 대조하기";
-      btnElement.disabled = false;
-      return;
-    }
-
-    // 2. Raw 텍스트를 전역 변수에 강제로 저장 (버튼용)
-    // 🎯 서버가 새로 보내주는 순수 텍스트 원본(data.rawData)을 그대로 꽂아줍니다!
     currentRawOcrString = data.rawData || "가져온 Raw 데이터가 존재하지 않습니다.";
-
-    // 3. UI 업데이트
-    btnElement.innerHTML = "🔽 데이터 대조창 닫기 (전체 이미지 보기)";
-    btnElement.disabled = false;
-    btnElement.style.background = "#e74c3c";
-    imgWrapper.style.flex = "1 1 40%";
-
-    // 4. 테이블 렌더링 시작
-    let tableHtml = `
-            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; color: #333;">
-                <thead style="background: #f8f9fa; position: sticky; top: 0; z-index: 5;">
-                    <tr>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">B/L번호</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">PAL</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">ETA</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">입고일</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">Fwd</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">Type</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">인보이스</th>
-                        <th style="padding: 8px 4px; border: 1px solid #ddd;">비고</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-
-    // 🔥 4. 테이블 반복문 대상 수정 (data -> data.parsedData)
-    data.parsedData.forEach((r) => {
-      tableHtml += `
-                <tr>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.bl || ""}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.pal || "0"}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.eta || ""}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.inDate || "미정"}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.fwd || ""}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.sType || ""}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd;">${r.invoice || ""}</td>
-                    <td style="padding: 6px 4px; border: 1px solid #ddd; text-align: left;">${r.etc || ""}</td>
-                </tr>`;
-    });
-    tableHtml += `</tbody></table>`;
-    container.innerHTML = tableHtml;
-    container.style.display = "block";
+    // 서버 파싱 결과 → 표준 편집 객체로 정규화
+    ocrEditRows = data.parsedData.map((r) => ({
+      bl: r.bl || "",
+      pal: r.pal != null ? String(r.pal) : "0",
+      eta: r.eta || "",
+      inDate: r.inDate || "미정",
+      fwd: r.fwd || "",
+      sType: r.sType || "",
+      invoice: r.invoice || "",
+      etc: r.etc || "",
+      iy: typeof r.iy === "number" ? r.iy : null, // 이미지 내 세로 위치(px)
+      ih: typeof r.ih === "number" ? r.ih : null,
+    }));
+    renderOcrTable();
   });
 }
 
-function initOcrGestures() {
-  const wrapper = document.getElementById("ocrImageWrapper");
-  if (!wrapper) return;
-
-  if (_ocrGesturesInitialized) return;
-  _ocrGesturesInitialized = true;
-
-  let isDragging = false;
-  let lastX = 0,
-    lastY = 0; // 🚨 기준점이 아니라 '마지막 위치' 추적으로 변경!
-  let initialPinchDist = 0;
-  let ocrStartScale = 1;
-
-  const updateTransform = () => {
-    const currentImg = document.getElementById("ocrImgElement");
-    if (currentImg)
-      currentImg.style.transform = `translate3d(${ocrTransform.x}px, ${ocrTransform.y}px, 0) scale(${ocrTransform.scale})`;
-  };
-
-  const getPinchDistance = (touches) =>
-    Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
-  const getMidpoint = (touches) => ({
-    x: (touches[0].clientX + touches[1].clientX) / 2,
-    y: (touches[0].clientY + touches[1].clientY) / 2,
+// ocrEditRows 기반으로 편집 가능한 표 렌더 (자연 너비 + 가로스크롤, 셀 탭=수정)
+function renderOcrTable() {
+  const inner = document.getElementById("ocrTableInner");
+  if (!inner) return;
+  let html = `<table style="border-collapse:collapse; font-size:12px; color:#333; white-space:nowrap;">
+    <thead><tr>`;
+  OCR_COLS.forEach((c) => {
+    html += `<th style="padding:7px 8px; border:1px solid #ddd; background:#f1f3f5; position:sticky; top:0; z-index:2;">${c.label}</th>`;
   });
+  html += `</tr></thead><tbody>`;
+  ocrEditRows.forEach((row, idx) => {
+    const bg = idx % 2 ? "#fafbfc" : "#fff";
+    html += `<tr style="background:${bg};">`;
+    OCR_COLS.forEach((c) => {
+      const v = row[c.key] != null ? String(row[c.key]) : "";
+      const wrap = c.key === "etc" ? "white-space:normal; max-width:200px;" : "";
+      html += `<td onclick="editOcrCell(this)" data-idx="${idx}" data-field="${c.key}" data-bg="${bg}" style="padding:7px 8px; border:1px solid #ddd; text-align:${c.align}; cursor:text; background:${bg}; ${wrap}">${_esc(v)}</td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  inner.innerHTML = html;
+}
 
-  wrapper.addEventListener(
+// 왼쪽 이미지 위 하이라이트 밴드 element 확보
+function ensureOcrHiliteBand() {
+  const pane = document.getElementById("ocrPaneImg");
+  if (!pane) return null;
+  let band = document.getElementById("ocrHiliteBand");
+  if (!band) {
+    band = document.createElement("div");
+    band.id = "ocrHiliteBand";
+    band.style.cssText =
+      "position:absolute; left:0; right:0; pointer-events:none; background:rgba(255,200,0,0.30); border-top:2px solid #f5a623; border-bottom:2px solid #f5a623; display:none; z-index:5;";
+    pane.appendChild(band);
+  }
+  return band;
+}
+
+// 현재 하이라이트 행을 왼쪽 이미지의 해당 위치(현재 줌/이동 반영)에 밴드로 표시
+function positionOcrHilite() {
+  const band = ensureOcrHiliteBand();
+  const img = document.getElementById("ocrImgElement");
+  const pane = document.getElementById("ocrPaneImg");
+  if (!band || !img || !pane) return;
+  const r = ocrHiliteIdx != null ? ocrEditRows[ocrHiliteIdx] : null;
+  if (!r || typeof r.iy !== "number" || !img.naturalHeight || !ocrImgFit.h) {
+    band.style.display = "none";
+    return;
+  }
+  const f = r.iy / img.naturalHeight; // 이미지 세로 비율(0~1)
+  const dispH = ocrImgFit.h * ocrTransform.scale; // 화면상 이미지 높이
+  const screenY = pane.clientHeight / 2 + (f - 0.5) * dispH + ocrTransform.y;
+  const rowFrac = typeof r.ih === "number" && r.ih > 0 ? r.ih / img.naturalHeight : 0.03;
+  let bandH = Math.max(rowFrac * dispH * 1.8, 16);
+  band.style.top = screenY - bandH / 2 + "px";
+  band.style.height = bandH + "px";
+  band.style.display = "block";
+}
+
+// 셀 탭 시 → 정렬은 그대로 두고, 그 줄을 양쪽(왼쪽 이미지 밴드 + 오른쪽 셀)에 하이라이트
+function highlightOcrRow(idx) {
+  ocrHiliteIdx = idx;
+  const inner = document.getElementById("ocrTableInner");
+  if (inner) {
+    inner.querySelectorAll('td[data-hl="1"]').forEach((td) => {
+      td.style.background = td.getAttribute("data-bg") || "";
+      td.removeAttribute("data-hl");
+    });
+    inner.querySelectorAll(`td[data-idx="${idx}"]`).forEach((td) => {
+      td.setAttribute("data-hl", "1");
+      td.style.background = "#ffe08a";
+    });
+  }
+  positionOcrHilite();
+}
+
+// 셀 탭/클릭 → 이미지 정렬 + 인라인 입력 편집
+function editOcrCell(td) {
+  if (!td || td.querySelector("input")) return;
+  const idx = parseInt(td.getAttribute("data-idx"));
+  const field = td.getAttribute("data-field");
+  if (isNaN(idx) || !field || !ocrEditRows[idx]) return;
+  highlightOcrRow(idx); // 정렬 유지 + 그 줄 양쪽 하이라이트
+  const cur = ocrEditRows[idx][field] != null ? String(ocrEditRows[idx][field]) : "";
+  const align = (OCR_COLS.find((c) => c.key === field) || {}).align || "center";
+  td.innerHTML = `<input type="text" value="${_esc(cur)}" style="width:100%; box-sizing:border-box; border:2px solid #4a90e2; border-radius:3px; padding:3px 2px; font-size:11px; text-align:${align}; outline:none;">`;
+  const input = td.querySelector("input");
+  input.focus();
+  input.select();
+  const commit = () => {
+    ocrEditRows[idx][field] = input.value;
+    td.innerHTML = _esc(input.value);
+    td.style.background = "#fff8d6"; // 수정 표시(노랑)
+  };
+  input.addEventListener("blur", commit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === "Escape") {
+      td.innerHTML = _esc(cur);
+    }
+  });
+}
+
+// 줌/이동 원위치 (패널 크기가 바뀌었을 수 있으니 기준 크기 재계산)
+function resetOcrTransform() {
+  ocrTransform = { scale: 1, x: 0, y: 0 };
+  ocrBakedScale = 1;
+  computeOcrFit();
+  bakeOcr();
+}
+
+// '수정 확정' → 서버 upsert
+function applyOcrEdits(btn) {
+  if (!isAdmin) {
+    showToast("⚠️ 로그인한 관리자만 수정할 수 있습니다.", 2500);
+    return;
+  }
+  if (!ocrEditRows || ocrEditRows.length === 0) {
+    showToast("⚠️ 적용할 데이터가 없습니다.", 2500);
+    return;
+  }
+  if (!confirm(`수정한 ${ocrEditRows.length}건을 입고 DB에 반영할까요?`)) return;
+  const orig = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "반영 중... ⏳";
+  }
+  apiCall({
+    source: "vercel",
+    domain: "system",
+    action: "APPLY_OCR_DATA",
+    admin_id: localStorage.getItem("admin_id"),
+    data: { rows: ocrEditRows },
+  }).then(function (res) {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+    if (res && res.success) {
+      showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount})`, 3000);
+      if (typeof navMonth === "function") navMonth(0);
+    } else {
+      showToast("⚠️ " + ((res && res.msg) || "반영에 실패했습니다."), 3000);
+    }
+  });
+}
+
+// 패널 크기에 맞춘 기준 표시 크기(scale=1) 계산 — contain 방식
+function computeOcrFit() {
+  const pane = document.getElementById("ocrPaneImg");
+  const img = document.getElementById("ocrImgElement");
+  if (!pane || !img || !img.naturalWidth) return;
+  const pw = pane.clientWidth;
+  const ph = pane.clientHeight;
+  const ratio = img.naturalWidth / img.naturalHeight;
+  let w = pw;
+  let h = pw / ratio;
+  if (h > ph) {
+    h = ph;
+    w = ph * ratio;
+  }
+  ocrImgFit = { w, h };
+}
+
+// 이미지 로드 완료 시 기준 크기 잡고 배치
+function ocrImgLoaded() {
+  resetOcrTransform();
+}
+
+// 제스처 중(매 프레임): 가벼운 GPU transform 만 갱신 → 부드러움. 표는 같은 배율로 동기화(시각용 transform)
+function applyOcrTransform() {
+  const img = document.getElementById("ocrImgElement");
+  if (img && ocrImgFit.w) {
+    const rel = ocrTransform.scale / ocrBakedScale;
+    img.style.transform = `translate3d(${ocrTransform.x}px, ${ocrTransform.y}px, 0) scale(${rel})`;
+  }
+  positionOcrHilite();
+}
+
+// 손 뗀 뒤(1회): 현재 배율을 실제 width/height 로 구워 선명하게. 표는 zoom 으로 확정(스크롤 영역도 확장)
+function bakeOcr() {
+  const img = document.getElementById("ocrImgElement");
+  const pane = document.getElementById("ocrPaneImg");
+  if (img && pane && ocrImgFit.w) {
+    ocrBakedScale = ocrTransform.scale;
+    const w = ocrImgFit.w * ocrBakedScale;
+    const h = ocrImgFit.h * ocrBakedScale;
+    img.style.width = w + "px";
+    img.style.height = h + "px";
+    img.style.left = (pane.clientWidth - w) / 2 + "px";
+    img.style.top = (pane.clientHeight - h) / 2 + "px";
+    img.style.transform = `translate3d(${ocrTransform.x}px, ${ocrTransform.y}px, 0) scale(1)`;
+  }
+  positionOcrHilite();
+}
+
+// 제스처 끝나면 살짝 뒤에 굽기 (휠 연속 입력 대비 디바운스)
+function scheduleOcrBake() {
+  if (_ocrBakeTimer) clearTimeout(_ocrBakeTimer);
+  _ocrBakeTimer = setTimeout(bakeOcr, 140);
+}
+
+// 이미지 패널 전용 핀치 줌/이동 (표 패널은 네이티브 스크롤 + 셀 onclick 편집)
+function initOcrSplitGestures() {
+  const imgPane = document.getElementById("ocrPaneImg");
+  if (!imgPane) return;
+
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const mid = (t) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+
+  // ── 터치
+  imgPane.addEventListener(
     "touchstart",
     (e) => {
-      if (e.target.closest(".close-btn")) return;
-      e.preventDefault();
-
       if (e.touches.length === 1) {
-        isDragging = true;
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
+        _ocrG.dragging = true;
+        _ocrG.moved = false;
+        _ocrG.lastX = _ocrG.startX = e.touches[0].clientX;
+        _ocrG.lastY = _ocrG.startY = e.touches[0].clientY;
       } else if (e.touches.length === 2) {
-        isDragging = false;
-        initialPinchDist = getPinchDistance(e.touches);
-        ocrStartScale = ocrTransform.scale;
-        const mid = getMidpoint(e.touches);
-        lastX = mid.x;
-        lastY = mid.y;
+        e.preventDefault();
+        _ocrG.dragging = false;
+        _ocrG.pinchDist = dist(e.touches);
+        _ocrG.startScale = ocrTransform.scale;
+        const m = mid(e.touches);
+        _ocrG.lastX = m.x;
+        _ocrG.lastY = m.y;
       }
     },
     { passive: false },
   );
 
-  wrapper.addEventListener(
+  imgPane.addEventListener(
     "touchmove",
     (e) => {
-      e.preventDefault();
-      if (e.touches.length === 1 && isDragging) {
-        // ☝️ 한 손가락 이동: 움직인 만큼만 더해줌
-        ocrTransform.x += e.touches[0].clientX - lastX;
-        ocrTransform.y += e.touches[0].clientY - lastY;
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
-        requestAnimationFrame(updateTransform);
+      if (e.touches.length === 1 && _ocrG.dragging) {
+        if (Math.abs(e.touches[0].clientX - _ocrG.startX) > 6 || Math.abs(e.touches[0].clientY - _ocrG.startY) > 6)
+          _ocrG.moved = true;
+        if (_ocrG.moved) {
+          e.preventDefault();
+          ocrTransform.x += e.touches[0].clientX - _ocrG.lastX;
+          ocrTransform.y += e.touches[0].clientY - _ocrG.lastY;
+          _ocrG.lastX = e.touches[0].clientX;
+          _ocrG.lastY = e.touches[0].clientY;
+          requestAnimationFrame(applyOcrTransform);
+        }
       } else if (e.touches.length === 2) {
-        // ✌️ 두 손가락 줌(Zoom) + 이동(Pan) 완벽 동시 적용!
-        const currentDist = getPinchDistance(e.touches);
-        ocrTransform.scale = Math.max(1, Math.min(ocrStartScale * (currentDist / initialPinchDist), 6));
-
-        const mid = getMidpoint(e.touches);
-        // 🚨 확대 중에도 두 손가락 중심점이 움직인 만큼만 화면 좌표에 더해줍니다 (헛돌기 버그 해결)
-        ocrTransform.x += mid.x - lastX;
-        ocrTransform.y += mid.y - lastY;
-        lastX = mid.x;
-        lastY = mid.y;
-
-        requestAnimationFrame(updateTransform);
+        e.preventDefault();
+        const cd = dist(e.touches);
+        ocrTransform.scale = Math.max(1, Math.min(_ocrG.startScale * (cd / _ocrG.pinchDist), 8));
+        const m = mid(e.touches);
+        ocrTransform.x += m.x - _ocrG.lastX;
+        ocrTransform.y += m.y - _ocrG.lastY;
+        _ocrG.lastX = m.x;
+        _ocrG.lastY = m.y;
+        requestAnimationFrame(applyOcrTransform);
       }
     },
     { passive: false },
   );
 
-  wrapper.addEventListener("touchend", (e) => {
-    if (e.touches.length === 1) {
-      isDragging = true;
-      lastX = e.touches[0].clientX;
-      lastY = e.touches[0].clientY;
-    } else if (e.touches.length === 0) {
-      isDragging = false;
+  imgPane.addEventListener("touchend", (e) => {
+    if (e.touches.length === 0) {
       if (ocrTransform.scale <= 1) {
-        ocrTransform = { scale: 1, x: 0, y: 0 };
-        const currentImg = document.getElementById("ocrImgElement");
-        if (currentImg) {
-          currentImg.style.transition = "transform 0.2s ease-out";
-          updateTransform();
-          setTimeout(() => {
-            if (currentImg) currentImg.style.transition = "none";
-          }, 200);
-        }
+        ocrTransform.scale = 1;
+        ocrTransform.x = 0;
+        ocrTransform.y = 0;
       }
+      bakeOcr(); // 손 떼면 현재 배율로 선명하게 굽기
+      _ocrG.dragging = false;
+      _ocrG.moved = false;
+    } else if (e.touches.length === 1) {
+      // 핀치 중 한 손가락만 뗌 → 남은 손가락으로 드래그 이어가기(점프 방지)
+      _ocrG.dragging = true;
+      _ocrG.moved = true;
+      _ocrG.lastX = e.touches[0].clientX;
+      _ocrG.lastY = e.touches[0].clientY;
     }
   });
 
-  // PC 마우스용
-  wrapper.addEventListener("mousedown", (e) => {
-    isDragging = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
+  // ── 마우스(PC)
+  imgPane.addEventListener("mousedown", (e) => {
+    _ocrG.dragging = true;
+    _ocrG.moved = false;
+    _ocrG.lastX = _ocrG.startX = e.clientX;
+    _ocrG.lastY = _ocrG.startY = e.clientY;
   });
-  wrapper.addEventListener("mousemove", (e) => {
-    if (!isDragging) return;
-    ocrTransform.x += e.clientX - lastX;
-    ocrTransform.y += e.clientY - lastY;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    requestAnimationFrame(updateTransform);
+  imgPane.addEventListener("mousemove", (e) => {
+    if (!_ocrG.dragging) return;
+    if (Math.abs(e.clientX - _ocrG.startX) > 6 || Math.abs(e.clientY - _ocrG.startY) > 6) _ocrG.moved = true;
+    if (_ocrG.moved) {
+      ocrTransform.x += e.clientX - _ocrG.lastX;
+      ocrTransform.y += e.clientY - _ocrG.lastY;
+      _ocrG.lastX = e.clientX;
+      _ocrG.lastY = e.clientY;
+      requestAnimationFrame(applyOcrTransform);
+    }
   });
-  window.addEventListener("mouseup", () => {
-    isDragging = false;
-  });
-  wrapper.addEventListener(
+
+  imgPane.addEventListener(
     "wheel",
     (e) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? -0.15 : 0.15;
-      ocrTransform.scale = Math.max(1, Math.min(ocrTransform.scale + delta, 6));
+      ocrTransform.scale = Math.max(1, Math.min(ocrTransform.scale + delta, 8));
       if (ocrTransform.scale <= 1) {
         ocrTransform.x = 0;
         ocrTransform.y = 0;
       }
-      requestAnimationFrame(updateTransform);
+      requestAnimationFrame(applyOcrTransform);
+      scheduleOcrBake(); // 휠 멈추면 선명하게 굽기
     },
     { passive: false },
   );
+
+  // window mouseup 은 1회만 바인딩
+  if (!_ocrWinBound) {
+    _ocrWinBound = true;
+    window.addEventListener("mouseup", () => {
+      if (_ocrG.dragging && _ocrG.moved) bakeOcr();
+      _ocrG.dragging = false;
+    });
+  }
 }
 
 function closeModalOnBgClick(e) {

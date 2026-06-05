@@ -1198,17 +1198,34 @@ module.exports = async function handler(req, res) {
             const imgRes = await fetch(fullUrl);
             const imgBuffer = await imgRes.arrayBuffer();
             const base64Image = Buffer.from(imgBuffer).toString("base64");
-            const visionRes = await fetch(
-              `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  requests: [{ image: { content: base64Image }, features: [{ type: "TEXT_DETECTION" }] }],
-                }),
-              },
-            );
-            const visionData = await visionRes.json();
+            // ⏱️ Vision OCR도 멈추면 함수가 죽지 않도록 15초 타임아웃
+            const visionController = new AbortController();
+            const visionTimer = setTimeout(() => visionController.abort(), 15000);
+            let visionData;
+            try {
+              const visionRes = await fetch(
+                `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    requests: [{ image: { content: base64Image }, features: [{ type: "TEXT_DETECTION" }] }],
+                  }),
+                  signal: visionController.signal,
+                },
+              );
+              visionData = await visionRes.json();
+            } catch (ve) {
+              clearTimeout(visionTimer);
+              await sendTgMsg(
+                chatId,
+                ve.name === "AbortError"
+                  ? `⚠️ OCR 응답 지연(시간 초과). 잠시 후 다시 시도해주세요.`
+                  : `⚠️ OCR 서버 오류. 잠시 후 다시 시도해주세요.`,
+              );
+              return res.status(200).send("OK");
+            }
+            clearTimeout(visionTimer);
 
             ocrCount++;
             ocrTotal++;
@@ -1237,17 +1254,26 @@ module.exports = async function handler(req, res) {
             finalRows = parsedResult;
             try {
               const prompt = `너는 물류 데이터베이스 전문 AI 관리자야.\n[원본 텍스트]\n${extractedText}\n[기존 파싱 결과]\n${JSON.stringify(parsedResult)}\n\n[임무 및 규칙]\n1. 빠진 B/L 채워 넣어.\n2. 오타 수정해.\n3. '발행전'은 B/L번호에 넣어.\n4. [bl, pal, eta, inDate, fwd, sType, invoice, etc] 키를 가진 JSON 배열만 출력.`;
-              const geminiRes = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.0, responseMimeType: "application/json" },
-                  }),
-                },
-              );
+              // ⏱️ Gemini가 느리거나 멈춰도 함수 전체가 죽지 않도록 타임아웃(14초) 후 기본 파싱으로 진행
+              const aiController = new AbortController();
+              const aiTimer = setTimeout(() => aiController.abort(), 14000);
+              let geminiRes;
+              try {
+                geminiRes = await fetch(
+                  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      contents: [{ parts: [{ text: prompt }] }],
+                      generationConfig: { temperature: 0.0, responseMimeType: "application/json" },
+                    }),
+                    signal: aiController.signal,
+                  },
+                );
+              } finally {
+                clearTimeout(aiTimer);
+              }
               const geminiJson = await geminiRes.json();
               if (geminiJson.candidates && geminiJson.candidates.length > 0) {
                 let aiText = geminiJson.candidates[0].content.parts[0].text
@@ -1261,7 +1287,16 @@ module.exports = async function handler(req, res) {
                 }
               }
             } catch (e) {
-              await sendTgMsg(chatId, `⚠️ AI 서버 오류. 기본 데이터로 진행합니다.`);
+              // 타임아웃·AI 오류 모두 여기로 → 기본 파싱(parsedResult)으로 계속 진행
+              const reason = e.name === "AbortError" ? "AI 응답 지연(시간 초과)" : "AI 서버 오류";
+              await sendTgMsg(chatId, `⚠️ ${reason}. 기본 판독 데이터로 진행합니다.`);
+            }
+
+            // 🧭 각 행의 이미지 내 세로 위치(Y px) 부착 → 웹 대조창 '셀 탭 시 이미지 정렬'에 사용
+            try {
+              attachRowYCoords(finalRows, visionData);
+            } catch (e) {
+              console.error("행 좌표 매핑 실패:", e);
             }
           }
 
@@ -1461,6 +1496,59 @@ module.exports = async function handler(req, res) {
   return res.status(200).send("OK");
 };
 // 👆 모듈 핸들러 종료
+// =================================================================
+// 🧭 행별 이미지 Y좌표(px) 매핑 — Vision 단어 박스에서 B/L 위치를 찾아 부착
+//    (웹 대조창에서 '셀 탭 → 왼쪽 이미지를 그 행으로 정렬'에 사용)
+// =================================================================
+function attachRowYCoords(rows, visionData) {
+  if (!Array.isArray(rows) || rows.length === 0 || !visionData) return;
+  const anns = visionData.responses && visionData.responses[0] && visionData.responses[0].textAnnotations;
+  if (!Array.isArray(anns) || anns.length < 2) return;
+  const digits = (v) => (String(v || "").match(/\d+/g) || []).join(""); // 숫자만 추출
+  const words = anns.slice(1).map((a) => {
+    const vs = (a.boundingPoly && a.boundingPoly.vertices) || [];
+    const ys = vs.map((v) => v.y || 0);
+    const top = ys.length ? Math.min(...ys) : 0;
+    const bot = ys.length ? Math.max(...ys) : 0;
+    return { d: digits(a.description), cy: Math.round((top + bot) / 2), h: Math.max(1, bot - top) };
+  });
+  const used = new Set();
+  // B/L 의 숫자부분으로 매칭 (Vision 이 'DSV'와 숫자를 쪼개도 매칭되도록)
+  rows.forEach((r) => {
+    const rd = digits(r.bl);
+    if (!rd || rd.length < 6) return; // 발행전/빈값 등은 건너뛰고 뒤에서 보간
+    for (let j = 0; j < words.length; j++) {
+      if (used.has(j)) continue;
+      const wd = words[j].d;
+      if (wd && wd.length >= 6 && (wd === rd || wd.includes(rd) || rd.includes(wd))) {
+        r.iy = words[j].cy;
+        r.ih = words[j].h;
+        used.add(j);
+        break;
+      }
+    }
+  });
+  // 미매칭(발행전 등) → 앞뒤 매칭값으로 선형 보간
+  for (let i = 0; i < rows.length; i++) {
+    if (typeof rows[i].iy === "number") continue;
+    let prev = null;
+    let next = null;
+    for (let a = i - 1; a >= 0; a--)
+      if (typeof rows[a].iy === "number") {
+        prev = { i: a, iy: rows[a].iy };
+        break;
+      }
+    for (let b = i + 1; b < rows.length; b++)
+      if (typeof rows[b].iy === "number") {
+        next = { i: b, iy: rows[b].iy };
+        break;
+      }
+    if (prev && next) rows[i].iy = Math.round(prev.iy + (next.iy - prev.iy) * ((i - prev.i) / (next.i - prev.i)));
+    else if (prev) rows[i].iy = prev.iy;
+    else if (next) rows[i].iy = next.iy;
+  }
+}
+
 // =================================================================
 // 🧠 로컬 정규식 파싱 엔진
 // =================================================================

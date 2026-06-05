@@ -1212,7 +1212,8 @@
         align-items: center;
         justify-content: center;
       }
-      #ocrImageContent img {
+      /* 대조 뷰어의 이미지(#ocrImgElement)는 JS가 width/height/left/top 으로 직접 줌·이동 제어 → 제약 제외 */
+      #ocrImageContent img:not(#ocrImgElement) {
         max-width: 100% !important;
         max-height: 100% !important;
         width: auto !important;
@@ -1221,6 +1222,9 @@
         transform-origin: center center !important;
         transition: none !important;
         /* 드래그 렉 방지 */
+        border-radius: 0 !important;
+      }
+      #ocrImgElement {
         border-radius: 0 !important;
       }
 
