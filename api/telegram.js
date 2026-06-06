@@ -1505,30 +1505,63 @@ function attachRowYCoords(rows, visionData) {
   const anns = visionData.responses && visionData.responses[0] && visionData.responses[0].textAnnotations;
   if (!Array.isArray(anns) || anns.length < 2) return;
   const digits = (v) => (String(v || "").match(/\d+/g) || []).join(""); // 숫자만 추출
+  const upper = (v) =>
+    String(v || "")
+      .toUpperCase()
+      .replace(/[\s•·\-\*]/g, ""); // 텍스트 비교용 정규화
   const words = anns.slice(1).map((a) => {
     const vs = (a.boundingPoly && a.boundingPoly.vertices) || [];
     const ys = vs.map((v) => v.y || 0);
+    const xs = vs.map((v) => v.x || 0);
     const top = ys.length ? Math.min(...ys) : 0;
     const bot = ys.length ? Math.max(...ys) : 0;
-    return { d: digits(a.description), cy: Math.round((top + bot) / 2), h: Math.max(1, bot - top) };
+    const lft = xs.length ? Math.min(...xs) : 0;
+    const rgt = xs.length ? Math.max(...xs) : 0;
+    return {
+      d: digits(a.description),
+      t: upper(a.description),
+      cy: Math.round((top + bot) / 2),
+      cx: Math.round((lft + rgt) / 2),
+      h: Math.max(1, bot - top),
+    };
   });
   const used = new Set();
-  // B/L 의 숫자부분으로 매칭 (Vision 이 'DSV'와 숫자를 쪼개도 매칭되도록)
-  rows.forEach((r) => {
-    const rd = digits(r.bl);
-    if (!rd || rd.length < 6) return; // 발행전/빈값 등은 건너뛰고 뒤에서 보간
+  // 키(숫자)로 미사용 단어 매칭 (Vision 이 'DSV'와 숫자를 쪼개도 매칭되도록)
+  const matchKey = (key) => {
+    if (!key || key.length < 6) return null;
     for (let j = 0; j < words.length; j++) {
       if (used.has(j)) continue;
       const wd = words[j].d;
-      if (wd && wd.length >= 6 && (wd === rd || wd.includes(rd) || rd.includes(wd))) {
-        r.iy = words[j].cy;
-        r.ih = words[j].h;
+      if (wd && wd.length >= 6 && (wd === key || wd.includes(key) || key.includes(wd))) {
         used.add(j);
-        break;
+        return words[j];
       }
     }
+    return null;
+  };
+  // 1차 B/L 숫자, 2차 인보이스 숫자(발행전 행도 인보이스로 위치 잡힘). 열별 X는 r.cx 에 저장
+  rows.forEach((r) => {
+    const mb = matchKey(digits(r.bl));
+    const mi = matchKey(digits(r.invoice));
+    const m = mb || mi;
+    if (m) {
+      r.iy = m.cy;
+      r.ih = m.h;
+    }
+    r.cx = {};
+    if (mb) r.cx.bl = mb.cx;
+    if (mi) r.cx.invoice = mi.cx;
   });
-  // 미매칭(발행전 등) → 앞뒤 매칭값으로 선형 보간
+  // 매칭된 앵커들로 평균 행간격(pitch) 추정 → 보간 + 외삽(앞뒤 앵커 없는 구간도 분산)
+  const anchors = [];
+  rows.forEach((r, i) => {
+    if (typeof r.iy === "number") anchors.push({ i, iy: r.iy });
+  });
+  if (anchors.length === 0) return;
+  const pitch =
+    anchors.length >= 2
+      ? (anchors[anchors.length - 1].iy - anchors[0].iy) / (anchors[anchors.length - 1].i - anchors[0].i)
+      : 0;
   for (let i = 0; i < rows.length; i++) {
     if (typeof rows[i].iy === "number") continue;
     let prev = null;
@@ -1544,9 +1577,57 @@ function attachRowYCoords(rows, visionData) {
         break;
       }
     if (prev && next) rows[i].iy = Math.round(prev.iy + (next.iy - prev.iy) * ((i - prev.i) / (next.i - prev.i)));
-    else if (prev) rows[i].iy = prev.iy;
-    else if (next) rows[i].iy = next.iy;
+    else if (prev)
+      rows[i].iy = Math.round(prev.iy + (i - prev.i) * pitch); // 뒤쪽(발행전 줄줄이) 외삽
+    else if (next) rows[i].iy = Math.round(next.iy - (next.i - i) * pitch); // 앞쪽 외삽
   }
+
+  // 2차: 각 행 Y 근처 단어에서 열별 X 채우기 (eta/입고일/fwd/type) → 탭한 열로 가로 정렬
+  rows.forEach((r) => {
+    if (typeof r.iy !== "number") return;
+    if (!r.cx) r.cx = {};
+    const band = Math.max((typeof r.ih === "number" ? r.ih : 20) * 1.4, 16);
+    const near = words.filter((w) => Math.abs(w.cy - r.iy) <= band);
+    const findDigit = (val) => {
+      const k = digits(val);
+      if (!k || k.length < 4) return null;
+      for (const w of near) if (w.d === k) return w.cx;
+      return null;
+    };
+    const findText = (val) => {
+      const k = upper(val);
+      if (!k) return null;
+      for (const w of near) if (w.t === k) return w.cx;
+      return null;
+    };
+    const setc = (f, x) => {
+      if (typeof x === "number" && r.cx[f] == null) r.cx[f] = x;
+    };
+    setc("eta", findDigit(r.eta));
+    setc("inDate", findDigit(r.inDate));
+    setc("fwd", findText(r.fwd));
+    setc("sType", findText(r.sType));
+  });
+
+  // 3차: 열 위치는 테이블이라 행마다 거의 동일 → 매칭된 X 중앙값을 '전역 열 X'로 만들어 빈 칸 보정
+  //      (발행전 행의 B/L 열, 비어있는 ETC 열 등도 올바른 열 위치로 이동)
+  const colKeys = ["bl", "invoice", "eta", "inDate", "fwd", "sType"];
+  const globalCx = {};
+  colKeys.forEach((c) => {
+    const xs = rows
+      .map((r) => r.cx && r.cx[c])
+      .filter((x) => typeof x === "number")
+      .sort((a, b) => a - b);
+    if (xs.length) globalCx[c] = xs[Math.floor(xs.length / 2)]; // 중앙값
+  });
+  const etcHdr = words.find((w) => w.t === "ETC"); // ETC 헤더 X
+  if (etcHdr) globalCx.etc = etcHdr.cx;
+  rows.forEach((r) => {
+    if (!r.cx) r.cx = {};
+    Object.keys(globalCx).forEach((c) => {
+      if (typeof r.cx[c] !== "number") r.cx[c] = globalCx[c];
+    });
+  });
 }
 
 // =================================================================
@@ -1564,6 +1645,8 @@ function parseOcrLinesLocal(text) {
   const isSType = (v) => /^(AIR|SEA)$/i.test(v);
   const isFwd = (v) => /^[A-Za-z]+$/.test(v) && !isSType(v);
   const isInvoice = (v) => /^\d{7,8}$/.test(v);
+  // PI-2026-0312 같은 특수 인보이스 형식(드물게 등장) — 비고로 새지 않도록 인보이스로 인식
+  const isPiInvoice = (v) => /^PI-?\d{4}-?\d{3,4}$/i.test(String(v).trim());
 
   const rows = [];
   let orphanInvoices = [];
@@ -1680,6 +1763,8 @@ function parseOcrLinesLocal(text) {
     if (!assigned) {
       if (isInvoice(raw)) {
         rows[activeRowIndex].invoices.push(raw);
+      } else if (isPiInvoice(raw)) {
+        rows[activeRowIndex].invoices.push(raw.trim()); // PI-형식 인보이스
       } else if (!isPal(raw) && !isDate(raw) && !isSType(raw) && !isFwd(raw)) {
         let invMatch = raw.match(/\b\d{7,8}\b/g);
         if (invMatch) {

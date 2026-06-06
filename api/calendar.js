@@ -1478,9 +1478,55 @@ module.exports = async function (req, res) {
             rawDataStr = "가져온 Raw 데이터가 존재하지 않습니다.";
           }
 
+          // 좌표(iy/ih/cx)는 캐시 그대로 두되, 값(pal/날짜/인보이스/비고 등)은 현재 inbound DB로 갱신
+          //  → 달력에서 따로 고친 내용이 대조창에도 반영됨
+          let parsedData = parseJSON(parsedDataStr);
+          if (Array.isArray(parsedData) && parsedData.length > 0) {
+            try {
+              const cleanBL = (v) => String(v || "").replace(/[\s•·\-\*]/g, "");
+              const invList = parsedData.map((r) => (r.invoice || "").toString().trim()).filter(Boolean);
+              const blList = parsedData.map((r) => cleanBL(r.bl)).filter((b) => b && b !== "발행전");
+              const sel =
+                "SELECT bl_number, pallets, DATE_FORMAT(eta,'%Y-%m-%d') AS eta, DATE_FORMAT(receive_date,'%Y-%m-%d') AS receive_date, fwd, s_type, invoice, remarks FROM inbound WHERE ";
+              const byInv = {};
+              const byBl = {};
+              if (invList.length) {
+                const [ri] = await pool.query(sel + "invoice IN (?)", [invList]);
+                ri.forEach((d) => {
+                  if (d.invoice) byInv[String(d.invoice).trim()] = d;
+                });
+              }
+              if (blList.length) {
+                const [rb] = await pool.query(sel + "bl_number IN (?)", [blList]);
+                rb.forEach((d) => {
+                  byBl[cleanBL(d.bl_number)] = d;
+                });
+              }
+              parsedData = parsedData.map((r) => {
+                const inv = (r.invoice || "").toString().trim();
+                const blc = cleanBL(r.bl);
+                const d = (inv && byInv[inv]) || (blc && blc !== "발행전" && byBl[blc]) || null;
+                if (!d) return r; // 달력에 없으면(삭제 등) OCR 스냅샷 유지
+                return {
+                  ...r, // iy/ih/cx 등 좌표 유지
+                  bl: d.bl_number || r.bl,
+                  pal: d.pallets != null ? String(d.pallets) : r.pal,
+                  eta: d.eta || "",
+                  inDate: d.receive_date || "미정",
+                  fwd: d.fwd || "",
+                  sType: d.s_type || "",
+                  invoice: d.invoice || "",
+                  etc: d.remarks || "",
+                };
+              });
+            } catch (mergeErr) {
+              console.error("OCR 대조 inbound 병합 실패:", mergeErr);
+            }
+          }
+
           // 프론트엔드로 최종 배달
           return res.status(200).json({
-            parsedData: parseJSON(parsedDataStr), // 기존 파싱 배열 객체
+            parsedData, // 좌표 캐시 + 현재 inbound 값 병합
             rawData: rawDataStr, // 완벽히 복원된 순수 원본 텍스트
           });
         } catch (err) {
@@ -1509,7 +1555,6 @@ module.exports = async function (req, res) {
 
           let insertCount = 0;
           let updateCount = 0;
-          const cleanRows = [];
 
           for (const r of rows) {
             const bl = String(r.bl || "").replace(/[\s•·\-\*]/g, "");
@@ -1544,17 +1589,8 @@ module.exports = async function (req, res) {
               );
               insertCount++;
             }
-            const keep = { bl, pal, eta: eta || "", inDate: inDate || "미정", fwd, sType, invoice, etc };
-            if (typeof r.iy === "number") keep.iy = r.iy;
-            if (typeof r.ih === "number") keep.ih = r.ih;
-            cleanRows.push(keep);
           }
-
-          // 캐시(LAST_OCR_DATA)도 수정본으로 갱신 → 다음 대조창 열 때 일치
-          await pool.query(
-            `INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
-            [JSON.stringify(cleanRows), JSON.stringify(cleanRows)],
-          );
+          // ⚠️ LAST_OCR_DATA(좌표 캐시)는 덮어쓰지 않음 — 좌표 보존 + 대조창은 GET 때 현재 inbound 값을 합쳐서 보여줌
 
           // 감사 로그
           try {
@@ -1566,7 +1602,7 @@ module.exports = async function (req, res) {
             );
           } catch (e) {}
 
-          return res.status(200).json({ success: true, insertCount, updateCount, total: cleanRows.length });
+          return res.status(200).json({ success: true, insertCount, updateCount, total: rows.length });
         } catch (err) {
           console.error("OCR 적용 에러:", err);
           return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
