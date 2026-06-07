@@ -31,9 +31,9 @@
         });
       })();
     </script>
-    <script src="common-core.js"></script>
-    <script src="common-ui.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="common-core.js" defer></script>
+    <script src="common-ui.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
     <style>
       /* 첫 페인트 안정화: html 배경은 위 인라인 스크립트가 즉시 칠함.
          아래는 혹시 JS 비활성/지연 시의 안전 기본값(다크) */
@@ -469,6 +469,17 @@
         transform: scale(0.92);
         filter: brightness(1.2);
       }
+      /* 📍 클릭/터치한 일정 강조 — 상세 모달이 어떤 일정에서 열렸는지 한눈에 (모바일·PC 공통) */
+      .item-tag.item-clicked {
+        outline: 3px solid #0a84ff;
+        outline-offset: 1px;
+        box-shadow:
+          0 0 0 3px rgba(10, 132, 255, 0.35),
+          0 4px 14px rgba(0, 0, 0, 0.35) !important;
+        transform: scale(1.04);
+        position: relative;
+        z-index: 6;
+      }
 
       /* 💡 작업(TASK) 간트차트: 소프트 미드나잇 테마 적용 */
       .item-tag-task {
@@ -840,6 +851,11 @@
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
         flex-wrap: wrap;
         padding-bottom: 35px;
+      }
+      /* 📍 클릭한 항목 카드 강조 (여러 건일 때만) — 주변부만 은은하게 파랗게 */
+      .modal-card.modal-card-clicked {
+        border-color: rgba(10, 132, 255, 0.55) !important;
+        box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.18) !important;
       }
       .modal-icon {
         width: 14px;
@@ -2769,6 +2785,581 @@
         color: #fff;
         padding: 10px;
       }
+
+      /* 사이드 패널/좌측바/미니네비는 기본 숨김(모바일/토글OFF 어디서도 안 보임). PC+토글ON 에서만 노출 */
+      #pcSidePanel,
+      #pcLeftbar,
+      #pcMiniNav,
+      #pcLeftTab,
+      #pcRightTab,
+      #pcOverlayDim {
+        display: none;
+      }
+      /* hover 툴팁(PC모드) — 유리(glass) 반투명 + 라벨/값 정렬 */
+      #pcTip {
+        display: none;
+        position: fixed;
+        z-index: 3000;
+        pointer-events: none;
+        min-width: 130px;
+        max-width: 300px;
+        background: rgba(255, 255, 255, 0.22);
+        backdrop-filter: blur(20px) saturate(1.4);
+        -webkit-backdrop-filter: blur(20px) saturate(1.4);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        color: #1c1e24;
+        padding: 9px 12px;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+      }
+      #pcTip .pctip-title {
+        font-weight: 800;
+        font-size: 13px;
+        margin-bottom: 5px;
+        letter-spacing: -0.2px;
+        color: #111;
+      }
+      #pcTip .pctip-row {
+        display: flex;
+        gap: 10px;
+        font-size: 11.5px;
+        line-height: 1.75;
+      }
+      #pcTip .pctip-k {
+        color: rgba(0, 0, 0, 0.45);
+        flex: 0 0 auto;
+        min-width: 38px;
+      }
+      #pcTip .pctip-v {
+        color: #1c1e24;
+        font-weight: 600;
+      }
+
+      /* =====================================================================
+         🖥️ PC 모드 — (1)마우스 기기(hover+fine) + (2)body.pc-dense(토글 ON) 둘 다일 때만.
+         창 크기 무관(PC면 유지), 터치 항상 제외. 모바일/토글 OFF 영향 없음.
+         ===================================================================== */
+      @media (hover: hover) and (pointer: fine) {
+        #pcDenseToggle {
+          display: inline-flex !important;
+        }
+        /* 빈 날도 너무 납작해지지 않게 */
+        body.pc-dense .day-cell {
+          min-height: 96px;
+        }
+        /* 출고 칩(단일 일정, 폐기·반품 등 단일 작업칩 포함): 풀폭 한 줄 바 (회사명 좌 / 수량 우)
+           여러 날 걸친 간트 막대(linked/edge)만 제외 */
+        body.pc-dense
+          .item-tag:not(.linked-left):not(.linked-right):not(.edge-left):not(.edge-right):not(.item-tag-task),
+        body.pc-dense .item-tag.item-tag-task:not(.linked-left):not(.linked-right):not(.edge-left):not(.edge-right) {
+          flex-direction: row !important;
+          align-items: center;
+          justify-content: space-between;
+          gap: 6px;
+          padding: 0 9px !important;
+          box-shadow: none;
+        }
+        body.pc-dense
+          .item-tag:not(.linked-left):not(.linked-right):not(.edge-left):not(.edge-right)
+          > div:not(.task-span-text) {
+          width: auto !important;
+          text-align: left !important;
+          flex: 0 0 auto;
+          white-space: nowrap;
+        }
+        body.pc-dense .item-tag:not(.linked-left):not(.linked-right):not(.edge-left):not(.edge-right) .pal-sub {
+          margin: 0 !important;
+          flex: 0 0 auto;
+          white-space: nowrap;
+        }
+        /* 헤더 컴팩트 (좁은 PC창 폴백용) */
+        body.pc-dense .top-wrapper {
+          padding: 8px 12px;
+          gap: 6px;
+        }
+        /* 우측 패널 카드 */
+        body.pc-dense .pcp-card {
+          background: var(--card-bg);
+          border: 1px solid var(--border-color);
+          border-radius: 14px;
+          padding: 14px;
+          margin-bottom: 12px;
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+        body.pc-dense .pcp-title {
+          font-weight: 800;
+          font-size: 0.95em;
+          color: var(--text-main);
+          margin-bottom: 10px;
+        }
+        body.pc-dense .pcp-stat-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.85em;
+          color: var(--text-sub);
+          padding: 3px 0;
+        }
+        body.pc-dense .pcp-stat-row b {
+          color: var(--text-main);
+        }
+        body.pc-dense .pcp-pend-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 4px;
+          border-bottom: 1px solid var(--border-color);
+          font-size: 0.85em;
+        }
+        body.pc-dense .pcp-btn {
+          width: 100%;
+          padding: 9px;
+          border: none;
+          border-radius: 10px;
+          background: #0a84ff;
+          color: #fff;
+          font-weight: 800;
+          cursor: pointer;
+        }
+        body.pc-dense .pcp-btn:hover {
+          filter: brightness(1.07);
+        }
+        /* 상단바(좁은 PC창 폴백): 플랫 + 한 줄 통합 */
+        body.pc-dense .top-wrapper {
+          position: sticky;
+          top: 6px;
+          z-index: 30;
+          display: flex;
+          flex-direction: row;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px 14px;
+          padding: 10px 18px;
+          background: var(--header-bg);
+          border: 1px solid var(--border-color);
+          border-radius: 14px;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+        }
+        body.pc-dense .app-branding-header,
+        body.pc-dense .top-row {
+          display: contents;
+        }
+        body.pc-dense .branding-left {
+          order: 1;
+        }
+        body.pc-dense .title-area {
+          order: 2;
+        }
+        body.pc-dense .size-toggle {
+          order: 3;
+        }
+        body.pc-dense .action-row-right {
+          order: 4;
+          margin-left: auto;
+        }
+        body.pc-dense .admin-actions {
+          order: 5;
+        }
+        body.pc-dense .controls-area {
+          order: 6;
+        }
+        body.pc-dense .branding-title {
+          font-size: 1.25em;
+          font-weight: 800;
+          letter-spacing: -0.5px;
+        }
+        body.pc-dense .branding-logo {
+          width: 28px;
+          height: 28px;
+        }
+        body.pc-dense .title-area,
+        body.pc-dense .size-toggle {
+          background: var(--btn-bg);
+          border: 1px solid var(--border-color);
+          border-radius: 10px;
+          padding: 3px;
+        }
+        body.pc-dense .title-area .nav-arrow,
+        body.pc-dense .title-area .title-btn {
+          background: transparent !important;
+          border: none !important;
+        }
+        body.pc-dense .size-toggle .size-btn {
+          border: none !important;
+        }
+        body.pc-dense .size-toggle .size-btn:not(.active) {
+          background: transparent !important;
+        }
+        body.pc-dense .multi-btn,
+        body.pc-dense .info-btn,
+        body.pc-dense .admin-btn,
+        body.pc-dense .theme-toggle,
+        body.pc-dense .nav-arrow {
+          height: 36px;
+          border-radius: 9px;
+        }
+        /* 날짜칸/요일헤더/hover */
+        body.pc-dense .day-header {
+          font-weight: 800;
+          letter-spacing: 0.5px;
+          padding: 12px 0;
+          background: var(--header-bg);
+          font-size: 0.95em;
+        }
+        body.pc-dense .day-cell {
+          min-height: 124px;
+          padding: 6px;
+        }
+        body.pc-dense .date-num {
+          font-size: 1.05em;
+        }
+        body.pc-dense .day-cell:hover {
+          background: rgba(10, 132, 255, 0.06);
+          box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.25);
+        }
+        body.pc-dense .day-cell.empty:hover {
+          background: var(--header-bg);
+          box-shadow: none;
+        }
+        body.pc-dense .item-tag {
+          cursor: pointer;
+        }
+        body.pc-dense .item-tag:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+          filter: brightness(1.04);
+          position: relative;
+          z-index: 2;
+        }
+        body.pc-dense .today-cell {
+          box-shadow: inset 0 0 0 2px rgba(255, 59, 48, 0.35) !important;
+        }
+        body.pc-dense #pcSidePanel::-webkit-scrollbar {
+          width: 8px;
+        }
+        body.pc-dense #pcSidePanel::-webkit-scrollbar-thumb {
+          background: var(--border-color);
+          border-radius: 4px;
+        }
+      }
+
+      /* ===== 좌측 사이드바(웹앱형) — PC + 토글ON 이면 창 크기 무관 항상 적용 ===== */
+      @media (hover: hover) and (pointer: fine) {
+        body.pc-dense .top-wrapper,
+        body.pc-dense .legend-bar-wrapper {
+          display: none !important;
+        }
+        /* 좌측바: 접히지 않았을 때만 표시 (도킹/오버레이는 하단 폭 분기에서) */
+        body.pc-dense:not(.pc-left-collapsed) #pcLeftbar {
+          display: flex;
+          flex-direction: column;
+          position: fixed;
+          left: 12px;
+          top: 12px;
+          width: 208px;
+          height: calc(100vh - 24px);
+          overflow-y: auto;
+          z-index: 45;
+          background: var(--header-bg);
+          border: 1px solid var(--border-color);
+          border-radius: 16px;
+          padding: 14px 12px;
+          gap: 5px;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+          box-sizing: border-box;
+        }
+        body.pc-dense .pclb-brand {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          padding: 4px 6px 10px;
+        }
+        body.pc-dense .pclb-logo {
+          width: 26px;
+          height: 26px;
+          border-radius: 6px;
+        }
+        body.pc-dense .pclb-title {
+          font-weight: 800;
+          font-size: 1.05em;
+          letter-spacing: -0.3px;
+          color: var(--text-main);
+        }
+        body.pc-dense .pclb-month {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          margin-bottom: 4px;
+        }
+        body.pc-dense .pclb-nav {
+          width: 34px;
+          height: 34px;
+          border: none;
+          background: var(--btn-bg);
+          color: var(--text-main);
+          border-radius: 8px;
+          font-size: 1.2em;
+          cursor: pointer;
+        }
+        body.pc-dense .pclb-ym {
+          flex: 1;
+          height: 34px;
+          border: none;
+          background: var(--btn-bg);
+          color: var(--text-main);
+          border-radius: 8px;
+          font-weight: 800;
+          font-size: 0.95em;
+          cursor: pointer;
+        }
+        body.pc-dense .pclb-sec {
+          font-size: 0.68em;
+          font-weight: 800;
+          letter-spacing: 0.5px;
+          color: var(--text-sub);
+          margin: 12px 6px 3px;
+          text-transform: uppercase;
+        }
+        body.pc-dense .pclb-item {
+          display: block;
+          width: 100%;
+          text-align: left;
+          padding: 9px 11px;
+          border: none;
+          border-radius: 9px;
+          background: transparent;
+          color: var(--text-main);
+          font-weight: 600;
+          font-size: 0.9em;
+          cursor: pointer;
+          transition:
+            background 0.13s ease,
+            transform 0.1s ease;
+        }
+        body.pc-dense .pclb-item:hover {
+          background: var(--btn-bg);
+        }
+        body.pc-dense .pclb-item.pclb-on {
+          background: rgba(10, 132, 255, 0.13);
+          color: #0a84ff;
+        }
+        body.pc-dense .pclb-seg {
+          display: flex;
+          gap: 4px;
+          background: var(--btn-bg);
+          border-radius: 9px;
+          padding: 3px;
+          margin: 2px 0;
+        }
+        body.pc-dense .pclb-seg-btn {
+          flex: 1;
+          border: none;
+          background: transparent;
+          color: var(--text-main);
+          padding: 6px 0;
+          border-radius: 6px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        body.pc-dense .pclb-seg-btn.pclb-on {
+          background: #0a84ff;
+          color: #fff;
+        }
+        body.pc-dense .pclb-off {
+          padding: 9px;
+          border: none;
+          border-radius: 9px;
+          background: var(--btn-bg);
+          color: var(--text-sub);
+          font-weight: 700;
+          cursor: pointer;
+        }
+        body.pc-dense .pclb-off:hover {
+          filter: brightness(1.08);
+        }
+      }
+
+      /* 우측 패널 — 접히지 않았을 때만 표시 */
+      @media (hover: hover) and (pointer: fine) {
+        body.pc-dense:not(.pc-right-collapsed) #pcSidePanel {
+          display: block;
+          position: fixed;
+          top: 12px;
+          right: 12px;
+          width: 312px;
+          height: calc(100vh - 24px);
+          overflow-y: auto;
+          z-index: 40;
+          -webkit-overflow-scrolling: touch;
+        }
+        body.pc-dense #pendingSection,
+        body.pc-dense #statsSummaryBar {
+          display: none !important;
+        }
+
+        /* ===== 책갈피 접기: 탭 / 딤 / 접기버튼 ===== */
+        body.pc-dense #pcLeftTab,
+        body.pc-dense #pcRightTab {
+          display: none;
+          position: fixed;
+          top: 16px;
+          z-index: 1300;
+          align-items: center;
+          gap: 3px;
+          height: 40px;
+          padding: 0 10px;
+          background: #0a84ff;
+          color: #fff;
+          font-weight: 800;
+          font-size: 0.95em;
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+        }
+        body.pc-dense #pcLeftTab {
+          left: 0;
+          border-radius: 0 12px 12px 0;
+        }
+        body.pc-dense #pcRightTab {
+          right: 0;
+          border-radius: 12px 0 0 12px;
+        }
+        body.pc-dense.pc-left-collapsed #pcLeftTab {
+          display: flex;
+        }
+        body.pc-dense.pc-right-collapsed #pcRightTab {
+          display: flex;
+        }
+        body.pc-dense #pcLeftTab:hover {
+          padding-left: 14px;
+        }
+        body.pc-dense #pcRightTab:hover {
+          padding-right: 14px;
+        }
+        body.pc-dense .pc-collapse-btn {
+          border: none;
+          background: var(--btn-bg);
+          color: var(--text-sub);
+          border-radius: 8px;
+          width: 28px;
+          height: 28px;
+          cursor: pointer;
+          font-size: 1.1em;
+          flex: 0 0 auto;
+        }
+        body.pc-dense .pc-collapse-btn:hover {
+          filter: brightness(1.1);
+        }
+        body.pc-dense #pcOverlayDim {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.4);
+          z-index: 1100;
+        }
+        /* 접힘 상태에서 달 이동용 미니 네비 (좌측 탭 옆) */
+        body.pc-dense.pc-left-collapsed #pcMiniNav {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          position: fixed;
+          top: 16px;
+          left: 62px;
+          z-index: 1300;
+          background: var(--header-bg);
+          border: 1px solid var(--border-color);
+          border-radius: 10px;
+          padding: 3px;
+          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+        }
+        body.pc-dense #pcMiniNav button {
+          border: none;
+          background: var(--btn-bg);
+          color: var(--text-main);
+          width: 30px;
+          height: 30px;
+          border-radius: 7px;
+          cursor: pointer;
+          font-size: 1.1em;
+        }
+        body.pc-dense #pcMiniNavLabel {
+          font-weight: 800;
+          padding: 0 8px;
+          cursor: pointer;
+          color: var(--text-main);
+          white-space: nowrap;
+        }
+
+        /* ===== 모달: PC에선 바텀시트 → 중앙 다이얼로그 ===== */
+        body.pc-dense .overlay-modal {
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+        }
+        body.pc-dense .modal-box {
+          border-radius: 18px !important;
+          max-height: 86vh;
+          animation: pcModalIn 0.22s ease-out !important;
+          box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4) !important;
+        }
+        body.pc-dense .bottom-sheet-handle {
+          display: none;
+        }
+        /* 상세 모달: PC에선 단일열 목록 + 간격 축소(한눈에) */
+        body.pc-dense #modal .modal-box {
+          max-width: 560px;
+        }
+        body.pc-dense #modalContent .modal-card {
+          margin-bottom: 6px;
+          padding: 12px 16px;
+        }
+        /* 완료(도장)·좌측알약 둘 다 없는 카드만 하단 여백 줄임 (절대위치 요소 겹침 방지) */
+        body.pc-dense #modalContent .modal-card:not(:has(.status-badge)):not(:has(.modal-left-pills)) {
+          padding-bottom: 12px !important;
+        }
+      }
+      @keyframes pcModalIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      /* 좌측: 달력(좌만 열림)=창-232 가 임계(819) 이상이면 도킹 → 창 ≥ 1051 */
+      @media (hover: hover) and (pointer: fine) and (min-width: 1051px) {
+        body.pc-dense:not(.pc-left-collapsed) {
+          padding-left: 232px;
+        }
+      }
+      /* 우측: 달력(둘 다 열림)=창-568 가 임계 이상이면 도킹 → 창 ≥ 1387 */
+      @media (hover: hover) and (pointer: fine) and (min-width: 1387px) {
+        body.pc-dense:not(.pc-right-collapsed) {
+          padding-right: 336px;
+        }
+      }
+      /* 좌측 도킹 폭 미만(<1051)에서 좌측이 열리면 오버레이(달력 위로) */
+      @media (hover: hover) and (pointer: fine) and (max-width: 1050px) {
+        body.pc-dense:not(.pc-left-collapsed) #pcLeftbar {
+          z-index: 1200;
+          box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
+        }
+        body.pc-dense:not(.pc-left-collapsed) #pcOverlayDim {
+          display: block;
+        }
+      }
+      /* 우측 도킹 폭 미만(<1387)에서 우측이 열리면 오버레이 */
+      @media (hover: hover) and (pointer: fine) and (max-width: 1386px) {
+        body.pc-dense:not(.pc-right-collapsed) #pcSidePanel {
+          z-index: 1200;
+          box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
+        }
+        body.pc-dense:not(.pc-right-collapsed) #pcOverlayDim {
+          display: block;
+        }
+      }
     </style>
   </head>
   <body>
@@ -2889,6 +3480,8 @@
           >
             🏖️ ON
           </button>
+          <!-- PC 전용: PC모드 ↔ 기본형 토글 (모바일에선 숨김) -->
+          <button class="size-btn" id="pcDenseToggle" onclick="togglePcDense()" style="display: none">🖥️ PC모드</button>
         </div>
 
         <div class="action-row-right">
@@ -3213,6 +3806,7 @@
             onclick="
               _editState = null;
               document.getElementById('modal').style.display = 'none';
+              if (typeof clearClickedHighlight === 'function') clearClickedHighlight();
             "
           >
             ✕
@@ -4967,7 +5561,7 @@
       </div>
     </div>
 
-    <script src="out.js"></script>
+    <script src="out.js" defer></script>
     <div id="fabBtn" class="fab-wrapper" style="display: none">
       <div class="fab-sub-container">
         <div class="fab-sub-item" id="fab-sub-ai-wrap" style="display: none">
@@ -5040,6 +5634,6 @@
         </div>
       </div>
     </div>
-    <script src="script.js"></script>
+    <script src="script.js" defer></script>
   </body>
 </html>

@@ -900,6 +900,8 @@ function renderCalendar() {
       for (let s = 0; s <= maxSlot; s++) {
         let item = renderArray[s];
         let sHeight = weekSlotHeights[w] && weekSlotHeights[w][s] ? weekSlotHeights[w][s] : 46;
+        // 🖥️ PC모드: 슬롯 높이 슬림(주 전체 균일 축소 → 간트 정렬 유지). 최소 30 보장
+        if (document.body.classList.contains("pc-dense")) sHeight = Math.max(30, Math.round(sHeight * 0.66));
 
         if (!item) {
           cellHtml += `<div class="item-tag" style="opacity:0; pointer-events:none; border:none; background:transparent; box-shadow:none; height:${sHeight}px; min-height:${sHeight}px; margin-bottom:1px; padding:0;"></div>`;
@@ -1006,8 +1008,19 @@ function renderCalendar() {
 
         let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${_argq(item.company)}', ${isItemDone})"`;
 
+        // hover 툴팁 내용(PC모드): 1줄=제목, 이후 "라벨: 값"
+        let _etc = (item.etc || "").replace(/\[[^\]]*\]/g, "").trim();
+        let _pal = parseInt(item.pal) || 0;
+        let _box = parseInt(item.box) || 0;
+        let _tip = `${cleanCompany}`;
+        if (_pal) _tip += `\n팔레트: ${_pal} P`;
+        if (_box) _tip += `\n박스: ${_box} B`;
+        if (!_pal && !_box) _tip += `\n수량: -`;
+        if (_etc) _tip += `\n비고: ${_etc}`;
+        _tip += `\n상태: ${isItemDone ? "✅ " + (isTaskMode ? "작업완료" : "출고완료") : isTaskMode ? "작업대기" : "출고대기"}`;
+
         // 🚨 핵심: 드래그가 먹히도록 data-raw-idx 강제 추가!
-        cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}" style="${bgStyle}" ${bindItem}>${innerHtml}</div>`;
+        cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}" data-tip="${_esc(_tip)}" style="${bgStyle}" ${bindItem}>${innerHtml}</div>`;
       }
     }
     cellHtml += `</div>`;
@@ -1029,10 +1042,295 @@ function renderCalendar() {
   updateSyncTime();
   // 🚨 [추가] 달력을 다 그리고 나면, 하단 통계 수치도 실시간으로 업데이트!
   updateStatsSummary();
+  renderPcSidePanel(); // PC모드 우측 패널
+  renderPcLeftbar(); // PC모드 좌측 사이드바
   // 콜드스타트 부트 로더 제거 (첫 렌더 완료)
   const _bl = document.getElementById("bootLoader");
   if (_bl) _bl.classList.add("hide");
 }
+
+// =====================================================================
+// 🖥️ PC 모드 (출고) — body.pc-dense + 마우스 미디어에서만. 모바일/토글OFF 불변
+// =====================================================================
+function togglePcDense() {
+  const on = document.body.classList.toggle("pc-dense");
+  try {
+    localStorage.setItem("pc_dense", on ? "on" : "off");
+  } catch (e) {}
+  const btn = document.getElementById("pcDenseToggle");
+  if (btn) {
+    btn.innerHTML = on ? "🖥️ PC모드 ON" : "🖥️ PC모드";
+    btn.classList.toggle("active", on);
+  }
+  if (on) {
+    ensurePcSidePanel();
+    ensurePcLeftbar();
+    initPcPanels();
+    renderPcSidePanel();
+    renderPcLeftbar();
+  }
+  if (typeof navMonth === "function") navMonth(0); // 슬롯 슬림/복원 즉시 반영 위해 재렌더
+}
+function ensurePcSidePanel() {
+  if (document.getElementById("pcSidePanel")) return;
+  const el = document.createElement("aside");
+  el.id = "pcSidePanel";
+  document.body.appendChild(el);
+}
+function ensurePcLeftbar() {
+  if (document.getElementById("pcLeftbar")) return;
+  const el = document.createElement("aside");
+  el.id = "pcLeftbar";
+  document.body.appendChild(el);
+}
+function pcGoToday() {
+  const now = new Date();
+  const diff = (now.getFullYear() - parseInt(serverData.year)) * 12 + (now.getMonth() + 1 - parseInt(serverData.month));
+  navMonth(diff);
+}
+// 🖥️ 책갈피 탭 / 딤 + 접기 토글
+function ensurePcChrome() {
+  if (!document.getElementById("pcLeftTab")) {
+    const t = document.createElement("button");
+    t.id = "pcLeftTab";
+    t.innerHTML = "▤ ›";
+    t.title = "메뉴 열기";
+    t.onclick = togglePcLeft;
+    document.body.appendChild(t);
+  }
+  if (!document.getElementById("pcRightTab")) {
+    const t = document.createElement("button");
+    t.id = "pcRightTab";
+    t.innerHTML = "‹ 📊";
+    t.title = "요약 패널 열기";
+    t.onclick = togglePcRight;
+    document.body.appendChild(t);
+  }
+  if (!document.getElementById("pcOverlayDim")) {
+    const d = document.createElement("div");
+    d.id = "pcOverlayDim";
+    d.onclick = closePcOverlays;
+    document.body.appendChild(d);
+  }
+  if (!document.getElementById("pcMiniNav")) {
+    const n = document.createElement("div");
+    n.id = "pcMiniNav";
+    n.innerHTML = `<button onclick="navMonth(-1)" aria-label="이전 달">‹</button><span id="pcMiniNavLabel" onclick="openPicker()"></span><button onclick="navMonth(1)" aria-label="다음 달">›</button>`;
+    document.body.appendChild(n);
+  }
+  ensurePcTip();
+}
+// 🖥️ hover 툴팁 (PC모드 전용)
+function ensurePcTip() {
+  if (document.getElementById("pcTip")) return;
+  const t = document.createElement("div");
+  t.id = "pcTip";
+  document.body.appendChild(t);
+  document.addEventListener("mouseover", (e) => {
+    if (!document.body.classList.contains("pc-dense")) return;
+    const tag = e.target.closest && e.target.closest(".item-tag[data-tip]");
+    if (!tag) return;
+    t.innerHTML = _pcTipHtml(tag.getAttribute("data-tip") || "");
+    t.style.display = "block";
+  });
+  document.addEventListener("mousemove", (e) => {
+    if (t.style.display !== "block") return;
+    const r = t.getBoundingClientRect();
+    let x = e.clientX + 14;
+    let y = e.clientY + 16;
+    if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - 14;
+    if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - 16;
+    t.style.left = x + "px";
+    t.style.top = y + "px";
+  });
+  document.addEventListener("mouseout", (e) => {
+    if (e.target.closest && e.target.closest(".item-tag[data-tip]")) t.style.display = "none";
+  });
+}
+// data-tip(여러 줄) → 제목 + 라벨/값 정렬 HTML
+function _pcTipHtml(tip) {
+  const lines = String(tip || "")
+    .split("\n")
+    .filter((l) => l.trim() !== "");
+  if (lines.length === 0) return "";
+  let html = `<div class="pctip-title">${_esc(lines[0])}</div>`;
+  for (let i = 1; i < lines.length; i++) {
+    const ci = lines[i].indexOf(": ");
+    if (ci > 0) {
+      html += `<div class="pctip-row"><span class="pctip-k">${_esc(lines[i].slice(0, ci))}</span><span class="pctip-v">${_esc(lines[i].slice(ci + 2))}</span></div>`;
+    } else {
+      html += `<div class="pctip-row"><span class="pctip-v">${_esc(lines[i])}</span></div>`;
+    }
+  }
+  return html;
+}
+function togglePcLeft() {
+  const c = document.body.classList.toggle("pc-left-collapsed");
+  try {
+    localStorage.setItem("pc_left", c ? "collapsed" : "open");
+  } catch (e) {}
+}
+function togglePcRight() {
+  const c = document.body.classList.toggle("pc-right-collapsed");
+  try {
+    localStorage.setItem("pc_right", c ? "collapsed" : "open");
+  } catch (e) {}
+}
+function closePcOverlays() {
+  document.body.classList.add("pc-left-collapsed", "pc-right-collapsed");
+  try {
+    localStorage.setItem("pc_left", "collapsed");
+    localStorage.setItem("pc_right", "collapsed");
+  } catch (e) {}
+}
+let _pcLeftNarrow = null;
+let _pcRightNarrow = null;
+// 임계폭 = '달력 자체'의 최소 폭(출고). 패널 폭(좌232/우336)은 별도로 빼서 판단
+const PC_DOCK_MIN = 819;
+const PC_LEFT_W = 232;
+const PC_RIGHT_W = 336;
+function applyPcAutoCollapse() {
+  if (!document.body.classList.contains("pc-dense")) return;
+  // 좌+우 모두 열면 달력이 임계 미만 → 우측 패널 먼저 접기
+  const rightNarrow = window.innerWidth - PC_LEFT_W - PC_RIGHT_W < PC_DOCK_MIN;
+  // 좌측만 열어도 달력이 임계 미만 → 좌측도 접기
+  const leftNarrow = window.innerWidth - PC_LEFT_W < PC_DOCK_MIN;
+  if (rightNarrow !== _pcRightNarrow) {
+    _pcRightNarrow = rightNarrow;
+    document.body.classList.toggle("pc-right-collapsed", rightNarrow);
+  }
+  if (leftNarrow !== _pcLeftNarrow) {
+    _pcLeftNarrow = leftNarrow;
+    document.body.classList.toggle("pc-left-collapsed", leftNarrow);
+  }
+}
+function initPcPanels() {
+  ensurePcChrome();
+  _pcLeftNarrow = null;
+  _pcRightNarrow = null;
+  applyPcAutoCollapse();
+  if (!window._pcResizeBound) {
+    window._pcResizeBound = true;
+    window.addEventListener("resize", applyPcAutoCollapse);
+  }
+}
+function renderPcSidePanel() {
+  if (!document.body.classList.contains("pc-dense")) return;
+  ensurePcSidePanel();
+  const panel = document.getElementById("pcSidePanel");
+  if (!panel) return;
+  let totalPal = 0,
+    totalBox = 0,
+    totalCnt = 0,
+    doneCnt = 0;
+  const md = serverData.monthData || {};
+  Object.keys(md).forEach((d) =>
+    (md[d] || []).forEach((it) => {
+      totalCnt++;
+      totalPal += parseInt(it.pal || 0) || 0;
+      totalBox += parseInt(it.box || 0) || 0;
+      if (it.isDone === true || String(it.isDone) === "true") doneCnt++;
+    }),
+  );
+  const waitCnt = totalCnt - doneCnt;
+  const pend = serverData.pendingItems || [];
+  let html = `
+    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+      <button class="pc-collapse-btn" onclick="togglePcRight()" title="패널 접기">›</button>
+    </div>
+    <div class="pcp-card">
+      <div class="pcp-title">📊 ${serverData.year}.${String(serverData.month).padStart(2, "0")} 요약</div>
+      <div class="pcp-stat-row"><span>총 팔레트</span><b>${totalPal} P</b></div>
+      <div class="pcp-stat-row"><span>총 박스</span><b>${totalBox} B</b></div>
+      <div class="pcp-stat-row"><span>총 건수</span><b>${totalCnt}건</b></div>
+      <div class="pcp-stat-row"><span>✅ 완료 / ⏳ 대기</span><b>${doneCnt} / ${waitCnt}</b></div>
+      <div style="margin-top:10px;"><button class="pcp-btn" onclick="openDashboard()">📊 전체 통계 보기</button></div>
+    </div>
+    <div class="pcp-card">
+      <div class="pcp-title">⏳ 출고 대기 / 미정 (${pend.length}건)</div>`;
+  if (pend.length === 0) {
+    html += `<div style="color:var(--text-sub); font-size:0.85em; padding:6px 2px;">대기 중인 건이 없습니다.</div>`;
+  } else {
+    pend.forEach((it) => {
+      const comp = _esc(
+        String(it.company || "")
+          .replace(/\[TASK\]/gi, "")
+          .trim(),
+      );
+      const qty = parseInt(it.pal || 0) ? `${it.pal}P` : parseInt(it.box || 0) ? `${it.box}B` : "";
+      html += `<div class="pcp-pend-item"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${comp}</span><b>${qty}</b></div>`;
+    });
+  }
+  html += `</div>`;
+  panel.innerHTML = html;
+}
+function renderPcLeftbar() {
+  if (!document.body.classList.contains("pc-dense")) return;
+  ensurePcLeftbar();
+  const bar = document.getElementById("pcLeftbar");
+  if (!bar) return;
+  const ym = `${serverData.year}.${String(serverData.month).padStart(2, "0")}`;
+  const mn = document.getElementById("pcMiniNavLabel");
+  if (mn) mn.textContent = ym;
+  const on = (id) => {
+    const e = document.getElementById(id);
+    return e && e.classList.contains("active") ? "pclb-on" : "";
+  };
+  const holidayOn = typeof isShowHoliday !== "undefined" && isShowHoliday;
+  const admin = typeof isAdmin !== "undefined" && isAdmin;
+  const dark = typeof isDarkMode !== "undefined" && isDarkMode;
+  bar.innerHTML = `
+    <div class="pclb-brand">
+      <img src="/apple-touch-icon.png" class="pclb-logo" alt="">
+      <div class="pclb-title">출고캘린더</div>
+      <button class="pc-collapse-btn" onclick="togglePcLeft()" title="메뉴 접기" style="margin-left:auto;">‹</button>
+    </div>
+    <div class="pclb-month">
+      <button class="pclb-nav" onclick="navMonth(-1)" aria-label="이전 달">‹</button>
+      <button class="pclb-ym" onclick="openPicker()">${ym}</button>
+      <button class="pclb-nav" onclick="navMonth(1)" aria-label="다음 달">›</button>
+    </div>
+    <button class="pclb-item" onclick="pcGoToday()">📅 오늘로 이동</button>
+
+    <div class="pclb-sec">보기</div>
+    <div class="pclb-seg">
+      <button class="pclb-seg-btn ${on("btnS")}" onclick="changeSize('S'); renderPcLeftbar()">A-</button>
+      <button class="pclb-seg-btn ${on("btnM")}" onclick="changeSize('M'); renderPcLeftbar()">A</button>
+      <button class="pclb-seg-btn ${on("btnL")}" onclick="changeSize('L'); renderPcLeftbar()">A+</button>
+    </div>
+    <button class="pclb-item ${holidayOn ? "pclb-on" : ""}" onclick="toggleHoliday(); renderPcLeftbar()">🏖️ 공휴일 ${holidayOn ? "ON" : "OFF"}</button>
+
+    <div class="pclb-sec">기능</div>
+    <button class="pclb-item" onclick="openDashboard()">📊 통계 대시보드</button>
+    <button class="pclb-item" onclick="toggleMultiMode()">☑️ 다중 선택</button>
+    <button class="pclb-item" onclick="navMonth(0)">🔄 새로고침</button>
+
+    <div class="pclb-sec">계정 / 설정</div>
+    <button class="pclb-item ${admin ? "pclb-on" : ""}" onclick="toggleAdmin(); setTimeout(renderPcLeftbar, 60)">${admin ? "🔓 관리자 모드" : "🔒 관리자 로그인"}</button>
+    <button class="pclb-item" onclick="toggleTheme(); renderPcLeftbar()">${dark ? "🌙 다크 테마" : "☀️ 라이트 테마"}</button>
+
+    <button class="pclb-off" style="margin-top:auto;" onclick="togglePcDense()">🖥️ PC모드 끄기</button>
+  `;
+}
+// 저장된 PC모드 선호 복원 (기본 OFF — 기존 사용자 영향 없음)
+window.addEventListener("DOMContentLoaded", function () {
+  try {
+    ensurePcSidePanel();
+    ensurePcLeftbar();
+    ensurePcChrome();
+    if (localStorage.getItem("pc_dense") === "on") {
+      document.body.classList.add("pc-dense");
+      const btn = document.getElementById("pcDenseToggle");
+      if (btn) {
+        btn.innerHTML = "🖥️ PC모드 ON";
+        btn.classList.add("active");
+      }
+      initPcPanels();
+      renderPcSidePanel();
+      renderPcLeftbar();
+    }
+  } catch (e) {}
+});
 
 // 💡 [미니 CRM] 데이터 조용히 백그라운드 동기화하는 함수
 function syncCrmDataBackground() {
@@ -1947,7 +2245,17 @@ function handleItemClick(e, day, idx, comp, isDone) {
     }, 100);
     return;
   }
-  showModal(day);
+  highlightClickedItem(e.currentTarget); // 달력 칩 강조
+  showModal(day, idx); // 모달 안에서도 클릭한 항목 카드 강조
+}
+
+// 클릭된 일정 칩 강조 (상세 모달이 어떤 일정에서 열렸는지 한눈에)
+function highlightClickedItem(el) {
+  clearClickedHighlight();
+  if (el && el.classList) el.classList.add("item-clicked");
+}
+function clearClickedHighlight() {
+  document.querySelectorAll(".item-tag.item-clicked").forEach((n) => n.classList.remove("item-clicked"));
 }
 
 function openAddFormWithDate(day) {
@@ -2302,7 +2610,7 @@ function openAddForm() {
   document.getElementById("addModal").style.display = "flex";
 }
 
-function showModal(day) {
+function showModal(day, clickedIdx) {
   let dayData = day === "pending" ? serverData.pendingItems : serverData.monthData[day];
   if (!dayData || dayData.length === 0) return;
   let titleText = "",
@@ -2476,6 +2784,15 @@ function showModal(day) {
   });
   document.getElementById("modalContent").innerHTML = contentHtml;
   document.getElementById("modal").style.display = "flex";
+
+  // 클릭한 항목 카드 강조 (여러 건일 때만 — 1건이면 강조 불필요)
+  if (clickedIdx != null && dayData.length > 1) {
+    const card = document.getElementById(`modal-card-${day}-${clickedIdx}`);
+    if (card) {
+      card.classList.add("modal-card-clicked");
+      setTimeout(() => card.scrollIntoView({ block: "nearest", behavior: "smooth" }), 60);
+    }
+  }
 }
 
 // ── 상세 모달 인라인 수정 상태 관리 ──
@@ -3064,7 +3381,7 @@ function openDashboard() {
 
   window.dashCurrentData = serverData;
   document.getElementById("dashboardModal").style.display = "flex";
-  setTimeout(renderDashCharts, 100);
+  setTimeout(renderDashCharts, 380); // 모달 슬라이드인 끝난 뒤 생성해야 진입 애니메이션이 보임
 }
 
 // 📈 핵심 차트 그리기 엔진
@@ -3315,6 +3632,7 @@ function renderDashCharts() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 800, easing: "easeOutQuart" },
       interaction: { mode: "index", intersect: false, axis: "x" },
       plugins: {
         legend: { display: false },
@@ -3449,6 +3767,7 @@ function renderDashCharts() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 800, easing: "easeOutQuart", animateRotate: true, animateScale: true },
       cutout: "55%",
       layout: { padding: { left: 50, right: 50, top: 30, bottom: 25 } },
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
@@ -3553,7 +3872,10 @@ function updateStatsSummary() {
 
 function closeModalOnBgClick(e) {
   if (isLongPress || isMultiMode) return;
-  if (e.target === document.getElementById("modal")) document.getElementById("modal").style.display = "none";
+  if (e.target === document.getElementById("modal")) {
+    document.getElementById("modal").style.display = "none";
+    clearClickedHighlight();
+  }
 }
 function toggleTheme() {
   const body = document.body;

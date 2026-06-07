@@ -1587,24 +1587,36 @@ function attachRowYCoords(rows, visionData) {
     if (typeof r.iy !== "number") return;
     if (!r.cx) r.cx = {};
     const band = Math.max((typeof r.ih === "number" ? r.ih : 20) * 1.4, 16);
-    const near = words.filter((w) => Math.abs(w.cy - r.iy) <= band);
+    // 왼→오 순으로 정렬 + 이미 쓴 단어는 건너뜀(ETA·입고일 날짜가 같아도 각각 다른 칸에 매칭)
+    const near = words.filter((w) => Math.abs(w.cy - r.iy) <= band).sort((a, b) => a.cx - b.cx);
+    const usedW = new Set();
     const findDigit = (val) => {
       const k = digits(val);
       if (!k || k.length < 4) return null;
-      for (const w of near) if (w.d === k) return w.cx;
+      for (const w of near) {
+        if (!usedW.has(w) && w.d === k) {
+          usedW.add(w);
+          return w.cx;
+        }
+      }
       return null;
     };
     const findText = (val) => {
       const k = upper(val);
       if (!k) return null;
-      for (const w of near) if (w.t === k) return w.cx;
+      for (const w of near) {
+        if (!usedW.has(w) && w.t === k) {
+          usedW.add(w);
+          return w.cx;
+        }
+      }
       return null;
     };
     const setc = (f, x) => {
       if (typeof x === "number" && r.cx[f] == null) r.cx[f] = x;
     };
-    setc("eta", findDigit(r.eta));
-    setc("inDate", findDigit(r.inDate));
+    setc("eta", findDigit(r.eta)); // 왼쪽 날짜
+    setc("inDate", findDigit(r.inDate)); // 그다음(오른쪽) 날짜
     setc("fwd", findText(r.fwd));
     setc("sType", findText(r.sType));
   });
