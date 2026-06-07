@@ -1185,16 +1185,13 @@ function closePcOverlays() {
 }
 let _pcLeftNarrow = null;
 let _pcRightNarrow = null;
-// 임계폭 = '달력 자체'의 최소 폭(출고). 패널 폭(좌232/우336)은 별도로 빼서 판단
+// 좌측 임계 창폭(출고, 우측 닫힘 기준). 우측은 패널폭(336) 만큼 더 넓어야 열림
 const PC_DOCK_MIN = 819;
-const PC_LEFT_W = 232;
-const PC_RIGHT_W = 336;
+const PC_RIGHT_EXTRA = 336;
 function applyPcAutoCollapse() {
   if (!document.body.classList.contains("pc-dense")) return;
-  // 좌+우 모두 열면 달력이 임계 미만 → 우측 패널 먼저 접기
-  const rightNarrow = window.innerWidth - PC_LEFT_W - PC_RIGHT_W < PC_DOCK_MIN;
-  // 좌측만 열어도 달력이 임계 미만 → 좌측도 접기
-  const leftNarrow = window.innerWidth - PC_LEFT_W < PC_DOCK_MIN;
+  const rightNarrow = window.innerWidth < PC_DOCK_MIN + PC_RIGHT_EXTRA; // 우측 먼저 닫힘
+  const leftNarrow = window.innerWidth < PC_DOCK_MIN; // 더 좁아지면 좌측도 닫힘
   if (rightNarrow !== _pcRightNarrow) {
     _pcRightNarrow = rightNarrow;
     document.body.classList.toggle("pc-right-collapsed", rightNarrow);
@@ -1309,7 +1306,10 @@ function renderPcLeftbar() {
     <button class="pclb-item ${admin ? "pclb-on" : ""}" onclick="toggleAdmin(); setTimeout(renderPcLeftbar, 60)">${admin ? "🔓 관리자 모드" : "🔒 관리자 로그인"}</button>
     <button class="pclb-item" onclick="toggleTheme(); renderPcLeftbar()">${dark ? "🌙 다크 테마" : "☀️ 라이트 테마"}</button>
 
-    <button class="pclb-off" style="margin-top:auto;" onclick="togglePcDense()">🖥️ PC모드 끄기</button>
+    <div class="pclb-info" style="margin-top:auto;">
+      <div>🔄 동기화 <b>${_esc((document.getElementById("lastSyncTime")?.innerText || "-").replace("최근 ", "").trim())}</b></div>
+    </div>
+    <button class="pclb-off" onclick="togglePcDense()">🖥️ PC모드 끄기</button>
   `;
 }
 // 저장된 PC모드 선호 복원 (기본 OFF — 기존 사용자 영향 없음)
@@ -1356,16 +1356,10 @@ function navMonth(offset) {
     currentM = now.getMonth() + 1;
   }
 
-  let newMonth = currentM + parseInt(offset, 10);
-  let newYear = currentY;
-
-  if (newMonth > 12) {
-    newMonth = 1;
-    newYear++;
-  } else if (newMonth < 1) {
-    newMonth = 12;
-    newYear--;
-  }
+  // 임의 offset도 정확히 처리(모듈로) — 오늘로 이동처럼 여러 달 점프 대응
+  let total = currentY * 12 + (currentM - 1) + parseInt(offset, 10);
+  let newYear = Math.floor(total / 12);
+  let newMonth = (total % 12) + 1;
 
   goToAsync(newYear, newMonth);
 }

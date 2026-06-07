@@ -3249,6 +3249,19 @@
         body.pc-dense .pc-collapse-btn:hover {
           filter: brightness(1.1);
         }
+        /* 좌측 메뉴 하단 정보(동기화 시간) */
+        body.pc-dense .pclb-info {
+          margin-top: auto;
+          padding: 10px 8px 4px;
+          font-size: 0.78em;
+          color: var(--text-sub);
+          line-height: 1.8;
+          border-top: 1px solid var(--border-color);
+        }
+        body.pc-dense .pclb-info b {
+          color: var(--text-main);
+          font-weight: 700;
+        }
         body.pc-dense #pcOverlayDim {
           display: none;
           position: fixed;
@@ -3328,20 +3341,20 @@
         }
       }
 
-      /* 좌측: 달력(좌만 열림)=창-232 가 임계(819) 이상이면 도킹 → 창 ≥ 1051 */
-      @media (hover: hover) and (pointer: fine) and (min-width: 1051px) {
+      /* 좌측: 창 ≥819 이면 도킹 */
+      @media (hover: hover) and (pointer: fine) and (min-width: 819px) {
         body.pc-dense:not(.pc-left-collapsed) {
           padding-left: 232px;
         }
       }
-      /* 우측: 달력(둘 다 열림)=창-568 가 임계 이상이면 도킹 → 창 ≥ 1387 */
-      @media (hover: hover) and (pointer: fine) and (min-width: 1387px) {
+      /* 우측: 창 ≥1155(=819+336) 이면 도킹 */
+      @media (hover: hover) and (pointer: fine) and (min-width: 1155px) {
         body.pc-dense:not(.pc-right-collapsed) {
           padding-right: 336px;
         }
       }
-      /* 좌측 도킹 폭 미만(<1051)에서 좌측이 열리면 오버레이(달력 위로) */
-      @media (hover: hover) and (pointer: fine) and (max-width: 1050px) {
+      /* 좌측 도킹폭 미만(<819)에서 좌측 열리면 오버레이 */
+      @media (hover: hover) and (pointer: fine) and (max-width: 818px) {
         body.pc-dense:not(.pc-left-collapsed) #pcLeftbar {
           z-index: 1200;
           box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
@@ -3350,8 +3363,8 @@
           display: block;
         }
       }
-      /* 우측 도킹 폭 미만(<1387)에서 우측이 열리면 오버레이 */
-      @media (hover: hover) and (pointer: fine) and (max-width: 1386px) {
+      /* 우측 도킹폭 미만(<1155)에서 우측 열리면 오버레이 */
+      @media (hover: hover) and (pointer: fine) and (max-width: 1154px) {
         body.pc-dense:not(.pc-right-collapsed) #pcSidePanel {
           z-index: 1200;
           box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
@@ -3457,6 +3470,15 @@
             >
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
+          </button>
+          <button
+            class="nav-arrow"
+            onclick="pcGoToday()"
+            aria-label="오늘로 이동"
+            title="오늘로 이동"
+            style="display: flex; align-items: center; justify-content: center; padding: 6px 12px"
+          >
+            📅
           </button>
         </div>
 
