@@ -1825,7 +1825,7 @@ function applyOcrEdits(btn) {
       btn.innerHTML = orig;
     }
     if (res && res.success) {
-      showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount})`, 3000);
+      showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount}${res.skipCount > 0 ? ` / 완료건 건너뜀 ${res.skipCount}` : ""})`, 3000);
       ocrOrigRows = JSON.parse(JSON.stringify(ocrEditRows)); // 기준 갱신
       if (typeof navMonth === "function") navMonth(0);
     } else {

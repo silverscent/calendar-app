@@ -1325,6 +1325,7 @@ module.exports = async function handler(req, res) {
 
           let updateCount = 0;
           let insertCount = 0;
+          let skipCount = 0;
           const makeSafeDate = (val) => {
             if (!val) return null;
             let s = String(val).trim();
@@ -1380,13 +1381,18 @@ module.exports = async function handler(req, res) {
             let isAiVal = aiSuccess ? 1 : 0;
             let exist = [];
             if (invoice) {
-              [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
+              [exist] = await pool.query(`SELECT id, status FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
             }
             if (exist.length === 0 && bl !== "발행전" && bl !== "") {
-              [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
+              [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
             }
 
             if (exist.length > 0) {
+              // 이미 완료 처리된 일정은 덮어쓰지 않음
+              if (exist[0].status === "완료") {
+                skipCount++;
+                continue;
+              }
               await pool.query(
                 `UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`,
                 [bl, pal, inDate, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id],
@@ -1410,7 +1416,7 @@ module.exports = async function handler(req, res) {
           });
           await sendTgMsg(
             chatId,
-            resultHeader + resultList + `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건) [🛡️V2 방어막 작동중]`,
+            resultHeader + resultList + `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건${skipCount > 0 ? ` / 완료처리 건너뜀 ${skipCount}건` : ""}) [🛡️V2 방어막 작동중]`,
           );
 
           // 🛠️ 스케줄 누락 화물 감지

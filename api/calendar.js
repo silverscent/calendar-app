@@ -1634,6 +1634,7 @@ module.exports = async function (req, res) {
 
           let insertCount = 0;
           let updateCount = 0;
+          let skipCount = 0;
 
           for (const r of rows) {
             const bl = String(r.bl || "").replace(/[\s•·\-\*]/g, "");
@@ -1649,13 +1650,18 @@ module.exports = async function (req, res) {
 
             let exist = [];
             if (invoice) {
-              [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
+              [exist] = await pool.query(`SELECT id, status FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
             }
             if (exist.length === 0 && bl !== "발행전" && bl !== "") {
-              [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
+              [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
             }
 
             if (exist.length > 0) {
+              // 이미 완료 처리된 일정은 덮어쓰지 않음
+              if (exist[0].status === "완료") {
+                skipCount++;
+                continue;
+              }
               await pool.query(
                 `UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=1 WHERE id=?`,
                 [bl, pal, inDate, etc, sType, fwd, invoice, eta, exist[0].id],
@@ -1677,11 +1683,11 @@ module.exports = async function (req, res) {
             if (ip.includes(",")) ip = ip.split(",")[0];
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, 'OCR_APPLY', ?, ?)",
-              [currentAdmin, `OCR 대조 수정 확정 (신규 ${insertCount}건 / 수정 ${updateCount}건)`, ip],
+              [currentAdmin, `OCR 대조 수정 확정 (신규 ${insertCount}건 / 수정 ${updateCount}건 / 완료건너뜀 ${skipCount}건)`, ip],
             );
           } catch (e) {}
 
-          return res.status(200).json({ success: true, insertCount, updateCount, total: rows.length });
+          return res.status(200).json({ success: true, insertCount, updateCount, skipCount, total: rows.length });
         } catch (err) {
           console.error("OCR 적용 에러:", err);
           return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
