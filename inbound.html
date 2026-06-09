@@ -2326,10 +2326,14 @@
           margin-top: 0;
           white-space: nowrap;
         }
-        /* 완료 칩: 슬림 유지 + 더 흐리게(구분) + 체크 키움 */
+        /* 완료 칩: 글씨 색으로 구분 — opacity 제거, PAL 배지 밝게 + 검정 글씨 */
         body.pc-dense .item-tag.done-mark {
           padding: 2px 9px;
-          opacity: 0.72;
+        }
+        body.pc-dense .item-tag.done-mark .pal-main {
+          color: #111111 !important;
+          background: rgba(0,0,0,0.12) !important;
+          text-shadow: none !important;
         }
         body.pc-dense .item-tag .done-icon {
           font-size: 1.05em;
