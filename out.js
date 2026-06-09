@@ -3076,7 +3076,10 @@ function showModal(day, clickedIdx) {
                         </div>`;
   });
   document.getElementById("modalContent").innerHTML = contentHtml;
-  document.getElementById("modal").style.display = "flex";
+  const _modal = document.getElementById("modal");
+  _modal.style.display = "flex";
+  const _modalBox = _modal.querySelector(".modal-box");
+  if (_modalBox) _modalBox.scrollTop = 0;
 
   // 클릭한 항목 카드 강조 (여러 건일 때만 — 1건이면 강조 불필요)
   if (clickedIdx != null && dayData.length > 1) {
