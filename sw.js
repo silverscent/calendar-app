@@ -1,5 +1,5 @@
 // sw.js (서비스 워커) — 앱 셸 캐싱으로 콜드 스타트(검은 화면) 단축
-const CACHE = "cal-shell-v2";
+const CACHE = "cal-shell-v4";
 
 // 앱 셸: 콜드 스타트 시 캐시에서 즉시 제공 → 검은 화면 최소화
 const SHELL = [

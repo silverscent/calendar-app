@@ -728,15 +728,22 @@ module.exports = async function (req, res) {
             countQueryStr = "SELECT COUNT(*) as cnt FROM outbound";
             let whereClauses = [];
             if (keyword) {
+              const kw = `%${keyword}%`;
               if (filterCol === "name") {
                 whereClauses.push("company LIKE ?");
-                params.push(`%${keyword}%`);
+                params.push(kw);
+              } else if (filterCol === "etc") {
+                whereClauses.push("etc LIKE ?");
+                params.push(kw);
               } else if (filterCol === "date") {
                 whereClauses.push("outbound_date LIKE ?");
-                params.push(`%${keyword}%`);
+                params.push(kw);
               } else {
-                whereClauses.push("(company LIKE ? OR outbound_date LIKE ?)");
-                params.push(`%${keyword}%`, `%${keyword}%`);
+                // 전체 검색: 부분(포함) 매칭으로 여러 컬럼 동시 검색
+                whereClauses.push(
+                  "(company LIKE ? OR etc LIKE ? OR outbound_date LIKE ? OR CAST(pal AS CHAR) LIKE ? OR CAST(box AS CHAR) LIKE ?)",
+                );
+                params.push(kw, kw, kw, kw, kw);
               }
             }
             if (whereClauses.length > 0) {
@@ -754,15 +761,28 @@ module.exports = async function (req, res) {
             countQueryStr = "SELECT COUNT(*) as cnt FROM inbound";
             let whereClauses = [];
             if (keyword) {
+              const kw = `%${keyword}%`;
               if (filterCol === "name") {
                 whereClauses.push("bl_number LIKE ?");
-                params.push(`%${keyword}%`);
+                params.push(kw);
+              } else if (filterCol === "invoice") {
+                whereClauses.push("invoice LIKE ?");
+                params.push(kw);
+              } else if (filterCol === "fwd") {
+                whereClauses.push("fwd LIKE ?");
+                params.push(kw);
+              } else if (filterCol === "remarks") {
+                whereClauses.push("remarks LIKE ?");
+                params.push(kw);
               } else if (filterCol === "date") {
-                whereClauses.push("receive_date LIKE ?");
-                params.push(`%${keyword}%`);
+                whereClauses.push("(receive_date LIKE ? OR eta LIKE ?)");
+                params.push(kw, kw);
               } else {
-                whereClauses.push("(bl_number LIKE ? OR receive_date LIKE ?)");
-                params.push(`%${keyword}%`, `%${keyword}%`);
+                // 전체 검색: 부분(포함) 매칭으로 여러 컬럼 동시 검색
+                whereClauses.push(
+                  "(bl_number LIKE ? OR invoice LIKE ? OR fwd LIKE ? OR s_type LIKE ? OR remarks LIKE ? OR receive_date LIKE ? OR eta LIKE ? OR CAST(pallets AS CHAR) LIKE ?)",
+                );
+                params.push(kw, kw, kw, kw, kw, kw, kw, kw);
               }
             }
             if (whereClauses.length > 0) {
@@ -790,6 +810,65 @@ module.exports = async function (req, res) {
         } catch (e) {
           console.error("API 처리 오류:", e);
           return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+        }
+      }
+
+      // 🔍 일정 검색 (PC 사이드바): 전체 기간 부분(포함) 검색 → 날짜 점프용
+      else if (action === "SEARCH_SCHEDULES") {
+        try {
+          const kwRaw = (payload.keyword || "").trim();
+          const kw = `%${kwRaw}%`;
+          const startDate = (payload.startDate || "").trim();
+          const endDate = (payload.endDate || "").trim();
+          let rows = [];
+          if (type === "out") {
+            // 출고: 업체명 검색 + 작업기간(선택)
+            let where = [];
+            let params = [];
+            // 약어(CRM 단축명)로 확장된 정식 업체명 목록(클라이언트 전달)
+            const compList = Array.isArray(payload.companies) ? payload.companies.filter(Boolean).slice(0, 50) : [];
+            if (kwRaw || compList.length) {
+              let ors = [];
+              if (kwRaw) {
+                // 대소문자 무시 (oc → OC D-KIT 등)
+                ors.push("LOWER(company) LIKE LOWER(?)", "LOWER(etc) LIKE LOWER(?)");
+                params.push(kw, kw);
+              }
+              if (compList.length) {
+                ors.push("LOWER(company) IN (" + compList.map(() => "LOWER(?)").join(",") + ")");
+                params.push(...compList);
+              }
+              where.push("(" + ors.join(" OR ") + ")");
+            }
+            if (startDate) {
+              where.push("outbound_date >= ?");
+              params.push(startDate);
+            }
+            if (endDate) {
+              where.push("outbound_date <= ?");
+              params.push(endDate);
+            }
+            if (where.length === 0) return res.status(200).json({ success: true, rows: [] });
+            where.push("outbound_date IS NOT NULL");
+            const sql =
+              "SELECT id, company, pal, box, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date, etc, isDone FROM outbound WHERE " +
+              where.join(" AND ") +
+              " ORDER BY outbound_date DESC LIMIT 200";
+            [rows] = await pool.query(sql, params);
+          } else {
+            // 입고: B/L · 인보이스 부분 검색 (+ 운송타입/포워더/비고도 함께)
+            if (!kwRaw) return res.status(200).json({ success: true, rows: [] });
+            const sql =
+              "SELECT id, bl_number AS bl, invoice, pallets AS pal, DATE_FORMAT(receive_date, '%Y-%m-%d') AS date, " +
+              "DATE_FORMAT(eta, '%Y-%m-%d') AS eta, fwd, s_type, status, remarks " +
+              "FROM inbound WHERE (LOWER(bl_number) LIKE LOWER(?) OR LOWER(invoice) LIKE LOWER(?) OR LOWER(fwd) LIKE LOWER(?) OR LOWER(s_type) LIKE LOWER(?) OR LOWER(remarks) LIKE LOWER(?)) " +
+              "AND receive_date IS NOT NULL ORDER BY receive_date DESC LIMIT 200";
+            [rows] = await pool.query(sql, [kw, kw, kw, kw, kw]);
+          }
+          return res.status(200).json({ success: true, rows: rows });
+        } catch (e) {
+          console.error("SEARCH_SCHEDULES 오류:", e);
+          return res.status(200).json({ success: false, msg: "검색 중 오류가 발생했습니다." });
         }
       }
 
