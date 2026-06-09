@@ -626,7 +626,6 @@
         text-overflow: ellipsis;
         width: 100%;
         text-align: center;
-        text-shadow: 0 1px 4px rgba(0,0,0,0.45);
       }
       .bl-sub {
         font-size: 0.8em;
@@ -639,7 +638,6 @@
         white-space: nowrap;
         overflow: hidden;
         max-width: 100%;
-        text-shadow: 0 1px 3px rgba(0,0,0,0.4);
       }
 
       /* 완료된 건은 파스텔 배경 위에서 흰색 글씨 + 그림자 유지 (가독성 향상) */
@@ -650,13 +648,14 @@
       .done-mark .pal-main,
       .done-mark .bl-sub {
         text-decoration: none !important;
-        text-shadow: 0 1px 4px rgba(0,0,0,0.55) !important;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.5) !important;
       }
       .done-icon {
         font-size: 9px !important;
         margin-right: 1px;
         font-weight: 900;
         line-height: 1;
+        color: #34c759 !important;
         text-decoration: none !important;
       }
 
@@ -1411,12 +1410,33 @@
       /* ===================================================== */
 
       /* 1. 상단 메뉴 (화살표 포함) 1줄 고정 & 화면 비율(vw) 축소 */
+      .app-branding-header {
+        flex-wrap: nowrap !important;
+      }
+      .branding-left {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+      }
+      .branding-logo {
+        flex-shrink: 0 !important;
+        width: clamp(16px, 3.5vw, 24px) !important;
+        height: clamp(16px, 3.5vw, 24px) !important;
+      }
+      .branding-title {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        font-size: clamp(0.72em, 3.5vw, 1.1em) !important;
+      }
+      .controls-area {
+        flex-shrink: 0 !important;
+      }
       .top-row {
         flex-wrap: nowrap !important;
         gap: 1.5vw !important;
       }
       .title-area,
-      .controls-area,
       .action-row-right,
       .sync-area,
       .admin-actions {
@@ -1424,8 +1444,6 @@
         gap: 1vw !important;
         white-space: nowrap !important;
       }
-      /* 🚨 화살표(.nav-arrow) 추가 완료!
-      */
       .title-btn,
       .admin-btn,
       .size-btn,
@@ -1565,6 +1583,7 @@
       .done-icon {
         font-size: 9px !important;
         margin-right: 1px !important;
+        color: #34c759 !important;
       }
 
       /* ===================================================== */

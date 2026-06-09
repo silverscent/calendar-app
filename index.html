@@ -658,6 +658,7 @@
         margin-right: 1px;
         font-weight: 900;
         line-height: 1;
+        color: #34c759 !important;
       }
       .pal-sub {
         font-size: 0.76em;
@@ -1530,12 +1531,33 @@
       /* ===================================================== */
 
       /* 1. 상단 메뉴 (화살표 포함) 1줄 고정 & 화면 비율(vw) 축소 */
+      .app-branding-header {
+        flex-wrap: nowrap !important;
+      }
+      .branding-left {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+      }
+      .branding-logo {
+        flex-shrink: 0 !important;
+        width: clamp(16px, 3.5vw, 24px) !important;
+        height: clamp(16px, 3.5vw, 24px) !important;
+      }
+      .branding-title {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        font-size: clamp(0.72em, 3.5vw, 1.1em) !important;
+      }
+      .controls-area {
+        flex-shrink: 0 !important;
+      }
       .top-row {
         flex-wrap: nowrap !important;
         gap: 1.5vw !important;
       }
       .title-area,
-      .controls-area,
       .action-row-right,
       .sync-area,
       .admin-actions {
@@ -1543,7 +1565,6 @@
         gap: 1vw !important;
         white-space: nowrap !important;
       }
-      /* 🚨 화살표(.nav-arrow) 추가 완료! */
       .title-btn,
       .admin-btn,
       .size-btn,
