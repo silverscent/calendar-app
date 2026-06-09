@@ -6,7 +6,7 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, viewport-fit=cover"
     />
 
     <link rel="icon" type="image/png" href="/favicon.png" />
@@ -656,6 +656,7 @@
         font-weight: 900;
         line-height: 1;
         color: #34c759 !important;
+        text-shadow: 0 0 4px rgba(255,255,255,0.9) !important;
         text-shadow: none !important;
         text-decoration: none !important;
       }
@@ -1585,6 +1586,7 @@
         font-size: 12px !important;
         margin-right: 1px !important;
         color: #34c759 !important;
+        text-shadow: 0 0 4px rgba(255,255,255,0.9) !important;
         text-shadow: none !important;
       }
 
@@ -3396,7 +3398,7 @@
         </div>
 
         <div class="action-row-right">
-          <button class="ocr-btn" onclick="showLastOcrImage()">최근OCR 🖼️</button>
+          <button class="ocr-btn" onclick="showLastOcrImage()">OCR 🖼️</button>
           <div class="sync-area" id="syncArea" style="display: flex">
             <span class="sync-time" id="lastSyncTime"></span>
             <button class="sync-btn" onclick="navMonth(0)" title="수동 동기화" aria-label="새로고침">🔄</button>
@@ -3419,7 +3421,7 @@
             font-size: 0.85em;
             box-shadow: 0 2px 4px rgba(10, 132, 255, 0.3);
           "
-          >최근OCR</span
+          >OCR</span
         >
         <span id="ocrTimeText" style="color: var(--text-main)">불러오는 중...</span>
       </div>

@@ -59,7 +59,7 @@ function updateSyncTime() {
   const now = new Date();
   const hh = String(now.getHours()).padStart(2, "0");
   const mm = String(now.getMinutes()).padStart(2, "0");
-  document.getElementById("lastSyncTime").innerText = `최근 ${hh}:${mm}`;
+  document.getElementById("lastSyncTime").innerText = `${hh}:${mm}`;
 }
 
 function updateFooterUI() {
@@ -3702,7 +3702,7 @@ function renderPcLeftbar() {
 
     <div class="pclb-sec">기능</div>
     <button class="pclb-item" onclick="openDashboard()">📊 통계 대시보드</button>
-    <button class="pclb-item" onclick="showLastOcrImage()">🖼️ 최근 OCR</button>
+    <button class="pclb-item" onclick="showLastOcrImage()">🖼️ OCR</button>
     <button class="pclb-item" onclick="toggleMultiMode()">☑️ 다중 선택</button>
     <button class="pclb-item" onclick="navMonth(0)">🔄 새로고침</button>
 
@@ -3711,8 +3711,8 @@ function renderPcLeftbar() {
     <button class="pclb-item" onclick="toggleTheme(); renderPcLeftbar()">${dark ? "🌙 다크 테마" : "☀️ 라이트 테마"}</button>
 
     <div class="pclb-info">
-      <div>🖼️ 최근 OCR <b>${_esc((document.getElementById("ocrTimeText")?.innerText || "-").trim())}</b></div>
-      <div>🔄 동기화 <b>${_esc((document.getElementById("lastSyncTime")?.innerText || "-").replace("최근 ", "").trim())}</b></div>
+      <div>🖼️ OCR <b>${_esc((document.getElementById("ocrTimeText")?.innerText || "-").trim())}</b></div>
+      <div>🔄 동기화 <b>${_esc((document.getElementById("lastSyncTime")?.innerText || "-").trim())}</b></div>
     </div>
     <div class="pclb-legend"><span><i style="background:#26e2fd"></i>🚢 해상</span><span><i style="background:#ff7eff"></i>✈️ 항공</span></div>
     <button class="pclb-off" onclick="togglePcDense()">🖥️ PC모드 끄기</button>

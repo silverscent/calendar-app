@@ -553,7 +553,7 @@ function updateSyncTime() {
   const now = new Date();
   const hh = String(now.getHours()).padStart(2, "0");
   const mm = String(now.getMinutes()).padStart(2, "0");
-  document.getElementById("lastSyncTime").innerText = `최근 ${hh}:${mm}`;
+  document.getElementById("lastSyncTime").innerText = `${hh}:${mm}`;
 }
 
 function updateFooterUI() {
