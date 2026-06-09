@@ -924,7 +924,7 @@ function renderCalendar() {
         if (pCount > 0) qtyText = `${pCount}P`;
         else if (bCount > 0) qtyText = `${bCount}B`;
 
-        let iconHtml = isItemDone ? `<span class="done-icon">✅</span>` : "";
+        let iconHtml = isItemDone ? `<span class="done-icon">✓</span>` : "";
         let tagClass = `item-tag`;
         if (checkIsSlim(item, day)) tagClass += " item-tag-slim";
         if (isItemDone) tagClass += " done-mark";
@@ -1047,6 +1047,8 @@ function renderCalendar() {
   // 콜드스타트 부트 로더 제거 (첫 렌더 완료)
   const _bl = document.getElementById("bootLoader");
   if (_bl) _bl.classList.add("hide");
+  // 검색 점프 하이라이트: 재렌더 직후 즉시 재적용(깜빡임 없이 유지)
+  if (window._pcHl) reapplyPcHl();
 }
 
 // =====================================================================
@@ -1087,6 +1089,210 @@ function pcGoToday() {
   const now = new Date();
   const diff = (now.getFullYear() - parseInt(serverData.year)) * 12 + (now.getMonth() + 1 - parseInt(serverData.month));
   navMonth(diff);
+}
+
+// 🔍 PC 사이드바 일정 검색 (출고: 업체명 포함검색 + 작업기간 선택)
+let _pcSearchTimer = null;
+function pcSearchInput() {
+  if (_pcSearchTimer) clearTimeout(_pcSearchTimer);
+  _pcSearchTimer = setTimeout(runPcSearch, 280);
+}
+// 작업기간 달력버튼: 버튼 전체를 누르면 달력 팝업
+function pcOpenDate(id) {
+  const inp = document.getElementById(id);
+  if (!inp) return;
+  try {
+    inp.showPicker();
+  } catch (_) {
+    inp.focus();
+    inp.click();
+  }
+}
+// 작업기간 달력버튼: 선택 시 라벨에 M/D 표시 + 검색
+function onPcDate() {
+  syncPcDateCaps();
+  runPcSearch();
+}
+function syncPcDateCaps() {
+  const fmt = (v, def) => {
+    if (!v) return { t: def, set: false };
+    const p = v.split("-");
+    return { t: `${parseInt(p[1], 10)}/${parseInt(p[2], 10)}`, set: true };
+  };
+  const s = document.getElementById("pcSearchStart");
+  const e = document.getElementById("pcSearchEnd");
+  const cs = document.getElementById("capStart");
+  const ce = document.getElementById("capEnd");
+  if (s && cs) {
+    const r = fmt(s.value, "부터");
+    cs.textContent = r.t;
+    cs.classList.toggle("set", r.set);
+  }
+  if (e && ce) {
+    const r = fmt(e.value, "까지");
+    ce.textContent = r.t;
+    ce.classList.toggle("set", r.set);
+  }
+}
+function runPcSearch() {
+  const inp = document.getElementById("pcSearchKw");
+  const box = document.getElementById("pcSearchResults");
+  if (!inp || !box) return;
+  const kw = inp.value.trim();
+  const sd = (document.getElementById("pcSearchStart")?.value || "").trim();
+  const ed = (document.getElementById("pcSearchEnd")?.value || "").trim();
+  window._pcSearchKw = kw;
+  window._pcSearchSd = sd;
+  window._pcSearchEd = ed;
+  // 검색어가 있을 때만 검색 (기간만으로는 결과 출력 안 함 — 기간은 보조 필터)
+  if (kw.length < 1) {
+    box.innerHTML = `<div class="pcsr-empty">업체·작업 검색어를 입력하세요${sd || ed ? " (기간은 보조 필터)" : ""}</div>`;
+    window._pcSearchHtml = box.innerHTML;
+    return;
+  }
+  // 약어(CRM 단축명)로도 검색되도록 매칭되는 정식 업체명 확장
+  let companies = [];
+  if (kw && typeof compInfoDB === "object" && compInfoDB) {
+    for (const mName in compInfoDB) {
+      const sn = (compInfoDB[mName] && compInfoDB[mName].shortName) || "";
+      if (sn && sn.includes(kw)) companies.push(mName);
+    }
+  }
+  box.innerHTML = `<div class="pcsr-empty">검색 중…</div>`;
+  apiCall({
+    source: "vercel",
+    action: "SEARCH_SCHEDULES",
+    type: "out",
+    keyword: kw,
+    startDate: sd,
+    endDate: ed,
+    companies: companies,
+  }).then((res) => {
+    if (!res || !res.success || !Array.isArray(res.rows) || res.rows.length === 0) {
+      box.innerHTML = `<div class="pcsr-empty">결과 없음</div>`;
+      window._pcSearchHtml = box.innerHTML;
+      return;
+    }
+    box.innerHTML =
+      `<div class="pcsr-cnt">${res.rows.length}건</div>` +
+      res.rows
+        .map((r) => {
+          const d = (r.date || "").slice(0, 10);
+          const raw = r.company || "-";
+          const isTask = raw.startsWith("[TASK]");
+          const comp = _esc(raw.replace(/^\[TASK\]/, "").trim() || "-");
+          const done = r.isDone === true || String(r.isDone) === "1" || String(r.isDone) === "true";
+          const dot = isTask ? "#af52de" : done ? "#34c759" : "#ff9f0a";
+          const pal = parseInt(r.pal) || 0;
+          const bx = parseInt(r.box) || 0;
+          const sub = isTask ? "작업" : `${pal}P · ${bx}B`;
+          return `<button class="pcsr-item" onclick="pcJumpTo('${d}','${_argq(raw)}')">
+              <span class="pcsr-dot" style="background:${dot}"></span>
+              <span class="pcsr-main"><b>${isTask ? "🛠 " : ""}${comp}</b><span class="pcsr-inv">${sub}</span></span>
+              <span class="pcsr-meta">${d}</span>
+            </button>`;
+        })
+        .join("");
+    window._pcSearchHtml = box.innerHTML;
+  });
+}
+// 검색 초기화: 입력어·작업기간·결과·하이라이트 모두 비움
+function pcSearchReset() {
+  window._pcSearchKw = "";
+  window._pcSearchSd = "";
+  window._pcSearchEd = "";
+  window._pcSearchHtml = "";
+  window._pcSearchScroll = 0;
+  window._pcHl = null;
+  const inp = document.getElementById("pcSearchKw");
+  const box = document.getElementById("pcSearchResults");
+  const s = document.getElementById("pcSearchStart");
+  const e = document.getElementById("pcSearchEnd");
+  if (inp) inp.value = "";
+  if (s) s.value = "";
+  if (e) e.value = "";
+  if (box) box.innerHTML = "";
+  syncPcDateCaps();
+  if (typeof clearClickedHighlight === "function") clearClickedHighlight();
+  if (inp) inp.focus();
+}
+
+function pcJumpTo(dateStr, key) {
+  if (!dateStr) return;
+  const box = document.getElementById("pcSearchResults");
+  if (box) window._pcSearchScroll = box.scrollTop; // 결과 스크롤 위치 기억
+  const [y, m, day] = dateStr.split("-").map((v) => parseInt(v, 10));
+  // 재렌더(캐시→서버 응답)에도 하이라이트가 유지되도록 일정 시간 동안 반복 적용
+  window._pcHl = { y: y, m: m, day: day, key: key || "", expire: Date.now() + 4500, scrolled: false };
+  goToAsync(y, m);
+  if (window._pcHlTimer) clearInterval(window._pcHlTimer);
+  window._pcHlTimer = setInterval(reapplyPcHl, 200);
+  setTimeout(reapplyPcHl, 120);
+}
+function reapplyPcHl() {
+  const h = window._pcHl;
+  if (!h) {
+    if (window._pcHlTimer) clearInterval(window._pcHlTimer);
+    return;
+  }
+  if (Date.now() > h.expire) {
+    if (typeof clearClickedHighlight === "function") clearClickedHighlight();
+    document.querySelectorAll(".item-tag.pc-search-flash").forEach((n) => n.classList.remove("pc-search-flash"));
+    window._pcHl = null;
+    if (window._pcHlTimer) clearInterval(window._pcHlTimer);
+    return;
+  }
+  if (parseInt(serverData.year, 10) !== h.y || parseInt(serverData.month, 10) !== h.m) return;
+  const cells = document.querySelectorAll(`.item-tag[onclick*="handleItemClick(event, ${h.day},"]`);
+  if (!cells || cells.length === 0) return;
+  let target = cells[0];
+  if (h.key) {
+    cells.forEach((c) => {
+      if ((c.getAttribute("onclick") || "").includes(h.key)) target = c;
+    });
+  }
+  // 깜빡임 없이 잔잔한 선택 테두리만 유지(펄스 애니메이션 제거)
+  if (!target.classList.contains("item-clicked")) {
+    if (typeof clearClickedHighlight === "function") clearClickedHighlight();
+    target.classList.add("item-clicked");
+  }
+  if (!h.scrolled) {
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    h.scrolled = true;
+  }
+}
+
+// ⌨️ 키보드 단축키 (PC): ←/→ 달 이동, T 오늘, Esc 모달 닫기
+if (!window._pcKeysBound) {
+  window._pcKeysBound = true;
+  document.addEventListener("keydown", function (e) {
+    const t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const openModal = Array.from(document.querySelectorAll(".overlay-modal")).find(
+      (m) => m.style.display && m.style.display !== "none",
+    );
+    if (e.key === "Escape") {
+      if (openModal) {
+        openModal.style.display = "none";
+        if (typeof _editState !== "undefined") _editState = null;
+        if (typeof clearClickedHighlight === "function") clearClickedHighlight();
+        e.preventDefault();
+      }
+      return;
+    }
+    if (openModal) return; // 모달 열려있으면 달 이동 막기
+    if (e.key === "ArrowLeft") {
+      navMonth(-1);
+      e.preventDefault();
+    } else if (e.key === "ArrowRight") {
+      navMonth(1);
+      e.preventDefault();
+    } else if (e.key === "t" || e.key === "T") {
+      pcGoToday();
+      e.preventDefault();
+    }
+  });
 }
 // 🖥️ 책갈피 탭 / 딤 + 접기 토글
 function ensurePcChrome() {
@@ -1138,8 +1344,18 @@ function ensurePcTip() {
     const r = t.getBoundingClientRect();
     let x = e.clientX + 14;
     let y = e.clientY + 16;
-    if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - 14;
-    if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - 16;
+    let flipX = false,
+      flipY = false;
+    if (x + r.width > window.innerWidth - 8) {
+      x = e.clientX - r.width - 14;
+      flipX = true;
+    }
+    if (y + r.height > window.innerHeight - 8) {
+      y = e.clientY - r.height - 16;
+      flipY = true;
+    }
+    t.classList.toggle("tip-fx", flipX);
+    t.classList.toggle("tip-fy", flipY);
     t.style.left = x + "px";
     t.style.top = y + "px";
   });
@@ -1231,18 +1447,71 @@ function renderPcSidePanel() {
   );
   const waitCnt = totalCnt - doneCnt;
   const pend = serverData.pendingItems || [];
+
+  // 📊 미니 통계보드 지표 (serverData만 사용). 출고는 작업(TASK)/출고 비율 포함
+  const now = new Date();
+  const isCurMonth =
+    parseInt(serverData.year) === now.getFullYear() && parseInt(serverData.month) === now.getMonth() + 1;
+  const dim = new Date(parseInt(serverData.year), parseInt(serverData.month), 0).getDate();
+  let todayCnt = 0,
+    weekCnt = 0,
+    notDonePal = 0,
+    peakDay = 0,
+    peakPal = 0,
+    taskCnt = 0,
+    shipCnt = 0;
+  const wkStart = now.getDate() - ((now.getDay() + 6) % 7);
+  const wkEnd = wkStart + 6;
+  for (let d = 1; d <= dim; d++) {
+    const arr = md[d] || [];
+    if (!arr.length) continue;
+    let dayPal = 0;
+    arr.forEach((it) => {
+      const p = parseInt(it.pal || 0) || 0;
+      dayPal += p;
+      if (!(it.isDone === true || String(it.isDone) === "true")) notDonePal += p;
+      if (String(it.company || "").startsWith("[TASK]")) taskCnt++;
+      else shipCnt++;
+    });
+    if (dayPal > peakPal) {
+      peakPal = dayPal;
+      peakDay = d;
+    }
+    if (isCurMonth && d === now.getDate()) todayCnt = arr.length;
+    if (isCurMonth && d >= wkStart && d <= wkEnd) weekCnt += arr.length;
+  }
+  const shipPct = taskCnt + shipCnt ? Math.round((shipCnt / (taskCnt + shipCnt)) * 100) : 0;
+  const miniBoard = `
+    <div class="pcp-card">
+      <div class="pcp-title">📊 미니 통계</div>
+      <div class="pcp-tiles">
+        <div class="pcp-tile"><span class="pcp-tile-v">${isCurMonth ? todayCnt : "–"}</span><span class="pcp-tile-l">오늘 출고</span></div>
+        <div class="pcp-tile"><span class="pcp-tile-v">${isCurMonth ? weekCnt : "–"}</span><span class="pcp-tile-l">이번주</span></div>
+        <div class="pcp-tile"><span class="pcp-tile-v">${notDonePal}<small>P</small></span><span class="pcp-tile-l">미완료 물량</span></div>
+        <div class="pcp-tile"><span class="pcp-tile-v">${peakDay ? peakDay + "일" : "–"}</span><span class="pcp-tile-l">최다일 ${peakDay ? peakPal + "P" : ""}</span></div>
+      </div>
+      <div class="pcp-ratio">
+        <div class="pcp-ratio-bar"><span style="width:${shipPct}%"></span></div>
+        <div class="pcp-ratio-lbl"><span>📦 출고 ${shipCnt}</span><span>🛠 작업 ${taskCnt}</span></div>
+      </div>
+    </div>`;
+
   let html = `
     <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
       <button class="pc-collapse-btn" onclick="togglePcRight()" title="패널 접기">›</button>
     </div>
     <div class="pcp-card">
       <div class="pcp-title">📊 ${serverData.year}.${String(serverData.month).padStart(2, "0")} 요약</div>
+      <div class="pcp-donut" style="background: conic-gradient(#34c759 0% ${totalCnt ? Math.round((doneCnt / totalCnt) * 100) : 0}%, var(--btn-bg) ${totalCnt ? Math.round((doneCnt / totalCnt) * 100) : 0}% 100%);">
+        <div class="pcp-donut-hole"><b>${totalCnt ? Math.round((doneCnt / totalCnt) * 100) : 0}%</b><span>완료</span></div>
+      </div>
       <div class="pcp-stat-row"><span>총 팔레트</span><b>${totalPal} P</b></div>
       <div class="pcp-stat-row"><span>총 박스</span><b>${totalBox} B</b></div>
       <div class="pcp-stat-row"><span>총 건수</span><b>${totalCnt}건</b></div>
       <div class="pcp-stat-row"><span>✅ 완료 / ⏳ 대기</span><b>${doneCnt} / ${waitCnt}</b></div>
       <div style="margin-top:10px;"><button class="pcp-btn" onclick="openDashboard()">📊 전체 통계 보기</button></div>
     </div>
+    ${miniBoard}
     <div class="pcp-card">
       <div class="pcp-title">⏳ 출고 대기 / 미정 (${pend.length}건)</div>`;
   if (pend.length === 0) {
@@ -1289,6 +1558,20 @@ function renderPcLeftbar() {
     </div>
     <button class="pclb-item" onclick="pcGoToday()">📅 오늘로 이동</button>
 
+    <div class="pclb-sec pclb-sec-row">일정 검색<button type="button" class="pclb-search-reset" onclick="pcSearchReset()">↺ 초기화</button></div>
+    <div class="pclb-search">
+      <div class="pclb-searchbox">
+        <span class="pclb-searchicon">🔍</span>
+        <input id="pcSearchKw" class="pclb-search-input" type="text" placeholder="업체 · 작업"
+          oninput="pcSearchInput()" onkeydown="if(event.key==='Enter')runPcSearch()" autocomplete="off" />
+      </div>
+      <div class="pclb-daterow">
+        <button type="button" class="pclb-datebtn" onclick="pcOpenDate('pcSearchStart')"><span class="pclb-datecap" id="capStart">부터</span><span class="pclb-dateico">📅</span><input id="pcSearchStart" type="date" tabindex="-1" onchange="onPcDate()" /></button>
+        <button type="button" class="pclb-datebtn" onclick="pcOpenDate('pcSearchEnd')"><span class="pclb-datecap" id="capEnd">까지</span><span class="pclb-dateico">📅</span><input id="pcSearchEnd" type="date" tabindex="-1" onchange="onPcDate()" /></button>
+      </div>
+      <div id="pcSearchResults" class="pclb-search-results" onscroll="window._pcSearchScroll=this.scrollTop"></div>
+    </div>
+
     <div class="pclb-sec">보기</div>
     <div class="pclb-seg">
       <button class="pclb-seg-btn ${on("btnS")}" onclick="changeSize('S'); renderPcLeftbar()">A-</button>
@@ -1299,6 +1582,7 @@ function renderPcLeftbar() {
 
     <div class="pclb-sec">기능</div>
     <button class="pclb-item" onclick="openDashboard()">📊 통계 대시보드</button>
+    <button class="pclb-item" onclick="openCompListModal()">🏢 거래처 정보</button>
     <button class="pclb-item" onclick="toggleMultiMode()">☑️ 다중 선택</button>
     <button class="pclb-item" onclick="navMonth(0)">🔄 새로고침</button>
 
@@ -1311,6 +1595,21 @@ function renderPcLeftbar() {
     </div>
     <button class="pclb-off" onclick="togglePcDense()">🖥️ PC모드 끄기</button>
   `;
+  // 사이드바 재렌더 시 진행 중인 검색어/기간/결과 복원 (월 점프해도 목록 유지)
+  if (window._pcSearchKw || window._pcSearchSd || window._pcSearchEd) {
+    const inp = document.getElementById("pcSearchKw");
+    const si = document.getElementById("pcSearchStart");
+    const ei = document.getElementById("pcSearchEnd");
+    const box = document.getElementById("pcSearchResults");
+    if (inp && window._pcSearchKw) inp.value = window._pcSearchKw;
+    if (si && window._pcSearchSd) si.value = window._pcSearchSd;
+    if (ei && window._pcSearchEd) ei.value = window._pcSearchEd;
+    if (box && window._pcSearchHtml) {
+      box.innerHTML = window._pcSearchHtml;
+      box.scrollTop = window._pcSearchScroll || 0; // 결과 스크롤 위치 복원
+    }
+  }
+  syncPcDateCaps(); // 작업기간 달력버튼 라벨 동기화
 }
 // 저장된 PC모드 선호 복원 (기본 OFF — 기존 사용자 영향 없음)
 window.addEventListener("DOMContentLoaded", function () {
@@ -3856,7 +4155,8 @@ function updateStatsSummary() {
     setTimeout(() => {
       barEl.style.width = `${percent}%`;
       if (percent === 100 && tPal > 0) {
-        barEl.style.background = "linear-gradient(90deg, #34c759 0%, #30d158 100%)"; // 100% 초록
+        // 완료: 단색 대신 또렷한 그라데이션(초록→에메랄드→틸)
+        barEl.style.background = "linear-gradient(90deg, #30d158 0%, #2bc7a0 55%, #00b8d4 100%)";
       } else {
         barEl.style.background = "linear-gradient(90deg, #0a84ff 0%, #34c759 100%)"; // 진행중 파랑
       }
