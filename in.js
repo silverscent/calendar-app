@@ -218,7 +218,9 @@ function renderCalendar() {
       dayData.forEach((item, idx) => {
         let isItemDone = item.isDone === true || String(item.isDone) === "true";
         let isAir = item.sType === "AIR";
-        let pastelBg = isAir ? "#ff7eff" : "#26e2fd";
+        let pastelBg = isItemDone
+          ? (isAir ? "#ff7eff" : "#26e2fd")
+          : (isAir ? "#ff91ff" : "#47e6fd");
 
         let tagClass = `item-tag`;
         if (isItemDone) tagClass += " done-mark";
