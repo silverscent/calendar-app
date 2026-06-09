@@ -640,9 +640,8 @@
         max-width: 100%;
       }
 
-      /* 완료된 건은 파스텔 배경 위에서 흰색 글씨 + 그림자 유지 (가독성 향상) */
+      /* 완료 칩: 배경에 alpha 적용(JS), opacity 제거 → done-icon은 영향 안 받음 */
       .done-mark {
-        opacity: 0.85; /* 0.6에서 0.85로 진하게 변경 */
         border-left: none !important;
       }
       .done-mark .pal-main,
