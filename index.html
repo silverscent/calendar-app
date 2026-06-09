@@ -3011,6 +3011,10 @@
           padding: 0 9px !important;
           box-shadow: none;
         }
+        /* 노란 띠(4px) 만큼 left padding 보정 → 내용물 정렬 유지 */
+        body.pc-dense .item-tag.item-tag-task:not(.linked-left):not(.linked-right):not(.edge-left):not(.edge-right) {
+          padding-left: 5px !important;
+        }
         body.pc-dense
           .item-tag:not(.linked-left):not(.linked-right):not(.edge-left):not(.edge-right)
           > div:not(.task-span-text) {
