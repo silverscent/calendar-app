@@ -924,7 +924,7 @@ function renderCalendar() {
         if (pCount > 0) qtyText = `${pCount}P`;
         else if (bCount > 0) qtyText = `${bCount}B`;
 
-        let iconHtml = isItemDone ? `<span class="done-icon">✓</span>` : "";
+        let iconHtml = isItemDone ? `<span class="done-icon">✅</span>` : "";
         let tagClass = `item-tag`;
         if (checkIsSlim(item, day)) tagClass += " item-tag-slim";
         if (isItemDone) tagClass += " done-mark";
