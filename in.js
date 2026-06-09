@@ -236,10 +236,8 @@ function renderCalendar() {
         let originalIdx = item._rawIdx !== undefined ? item._rawIdx : idx;
         let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${_argq(item.bl)}', ${isItemDone})"`;
 
-        // 💡 [디테일 2 수정] 완료 여부에 따른 극명한 글씨색 대비
-        let textColor = isItemDone ? "#ffffff" : "#111111";
-        let textShadow = isItemDone ? "text-shadow: 0px 1px 2px rgba(0,0,0,0.6);" : "";
-        let customStyle = `background-color: ${pastelBg} !important; color: ${textColor} !important; ${textShadow} border: 1px solid rgba(0,0,0,0.1);`;
+        let textColor = isItemDone ? "rgba(0,0,0,0.55)" : "#111111";
+        let customStyle = `background-color: ${pastelBg} !important; color: ${textColor} !important; border: 1px solid rgba(0,0,0,0.1);`;
 
         // hover 툴팁 내용(PC모드): 1줄=제목, 이후 "라벨: 값"
         let _tip = `${item.bl}`;
