@@ -1452,6 +1452,7 @@
       .sync-btn,
       .multi-btn,
       .ocr-btn,
+      .info-btn,
       .nav-arrow {
         white-space: nowrap !important;
         font-size: clamp(0.7em, 3vw, 1.15em) !important;
@@ -1460,6 +1461,13 @@
       .sync-time {
         font-size: clamp(0.6em, 2.5vw, 0.75em) !important;
         white-space: nowrap !important;
+      }
+      .sync-area {
+        flex-shrink: 0 !important;
+        gap: clamp(2px, 1vw, 5px) !important;
+      }
+      .action-row-right {
+        overflow: hidden !important;
       }
 
       /* 2. 상세 모달창 - 긴 글씨 완벽 줄바꿈 (Flexbox 탈출 방지) */
@@ -1496,21 +1504,50 @@
         right: 16px !important;
         margin: 0 !important;
       }
-      /* 💡 [1번 패치] 입고 달력 최근 OCR / 해상 항공 범례 자동 크기 조절 */
+      /* 💡 범례 바 전체 자동 축소 — 핀치줌 시 프레임 이탈 방지 */
       .legend-bar-wrapper {
         flex-wrap: nowrap !important;
         white-space: nowrap !important;
-        gap: 1vw !important;
+        gap: clamp(4px, 2vw, 10px) !important;
+        overflow: hidden !important;
       }
-      .ocr-time-info,
-      .legend-bar,
-      .legend-item {
-        flex-wrap: nowrap !important;
+      .ocr-time-info {
+        font-size: clamp(0.6em, 2.8vw, 0.85em) !important;
+        gap: clamp(2px, 1vw, 6px) !important;
+        flex-shrink: 1 !important;
+        min-width: 0 !important;
+      }
+      .ocr-time-info span {
+        padding: clamp(2px, 0.8vw, 3px) clamp(3px, 1.5vw, 8px) !important;
         white-space: nowrap !important;
       }
-      .ocr-time-info span,
+      #ocrTimeText {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: clamp(70px, 22vw, 130px) !important;
+      }
+      .bl-toggle-label {
+        font-size: clamp(0.6em, 2.5vw, 0.8em) !important;
+      }
+      .bl-toggle-track {
+        width: clamp(22px, 5vw, 32px) !important;
+        flex-shrink: 0 !important;
+      }
+      .legend-bar {
+        flex-wrap: nowrap !important;
+        gap: clamp(4px, 2vw, 12px) !important;
+        flex-shrink: 0 !important;
+      }
       .legend-item {
-        font-size: clamp(0.7em, 2.5vw, 0.85em) !important;
+        font-size: clamp(0.6em, 2.5vw, 0.85em) !important;
+        gap: clamp(2px, 1vw, 5px) !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+      }
+      .legend-color {
+        width: clamp(10px, 2.5vw, 16px) !important;
+        height: clamp(10px, 2.5vw, 16px) !important;
+        flex-shrink: 0 !important;
       }
       /* 💡 [수정] 부모 태그(검정/흰색)의 색상을 그대로 상속받도록 inherit 적용 */
       .pal-main {

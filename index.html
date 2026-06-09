@@ -1571,6 +1571,7 @@
       .sync-btn,
       .multi-btn,
       .ocr-btn,
+      .info-btn,
       .nav-arrow {
         white-space: nowrap !important;
         font-size: clamp(0.7em, 3vw, 1.15em) !important;
@@ -1579,6 +1580,13 @@
       .sync-time {
         font-size: clamp(0.6em, 2.5vw, 0.75em) !important;
         white-space: nowrap !important;
+      }
+      .sync-area {
+        flex-shrink: 0 !important;
+        gap: clamp(2px, 1vw, 5px) !important;
+      }
+      .action-row-right {
+        overflow: hidden !important;
       }
 
       /* 2. 상세 모달창 - 긴 글씨 완벽 줄바꿈 (Flexbox 탈출 방지) */
