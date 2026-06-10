@@ -379,6 +379,7 @@ function _attachDrag(fab, storageKey, hasMenu) {
       dragged = true;
       window.fabDragging = true;
       if (hasMenu) _closeFabMenuInstant(fab); // 드래그 시작 시 잔상 없이 닫기
+      if (!hasMenu) fab.style.setProperty("transition", "none", "important"); // 단일버튼: 드래그 중 transition 제거로 부드럽게
       // 드래그 확정 순간: 본체 기준 시작좌표 + offset 확정 후 left/top 모드로 전환
       const wrapRect = fab.getBoundingClientRect();
       const baseRect = getBaseRect();
@@ -403,6 +404,7 @@ function _attachDrag(fab, storageKey, hasMenu) {
       rafId = null;
     }
     if (dragged) {
+      if (!hasMenu) fab.style.removeProperty("transition"); // snap 애니메이션은 CSS transition으로 복구
       _snapToEdge(fab, hasMenu);
       _savePos(fab, storageKey);
       // 드래그 중 닫기로 남은 인라인 스타일 원복 (다음 메뉴 열기 정상화)
