@@ -2355,15 +2355,15 @@
         /* !important나 transform은 여기서 다 지우세요 */
       }
       .fab-main {
-        width: 60px;
-        height: 60px;
+        width: 52px;
+        height: 52px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #0a84ff, #0056b3);
+        background: linear-gradient(145deg, #2196f3, #0a60e0);
         color: white;
-        border: none;
-        font-size: 32px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        font-size: 28px;
         font-weight: 300;
-        box-shadow: 0 8px 25px rgba(10, 132, 255, 0.5);
+        box-shadow: 0 4px 18px rgba(10, 120, 255, 0.38), 0 1px 4px rgba(0, 0, 0, 0.14);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -2374,8 +2374,13 @@
       /* 열렸을 때 + 가 X 로 변하며 빨간색으로 변경 */
       .fab-wrapper.open .fab-main {
         transform: rotate(45deg);
-        background: linear-gradient(135deg, #ff3b30, #c81b12);
-        box-shadow: 0 8px 25px rgba(255, 59, 48, 0.5);
+        background: linear-gradient(145deg, #ff4b3a, #d11a0d);
+        box-shadow: 0 4px 18px rgba(255, 59, 48, 0.4), 0 1px 4px rgba(0, 0, 0, 0.14);
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+      .fab-main:active {
+        transform: scale(0.88) translateY(3px);
+        box-shadow: 0 2px 10px rgba(10, 120, 255, 0.3);
       }
       .fab-sub-container {
         display: flex;

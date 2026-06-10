@@ -1836,14 +1836,14 @@
         position: fixed;
         right: 20px;
         bottom: max(30px, env(safe-area-inset-bottom));
-        width: 60px;
-        height: 60px;
+        width: 52px;
+        height: 52px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #5e5ce6, #bf5af2);
+        background: linear-gradient(145deg, #7c7af0, #a855f7);
         color: white;
-        border: none;
-        font-size: 28px;
-        box-shadow: 0 8px 25px rgba(94, 92, 230, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        font-size: 22px;
+        box-shadow: 0 4px 18px rgba(120, 90, 250, 0.38), 0 1px 4px rgba(0, 0, 0, 0.14);
         z-index: 1500;
         cursor: pointer;
         display: flex;
@@ -1851,12 +1851,12 @@
         justify-content: center;
         transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
         -webkit-tap-highlight-color: transparent;
-        touch-action: none; /* 👈 추가 — 브라우저 제스처 완전 차단 */
-        overscroll-behavior: contain; /* 👈 추가 */
+        touch-action: none;
+        overscroll-behavior: contain;
       }
       .fab-single-ai:active {
-        transform: scale(0.9) translateY(4px);
-        box-shadow: 0 4px 15px rgba(94, 92, 230, 0.4);
+        transform: scale(0.88) translateY(3px);
+        box-shadow: 0 2px 10px rgba(120, 90, 250, 0.3);
       }
 
       /* ════════════════════════════════════════
