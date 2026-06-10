@@ -2303,10 +2303,10 @@
           margin-bottom: 3px;
           min-height: 0;
         }
-        /* PC dense 모드: 노란 띠 제거, 일반 칩과 동일한 레이아웃 (border-left 1px 제거 보정 포함) */
+        /* 노란 띠(4px) 보정 — 4+6=10px = 일반 칩 1+9px과 동일 */
         body.pc-dense .item-tag.has-etc {
-          border-left: none !important;
-          padding-left: 10px !important;
+          border-left: 4px solid #ffd60a !important;
+          padding-left: 6px !important;
         }
         /* PAL = 어두운 배지 + 흰 숫자(어느 색·완료에서도 잘 보임) */
         body.pc-dense .item-tag .pal-main {
