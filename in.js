@@ -16,6 +16,10 @@ function toggleBlDisplayMode() {
   if (typeof renderCalendar === "function") renderCalendar();
   if (typeof renderPcLeftbar === "function") renderPcLeftbar();
   syncBlToggleUI();
+  // 토글 직후 칩 숫자에 '값 변경' 플립 애니메이션 — 새로 그려진 .bl-sub에 클래스 부여
+  requestAnimationFrame(() => {
+    document.querySelectorAll(".bl-sub").forEach((el) => el.classList.add("num-flip"));
+  });
 }
 // 토글 스위치 UI(모바일·PC) 상태 동기화
 function syncBlToggleUI() {
