@@ -1513,7 +1513,9 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     console.error("🔥 시스템 에러:", error);
     const errTarget = chatId || process.env.TELEGRAM_CHAT_ID;
-    await sendTgMsg(errTarget, `🔥 에러 발생: ${error.message}`);
+    const sqlInfo = error.sql ? `\nSQL: ${String(error.sql).substring(0, 120)}` : "";
+    const colInfo = error.sqlMessage || error.message;
+    await sendTgMsg(errTarget, `🔥 에러: ${colInfo}${sqlInfo}`);
   }
   return res.status(200).send("OK");
 };
