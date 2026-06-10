@@ -1557,9 +1557,11 @@
         text-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
       }
       .bl-sub {
-        font-size: clamp(0.55em, 2.2vw, 0.75em) !important;
+        /* 작은 폰에선 3vw로 화면 비례 확대, 큰 글씨 모드(120%)·최협 셀에서도 '발행전'(한글3자)이 안 삐져나가는 상한 */
+        font-size: clamp(0.62em, 3vw, 0.95em) !important;
         letter-spacing: -0.5px !important;
         white-space: nowrap !important;
+        max-width: 100% !important;
         color: inherit !important;
         opacity: 0.9;
         text-shadow: 0 1px 3px rgba(0,0,0,0.45) !important;
