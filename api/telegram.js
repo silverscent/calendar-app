@@ -75,10 +75,14 @@ async function ensureTables() {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`,
   );
-  // 기존 테이블이 VARCHAR(255)로 생성된 경우 TEXT로 업그레이드 (OCR 원본/JSON이 255자 초과 가능)
+  // 기존 테이블이 VARCHAR(255)로 생성된 경우 TEXT로 업그레이드
+  await pool.query(`ALTER TABLE system_settings MODIFY COLUMN setting_value TEXT`).catch((e) => {
+    console.error("ALTER TABLE system_settings 실패 (무시):", e.message);
+  });
+  // OCR 원본/파싱 결과용 전용 테이블 — system_settings VARCHAR 한도 우회
   await pool.query(
-    `ALTER TABLE system_settings MODIFY COLUMN setting_value TEXT`,
-  ).catch(() => {});
+    `CREATE TABLE IF NOT EXISTS ocr_store (store_key VARCHAR(100) PRIMARY KEY, store_value MEDIUMTEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`,
+  );
   await pool.query(
     `CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
   );
@@ -1040,8 +1044,8 @@ module.exports = async function handler(req, res) {
               return res.status(200).send("OK");
             }
 
-            // 해시를 PENDING에 같이 저장
-            const jsonData = JSON.stringify({ id: fileId, uniqueId: imgHash, url: fileUrl });
+            // url은 저장 안 함 — OCR 처리 시 fileId로 재fetch, 저장하면 VARCHAR 한도 초과
+            const jsonData = JSON.stringify({ id: fileId, uniqueId: imgHash });
             await pool.query(
               `INSERT INTO system_settings (setting_key, setting_value) VALUES ('PENDING_IMAGE_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
               [jsonData, jsonData],
@@ -1069,7 +1073,7 @@ module.exports = async function handler(req, res) {
       // 🛑 대기열 및 캐시 취소 기능 보강 (락 강제 해제 포함)
       if (text.startsWith("/cancel")) {
         await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
-        await pool.query(`DELETE FROM system_settings WHERE setting_key = 'CACHED_TEST_DATA'`);
+        await pool.query(`DELETE FROM ocr_store WHERE store_key = 'CACHED_TEST_DATA'`);
         await pool.query(`UPDATE system_settings SET setting_value = '0' WHERE setting_key = 'OCR_IS_RUNNING'`); // 무한 락 강제 해제 방어막
         await sendTgMsg(chatId, `🗑️ 대기 중인 이미지와 임시 데이터가 모두 취소되었습니다.`);
         return res.status(200).send("OK");
@@ -1163,11 +1167,11 @@ module.exports = async function handler(req, res) {
 
           if (text.startsWith("/ocr") && (targetUniqueId || targetFileId)) {
             const [cacheRows] = await pool.query(
-              `SELECT setting_value FROM system_settings WHERE setting_key = 'CACHED_TEST_DATA'`,
+              `SELECT store_value FROM ocr_store WHERE store_key = 'CACHED_TEST_DATA'`,
             );
-            if (cacheRows.length > 0 && cacheRows[0].setting_value) {
+            if (cacheRows.length > 0 && cacheRows[0].store_value) {
               try {
-                let rawCache = cacheRows[0].setting_value;
+                let rawCache = cacheRows[0].store_value;
                 if (typeof rawCache === "string" && rawCache.startsWith('"')) rawCache = JSON.parse(rawCache);
                 const cacheData = typeof rawCache === "string" ? JSON.parse(rawCache) : rawCache;
 
@@ -1314,7 +1318,7 @@ module.exports = async function handler(req, res) {
             const cacheObj = { uniqueId: targetUniqueId, rows: finalRows };
             const cacheStr = JSON.stringify(cacheObj);
             await pool.query(
-              `INSERT INTO system_settings (setting_key, setting_value) VALUES ('CACHED_TEST_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
+              `INSERT INTO ocr_store (store_key, store_value) VALUES ('CACHED_TEST_DATA', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
               [cacheStr, cacheStr],
             );
 
@@ -1451,7 +1455,7 @@ module.exports = async function handler(req, res) {
           }
 
           // 청소 및 기록
-          await pool.query(`DELETE FROM system_settings WHERE setting_key = 'CACHED_TEST_DATA'`);
+          await pool.query(`DELETE FROM ocr_store WHERE store_key = 'CACHED_TEST_DATA'`);
           await pool.query(`DELETE FROM system_settings WHERE setting_key = 'PENDING_IMAGE_DATA'`);
 
           const currentTime = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
@@ -1484,15 +1488,16 @@ module.exports = async function handler(req, res) {
             `INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
             [jsonTime, jsonTime],
           );
+          // LAST_OCR_DATA, LAST_OCR_RAW는 크기가 크므로 ocr_store(MEDIUMTEXT)에 저장
           await pool.query(
-            `INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_DATA', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
+            `INSERT INTO ocr_store (store_key, store_value) VALUES ('LAST_OCR_DATA', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
             [jsonDataStr, jsonDataStr],
           );
 
           if (extractedText) {
             const jsonRawStr = JSON.stringify(extractedText);
             await pool.query(
-              `INSERT INTO system_settings (setting_key, setting_value) VALUES ('LAST_OCR_RAW', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
+              `INSERT INTO ocr_store (store_key, store_value) VALUES ('LAST_OCR_RAW', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
               [jsonRawStr, jsonRawStr],
             );
           }

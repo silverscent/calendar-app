@@ -1531,14 +1531,14 @@ module.exports = async function (req, res) {
       else if (action === "GET_LAST_OCR_DATA") {
         try {
           const [rows] = await pool.query(
-            "SELECT setting_value FROM system_settings WHERE setting_key = 'LAST_OCR_DATA'",
+            "SELECT store_value FROM ocr_store WHERE store_key = 'LAST_OCR_DATA'",
           );
           const [rawRows] = await pool.query(
-            "SELECT setting_value FROM system_settings WHERE setting_key = 'LAST_OCR_RAW'",
+            "SELECT store_value FROM ocr_store WHERE store_key = 'LAST_OCR_RAW'",
           );
 
-          const parsedDataStr = rows[0] ? rows[0].setting_value : "[]";
-          let rawDataStr = rawRows[0] ? rawRows[0].setting_value : "";
+          const parsedDataStr = rows[0] ? rows[0].store_value : "[]";
+          let rawDataStr = rawRows[0] ? rawRows[0].store_value : "";
 
           // 🎯 [핵심 버그 수정 포인트]
           // 텔레그램에서 JSON.stringify()로 감싸서 넣었기 때문에 앞뒤에 붙은 큰따옴표(")와
