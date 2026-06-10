@@ -1710,11 +1710,6 @@ function parseOcrLinesLocal(text) {
   }
   for (let raw of tokens) {
     if (isBL(raw)) {
-      // sType이 이미 채워진 행 = 인보이스/비고 구간 — BL처럼 생긴 토큰도 비고로
-      if (rows.length > 0 && rows[activeRowIndex].sType) {
-        rows[activeRowIndex].etc.push(raw);
-        continue;
-      }
       if (rows.length > 0) {
         let lastRow = rows[rows.length - 1];
         let hasData =
