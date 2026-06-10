@@ -601,9 +601,11 @@
         transform: scale(0.92);
         filter: brightness(1.2);
       }
-      /* 노란 띠를 배경 그라데이션으로 — 공간 미점유, 둥근 모서리(5px)까지 덮도록 6px 폭(틈 방지), 글씨/✓는 위로 올라옴 */
+      /* 노란 띠 = 배경 그라데이션(공간 미점유, 글씨/✓ 위로 올라옴) + 좌측 모서리만 직각 → 둥근곡선/직선띠 틈 원천 제거 */
       .has-etc {
-        background-image: linear-gradient(to right, #ffd60a 6px, transparent 6px) !important;
+        background-image: linear-gradient(to right, #ffd60a 4px, transparent 4px) !important;
+        border-top-left-radius: 0 !important;
+        border-bottom-left-radius: 0 !important;
       }
       /* 📍 클릭/터치한 일정 강조 — 상세 모달이 어떤 일정에서 열렸는지 한눈에 (모바일·PC 공통) */
       .item-tag.item-clicked {
@@ -653,9 +655,9 @@
       .done-mark {
         border-left: none !important;
       }
-      /* 비고 있는 완료 칩도 동일 그라데이션 노란 띠 */
+      /* 비고 있는 완료 칩도 동일 그라데이션 노란 띠 (좌측 직각은 .has-etc에서 상속) */
       .done-mark.has-etc {
-        background-image: linear-gradient(to right, #ffd60a 6px, transparent 6px) !important;
+        background-image: linear-gradient(to right, #ffd60a 4px, transparent 4px) !important;
       }
       .done-mark .pal-main,
       .done-mark .bl-sub {
@@ -2310,17 +2312,20 @@
           gap: 6px;
           width: 100%;
           max-width: 100%;
-          padding: 2px 9px;
+          /* 검은 PAL 배지를 칩 좌측으로 최대한 — 좌측 패딩 5px(완전 flush 아닌 '안에 든' 느낌) */
+          padding: 2px 9px 2px 5px;
           border-radius: 5px;
           box-shadow: none;
           margin-bottom: 3px;
           min-height: 0;
         }
-        /* 노란 띠를 배경 그라데이션으로 — 공간 미점유, 일반 칩과 동일 padding(9px), 둥근 모서리 틈 방지(6px) */
+        /* 노란 띠 = 그라데이션 4px + 좌측 직각(틈 제거). padding-left 5px → 검은 배지가 띠 바로 옆, non-etc와 정렬 */
         body.pc-dense .item-tag.has-etc {
           border-left: none !important;
-          background-image: linear-gradient(to right, #ffd60a 6px, transparent 6px) !important;
-          padding-left: 9px !important;
+          background-image: linear-gradient(to right, #ffd60a 4px, transparent 4px) !important;
+          border-top-left-radius: 0 !important;
+          border-bottom-left-radius: 0 !important;
+          padding-left: 5px !important;
         }
         /* PAL = 어두운 배지 + 흰 숫자(어느 색·완료에서도 잘 보임) */
         body.pc-dense .item-tag .pal-main {
@@ -2328,12 +2333,13 @@
           font-weight: 900 !important;
           color: #fff !important;
           width: auto;
+          /* 2자리 기준 폭 — 1자리도 동일 폭(가운데 정렬), 3자리는 드물게 살짝 넓어짐. 좌우 패딩 6px→3px로 확 축소 */
           min-width: 1.6em;
           text-align: center;
           flex: 0 0 auto;
           background: rgba(0, 0, 0, 0.34);
           border-radius: 5px;
-          padding: 1px 6px;
+          padding: 1px 3px;
           line-height: 1.35;
         }
         /* BL = 번호 느낌(약간 톤다운 + 자간) */
@@ -2360,8 +2366,6 @@
         /* 빈 날도 너무 납작해지지 않게 */
         body.pc-dense .day-cell {
           min-height: 96px;
-          /* 칩을 좌측에 최대한 붙임 — 가로 패딩 4px→2px (완전 flush 아닌 '안에 든' 느낌 유지) */
-          padding: 4px 2px;
         }
 
         /* ── 헤더 컴팩트 ── */
@@ -2588,8 +2592,7 @@
         /* 달력을 PC답게 시원하게 */
         body.pc-dense .day-cell {
           min-height: 124px;
-          /* 세로 여백은 시원하게, 가로는 2px로 줄여 칩을 좌측에 최대한 붙임 */
-          padding: 6px 2px;
+          padding: 6px;
         }
         body.pc-dense .date-num {
           font-size: 1.05em;
