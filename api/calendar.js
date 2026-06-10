@@ -1144,13 +1144,13 @@ module.exports = async function (req, res) {
             `CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`,
           );
           const [rows] = await pool.query(
-            `SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`,
+            `SELECT store_value FROM ocr_store WHERE store_key = 'last_ocr_image'`,
           );
           let finalUrl = "";
           let fileId = null;
 
           if (rows.length > 0) {
-            let val = rows[0].setting_value;
+            let val = rows[0].store_value;
             if (typeof val === "string") {
               try {
                 val = JSON.parse(val);
@@ -1175,8 +1175,8 @@ module.exports = async function (req, res) {
                   if (typeof val === "object") {
                     val.url = finalUrl;
                     await pool.query(
-                      `UPDATE system_settings SET setting_value = ? WHERE setting_key = 'last_ocr_image'`,
-                      [JSON.stringify(val)],
+                      `INSERT INTO ocr_store (store_key, store_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
+                      [JSON.stringify(val), JSON.stringify(val)],
                     );
                   }
                 }
@@ -1224,7 +1224,7 @@ module.exports = async function (req, res) {
           `CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`,
         );
         await pool.query(
-          `INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
+          `INSERT INTO ocr_store (store_key, store_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
           [urlVal, urlVal],
         );
         await pool.query(

@@ -599,7 +599,7 @@ module.exports = async function handler(req, res) {
           `SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_time'`,
         );
         const [lastImgRows] = await pool.query(
-          `SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`,
+          `SELECT store_value FROM ocr_store WHERE store_key = 'last_ocr_image'`,
         );
         const [cRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_COUNT'`);
         const [aStatusRows] = await pool.query(
@@ -638,7 +638,7 @@ module.exports = async function handler(req, res) {
 
         await sendTgMsg(chatId, statusMsg);
         if (lastImgRows.length > 0) {
-          const imgData = safeGetJson(lastImgRows[0].setting_value);
+          const imgData = safeGetJson(lastImgRows[0].store_value);
           if (imgData.fileId) {
             await sendTgPhoto(chatId, imgData.fileId, "📁 가장 최근에 판독한 원본 이미지입니다.");
           } else if (imgData.url) {
@@ -1137,13 +1137,13 @@ module.exports = async function handler(req, res) {
 
           if (isReparse) {
             const [rows] = await pool.query(
-              `SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_image'`,
+              `SELECT store_value FROM ocr_store WHERE store_key = 'last_ocr_image'`,
             );
-            if (rows.length === 0 || !rows[0].setting_value) {
+            if (rows.length === 0 || !rows[0].store_value) {
               await sendTgMsg(chatId, `⚠️ 재처리할 이전 이미지가 없습니다.`);
               return res.status(200).send("OK");
             }
-            const pData = safeGetJson(rows[0].setting_value);
+            const pData = safeGetJson(rows[0].store_value);
             fullUrl = pData.url || "";
             targetFileId = pData.fileId || null;
           } else {
@@ -1479,7 +1479,7 @@ module.exports = async function handler(req, res) {
           if (fullUrl) {
             const jsonUrl = JSON.stringify({ url: fullUrl, fileId: targetFileId });
             await pool.query(
-              `INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
+              `INSERT INTO ocr_store (store_key, store_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
               [jsonUrl, jsonUrl],
             );
           }
