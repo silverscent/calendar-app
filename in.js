@@ -1761,7 +1761,7 @@ function verifyOcrRows() {
   });
 
   // 행 개수 대조 — 공백 기준 토큰 분리 후 완전 매칭(SEA+인보이스 연결 오매칭 방지)
-  const rawTokens = currentRawOcrString.toUpperCase().replace(/[-]/g, "").split(/[\s\n\r•·*/().,]+/).filter(Boolean);
+  const rawTokens = currentRawOcrString.toUpperCase().split(/[\s\n\r•·*/().,\-]+/).filter(Boolean);
   const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{2,5}\d{5,9}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
   const countNote =
     rawRowCount && rawRowCount !== ocrEditRows.length ? ` · ⚠️행수 원본 ${rawRowCount}/표 ${ocrEditRows.length}` : "";
