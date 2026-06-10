@@ -86,6 +86,7 @@ async function ensureTables() {
 }
 
 module.exports = async function handler(req, res) {
+  let chatId; // catch 블록에서 접근 가능하도록 함수 스코프에 선언
   try {
     await ensureTables();
 
@@ -195,7 +196,7 @@ module.exports = async function handler(req, res) {
     }
 
     const message = payload.message;
-    const chatId = message.chat.id;
+    chatId = message.chat.id;
     const senderId = message.from.id;
     const text = message.text || "";
     const isAdmin = String(senderId) === String(process.env.ADMIN_TELEGRAM_USER_ID);
@@ -1093,6 +1094,7 @@ module.exports = async function handler(req, res) {
           [nowTime.toString(), nowTime.toString()],
         );
 
+        let skipLockReset = false; // Vision 타임아웃 시 finally 락 리셋 방지용
         try {
           let targetFileId = null;
           let targetUniqueId = null;
@@ -1221,6 +1223,8 @@ module.exports = async function handler(req, res) {
               visionData = await visionRes.json();
             } catch (ve) {
               clearTimeout(visionTimer);
+              // 락을 리셋하지 않음: 텔레그램이 15초 후 웹훅을 재전송해도 40초 락이 차단
+              skipLockReset = true;
               await sendTgMsg(
                 chatId,
                 ve.name === "AbortError"
@@ -1494,15 +1498,16 @@ module.exports = async function handler(req, res) {
           }
           return res.status(200).send("OK");
         } finally {
-          // 🚨 [가장 중요했던 부분] 에러가 발생하든 성공하든 무조건 락을 0으로 되돌립니다.
-          await pool.query(`UPDATE system_settings SET setting_value = '0' WHERE setting_key = 'OCR_IS_RUNNING'`);
+          // skipLockReset=true이면 Vision 타임아웃 — 락을 유지해 텔레그램 웹훅 재전송 차단
+          if (!skipLockReset) {
+            await pool.query(`UPDATE system_settings SET setting_value = '0' WHERE setting_key = 'OCR_IS_RUNNING'`);
+          }
         }
       } // 👈 봇 명령어 처리 if문 종료
     } // 👈 isAdminCmd 체크 if문 종료
   } catch (error) {
     console.error("🔥 시스템 에러:", error);
-    // chatId가 정의된 경우(사용자 대화 중 에러) 해당 대화창에, 아니면 그룹 채팅에 전송
-    const errTarget = typeof chatId !== "undefined" && chatId ? chatId : process.env.TELEGRAM_CHAT_ID;
+    const errTarget = chatId || process.env.TELEGRAM_CHAT_ID;
     await sendTgMsg(errTarget, `🔥 에러 발생: ${error.message}`);
   }
   return res.status(200).send("OK");
