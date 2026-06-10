@@ -2360,6 +2360,8 @@
         /* 빈 날도 너무 납작해지지 않게 */
         body.pc-dense .day-cell {
           min-height: 96px;
+          /* 칩을 좌측에 최대한 붙임 — 가로 패딩 4px→2px (완전 flush 아닌 '안에 든' 느낌 유지) */
+          padding: 4px 2px;
         }
 
         /* ── 헤더 컴팩트 ── */
@@ -2586,7 +2588,8 @@
         /* 달력을 PC답게 시원하게 */
         body.pc-dense .day-cell {
           min-height: 124px;
-          padding: 6px;
+          /* 세로 여백은 시원하게, 가로는 2px로 줄여 칩을 좌측에 최대한 붙임 */
+          padding: 6px 2px;
         }
         body.pc-dense .date-num {
           font-size: 1.05em;
