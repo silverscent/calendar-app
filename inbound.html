@@ -601,11 +601,21 @@
         transform: scale(0.92);
         filter: brightness(1.2);
       }
-      /* 노란 띠 = 배경 그라데이션(공간 미점유, 글씨/✓ 위로 올라옴) + 좌측 모서리만 직각 → 둥근곡선/직선띠 틈 원천 제거 */
+      /* 노란 띠 = 칩과 동일한 둥근 모서리(5px) 가상요소(::after) — 칩은 둥근 채 유지, 띠가 곡선까지 정확히 채워 틈 없음, 공간 미점유.
+         (::before는 드래그 삽입선이 사용하므로 ::after 사용) */
       .has-etc {
-        background-image: linear-gradient(to right, #ffd60a 4px, transparent 4px) !important;
-        border-top-left-radius: 0 !important;
-        border-bottom-left-radius: 0 !important;
+        position: relative;
+      }
+      .has-etc::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 5px;
+        background: #ffd60a;
+        border-radius: 5px 0 0 5px;
+        pointer-events: none;
       }
       /* 📍 클릭/터치한 일정 강조 — 상세 모달이 어떤 일정에서 열렸는지 한눈에 (모바일·PC 공통) */
       .item-tag.item-clicked {
@@ -655,10 +665,7 @@
       .done-mark {
         border-left: none !important;
       }
-      /* 비고 있는 완료 칩도 동일 그라데이션 노란 띠 (좌측 직각은 .has-etc에서 상속) */
-      .done-mark.has-etc {
-        background-image: linear-gradient(to right, #ffd60a 4px, transparent 4px) !important;
-      }
+      /* 비고 있는 완료 칩의 노란 띠는 위 .has-etc::after 가상요소가 처리(완료/대기 공통) */
       .done-mark .pal-main,
       .done-mark .bl-sub {
         text-decoration: none !important;
@@ -2319,12 +2326,8 @@
           margin-bottom: 3px;
           min-height: 0;
         }
-        /* 노란 띠 = 그라데이션 4px + 좌측 직각(틈 제거). padding-left 5px → 검은 배지가 띠 바로 옆, non-etc와 정렬 */
+        /* 노란 띠는 .has-etc::after(둥근 가상요소)가 처리. 여기선 검은 배지를 띠 옆으로 — padding-left 5px(non-etc와 정렬) */
         body.pc-dense .item-tag.has-etc {
-          border-left: none !important;
-          background-image: linear-gradient(to right, #ffd60a 4px, transparent 4px) !important;
-          border-top-left-radius: 0 !important;
-          border-bottom-left-radius: 0 !important;
           padding-left: 5px !important;
         }
         /* PAL = 어두운 배지 + 흰 숫자(어느 색·완료에서도 잘 보임) */
