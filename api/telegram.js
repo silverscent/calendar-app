@@ -1657,7 +1657,13 @@ function parseOcrLinesLocal(text) {
     .map((l) => l.trim())
     .filter(Boolean);
   const cleanBL = (v) => String(v).replace(/[\s•·\-\*]/g, "");
-  const isBL = (v) => /^(DSV|BUD|S)\d{6,8}$/i.test(cleanBL(v)) || cleanBL(v) === "발행전";
+  // 프리픽스 하드코딩 제거 — SCAC 코드(2~5알파벳) + 일련번호(5~9숫자) 구조면 BL로 인식
+  // 대시는 제거하지 않음: 실제 BL에는 대시 없고, PI-2026-0312 같은 인보이스는 대시가 구분자 → 자동 제외
+  const isBL = (v) => {
+    const cleaned = String(v).trim().replace(/[\s•·*]/g, "");
+    if (cleaned === "발행전") return true;
+    return /^[A-Za-z]{2,5}\d{5,9}$/.test(cleaned);
+  };
   const isPal = (v) => /^\d{1,3}$/.test(v);
   const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
   const isSType = (v) => /^(AIR|SEA)$/i.test(v);
@@ -1686,6 +1692,11 @@ function parseOcrLinesLocal(text) {
   }
   for (let raw of tokens) {
     if (isBL(raw)) {
+      // sType이 이미 채워진 행 = 인보이스/비고 구간 — BL처럼 생긴 토큰도 비고로
+      if (rows.length > 0 && rows[activeRowIndex].sType) {
+        rows[activeRowIndex].etc.push(raw);
+        continue;
+      }
       if (rows.length > 0) {
         let lastRow = rows[rows.length - 1];
         let hasData =
