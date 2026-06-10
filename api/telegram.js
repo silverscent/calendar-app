@@ -75,6 +75,10 @@ async function ensureTables() {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`,
   );
+  // 기존 테이블이 VARCHAR(255)로 생성된 경우 TEXT로 업그레이드 (OCR 원본/JSON이 255자 초과 가능)
+  await pool.query(
+    `ALTER TABLE system_settings MODIFY COLUMN setting_value TEXT`,
+  ).catch(() => {});
   await pool.query(
     `CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
   );
@@ -1497,7 +1501,9 @@ module.exports = async function handler(req, res) {
     } // 👈 isAdminCmd 체크 if문 종료
   } catch (error) {
     console.error("🔥 시스템 에러:", error);
-    await sendTgMsg(process.env.TELEGRAM_CHAT_ID, `🔥 에러 발생: ${error.message}`);
+    // chatId가 정의된 경우(사용자 대화 중 에러) 해당 대화창에, 아니면 그룹 채팅에 전송
+    const errTarget = typeof chatId !== "undefined" && chatId ? chatId : process.env.TELEGRAM_CHAT_ID;
+    await sendTgMsg(errTarget, `🔥 에러 발생: ${error.message}`);
   }
   return res.status(200).send("OK");
 };
