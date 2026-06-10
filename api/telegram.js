@@ -1029,6 +1029,11 @@ module.exports = async function handler(req, res) {
             const botToken = process.env.TELEGRAM_BOT_TOKEN;
             const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
             const fileData = await fileRes.json();
+            // getFile 실패(20MB 초과·만료) 시 result가 없어 크래시 → 선제 방어
+            if (!fileData.ok || !fileData.result?.file_path) {
+              await sendTgMsg(chatId, `⚠️ 이미지를 가져올 수 없습니다. (20MB 초과 또는 만료된 파일)`);
+              return res.status(200).send("OK");
+            }
             const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
 
             const imgRes = await fetch(fileUrl);
@@ -1202,6 +1207,11 @@ module.exports = async function handler(req, res) {
             if (!isReparse && targetFileId) {
               const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${targetFileId}`);
               const fileData = await fileRes.json();
+              // getFile 실패(20MB 초과·만료) 시 result가 없어 크래시 → 선제 방어 (OCR 카운트 소진 전이라 안전)
+              if (!fileData.ok || !fileData.result?.file_path) {
+                await sendTgMsg(chatId, `⚠️ 이미지를 가져올 수 없습니다. (20MB 초과 또는 만료된 이미지)`);
+                return res.status(200).send("OK");
+              }
               fullUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
             }
 
@@ -1250,6 +1260,12 @@ module.exports = async function handler(req, res) {
               [ocrTotal.toString(), ocrTotal.toString()],
             );
 
+            // Vision이 에러 객체를 반환(할당량 초과·API키 만료·요청 형식 오류)하면 responses가 없어 크래시 → 선제 방어
+            if (visionData.error || !Array.isArray(visionData.responses)) {
+              const vmsg = visionData.error?.message || "응답 형식 오류";
+              await sendTgMsg(chatId, `⚠️ OCR 엔진 오류: ${vmsg}\n(API 키 또는 이번 달 할당량을 확인해주세요)`);
+              return res.status(200).send("OK");
+            }
             extractedText = visionData.responses[0]?.fullTextAnnotation?.text || "";
             if (!extractedText) {
               await sendTgMsg(chatId, `⚠️ 텍스트를 찾을 수 없습니다.`);
@@ -1377,10 +1393,11 @@ module.exports = async function handler(req, res) {
 
             // 필터 적용
             customFilters.forEach((word) => {
-              const cleanWord = word.trim();
+              const cleanWord = String(word || "").trim();
               if (cleanWord) {
-                const regex = new RegExp(cleanWord, "g");
-                etc = etc.replace(regex, "");
+                // 정규식 메타문자 이스케이프 — (주), +할인, [특수 등 특수문자 필터도 안전(SyntaxError 방지)
+                const escaped = cleanWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                etc = etc.replace(new RegExp(escaped, "g"), "");
               }
             });
             etc = etc.replace(/\d+월\s*(첫|둘째|둘쨋|셋째|셋쨋|넷째|넷쨋|다섯|마지막)?\s*주/g, "");
@@ -1388,6 +1405,7 @@ module.exports = async function handler(req, res) {
               .replace(/^[\s\/,|_|-]+|[\s\/,|_|-]+$/g, "")
               .replace(/\/+/g, "/")
               .trim();
+            if (etc.length > 250) etc = etc.substring(0, 250); // remarks 컬럼 한도 방어("data too long" 차단)
             r.etc = etc;
 
             let isAiVal = aiSuccess ? 1 : 0;
