@@ -601,8 +601,9 @@
         transform: scale(0.92);
         filter: brightness(1.2);
       }
+      /* 노란 띠를 inset shadow로 — 레이아웃 공간 미점유, 칩 배경 연속, 글씨/완료✓가 띠 위로 올라옴 */
       .has-etc {
-        border-left: 4px solid #ffd60a !important;
+        box-shadow: inset 4px 0 0 0 #ffd60a, 0 2px 4px rgba(0, 0, 0, 0.15) !important;
       }
       /* 📍 클릭/터치한 일정 강조 — 상세 모달이 어떤 일정에서 열렸는지 한눈에 (모바일·PC 공통) */
       .item-tag.item-clicked {
@@ -642,9 +643,9 @@
       .done-mark {
         border-left: none !important;
       }
-      /* 비고 있는 완료 칩은 노란 띠 유지 */
+      /* 비고 있는 완료 칩도 inset 노란 띠 — 완료✓가 띠 위로 올라옴 */
       .done-mark.has-etc {
-        border-left: 4px solid #ffd60a !important;
+        box-shadow: inset 4px 0 0 0 #ffd60a, 0 2px 4px rgba(0, 0, 0, 0.15) !important;
       }
       .done-mark .pal-main,
       .done-mark .bl-sub {
@@ -2305,10 +2306,11 @@
           margin-bottom: 3px;
           min-height: 0;
         }
-        /* 노란 띠(4px) 보정 — 4+6=10px = 일반 칩 1+9px과 동일 */
+        /* 노란 띠를 inset shadow로 — 공간 미점유, 일반 칩과 동일 padding(9px), 내용물이 띠 위로 올라옴 */
         body.pc-dense .item-tag.has-etc {
-          border-left: 4px solid #ffd60a !important;
-          padding-left: 6px !important;
+          border-left: none !important;
+          box-shadow: inset 4px 0 0 0 #ffd60a !important;
+          padding-left: 9px !important;
         }
         /* PAL = 어두운 배지 + 흰 숫자(어느 색·완료에서도 잘 보임) */
         body.pc-dense .item-tag .pal-main {
