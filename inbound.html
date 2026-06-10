@@ -2303,11 +2303,10 @@
           margin-bottom: 3px;
           min-height: 0;
         }
-        /* border-left 대신 inset shadow — 레이아웃 무영향, 패딩은 일반 칩과 동일 */
+        /* PC dense 모드: 노란 띠 제거, 일반 칩과 동일한 레이아웃 (border-left 1px 제거 보정 포함) */
         body.pc-dense .item-tag.has-etc {
           border-left: none !important;
-          box-shadow: inset 4px 0 0 0 #ffd60a !important;
-          padding-left: 9px !important;
+          padding-left: 10px !important;
         }
         /* PAL = 어두운 배지 + 흰 숫자(어느 색·완료에서도 잘 보임) */
         body.pc-dense .item-tag .pal-main {
@@ -2315,7 +2314,7 @@
           font-weight: 900 !important;
           color: #fff !important;
           width: auto;
-          min-width: 0;
+          min-width: 1.6em;
           text-align: center;
           flex: 0 0 auto;
           background: rgba(0, 0, 0, 0.34);
