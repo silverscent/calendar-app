@@ -1697,7 +1697,7 @@ function verifyOcrRows() {
   const cleanBL = (v) => String(v || "").replace(/[\s•·\-\*]/g, "");
   const isBLok = (v) => {
     const c = cleanBL(v);
-    return /^(DSV|BUD|S)\d{6,8}$/i.test(c) || c === "발행전";
+    return /^[A-Za-z]{2,5}\d{5,9}$/.test(c) || c === "발행전";
   };
   const isInvOk = (v) => /^\d{7,8}$/.test(String(v).trim()) || /^PI-?\d{4}-?\d{3,4}$/i.test(String(v).trim());
   const hasInvLike = (v) => /\d{7,8}/.test(String(v)) || /PI-?\d{4}-?\d{3,4}/i.test(String(v));
@@ -1761,7 +1761,7 @@ function verifyOcrRows() {
   });
 
   // 행 개수 대조 (누락/중복 의심) — 원본의 B/L·발행전 수 vs 표 행수
-  const rawRowCount = (rawNorm.match(/(DSV|BUD)\d{6,8}/g) || []).length + (rawNorm.match(/발행전/g) || []).length;
+  const rawRowCount = (rawNorm.match(/[A-Za-z]{2,5}\d{5,9}/g) || []).length + (rawNorm.match(/발행전/g) || []).length;
   const countNote =
     rawRowCount && rawRowCount !== ocrEditRows.length ? ` · ⚠️행수 원본 ${rawRowCount}/표 ${ocrEditRows.length}` : "";
 
