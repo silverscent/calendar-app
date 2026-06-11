@@ -1714,7 +1714,9 @@ module.exports = async function (req, res) {
               if (sn && sn !== fullName) lines.push(`- ${sn} → ${fullName}`);
             }
             if (lines.length > 0) {
-              compGlossary = `\n\n[출고 업체 약어 → 정식명] (사용자가 약어로 물으면 정식 업체명으로 바꿔 company LIKE 검색)\n${lines.join("\n")}`;
+              compGlossary =
+                `\n\n[출고 업체 약어/별칭 → 정식명]\n${lines.join("\n")}\n` +
+                `※ 사용자는 정식명·등록약어는 물론, 그 일부·앞글자·변형으로도 부를 수 있어. 공백·'(주)'·'㈜'·괄호·기호 차이는 전부 무시하고, '이름 일부+층수/위치' 조합도 이해해. 예: '메디뱅'→메디뱅크, '위비'→위드비아, '드림'→드림케어, '메디2'·'메디맥2층'·'메디맥 2층'→(주)메디맥 2층. 위 목록에서 가장 알맞은 업체를 찰떡같이 추론해 그 정식명의 핵심부로 company LIKE 검색(층수가 의미있으면 함께 매칭). 애매하면 가장 비슷한 후보로.`;
             }
           } catch (e) {
             console.error("업체 약어 용어집 로드 실패(무시):", e.message);
