@@ -1762,7 +1762,7 @@ ${schema}${compGlossary}
 2. 데이터 조회와 무관한 질문이면(인사·농담·잡담은 물론, 일반 상식·일상 대화·조언·계산 등 무엇이든) SQL을 만들지 말고 이 형식으로 친절히 답해: {"chat": "도움이 되는 친근한 한국어 답변(존댓말, 이모지 1개 정도)"}. 모르면 솔직히 모른다고. 물류 데이터도 잘 돕는 비서임은 자연스럽게 유지.
 3. 응답은 위 두 JSON 형식 중 하나로만. JSON 외 다른 텍스트 절대 포함 금지.
 4. 날짜 계산 시 오늘(${today}) 기준으로 정확하게. 결과가 없을 수 있으니 LIMIT 50 이하로.
-5. 이 DB는 MySQL/TiDB임. 숫자 변환 시 CAST(컬럼 AS SIGNED) 사용(CAST AS INT 절대 금지). pallets, pal, box는 varchar이므로 SUM 등 연산 시 반드시 CAST(컬럼 AS SIGNED) 적용.
+5. 이 DB는 MySQL/TiDB임. (a) 숫자 변환은 CAST(컬럼 AS SIGNED) 사용(CAST AS INT 절대 금지). pallets, pal, box는 varchar이므로 SUM 등 연산 시 반드시 CAST(컬럼 AS SIGNED) 적용. (b) 날짜는 MySQL 함수만 사용: YEAR(), MONTH(), DAY(), DATE_FORMAT(), CURDATE(), DATE_SUB/DATE_ADD(날짜 INTERVAL n DAY/MONTH/YEAR). ⚠️ SQLite/기타 함수(strftime, date('now'), datetime 등) 절대 금지. 예) 저번달: YEAR(outbound_date)=YEAR(CURDATE() - INTERVAL 1 MONTH) AND MONTH(outbound_date)=MONTH(CURDATE() - INTERVAL 1 MONTH).
 6. 업체명·포워더(fwd)·B/L·인보이스·비고 등 텍스트 검색은 항상 부분일치 LIKE '%값%' (대소문자 무시: LOWER 비교)로 생성해서, 사용자가 약어·줄임말·일부만 입력하거나 오타가 있어도 최대한 찾게 해. 약어/줄임말은 의도를 추론해 가장 알맞은 컬럼에 매칭.
 
 [질문]
