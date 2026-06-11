@@ -606,6 +606,8 @@
          (::before는 드래그 삽입선이 사용하므로 ::after 사용) */
       .has-etc {
         position: relative;
+        /* 인라인 1px 좌측 테두리 제거 → ::after 띠가 칩 좌측에 완전 밀착(없으면 1px 배경 비침). 완료칩(done-mark)과 동일 */
+        border-left: none !important;
       }
       .has-etc::after {
         content: "";
