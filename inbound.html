@@ -659,17 +659,17 @@
         justify-content: center;
         white-space: nowrap;
       }
-      /* B/L↔INV 토글 시 숫자가 흐릿하게 확대→3D 플립하며 선명하게 떨어지듯 등장(팝+블러+바운스).
-         transform/opacity/filter만 사용 → 모바일 .bl-sub의 color/text-shadow !important 영향 없음 */
+      /* B/L↔INV 토글 시 숫자가 아래에서 위로 굴러 올라오며 통통 튀고 정착(슬롯머신/오도미터 롤).
+         transform/opacity만 사용 → 모바일 .bl-sub의 color/text-shadow !important 영향 없음 */
       @keyframes blSubFlip {
-        0%   { transform: perspective(180px) rotateX(-85deg) scale(1.35); opacity: 0; filter: blur(2.5px); }
-        55%  { transform: perspective(180px) rotateX(10deg) scale(1.12); opacity: 1; filter: blur(0); }
-        100% { transform: perspective(180px) rotateX(0deg) scale(1); opacity: 1; filter: blur(0); }
+        0%   { transform: translateY(150%) scale(0.8); opacity: 0; }
+        45%  { transform: translateY(-18%) scale(1.22); opacity: 1; }
+        68%  { transform: translateY(9%) scale(0.96); opacity: 1; }
+        85%  { transform: translateY(-4%) scale(1.02); opacity: 1; }
+        100% { transform: translateY(0) scale(1); opacity: 1; }
       }
       .bl-sub.num-flip {
-        animation: blSubFlip 0.55s cubic-bezier(0.2, 0.8, 0.3, 1.2);
-        transform-origin: 50% 50%;
-        backface-visibility: hidden;
+        animation: blSubFlip 0.6s cubic-bezier(0.25, 0.7, 0.35, 1);
       }
 
       /* 완료 칩: 배경에 alpha 적용(JS), opacity 제거 → done-icon은 영향 안 받음 */
