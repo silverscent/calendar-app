@@ -1399,28 +1399,34 @@ function closePcOverlays() {
     localStorage.setItem("pc_right", "collapsed");
   } catch (e) {}
 }
-let _pcLeftNarrow = null;
-let _pcRightNarrow = null;
 // 좌측 임계 창폭(출고, 우측 닫힘 기준). 우측은 패널폭(336) 만큼 더 넓어야 열림
 const PC_DOCK_MIN = 819;
 const PC_RIGHT_EXTRA = 336;
+// 사용자가 수동으로 접어둔(collapsed) 패널은 창을 키워도 자동으로 열지 않음.
+// 열어둔(open)·기본(null) 상태일 때만 창 폭에 따라 자동 여닫음.
 function applyPcAutoCollapse() {
   if (!document.body.classList.contains("pc-dense")) return;
+  let rightIntent = null,
+    leftIntent = null;
+  try {
+    rightIntent = localStorage.getItem("pc_right");
+    leftIntent = localStorage.getItem("pc_left");
+  } catch (e) {}
   const rightNarrow = window.innerWidth < PC_DOCK_MIN + PC_RIGHT_EXTRA; // 우측 먼저 닫힘
   const leftNarrow = window.innerWidth < PC_DOCK_MIN; // 더 좁아지면 좌측도 닫힘
-  if (rightNarrow !== _pcRightNarrow) {
-    _pcRightNarrow = rightNarrow;
+  if (rightIntent === "collapsed") {
+    document.body.classList.add("pc-right-collapsed"); // 수동 접음 유지
+  } else {
     document.body.classList.toggle("pc-right-collapsed", rightNarrow);
   }
-  if (leftNarrow !== _pcLeftNarrow) {
-    _pcLeftNarrow = leftNarrow;
+  if (leftIntent === "collapsed") {
+    document.body.classList.add("pc-left-collapsed"); // 수동 접음 유지
+  } else {
     document.body.classList.toggle("pc-left-collapsed", leftNarrow);
   }
 }
 function initPcPanels() {
   ensurePcChrome();
-  _pcLeftNarrow = null;
-  _pcRightNarrow = null;
   applyPcAutoCollapse();
   if (!window._pcResizeBound) {
     window._pcResizeBound = true;

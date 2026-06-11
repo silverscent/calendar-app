@@ -659,16 +659,16 @@
         justify-content: center;
         white-space: nowrap;
       }
-      /* B/L↔INV 토글 시 칩 숫자가 위쪽 힌지에서 3D로 플립되며 새 값이 떨어지듯 등장(플립보드 + 살짝 바운스).
-         transform/opacity만 사용 → 모바일 .bl-sub의 !important 영향 없음 */
+      /* B/L↔INV 토글 시 숫자가 흐릿하게 확대→3D 플립하며 선명하게 떨어지듯 등장(팝+블러+바운스).
+         transform/opacity/filter만 사용 → 모바일 .bl-sub의 color/text-shadow !important 영향 없음 */
       @keyframes blSubFlip {
-        0%   { transform: perspective(160px) rotateX(-90deg); opacity: 0; }
-        65%  { transform: perspective(160px) rotateX(12deg); opacity: 1; }
-        100% { transform: perspective(160px) rotateX(0deg); opacity: 1; }
+        0%   { transform: perspective(180px) rotateX(-85deg) scale(1.35); opacity: 0; filter: blur(2.5px); }
+        55%  { transform: perspective(180px) rotateX(10deg) scale(1.12); opacity: 1; filter: blur(0); }
+        100% { transform: perspective(180px) rotateX(0deg) scale(1); opacity: 1; filter: blur(0); }
       }
       .bl-sub.num-flip {
-        animation: blSubFlip 0.5s ease-out;
-        transform-origin: 50% 0;
+        animation: blSubFlip 0.55s cubic-bezier(0.2, 0.8, 0.3, 1.2);
+        transform-origin: 50% 50%;
         backface-visibility: hidden;
       }
 
