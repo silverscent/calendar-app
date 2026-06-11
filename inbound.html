@@ -2176,13 +2176,16 @@
       /* 타이핑 점은 양쪽 공통 보라색이라 OK */
 
       .ai-send-btn {
-        width: 46px;
+        min-width: 46px;
         height: 46px;
+        padding: 0 14px;
         border-radius: 14px;
         border: none;
         background: linear-gradient(135deg, #6e6cf0, #bf5af2);
         color: #fff;
-        font-size: 1.15em;
+        font-size: 0.95em;
+        font-weight: 800;
+        white-space: nowrap; /* '전송'이 두 줄로 깨지지 않게 */
         cursor: pointer;
         display: grid;
         place-items: center;
@@ -5309,7 +5312,7 @@
             placeholder="무엇이든 물어보세요..."
             onkeydown="if (event.key === 'Enter') runAiQuery();"
           />
-          <button id="ai-send-btn" class="ai-send-btn" onclick="runAiQuery()">↑</button>
+          <button id="ai-send-btn" class="ai-send-btn" onclick="runAiQuery()">전송</button>
         </div>
       </div>
     </div>

@@ -1804,6 +1804,8 @@ ${question}
 
           // 🛡️ MySQL 문법 자동 보정: CAST(... AS INT) → SIGNED
           let safeSql = sql.replace(/AS\s+INT\s*\)/gi, "AS SIGNED)");
+          // 끝에 붙는 세미콜론은 정상(단일 쿼리)이므로 제거 후 검사 → 중간 세미콜론(다중쿼리)만 차단
+          safeSql = safeSql.trim().replace(/;+\s*$/, "");
 
           // SELECT만 허용 + 세미콜론/다중쿼리 차단
           if (!/^\s*SELECT/i.test(safeSql)) {
