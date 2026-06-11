@@ -1715,7 +1715,7 @@ module.exports = async function (req, res) {
             }
             if (lines.length > 0) {
               compGlossary =
-                `\n\n[출고 업체 약어/별칭 → 정식명]\n${lines.join("\n")}\n` +
+                `\n\n[출고 업체 약어/별칭 → 정식명] (⚠️ 이건 테이블이 아니라 네가 머릿속에서 약어를 변환하는 참고 목록이야. DB엔 inbound/outbound 두 테이블만 있고 company_alias 같은 별도 테이블은 없어 — 절대 조회/JOIN 하지 마. 약어를 아래 정식명으로 바꾼 뒤 outbound.company 를 LIKE 로 검색해.)\n${lines.join("\n")}\n` +
                 `※ 사용자는 정식명·등록약어는 물론, 그 일부·앞글자·변형으로도 부를 수 있어. 공백·'(주)'·'㈜'·괄호·기호 차이는 전부 무시하고, '이름 일부+층수/위치' 조합도 이해해. 예: '메디뱅'→메디뱅크, '위비'→위드비아, '드림'→드림케어, '메디2'·'메디맥2층'·'메디맥 2층'→(주)메디맥 2층. 위 목록에서 가장 알맞은 업체를 찰떡같이 추론해 그 정식명의 핵심부로 company LIKE 검색(층수가 의미있으면 함께 매칭). 애매하면 가장 비슷한 후보로.`;
             }
           } catch (e) {
@@ -1758,7 +1758,7 @@ module.exports = async function (req, res) {
 ${schema}${compGlossary}
 
 [규칙]
-1. 데이터 조회 질문이면 SELECT 쿼리만 생성(INSERT/UPDATE/DELETE/DROP 절대 금지) 후 이 형식: {"sql": "SELECT ...", "explanation": "쿼리 설명"}
+1. 데이터 조회 질문이면 SELECT 쿼리만 생성(INSERT/UPDATE/DELETE/DROP 절대 금지) 후 이 형식: {"sql": "SELECT ...", "explanation": "쿼리 설명"}. ⚠️ 오직 inbound·outbound 두 테이블만 사용 — 그 외 테이블(company_alias 등) 참조·JOIN 절대 금지.
 2. 데이터 조회와 무관한 질문이면(인사·농담·잡담은 물론, 일반 상식·일상 대화·조언·계산 등 무엇이든) SQL을 만들지 말고 이 형식으로 친절히 답해: {"chat": "도움이 되는 친근한 한국어 답변(존댓말, 이모지 1개 정도)"}. 모르면 솔직히 모른다고. 물류 데이터도 잘 돕는 비서임은 자연스럽게 유지.
 3. 응답은 위 두 JSON 형식 중 하나로만. JSON 외 다른 텍스트 절대 포함 금지.
 4. 날짜 계산 시 오늘(${today}) 기준으로 정확하게. 결과가 없을 수 있으니 LIMIT 50 이하로.
