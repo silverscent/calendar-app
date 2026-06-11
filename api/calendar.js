@@ -1701,6 +1701,25 @@ module.exports = async function (req, res) {
 
           const today = new Date().toISOString().slice(0, 10);
 
+          // 🏢 거래처 CRM에서 업체 약어(shortName) → 정식명 용어집 동적 생성 (15개 등 전체 자동 반영)
+          let compGlossary = "";
+          try {
+            const [ciRows] = await pool.query(
+              `SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`,
+            );
+            const ciDb = ciRows.length > 0 ? parseJSON(ciRows[0].setting_value) : {};
+            const lines = [];
+            for (const fullName in ciDb) {
+              const sn = (ciDb[fullName] && ciDb[fullName].shortName ? String(ciDb[fullName].shortName) : "").trim();
+              if (sn && sn !== fullName) lines.push(`- ${sn} → ${fullName}`);
+            }
+            if (lines.length > 0) {
+              compGlossary = `\n\n[출고 업체 약어 → 정식명] (사용자가 약어로 물으면 정식 업체명으로 바꿔 company LIKE 검색)\n${lines.join("\n")}`;
+            }
+          } catch (e) {
+            console.error("업체 약어 용어집 로드 실패(무시):", e.message);
+          }
+
           // 스키마 정의
           const schema = `
 [inbound 테이블 - 입고 데이터]
@@ -1734,12 +1753,7 @@ module.exports = async function (req, res) {
 이번 달: ${today.slice(0, 7)}
 
 [DB 스키마]
-${schema}
-
-[출고 업체 약어 → 정식명] (사용자가 약어로 물으면 정식 업체명으로 바꿔 company LIKE 검색)
-- 위비 → 위드비아
-- 드림 → 드림케어
-- 메뱅 → 메디뱅크
+${schema}${compGlossary}
 
 [규칙]
 1. 데이터 조회 질문이면 SELECT 쿼리만 생성(INSERT/UPDATE/DELETE/DROP 절대 금지) 후 이 형식: {"sql": "SELECT ...", "explanation": "쿼리 설명"}
