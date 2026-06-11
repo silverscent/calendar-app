@@ -601,11 +601,10 @@
         transform: scale(0.92);
         filter: brightness(1.2);
       }
-      /* 노란 띠 = border-left(border-radius 자동 추종, 모서리 완벽).
-         overflow:visible → 완료✓·글씨가 띠(테두리) 위로 그려짐(클립 해제, 그리기순서상 내용이 테두리 위) */
+      /* 노란 띠 = inset box-shadow(레이아웃 공간 미점유 → 숫자가 비고 없는 칩과 동일하게 정중앙).
+         5px(모서리 반경=5px)로 둥근 모서리까지 채움. 내용보다 아래 레이어라 ✓·글씨는 위로 표시 */
       .has-etc {
-        border-left: 4px solid #ffd60a !important;
-        overflow: visible !important;
+        box-shadow: inset 5px 0 0 0 #ffd60a, 0 2px 4px rgba(0, 0, 0, 0.15) !important;
       }
       /* 📍 클릭/터치한 일정 강조 — 상세 모달이 어떤 일정에서 열렸는지 한눈에 (모바일·PC 공통) */
       .item-tag.item-clicked {
@@ -657,9 +656,9 @@
       .done-mark {
         border-left: none !important;
       }
-      /* 완료 칩은 done-mark에서 border-left:none → 비고 있으면 노란 띠(border-left) 다시 부여 */
+      /* 완료 칩도 동일한 inset 노란 띠 */
       .done-mark.has-etc {
-        border-left: 4px solid #ffd60a !important;
+        box-shadow: inset 5px 0 0 0 #ffd60a, 0 2px 4px rgba(0, 0, 0, 0.15) !important;
       }
       .done-mark .pal-main,
       .done-mark .bl-sub {
@@ -2321,10 +2320,9 @@
           margin-bottom: 3px;
           min-height: 0;
         }
-        /* 노란 띠 = border-left 4px(둥근 모서리 따라감). 검은 배지: border4+padding1=5px → non-etc(padding5px)와 정렬 */
+        /* 노란 띠 = inset box-shadow(레이아웃 미점유 → 배지 위치가 non-etc와 동일, padding 5px 그대로 상속) */
         body.pc-dense .item-tag.has-etc {
-          border-left: 4px solid #ffd60a !important;
-          padding-left: 1px !important;
+          box-shadow: inset 5px 0 0 0 #ffd60a !important;
         }
         /* PAL = 어두운 배지 + 흰 숫자(어느 색·완료에서도 잘 보임) */
         body.pc-dense .item-tag .pal-main {
