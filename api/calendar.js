@@ -1701,6 +1701,62 @@ module.exports = async function (req, res) {
 
           const today = new Date().toISOString().slice(0, 10);
 
+          // 🌤️ 날씨 질문이면 실시간 날씨(서울)를 가져와 답변 (LLM은 실시간 정보를 모르므로 API로 보강)
+          const isWeatherQ =
+            /(날씨|기온|비\s*(가|와|올|오|내|쏟)|눈\s*(이|올|내|와)|우산|더울|더워|더운|추울|추워|추운|덥|춥|폭염|한파|장마|소나기|미세먼지|황사|맑|흐)/.test(
+              question,
+            );
+          if (isWeatherQ) {
+            let wSummary = "";
+            try {
+              const wCtrl = new AbortController();
+              const wTimer = setTimeout(() => wCtrl.abort(), 7000);
+              const wRes = await fetch("https://wttr.in/Seoul?format=j1&lang=ko", { signal: wCtrl.signal });
+              clearTimeout(wTimer);
+              const wData = await wRes.json();
+              if (wData && Array.isArray(wData.weather)) {
+                const cur = wData.current_condition?.[0] || {};
+                const curDesc = cur.lang_ko?.[0]?.value || cur.weatherDesc?.[0]?.value || "";
+                const fmtDay = (d, label) => {
+                  if (!d) return "";
+                  const noon = d.hourly?.[4] || d.hourly?.[Math.floor((d.hourly?.length || 1) / 2)] || {};
+                  const desc = noon.lang_ko?.[0]?.value || noon.weatherDesc?.[0]?.value || "";
+                  return `${label}(${d.date}): ${d.mintempC}~${d.maxtempC}℃, ${desc}, 강수확률 ${noon.chanceofrain ?? "?"}%`;
+                };
+                wSummary =
+                  `[서울 실시간 날씨]\n현재: ${cur.temp_C ?? "?"}℃, ${curDesc}, 습도 ${cur.humidity ?? "?"}%\n` +
+                  [fmtDay(wData.weather[0], "오늘"), fmtDay(wData.weather[1], "내일"), fmtDay(wData.weather[2], "모레")]
+                    .filter(Boolean)
+                    .join("\n");
+              }
+            } catch (e) {
+              console.error("날씨 조회 실패:", e.message);
+            }
+
+            let wAnswer = "";
+            try {
+              const wPrompt = `사용자가 "${question}"라고 물었어. 아래 실시간 서울 날씨 데이터를 근거로 친근하고 짧게(2~3문장, 존댓말, 이모지 1개 정도) 답해줘. 데이터에 없는 내용은 지어내지 말고, 서울 기준임을 자연스럽게 알려줘.\n\n${wSummary || "(날씨 데이터를 가져오지 못함)"}`;
+              const wgRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY_AI || process.env.GEMINI_API_KEY}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ contents: [{ parts: [{ text: wPrompt }] }], generationConfig: { temperature: 0.7 } }),
+                },
+              );
+              const wgJson = await wgRes.json();
+              wAnswer = wgJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+            } catch (e) {
+              console.error("날씨 답변 생성 실패:", e.message);
+            }
+            if (!wAnswer) {
+              wAnswer = wSummary
+                ? `🌤️ ${wSummary}`
+                : "지금은 날씨 정보를 가져오지 못했어요. 잠시 후 다시 시도해주세요 😅";
+            }
+            return res.status(200).json({ success: true, sql: "", rows: [], summary: wAnswer, count: 0, isChat: true });
+          }
+
           // 🏢 거래처 CRM에서 업체 약어(shortName) → 정식명 용어집 동적 생성 (15개 등 전체 자동 반영)
           let compGlossary = "";
           try {
@@ -1759,11 +1815,17 @@ ${schema}${compGlossary}
 
 [규칙]
 1. 데이터 조회 질문이면 SELECT 쿼리만 생성(INSERT/UPDATE/DELETE/DROP 절대 금지) 후 이 형식: {"sql": "SELECT ...", "explanation": "쿼리 설명"}. ⚠️ 오직 inbound·outbound 두 테이블만 사용 — 그 외 테이블(company_alias 등) 참조·JOIN 절대 금지.
-2. 데이터 조회와 무관한 질문이면(인사·농담·잡담은 물론, 일반 상식·일상 대화·조언·계산 등 무엇이든) SQL을 만들지 말고 이 형식으로 친절히 답해: {"chat": "도움이 되는 친근한 한국어 답변(존댓말, 이모지 1개 정도)"}. 모르면 솔직히 모른다고. 물류 데이터도 잘 돕는 비서임은 자연스럽게 유지.
+2. 데이터 조회와 무관한 질문(인사·잡담·농담·일반상식·일상대화·조언·계산 등 무엇이든)이면 SQL 없이 {"chat": "..."} 형식으로 똑똑하고 친근한 만능 비서처럼 성심껏 답해. '저는 물류 AI라서 모릅니다' 식의 회피·딱딱한 거절은 금지! 아는 건 적극적으로 답하고, 날씨·뉴스처럼 실시간 정보만 "실시간 정보는 확인이 어렵다"고 솔직히 말하되 대화는 따뜻하게 이어가(짧은 팁이나 농담 곁들여도 좋아).
 3. 응답은 위 두 JSON 형식 중 하나로만. JSON 외 다른 텍스트 절대 포함 금지.
 4. 날짜 계산 시 오늘(${today}) 기준으로 정확하게. 결과가 없을 수 있으니 LIMIT 50 이하로.
-5. 이 DB는 MySQL/TiDB임. (a) 숫자 변환은 CAST(컬럼 AS SIGNED) 사용(CAST AS INT 절대 금지). pallets, pal, box는 varchar이므로 SUM 등 연산 시 반드시 CAST(컬럼 AS SIGNED) 적용. (b) 날짜는 MySQL 함수만 사용: YEAR(), MONTH(), DAY(), DATE_FORMAT(), CURDATE(), DATE_SUB/DATE_ADD(날짜 INTERVAL n DAY/MONTH/YEAR). ⚠️ SQLite/기타 함수(strftime, date('now'), datetime 등) 절대 금지. 예) 저번달: YEAR(outbound_date)=YEAR(CURDATE() - INTERVAL 1 MONTH) AND MONTH(outbound_date)=MONTH(CURDATE() - INTERVAL 1 MONTH).
+5. 이 DB는 MySQL/TiDB임. (a) 숫자 변환은 CAST(컬럼 AS SIGNED) 사용(CAST AS INT 절대 금지). pallets, pal, box는 varchar이므로 SUM 등 연산 시 반드시 CAST(컬럼 AS SIGNED) 적용. (b) 날짜는 MySQL 함수만 사용: YEAR(), MONTH(), DAY(), DATE_FORMAT(), CURDATE(), DATE_SUB/DATE_ADD(날짜 INTERVAL n DAY/MONTH/YEAR). ⚠️ SQLite/기타 함수(strftime, date('now'), datetime 등) 절대 금지. 예) 저번달: YEAR(outbound_date)=YEAR(CURDATE() - INTERVAL 1 MONTH) AND MONTH(outbound_date)=MONTH(CURDATE() - INTERVAL 1 MONTH). (c) 문자열 연결은 CONCAT()(|| 금지), NULL 대체는 IFNULL/COALESCE, 불리언은 1/0. MySQL 표준 구문만.
 6. 업체명·포워더(fwd)·B/L·인보이스·비고 등 텍스트 검색은 항상 부분일치 LIKE '%값%' (대소문자 무시: LOWER 비교)로 생성해서, 사용자가 약어·줄임말·일부만 입력하거나 오타가 있어도 최대한 찾게 해. 약어/줄임말은 의도를 추론해 가장 알맞은 컬럼에 매칭.
+
+[데이터 해석 가이드]
+- 날짜(eta·receive_date·outbound_date)가 '미정'인 건 NULL로 저장됨. 특정 기간/월 조회 시 NULL은 자동 제외됨. '날짜 미정/안 잡힌 건'을 물으면 해당 컬럼 IS NULL 로 검색.
+- 완료/대기 구분: 출고 "나갔다/출고됨/완료"=outbound.isDone=1, "예정/대기/안 나간"=isDone=0. 입고 "입고됨/완료"=inbound.status='완료', "대기/예정"=inbound.status='입고대기'.
+- 수량 "몇 개/얼마나"는 기본 팔레트 기준: 출고=SUM(CAST(pal AS SIGNED)), 입고=SUM(CAST(pallets AS SIGNED)). 박스를 물으면 box, 둘 다면 둘 다 보여줘. 건수는 COUNT(*).
+- ⚠️ outbound.company엔 실제 출고가 아닌 작업/메모 행도 섞여 있음(company가 '[TASK]'로 시작하거나 폐기·반품·제작·하프·점검·휴무·야근 등). 순수 출고 건수/수량을 물으면 이런 행은 제외(예: AND company NOT LIKE '[TASK]%' AND company NOT REGEXP '폐기|반품|제작|하프|점검|휴무|야근'). 단 사용자가 그 작업 자체를 물으면 포함.
 
 [질문]
 ${question}
