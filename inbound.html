@@ -606,16 +606,24 @@
       .has-etc {
         position: relative;
       }
+      /* 띠 자체엔 라운딩 없음 — 칩의 overflow:hidden+border-radius가 띠를 칩 모서리 모양으로 한 번만 클립.
+         폭 6px(모서리 반경 5px보다 크게) → 둥근 모서리까지 완전히 덮어 틈/taper 없음 */
       .has-etc::after {
         content: "";
         position: absolute;
         left: 0;
         top: 0;
         bottom: 0;
-        width: 5px;
+        width: 6px;
         background: #ffd60a;
-        border-radius: 5px 0 0 5px;
         pointer-events: none;
+        z-index: 0; /* 칩 배경 위 */
+      }
+      /* 글씨/완료✓는 띠보다 위로 (z-index 1 > 띠 0) — ✓가 띠 뒤로 넘어가지 않게 */
+      .has-etc .pal-main,
+      .has-etc .bl-sub {
+        position: relative;
+        z-index: 1;
       }
       /* 📍 클릭/터치한 일정 강조 — 상세 모달이 어떤 일정에서 열렸는지 한눈에 (모바일·PC 공통) */
       .item-tag.item-clicked {
