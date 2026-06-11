@@ -639,15 +639,17 @@
         justify-content: center;
         white-space: nowrap;
       }
-      /* B/L↔INV 토글 시 칩 숫자가 가로로 접혔다 펴지며 '값이 바뀜'을 인지시킴
-         (transform/opacity만 사용 → 모바일 .bl-sub의 !important 영향 안 받음, 칩 밖으로도 안 나감) */
+      /* B/L↔INV 토글 시 칩 숫자가 위쪽 힌지에서 3D로 플립되며 새 값이 떨어지듯 등장(플립보드 + 살짝 바운스).
+         transform/opacity만 사용 → 모바일 .bl-sub의 !important 영향 없음 */
       @keyframes blSubFlip {
-        0% { transform: scaleX(1); opacity: 1; }
-        45% { transform: scaleX(0.06); opacity: 0.25; }
-        100% { transform: scaleX(1); opacity: 1; }
+        0%   { transform: perspective(160px) rotateX(-90deg); opacity: 0; }
+        65%  { transform: perspective(160px) rotateX(12deg); opacity: 1; }
+        100% { transform: perspective(160px) rotateX(0deg); opacity: 1; }
       }
       .bl-sub.num-flip {
-        animation: blSubFlip 0.4s ease-in-out;
+        animation: blSubFlip 0.5s ease-out;
+        transform-origin: 50% 0;
+        backface-visibility: hidden;
       }
 
       /* 완료 칩: 배경에 alpha 적용(JS), opacity 제거 → done-icon은 영향 안 받음 */
@@ -664,8 +666,9 @@
         text-shadow: none !important;
       }
       .done-icon {
-        font-size: 12px !important;
-        margin-right: 1px;
+        /* 노란 띠(border-left 4px)가 내용폭을 줄여 ✓가 잘리던 문제 → ✓ 축소+여백0으로 공간 확보 */
+        font-size: 10px !important;
+        margin-right: 0;
         font-weight: 900;
         line-height: 1;
         color: #0055d4 !important;
