@@ -1707,11 +1707,48 @@ module.exports = async function (req, res) {
               question,
             );
           if (isWeatherQ) {
+            const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY_AI || process.env.GEMINI_API_KEY}`;
+            // 1) 질문에서 지역 추출 (시간표현 제외). 없으면 사용자에게 지역을 되물음
+            let wLoc = "";
+            try {
+              const locPrompt = `다음 문장에서 날씨를 궁금해하는 '지역/도시 이름'만 추출해. 시간표현(오늘/내일/모레/이번주/주말/지금 등)은 지역이 아님. 지역이 없으면 빈 문자열. JSON만 출력: {"location":"..."}\n문장: ${question}`;
+              const lr = await fetch(gUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: locPrompt }] }],
+                  generationConfig: { temperature: 0, responseMimeType: "application/json" },
+                }),
+              });
+              const lj = await lr.json();
+              const lt = (lj.candidates?.[0]?.content?.parts?.[0]?.text || "")
+                .replace(/```json/gi, "")
+                .replace(/```/g, "")
+                .trim();
+              wLoc = (JSON.parse(lt).location || "").trim();
+            } catch (e) {
+              console.error("지역 추출 실패:", e.message);
+            }
+
+            if (!wLoc) {
+              return res.status(200).json({
+                success: true,
+                sql: "",
+                rows: [],
+                count: 0,
+                isChat: true,
+                summary: "어느 지역 날씨를 알려드릴까요? 🌍 (예: 수원, 용인, 분당)",
+              });
+            }
+
+            // 2) 해당 지역 실시간 날씨 조회
             let wSummary = "";
             try {
               const wCtrl = new AbortController();
               const wTimer = setTimeout(() => wCtrl.abort(), 7000);
-              const wRes = await fetch("https://wttr.in/Seoul?format=j1&lang=ko", { signal: wCtrl.signal });
+              const wRes = await fetch(`https://wttr.in/${encodeURIComponent(wLoc)}?format=j1&lang=ko`, {
+                signal: wCtrl.signal,
+              });
               clearTimeout(wTimer);
               const wData = await wRes.json();
               if (wData && Array.isArray(wData.weather)) {
@@ -1724,7 +1761,7 @@ module.exports = async function (req, res) {
                   return `${label}(${d.date}): ${d.mintempC}~${d.maxtempC}℃, ${desc}, 강수확률 ${noon.chanceofrain ?? "?"}%`;
                 };
                 wSummary =
-                  `[서울 실시간 날씨]\n현재: ${cur.temp_C ?? "?"}℃, ${curDesc}, 습도 ${cur.humidity ?? "?"}%\n` +
+                  `[${wLoc} 실시간 날씨]\n현재: ${cur.temp_C ?? "?"}℃, ${curDesc}, 습도 ${cur.humidity ?? "?"}%\n` +
                   [fmtDay(wData.weather[0], "오늘"), fmtDay(wData.weather[1], "내일"), fmtDay(wData.weather[2], "모레")]
                     .filter(Boolean)
                     .join("\n");
@@ -1733,17 +1770,15 @@ module.exports = async function (req, res) {
               console.error("날씨 조회 실패:", e.message);
             }
 
+            // 3) 자연스럽게 답변
             let wAnswer = "";
             try {
-              const wPrompt = `사용자가 "${question}"라고 물었어. 아래 실시간 서울 날씨 데이터를 근거로 친근하고 짧게(2~3문장, 존댓말, 이모지 1개 정도) 답해줘. 데이터에 없는 내용은 지어내지 말고, 서울 기준임을 자연스럽게 알려줘.\n\n${wSummary || "(날씨 데이터를 가져오지 못함)"}`;
-              const wgRes = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY_AI || process.env.GEMINI_API_KEY}`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ contents: [{ parts: [{ text: wPrompt }] }], generationConfig: { temperature: 0.7 } }),
-                },
-              );
+              const wPrompt = `사용자가 "${question}"라고 물었어. 아래 '${wLoc}' 실시간 날씨 데이터를 근거로 친근하고 짧게(2~3문장, 존댓말, 이모지 1개 정도) 답해. 데이터에 없는 내용은 지어내지 마.\n\n${wSummary || "(날씨 데이터를 가져오지 못함)"}`;
+              const wgRes = await fetch(gUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contents: [{ parts: [{ text: wPrompt }] }], generationConfig: { temperature: 0.7 } }),
+              });
               const wgJson = await wgRes.json();
               wAnswer = wgJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
             } catch (e) {
@@ -1752,9 +1787,9 @@ module.exports = async function (req, res) {
             if (!wAnswer) {
               wAnswer = wSummary
                 ? `🌤️ ${wSummary}`
-                : "지금은 날씨 정보를 가져오지 못했어요. 잠시 후 다시 시도해주세요 😅";
+                : `'${wLoc}' 날씨 정보를 가져오지 못했어요. 지역명을 다시 확인해 주실래요? 😅`;
             }
-            return res.status(200).json({ success: true, sql: "", rows: [], summary: wAnswer, count: 0, isChat: true });
+            return res.status(200).json({ success: true, sql: "", rows: [], count: 0, isChat: true, summary: wAnswer });
           }
 
           // 🏢 거래처 CRM에서 업체 약어(shortName) → 정식명 용어집 동적 생성 (15개 등 전체 자동 반영)
