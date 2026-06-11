@@ -601,10 +601,25 @@
         transform: scale(0.92);
         filter: brightness(1.2);
       }
-      /* 노란 띠 = inset box-shadow(레이아웃 공간 미점유 → 숫자가 비고 없는 칩과 동일하게 정중앙).
-         5px(모서리 반경=5px)로 둥근 모서리까지 채움. 내용보다 아래 레이어라 ✓·글씨는 위로 표시 */
+      /* 노란 띠 = 가상요소(::after)에 border-left — 진짜 테두리라 둥근 모서리 완벽 추종(틈 없음).
+         absolute라 레이아웃 미점유 → 숫자가 비고 없는 칩과 동일하게 정중앙. 내용(z1)이 띠(z0) 위로.
+         (::before는 드래그 삽입선이 사용하므로 ::after 사용) */
       .has-etc {
-        box-shadow: inset 5px 0 0 0 #ffd60a, 0 2px 4px rgba(0, 0, 0, 0.15) !important;
+        position: relative;
+      }
+      .has-etc::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-left: 4px solid #ffd60a;
+        border-radius: inherit;
+        pointer-events: none;
+        z-index: 0;
+      }
+      .has-etc .pal-main,
+      .has-etc .bl-sub {
+        position: relative;
+        z-index: 1;
       }
       /* 📍 클릭/터치한 일정 강조 — 상세 모달이 어떤 일정에서 열렸는지 한눈에 (모바일·PC 공통) */
       .item-tag.item-clicked {
@@ -656,10 +671,7 @@
       .done-mark {
         border-left: none !important;
       }
-      /* 완료 칩도 동일한 inset 노란 띠 */
-      .done-mark.has-etc {
-        box-shadow: inset 5px 0 0 0 #ffd60a, 0 2px 4px rgba(0, 0, 0, 0.15) !important;
-      }
+      /* 완료 칩의 노란 띠도 위 .has-etc::after가 처리(별도 규칙 불필요) */
       .done-mark .pal-main,
       .done-mark .bl-sub {
         text-decoration: none !important;
@@ -2320,10 +2332,7 @@
           margin-bottom: 3px;
           min-height: 0;
         }
-        /* 노란 띠 = inset box-shadow(레이아웃 미점유 → 배지 위치가 non-etc와 동일, padding 5px 그대로 상속) */
-        body.pc-dense .item-tag.has-etc {
-          box-shadow: inset 5px 0 0 0 #ffd60a !important;
-        }
+        /* PC밀집 노란 띠도 .has-etc::after가 처리. 배지 padding은 non-etc(5px)와 동일 유지(별도 보정 불필요) */
         /* PAL = 어두운 배지 + 흰 숫자(어느 색·완료에서도 잘 보임) */
         body.pc-dense .item-tag .pal-main {
           font-size: 0.82em !important;
