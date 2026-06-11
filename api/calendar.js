@@ -1847,8 +1847,17 @@ ${question}
           // LIMIT 없으면 안전 상한 부여 (과도한 조회 방지)
           if (!/\blimit\b/i.test(safeSql)) safeSql += " LIMIT 100";
 
-          // SQL 실행
-          const [rows] = await pool.query(safeSql);
+          // SQL 실행 (AI가 만든 SQL 문법 오류 등은 실제 메시지로 안내 → 진단/수정 용이)
+          let rows;
+          try {
+            [rows] = await pool.query(safeSql);
+          } catch (sqlErr) {
+            console.error("AI SQL 실행 오류:", sqlErr.sqlMessage || sqlErr.message, "| SQL:", safeSql);
+            return res.status(200).json({
+              success: false,
+              msg: `조회 중 오류가 났어요 😢\n(${sqlErr.sqlMessage || sqlErr.message})`,
+            });
+          }
 
           // 결과 자연어 요약 (위트 있는 톤). 결과가 0건이면 호출 아끼고 코드로 처리
           let summary;
