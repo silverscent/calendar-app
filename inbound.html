@@ -1921,6 +1921,9 @@
         padding: 0;
         overflow: hidden; /* 패널 자체 스크롤 금지 (내부 ai-chat-log 만 스크롤) */
         max-width: 480px;
+        /* 모바일 vh는 주소창/키보드 영역까지 포함 → 위 대화가 화면 위로 밀림. dvh(실제 보이는 높이)로 보정 */
+        max-height: 85vh;
+        max-height: 85dvh;
         animation: aiPanelUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .ai-modal-panel {
@@ -1930,6 +1933,7 @@
         border-radius: 28px 28px 0 0;
         padding: 0;
         max-height: 85vh;
+        max-height: 85dvh;
         display: flex;
         flex-direction: column;
         box-shadow:
@@ -2221,18 +2225,24 @@
 
       /* 대화 지우기 (헤더 우측 작게) */
       .ai-clear-btn {
-        background: none;
-        border: none;
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.12);
         font-size: 0.72em;
-        color: #777;
+        color: #aaa;
         cursor: pointer;
-        padding: 4px 8px;
+        padding: 4px 9px;
         border-radius: 8px;
         transition: all 0.16s ease;
       }
       .ai-clear-btn:hover {
         color: #ff6b6b;
-        background: rgba(255, 107, 107, 0.1);
+        background: rgba(255, 107, 107, 0.12);
+        border-color: rgba(255, 107, 107, 0.3);
+      }
+      body.light-mode .ai-clear-btn {
+        background: rgba(0, 0, 0, 0.04);
+        border-color: rgba(0, 0, 0, 0.12);
+        color: #888;
       }
 
       /* 구버전 호환 (안 쓰임) */
