@@ -1962,17 +1962,20 @@ function attachAutocomplete(inputId) {
   drop.style.display = "none";
   input.parentNode.insertBefore(drop, input.nextSibling);
   const cleanStr = (s) => s.replace(/[\(\)주]/g, "");
+  const shortOf = (c) => (compInfoDB[c] && compInfoDB[c].shortName ? String(compInfoDB[c].shortName).trim() : "");
+  const escRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // 정규식 특수문자 이스케이프
   function renderList(filterText) {
-    // CRM(compInfoDB) 업체 목록 (하드코딩 제거 → DB 단일 소스)
+    // CRM(compInfoDB) 업체 목록 (하드코딩 제거 → DB 단일 소스). 정식명 + 약어(shortName) 둘 다 검색
     let combinedComps = Object.keys(compInfoDB);
     let filtered = [...combinedComps];
 
     if (filterText) {
-      filtered = filtered.filter((c) => c.includes(filterText));
+      filtered = filtered.filter((c) => c.includes(filterText) || shortOf(c).includes(filterText));
       filtered.sort((a, b) => {
-        let idxA = a.indexOf(filterText);
-        let idxB = b.indexOf(filterText);
-        if (idxA !== idxB) return idxA - idxB;
+        // 정식명 매칭을 약어 매칭보다 우선, 같은 그룹 내에선 매칭 위치 빠른 순
+        let ia = a.includes(filterText) ? a.indexOf(filterText) : 1000 + (shortOf(a).indexOf(filterText) + 1 || 999);
+        let ib = b.includes(filterText) ? b.indexOf(filterText) : 1000 + (shortOf(b).indexOf(filterText) + 1 || 999);
+        if (ia !== ib) return ia - ib;
         return cleanStr(a).localeCompare(cleanStr(b));
       });
     } else {
@@ -1982,12 +1985,13 @@ function attachAutocomplete(inputId) {
       drop.style.display = "none";
       return;
     }
+    const reF = filterText ? new RegExp(`(${escRe(filterText)})`, "gi") : null;
+    const hl = (t) => (reF && t ? t.replace(reF, "<strong style='color:#0a84ff;'>$1</strong>") : t);
     let html = "";
     filtered.forEach((c) => {
-      let bolded = filterText
-        ? c.replace(new RegExp(`(${filterText})`, "gi"), "<strong style='color:#0a84ff;'>$1</strong>")
-        : c;
-      html += `<div class="drop-item" onmousedown="document.getElementById('${inputId}').value='${c}'; document.getElementById('${inputId}-drop').style.display='none';">${bolded}</div>`;
+      const sn = shortOf(c);
+      const snTag = sn ? ` <span style="color:#888; font-size:0.85em;">${hl(sn)}</span>` : "";
+      html += `<div class="drop-item" onmousedown="document.getElementById('${inputId}').value='${c}'; document.getElementById('${inputId}-drop').style.display='none';">${hl(c)}${snTag}</div>`;
     });
     drop.innerHTML = html;
     drop.style.display = "block";
