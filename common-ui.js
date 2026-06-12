@@ -429,6 +429,8 @@ function initNativeBottomSheet() {
       setTimeout(() => {
         modal.style.display = "none";
         box.style.transform = ""; // 다음번 열릴 때를 위해 원상복구
+        // 스와이프로 닫아도 일정 파란 강조 제거 (닫기버튼·배경 클릭과 동일하게 통일)
+        if (typeof clearClickedHighlight === "function") clearClickedHighlight();
       }, 300);
     } else {
       // 살짝 내리다 말았으면 다시 제자리로 튕겨 올라감
