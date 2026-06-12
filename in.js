@@ -1407,7 +1407,10 @@ function showLastOcrImage() {
             <div id="ocrPaneImg" style="flex:1 1 100%; min-width:0; overflow:hidden; position:relative; touch-action:none;">
               <img id="ocrImgElement" src="${url}" alt="스케줄 이미지" draggable="false" onload="ocrImgLoaded()" style="position:absolute; left:0; top:0; display:block; transform-origin:center center; user-select:none; -webkit-user-drag:none; -moz-user-select:none; will-change:transform;">
             </div>
-            <div id="ocrPaneTable" style="flex:0 0 0%; width:0; min-width:0; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff; position:relative; display:none; border-left:2px solid #fff;">
+            <div id="ocrSplitDivider" title="드래그해서 좌우 너비 조절" style="display:none; flex:0 0 16px; align-items:center; justify-content:center; cursor:col-resize; background:#cfd4da; touch-action:none; position:relative; z-index:6;">
+              <div style="width:4px; height:50px; border-radius:3px; background:#7b828c; pointer-events:none;"></div>
+            </div>
+            <div id="ocrPaneTable" style="flex:0 0 0%; width:0; min-width:0; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff; position:relative; display:none;">
               <div id="ocrTableInner" style="padding:2px; min-width:max-content; transform-origin:0 0;"></div>
             </div>
           </div>
@@ -1425,6 +1428,7 @@ function showLastOcrImage() {
         </div>
       `;
       initOcrSplitGestures();
+      initOcrSplitDivider();
     } else {
       document.getElementById("ocrImageContent").innerHTML =
         '<div style="color:var(--text-sub); font-weight:800;">현재 서버에 등록된 최신 이미지가 없습니다.</div>';
@@ -1441,6 +1445,7 @@ function toggleOcrCompare(btn) {
   const verifyBtn = document.getElementById("ocrVerifyBtn");
   const rawBtn = document.getElementById("ocrRawBtn");
   const rawContainer = document.getElementById("raw-ocr-textarea-container");
+  const divider = document.getElementById("ocrSplitDivider");
   const hint = document.getElementById("ocrHint");
   if (!pane || !imgPane) return;
   const isOn = pane.style.display !== "none";
@@ -1449,6 +1454,7 @@ function toggleOcrCompare(btn) {
     pane.style.display = "none";
     pane.style.flex = "0 0 0%";
     imgPane.style.flex = "1 1 100%";
+    if (divider) divider.style.display = "none";
     if (applyBtn) applyBtn.style.display = "none";
     if (verifyBtn) verifyBtn.style.display = "none";
     if (rawBtn) rawBtn.style.display = ""; // 이미지보기로 복귀 → Raw 버튼 다시 표시
@@ -1461,6 +1467,7 @@ function toggleOcrCompare(btn) {
     pane.style.display = "block";
     pane.style.flex = "1 1 50%";
     imgPane.style.flex = "1 1 50%";
+    if (divider) divider.style.display = "flex"; // 가운데 드래그 구분선 노출
     if (applyBtn) applyBtn.style.display = "block";
     if (verifyBtn) verifyBtn.style.display = "block";
     if (rawBtn) rawBtn.style.display = "none"; // 대조·수정 모드에선 Raw 버튼 숨김
@@ -1472,6 +1479,44 @@ function toggleOcrCompare(btn) {
     resetOcrTransform();
     loadOcrSplitData();
   }
+}
+
+// 대조창 가운데 구분선 드래그 → 좌(이미지)/우(표) 너비 비율 자유 조절
+function initOcrSplitDivider() {
+  const divider = document.getElementById("ocrSplitDivider");
+  const wrap = document.getElementById("ocrSplitWrap");
+  const imgPane = document.getElementById("ocrPaneImg");
+  const tablePane = document.getElementById("ocrPaneTable");
+  if (!divider || !wrap || !imgPane || !tablePane) return;
+  let dragging = false;
+  const apply = (clientX) => {
+    const rect = wrap.getBoundingClientRect();
+    if (!rect.width) return;
+    let ratio = (clientX - rect.left) / rect.width;
+    ratio = Math.max(0.15, Math.min(0.85, ratio)); // 한쪽이 너무 좁아지지 않게 제한
+    imgPane.style.flex = `0 0 ${(ratio * 100).toFixed(1)}%`;
+    tablePane.style.flex = "1 1 auto";
+  };
+  divider.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    try {
+      divider.setPointerCapture(e.pointerId);
+    } catch (_) {}
+    e.preventDefault();
+  });
+  divider.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    apply(e.clientX);
+    e.preventDefault();
+  });
+  const end = (e) => {
+    dragging = false;
+    try {
+      divider.releasePointerCapture(e.pointerId);
+    } catch (_) {}
+  };
+  divider.addEventListener("pointerup", end);
+  divider.addEventListener("pointercancel", end);
 }
 
 // 대조창 데이터 로드 → 편집용 배열 생성 → 표 렌더 (제스처는 모달 열 때 이미 바인딩됨)
