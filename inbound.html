@@ -1399,16 +1399,15 @@
       /* 🚀 [추가] OCR 이미지 모달 광활화 & 핀치투줌 대응 */
       #ocrImageModal .modal-box {
         max-width: 100% !important;
-        /* OCR은 크게 보는 게 좋음 → 화면 전체 높이. dvh(실제 보이는 높이) 사용 */
-        height: 100vh !important;
-        height: 100dvh !important;
-        max-height: 100vh !important;
-        max-height: 100dvh !important;
-        /* 상단은 노치/상태바(safe-area)만큼 여백 → 헤더 안 가림. 핸들도 자연스럽게 내려옴 */
-        padding: max(20px, env(safe-area-inset-top)) 0 max(10px, env(safe-area-inset-bottom)) 0 !important;
+        /* OCR은 크게 보는 게 좋지만, 상단을 (노치+조금) 내려 좌우 둥근 모서리가 보이게. dvh로 넘침 방지 */
+        height: calc(100vh - 44px) !important;
+        height: calc(100dvh - max(24px, env(safe-area-inset-top)) - 14px) !important;
+        max-height: calc(100vh - 44px) !important;
+        max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - 14px) !important;
+        padding: 14px 0 max(10px, env(safe-area-inset-bottom)) 0 !important;
         display: flex;
         flex-direction: column;
-        border-radius: 0 !important;
+        border-radius: 20px 20px 0 0 !important;
       }
       #ocrImageWrapper {
         flex: 1;
