@@ -2792,7 +2792,9 @@ function submitCMS(
         let oldEDate =
           oldBlockEnd && oldBlockEnd !== "null" && oldBlockEnd !== "" ? new Date(oldBlockEnd) : new Date(oldSDate);
         let curr = new Date(oldSDate);
-        while (curr <= oldEDate) {
+        let _g1 = 0;
+        while (curr <= oldEDate && _g1++ < 400) {
+          // _g1: 날짜 범위가 비정상적으로 커도 루프 폭주(프리징) 방지 (최대 400일)
           oldDates.push(
             `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`,
           );
@@ -2808,7 +2810,9 @@ function submitCMS(
         let newEDate = endDateStr ? new Date(endDateStr) : new Date(newSDate);
         if (newEDate < newSDate) newEDate = new Date(newSDate);
         let curr = new Date(newSDate);
-        while (curr <= newEDate) {
+        let _g2 = 0;
+        while (curr <= newEDate && _g2++ < 400) {
+          // _g2: 루프 폭주(프리징) 방지 (최대 400일)
           newDates.push(
             `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`,
           );
@@ -2837,7 +2841,12 @@ function submitCMS(
           token: adminToken,
           admin_id: localStorage.getItem("admin_id"),
         }).then((res) => {
-          if (res === null) goToAsync(serverData.year, serverData.month);
+          // 블록(N일) 수정 시 실패가 여러 건이어도 전체 리로드는 1회만 → 렌더 폭주(프리징) 방지
+          if (res === null && !window._recoverScheduled) {
+            window._recoverScheduled = true;
+            setTimeout(() => (window._recoverScheduled = false), 1500);
+            goToAsync(serverData.year, serverData.month);
+          }
         });
       });
       if (action === "EDIT") _reopenDetailAfter(payload.newDate);
