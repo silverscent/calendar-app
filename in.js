@@ -1407,8 +1407,8 @@ function showLastOcrImage() {
             <div id="ocrPaneImg" style="flex:1 1 100%; min-width:0; overflow:hidden; position:relative; touch-action:none;">
               <img id="ocrImgElement" src="${url}" alt="스케줄 이미지" draggable="false" onload="ocrImgLoaded()" style="position:absolute; left:0; top:0; display:block; transform-origin:center center; user-select:none; -webkit-user-drag:none; -moz-user-select:none; will-change:transform;">
             </div>
-            <div id="ocrSplitDivider" title="드래그해서 좌우 너비 조절" style="display:none; flex:0 0 16px; align-items:center; justify-content:center; cursor:col-resize; background:#cfd4da; touch-action:none; position:relative; z-index:6;">
-              <div style="width:4px; height:50px; border-radius:3px; background:#7b828c; pointer-events:none;"></div>
+            <div id="ocrSplitDivider" title="드래그해서 좌우 너비 조절" style="display:none; flex:0 0 8px; align-items:center; justify-content:center; cursor:col-resize; background:#cfd4da; touch-action:none; position:relative; z-index:6;">
+              <div style="width:2px; height:44px; border-radius:2px; background:#7b828c; pointer-events:none;"></div>
             </div>
             <div id="ocrPaneTable" style="flex:0 0 0%; width:0; min-width:0; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff; position:relative; display:none;">
               <div id="ocrTableInner" style="padding:2px; min-width:max-content; transform-origin:0 0;"></div>
