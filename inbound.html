@@ -1399,16 +1399,16 @@
       /* 🚀 [추가] OCR 이미지 모달 광활화 & 핀치투줌 대응 */
       #ocrImageModal .modal-box {
         max-width: 100% !important;
-        /* 모바일 vh는 주소창 영역까지 포함 → 상단 잘림. dvh(실제 보이는 높이)로 + 92%로 상단 여백 확보 */
-        height: 92vh !important;
-        height: 92dvh !important;
-        max-height: 92vh !important;
-        max-height: 92dvh !important;
-        /* 상단 패딩 ↑ : 핸들(-10px margin)이 맨 위에 붙지 않게 여유 확보 */
-        padding: 20px 0 max(10px, env(safe-area-inset-bottom)) 0 !important;
+        /* OCR은 크게 보는 게 좋음 → 화면 전체 높이. dvh(실제 보이는 높이) 사용 */
+        height: 100vh !important;
+        height: 100dvh !important;
+        max-height: 100vh !important;
+        max-height: 100dvh !important;
+        /* 상단은 노치/상태바(safe-area)만큼 여백 → 헤더 안 가림. 핸들도 자연스럽게 내려옴 */
+        padding: max(20px, env(safe-area-inset-top)) 0 max(10px, env(safe-area-inset-bottom)) 0 !important;
         display: flex;
         flex-direction: column;
-        border-radius: 20px 20px 0 0 !important;
+        border-radius: 0 !important;
       }
       #ocrImageWrapper {
         flex: 1;
