@@ -1071,6 +1071,14 @@
         margin-bottom: -8px;
         padding-left: 4px;
       }
+      /* 📱 모바일: 입력창 포커스 시 iOS 자동확대 방지 — 16px 바닥 적용(핀치확대·큰글씨 모드는 그대로 유지). */
+      @media (max-width: 768px) {
+        input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+        textarea,
+        select {
+          font-size: max(16px, 1em) !important;
+        }
+      }
       .edit-input {
         width: 100%;
         box-sizing: border-box;

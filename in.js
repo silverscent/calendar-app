@@ -1387,7 +1387,7 @@ function showLastOcrImage() {
   ocrTransform = { scale: 1, x: 0, y: 0 };
   // Raw 파싱 텍스트 보기 — 로그인 관리자만
   const rawWrap = document.getElementById("rawOcrToggleWrap");
-  if (rawWrap) rawWrap.style.display = isAdmin ? "block" : "none";
+  if (rawWrap) rawWrap.style.display = "none"; // 옛 위치(상단) 버튼 숨김 — 하단 버튼줄로 이동
   const rawArea = document.getElementById("raw-ocr-textarea-container");
   if (rawArea) rawArea.style.display = "none"; // 열려있던 raw 패널 닫기
 
@@ -1415,7 +1415,8 @@ function showLastOcrImage() {
             <button onclick="resetOcrTransform()" style="flex:0 0 auto; padding:11px 12px; background:var(--border-color,#444); color:var(--text-main,#fff); border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px;">↺</button>
             ${
               isAdmin
-                ? `<button id="ocrCompareBtn" onclick="toggleOcrCompare(this)" style="flex:1.3 1 auto; padding:11px 8px; background:#4a90e2; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📊 대조·수정 켜기</button>
+                ? `<button id="ocrRawBtn" onclick="toggleRawOcrView()" style="flex:0 0 auto; padding:11px 10px; background:var(--border-color,#444); color:var(--text-main,#fff); border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px;">📄 Raw</button>
+            <button id="ocrCompareBtn" onclick="toggleOcrCompare(this)" style="flex:1.3 1 auto; padding:11px 8px; background:#4a90e2; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📊 대조·수정 켜기</button>
             <button id="ocrVerifyBtn" onclick="verifyOcrRows(this)" style="display:none; flex:1 1 auto; padding:11px 8px; background:#f39c12; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">🔍 검증</button>
             <button id="ocrApplyBtn" onclick="applyOcrEdits(this)" style="display:none; flex:1 1 auto; padding:11px 8px; background:#27ae60; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📌 확정</button>`
                 : ``
@@ -1438,6 +1439,8 @@ function toggleOcrCompare(btn) {
   const imgPane = document.getElementById("ocrPaneImg");
   const applyBtn = document.getElementById("ocrApplyBtn");
   const verifyBtn = document.getElementById("ocrVerifyBtn");
+  const rawBtn = document.getElementById("ocrRawBtn");
+  const rawContainer = document.getElementById("raw-ocr-textarea-container");
   const hint = document.getElementById("ocrHint");
   if (!pane || !imgPane) return;
   const isOn = pane.style.display !== "none";
@@ -1448,6 +1451,7 @@ function toggleOcrCompare(btn) {
     imgPane.style.flex = "1 1 100%";
     if (applyBtn) applyBtn.style.display = "none";
     if (verifyBtn) verifyBtn.style.display = "none";
+    if (rawBtn) rawBtn.style.display = ""; // 이미지보기로 복귀 → Raw 버튼 다시 표시
     btn.innerHTML = "📊 대조·수정 켜기";
     btn.style.background = "#4a90e2";
     if (hint) hint.innerHTML = "두 손가락=확대 · 한 손가락=이동";
@@ -1459,6 +1463,8 @@ function toggleOcrCompare(btn) {
     imgPane.style.flex = "1 1 50%";
     if (applyBtn) applyBtn.style.display = "block";
     if (verifyBtn) verifyBtn.style.display = "block";
+    if (rawBtn) rawBtn.style.display = "none"; // 대조·수정 모드에선 Raw 버튼 숨김
+    if (rawContainer) rawContainer.style.display = "none"; // 열려있던 Raw 패널 닫기
     btn.innerHTML = "🖼️ 이미지만 보기";
     btn.style.background = "#e74c3c";
     if (hint)

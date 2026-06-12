@@ -1042,6 +1042,15 @@
         margin-bottom: -8px;
         padding-left: 4px;
       }
+      /* 📱 모바일: 입력창 포커스 시 iOS 자동확대 방지 — 16px 바닥 적용(핀치확대·큰글씨 모드는 그대로 유지).
+         가로폭은 컨테이너가 정하므로 작은 폰에서도 레이아웃 영향 없음. */
+      @media (max-width: 768px) {
+        input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+        textarea,
+        select {
+          font-size: max(16px, 1em) !important;
+        }
+      }
       .edit-input {
         width: 100%;
         box-sizing: border-box;
@@ -1390,8 +1399,11 @@
       /* 🚀 [추가] OCR 이미지 모달 광활화 & 핀치투줌 대응 */
       #ocrImageModal .modal-box {
         max-width: 100% !important;
-        height: 98vh !important;
-        max-height: 98vh !important;
+        /* 모바일 vh는 주소창 영역까지 포함 → 상단 잘림. dvh(실제 보이는 높이)로 + 92%로 상단 여백 확보 */
+        height: 92vh !important;
+        height: 92dvh !important;
+        max-height: 92vh !important;
+        max-height: 92dvh !important;
         padding: 10px 0 max(10px, env(safe-area-inset-bottom)) 0 !important;
         display: flex;
         flex-direction: column;
