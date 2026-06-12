@@ -1399,7 +1399,7 @@ function showLastOcrImage() {
     let url = res && res.url ? res.url : typeof res === "string" ? res : "";
     if (url && url.startsWith("http")) {
       document.getElementById("ocrImageContent").innerHTML = `
-        <div style="display:flex; flex-direction:column; width:100%; height:80vh; max-height:820px; overflow:hidden;">
+        <div style="display:flex; flex-direction:column; width:100%; height:100%; overflow:hidden;">
           <div id="ocrHint" style="flex:0 0 auto; font-size:11px; color:var(--text-sub,#888); padding:0 2px 6px; text-align:center; line-height:1.4;">
             두 손가락=확대 · 한 손가락=이동
           </div>

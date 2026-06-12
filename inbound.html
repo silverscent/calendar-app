@@ -1404,7 +1404,8 @@
         height: 92dvh !important;
         max-height: 92vh !important;
         max-height: 92dvh !important;
-        padding: 10px 0 max(10px, env(safe-area-inset-bottom)) 0 !important;
+        /* 상단 패딩 ↑ : 핸들(-10px margin)이 맨 위에 붙지 않게 여유 확보 */
+        padding: 20px 0 max(10px, env(safe-area-inset-bottom)) 0 !important;
         display: flex;
         flex-direction: column;
         border-radius: 20px 20px 0 0 !important;
