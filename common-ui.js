@@ -1577,20 +1577,13 @@ async function showIpInfo(ip) {
 
   if (_ipInfoCache.has(ip)) { _showResult(_ipInfoCache.get(ip)); return; }
 
-  try {
-    const r = await fetch(`https://ipapi.co/${ip}/json/`);
-    const body = document.getElementById("ipInfoBody");
-    if (!r.ok) {
-      if (body) body.innerHTML = r.status === 429
-        ? `<span style="color:var(--text-sub);">요청 한도 초과 — 잠시 후 다시 시도해주세요</span>`
-        : `<span style="color:var(--text-sub);">조회 실패 (HTTP ${r.status})</span>`;
-      return;
-    }
-    const d = await r.json();
-    if (!d.error) _ipInfoCache.set(ip, d);
-    _showResult(d);
-  } catch (e) {
-    const body = document.getElementById("ipInfoBody");
-    if (body) body.innerHTML = `<span style="color:var(--text-sub);">조회 실패: 네트워크 오류</span>`;
+  const res = await apiCall({ source: "vercel", action: "GET_IP_INFO", data: { ip } });
+  const body = document.getElementById("ipInfoBody");
+  if (!res || res.error) {
+    if (body) body.innerHTML = `<span style="color:var(--text-sub);">조회 실패: ${_esc((res && res.reason) || "서버 오류")}</span>`;
+    return;
   }
+  const d = res.info;
+  if (d && !d.error) _ipInfoCache.set(ip, d);
+  _showResult(d || { error: true, reason: "응답 없음" });
 }
