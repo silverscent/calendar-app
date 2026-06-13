@@ -1417,7 +1417,8 @@ module.exports = async function (req, res) {
           const addBox = parseInt(data?.addBox) || 0;
 
           // 프론트엔드와 100% 동일한 히스토리 글씨 생성 (예: [5/17 1P 10B 추가])
-          const histDate = `${new Date().getMonth() + 1}/${new Date().getDate()}`;
+          const _now = new Date();
+          const histDate = `${_now.getMonth() + 1}/${_now.getDate()}`;
           const addPalStr = data?.addPal ? data.addPal + "P" : "";
           const addBoxStr = data?.addBox ? data.addBox + "B" : "";
           const spaceStr = data?.addPal && data?.addBox ? " " : "";
@@ -2030,7 +2031,7 @@ ${question}
           }
           // 🔒 민감 테이블/파일/스키마 접근 차단 (입·출고 데이터만 허용)
           if (
-            /\b(admins|admin_audit_logs|system_settings|processed_images|mysql|information_schema|performance_schema)\b/i.test(
+            /\b(admins|admin_audit_logs|system_settings|processed_images|ocr_store|mysql|information_schema|performance_schema)\b/i.test(
               safeSql,
             ) ||
             /into\s+(outfile|dumpfile)|load_file\s*\(|\bsys\./i.test(safeSql)
