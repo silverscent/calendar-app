@@ -1926,55 +1926,63 @@ function onOcrCellTap(td) {
   selectOcrCell(idx, field); // 첫 탭 → 선택(이미지 이동 + 하이라이트)
 }
 
-// 📱 셀 편집 시 소프트 키보드가 입력칸을 가리지 않게:
-//   ① iOS가 fixed 모달 안 input을 보이려고 밀어올린 '문서 스크롤'을 되돌리고(모달이 키보드 뒤로 안 내려감)
-//   ② 편집 셀을 표 패널 상단으로 올림.
-//   첫 키보드 등장은 iOS가 늦게/반복적으로 문서를 밀어서 한두 번 보정으론 못 이김 → rAF로 ~1.2초간 매 프레임 보정.
-function _ocrLiftCellAboveKeyboard(td) {
+// 📱 셀 편집 시: OCR 모달은 화면 꽉 찬 높이라 키보드가 하단을 가림 → '일반 모달처럼' 키보드 위 영역만큼으로
+//   모달을 줄여 상단에 붙이고(visualViewport 기준), 편집 셀을 보이는 영역 안으로 스크롤.
+function _ocrFitModalAboveKeyboard(td) {
+  const modal = document.getElementById("ocrImageModal");
+  const box = modal && modal.querySelector(".modal-box");
   const pane = document.getElementById("ocrPaneTable");
-  if (!pane || !td) return;
-  const correct = () => {
+  const vv = window.visualViewport;
+  if (!modal || !box || !pane || !td) return;
+
+  const restore = () => {
+    modal.style.alignItems = "";
+    box.style.removeProperty("height");
+    box.style.removeProperty("max-height");
+    box.style.transform = "";
+  };
+
+  const apply = () => {
     const input = td.querySelector("input");
     if (!input) return false; // 편집 종료
-    // ① iOS가 input 보이려고 문서(body/window)를 밀어올린 것 원복
-    try {
-      if (window.pageYOffset) window.scrollTo(0, 0);
-    } catch (_) {}
-    const se = document.scrollingElement;
-    if (se && se.scrollTop) se.scrollTop = 0;
-    if (document.body && document.body.scrollTop) document.body.scrollTop = 0;
-    // ② 편집 셀을 패널 상단으로 (상대 좌표라 문서 밀림과 무관하게 정확)
+    const kbVisible = vv ? vv.height < window.innerHeight - 80 : false;
+    if (kbVisible) {
+      // 모달을 키보드 위 영역만큼으로 줄여 상단에 붙임 → 표 전체가 키보드 위로 올라옴
+      modal.style.alignItems = "flex-start";
+      box.style.setProperty("height", vv.height + "px", "important");
+      box.style.setProperty("max-height", vv.height + "px", "important");
+      box.style.transform = vv.offsetTop ? `translateY(${vv.offsetTop}px)` : "";
+    } else {
+      restore();
+    }
+    // 편집 셀이 패널 보이는 영역 안에 오도록 스크롤
     const paneRect = pane.getBoundingClientRect();
     const tdRect = td.getBoundingClientRect();
-    const delta = tdRect.top - paneRect.top - 6;
-    if (Math.abs(delta) > 1) pane.scrollTop += delta;
+    if (tdRect.bottom > paneRect.bottom - 4) pane.scrollTop += tdRect.bottom - (paneRect.bottom - 4);
+    else if (tdRect.top < paneRect.top + 4) pane.scrollTop += tdRect.top - (paneRect.top + 4);
     return true;
   };
-  // 첫 키보드 등장 동안(~1.2초) 매 프레임 보정 → iOS의 반복적 문서 밀림을 이김(안정되면 사실상 no-op)
-  const start = Date.now();
-  let raf = null;
-  const loop = () => {
-    if (correct() === false) return;
-    if (Date.now() - start < 1200) raf = requestAnimationFrame(loop);
-  };
-  raf = requestAnimationFrame(loop);
-  const vv = window.visualViewport;
-  const onVV = () => correct(); // 키보드 등장(resize)/iOS 문서이동(scroll) 순간 즉시 보정
+
+  apply();
+  const timers = [0, 80, 200, 350, 550, 800].map((ms) => setTimeout(apply, ms));
+  const onVV = () => apply(); // 키보드 등장/높이변화 순간 즉시 반영
   if (vv) {
     vv.addEventListener("resize", onVV);
     vv.addEventListener("scroll", onVV);
   }
-  // 편집 끝나면(입력칸 사라지면) 정리
+  // 편집 끝나면(입력칸 사라지면) 정리 + 모달 원복
   const watch = setInterval(() => {
     if (!td.querySelector("input")) {
       clearInterval(watch);
-      if (raf) cancelAnimationFrame(raf);
+      timers.forEach(clearTimeout);
       if (vv) {
         vv.removeEventListener("resize", onVV);
         vv.removeEventListener("scroll", onVV);
       }
+      // 다른 셀로 편집이 이어지는 중이면 모달 상태 유지(셀 이동 시 깜빡임 방지)
+      if (!document.querySelector("#ocrTableInner td input")) restore();
     }
-  }, 300);
+  }, 250);
 }
 
 // 인라인 입력 편집 시작 (initial: 키보드로 글자 바로 쳐서 진입 시 그 글자로 덮어씀)
@@ -1992,7 +2000,7 @@ function startEditOcrCell(td, idx, field, initial) {
   } else {
     input.select();
   }
-  _ocrLiftCellAboveKeyboard(td); // 📱 편집 셀을 키보드 위로 올림(rAF 보정, 포커스 틱엔 영향 없음)
+  _ocrFitModalAboveKeyboard(td); // 📱 모달을 키보드 위 영역만큼으로 줄여 편집 셀이 항상 보이게
   let done = false;
   // move: "down"(Enter) | "right"/"left"(Tab) | "stay"(blur/제자리)
   const commit = (move) => {
