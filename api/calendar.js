@@ -87,6 +87,16 @@ function getSaturdayOfWeek(dateStr) {
   return d.toISOString().slice(0, 10);
 }
 
+// ── 콜드스타트 시 인덱스 1회 생성 (이미 있으면 errno 1061로 무시)
+(async () => {
+  const tryIdx = (sql) => pool.query(sql).catch((e) => { if (e.errno !== 1061) console.warn("idx:", e.message); });
+  await tryIdx("ALTER TABLE inbound ADD INDEX idx_receive_date (receive_date)");
+  await tryIdx("ALTER TABLE inbound ADD INDEX idx_invoice (invoice(50))");
+  await tryIdx("ALTER TABLE inbound ADD INDEX idx_bl_number (bl_number(50))");
+  await tryIdx("ALTER TABLE outbound ADD INDEX idx_outbound_date (outbound_date)");
+  await tryIdx("ALTER TABLE admin_audit_logs ADD INDEX idx_audit_admin_action (admin_id, action_type)");
+})();
+
 module.exports = async function (req, res) {
   // CORS: 자사 도메인(프로덕션 별칭 + 이 프로젝트 배포 URL)만 허용.
   // ※ 동일 출처(same-origin) 요청은 브라우저가 CORS 검사를 안 하므로 앱은 영향 없음.
@@ -1586,16 +1596,15 @@ module.exports = async function (req, res) {
                 "SELECT bl_number, pallets, DATE_FORMAT(eta,'%Y-%m-%d') AS eta, DATE_FORMAT(receive_date,'%Y-%m-%d') AS receive_date, fwd, s_type, invoice, remarks, status FROM inbound WHERE ";
               const byInv = {};
               const byBl = {};
-              if (invList.length) {
-                const [ri] = await pool.query(sel + "invoice IN (?)", [invList]);
-                ri.forEach((d) => {
+              const _wParts = [];
+              const _wParams = [];
+              if (invList.length) { _wParts.push("invoice IN (?)"); _wParams.push(invList); }
+              if (blList.length) { _wParts.push("bl_number IN (?)"); _wParams.push(blList); }
+              if (_wParts.length) {
+                const [rows] = await pool.query(sel + _wParts.join(" OR "), _wParams);
+                rows.forEach((d) => {
                   if (d.invoice) byInv[String(d.invoice).trim()] = d;
-                });
-              }
-              if (blList.length) {
-                const [rb] = await pool.query(sel + "bl_number IN (?)", [blList]);
-                rb.forEach((d) => {
-                  byBl[cleanBL(d.bl_number)] = d;
+                  if (d.bl_number) byBl[cleanBL(d.bl_number)] = d;
                 });
               }
               // OCR 파싱행: 현재 inbound 값으로 갱신하되, 완료된 건은 제외
