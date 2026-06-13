@@ -1937,7 +1937,10 @@ function _ocrFitModalAboveKeyboard(td) {
   const vv = window.visualViewport;
   if (!modal || !box || !pane || !td || !vv) return; // vv 없으면 키보드 등장 우선(레이아웃 안 건드림)
 
+  const cellIdx = parseInt(td.getAttribute("data-idx"));
+  const cellField = td.getAttribute("data-field");
   let applied = false;
+  let lastPaneH = 0; // 패널 높이 바뀔 때만 왼쪽 이미지 재정렬(불필요한 재줌 방지)
   const restore = () => {
     if (!applied) return;
     applied = false;
@@ -1945,6 +1948,13 @@ function _ocrFitModalAboveKeyboard(td) {
     box.style.removeProperty("height");
     box.style.removeProperty("max-height");
     box.style.transform = "";
+    // 패널이 원래 크기로 돌아왔으니 이미지 기준 재계산 + 선택 셀로 재정렬
+    requestAnimationFrame(() => {
+      if (typeof computeOcrFit === "function") computeOcrFit();
+      if (_ocrSelectedCell && typeof locateOcrImage === "function")
+        locateOcrImage(_ocrSelectedCell.idx, _ocrSelectedCell.field);
+      else if (typeof bakeOcr === "function") bakeOcr();
+    });
   };
   const fit = () => {
     const input = td.querySelector("input");
@@ -1962,6 +1972,14 @@ function _ocrFitModalAboveKeyboard(td) {
       const tdRect = td.getBoundingClientRect();
       if (tdRect.bottom > paneRect.bottom - 4) pane.scrollTop += tdRect.bottom - (paneRect.bottom - 4);
       else if (tdRect.top < paneRect.top + 4) pane.scrollTop += tdRect.top - (paneRect.top + 4);
+      // 🔑 왼쪽 이미지 패널 크기가 줄었으니 기준 재계산 후 그 셀로 다시 정렬(확대 위치 어긋남 수정)
+      const imgPane = document.getElementById("ocrPaneImg");
+      const ph = imgPane ? imgPane.clientHeight : 0;
+      if (ph && ph !== lastPaneH) {
+        lastPaneH = ph;
+        if (typeof computeOcrFit === "function") computeOcrFit();
+        if (!isNaN(cellIdx) && typeof locateOcrImage === "function") locateOcrImage(cellIdx, cellField);
+      }
     } else {
       restore();
     }
