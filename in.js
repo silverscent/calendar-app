@@ -1926,6 +1926,22 @@ function onOcrCellTap(td) {
   selectOcrCell(idx, field); // 첫 탭 → 선택(이미지 이동 + 하이라이트)
 }
 
+// 모바일: 셀 편집 시 소프트 키보드가 입력칸을 가리지 않도록, 그 셀을 표 영역 맨 위로 끌어올림
+//  (표 패널 top은 화면 상단부라 키보드(하단)보다 항상 위 → 맨 위로 보내면 확실히 보임)
+function _ocrLiftCellAboveKeyboard(td) {
+  const pane = document.getElementById("ocrPaneTable");
+  if (!pane || !td) return;
+  const lift = () => {
+    const input = td.querySelector("input");
+    if (!input) return; // 이미 편집 끝났으면 패스
+    const paneRect = pane.getBoundingClientRect();
+    const tdRect = td.getBoundingClientRect();
+    pane.scrollTop += tdRect.top - paneRect.top - 6; // 편집 셀을 패널 맨 위로
+  };
+  lift(); // 즉시 1회
+  setTimeout(lift, 300); // 키보드 애니메이션 올라온 뒤 한 번 더 보정
+}
+
 // 인라인 입력 편집 시작 (initial: 키보드로 글자 바로 쳐서 진입 시 그 글자로 덮어씀)
 function startEditOcrCell(td, idx, field, initial) {
   if (td.querySelector("input")) return;
@@ -1941,6 +1957,7 @@ function startEditOcrCell(td, idx, field, initial) {
   } else {
     input.select();
   }
+  _ocrLiftCellAboveKeyboard(td); // 📱 키보드가 입력칸 가리지 않게 위로 끌어올림
   let done = false;
   // move: "down"(Enter) | "right"/"left"(Tab) | "stay"(blur/제자리)
   const commit = (move) => {
