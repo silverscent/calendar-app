@@ -1534,6 +1534,8 @@ function _descWithIpLink(desc) {
   );
 }
 
+const _ipInfoCache = new Map();
+
 async function showIpInfo(ip) {
   if (!ip || ip === "IP알수없음") return;
   const prev = document.getElementById("ipInfoPopup");
@@ -1553,9 +1555,8 @@ async function showIpInfo(ip) {
   </div>`;
   popup.addEventListener("click", (e) => { if (e.target === popup) popup.remove(); });
   document.body.appendChild(popup);
-  try {
-    const r = await fetch(`https://ipapi.co/${ip}/json/`);
-    const d = await r.json();
+
+  const _showResult = (d) => {
     const body = document.getElementById("ipInfoBody");
     if (!body) return;
     if (d.error) {
@@ -1570,11 +1571,24 @@ async function showIpInfo(ip) {
       ["🕐 시간대", d.timezone || null],
     ].filter(([, v]) => v);
     body.innerHTML = rows
-      .map(
-        ([k, v]) =>
-          `<div style="display:flex; gap:8px;"><span style="color:var(--text-sub); min-width:70px;">${k}</span><span style="font-weight:700; word-break:break-all;">${_esc(String(v))}</span></div>`,
-      )
+      .map(([k, v]) => `<div style="display:flex; gap:8px;"><span style="color:var(--text-sub); min-width:70px;">${k}</span><span style="font-weight:700; word-break:break-all;">${_esc(String(v))}</span></div>`)
       .join("");
+  };
+
+  if (_ipInfoCache.has(ip)) { _showResult(_ipInfoCache.get(ip)); return; }
+
+  try {
+    const r = await fetch(`https://ipapi.co/${ip}/json/`);
+    const body = document.getElementById("ipInfoBody");
+    if (!r.ok) {
+      if (body) body.innerHTML = r.status === 429
+        ? `<span style="color:var(--text-sub);">요청 한도 초과 — 잠시 후 다시 시도해주세요</span>`
+        : `<span style="color:var(--text-sub);">조회 실패 (HTTP ${r.status})</span>`;
+      return;
+    }
+    const d = await r.json();
+    if (!d.error) _ipInfoCache.set(ip, d);
+    _showResult(d);
   } catch (e) {
     const body = document.getElementById("ipInfoBody");
     if (body) body.innerHTML = `<span style="color:var(--text-sub);">조회 실패: 네트워크 오류</span>`;
