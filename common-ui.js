@@ -585,7 +585,7 @@ function refreshConnLogs() {
                       <span style="color:var(--text-sub); font-family:monospace; width:110px; flex-shrink:0;">${dateStr}</span>
                       <span style="background:rgba(128,128,128,0.1); color:${tColor}; font-weight:900; width:50px; flex-shrink:0; text-align:center; padding:3px 0; border-radius:4px; font-size:0.85em;">${_esc(typeShort)}</span>
                       <span style="font-weight:900; color:var(--text-main); flex-shrink:0; width:80px; margin-left:8px;">${_esc(log.admin_id || "손님")}</span>
-                      <span style="color:var(--text-sub); flex:1; margin-left:12px;">${_esc(desc)}</span>
+                      <span style="color:var(--text-sub); flex:1; margin-left:12px;">${_descWithIpLink(desc)}</span>
                   </div>`;
     });
     timeline.innerHTML = html;
@@ -1518,3 +1518,65 @@ function changeConnLogPage(dir) {
     { passive: true },
   );
 })();
+
+// ── IP 클릭 팝업 ──────────────────────────────────────────────────────────────
+
+// 설명 텍스트 중 'IP: x.x.x.x' 부분만 클릭 가능한 링크로 변환 (나머지는 _esc 처리)
+function _descWithIpLink(desc) {
+  if (!desc) return "";
+  const m = desc.match(/IP:\s*([\d.a-f:]+)/i);
+  if (!m) return _esc(desc);
+  const ip = m[1];
+  return (
+    _esc(desc.slice(0, m.index)) +
+    `IP: <span onclick="showIpInfo('${_argq(ip)}')" style="color:#0a84ff;cursor:pointer;text-decoration:underline dotted;font-weight:700;">${_esc(ip)}</span>` +
+    _esc(desc.slice(m.index + m[0].length))
+  );
+}
+
+async function showIpInfo(ip) {
+  if (!ip || ip === "IP알수없음") return;
+  const prev = document.getElementById("ipInfoPopup");
+  if (prev) prev.remove();
+  const popup = document.createElement("div");
+  popup.id = "ipInfoPopup";
+  popup.style.cssText =
+    "position:fixed; inset:0; z-index:99999; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.55); padding:24px; box-sizing:border-box;";
+  const safeIp = _esc(ip);
+  popup.innerHTML = `<div style="background:var(--card-bg,#26282c); color:var(--text-main,#fff); width:100%; max-width:320px; border-radius:18px; padding:22px 20px 16px; box-shadow:0 12px 40px rgba(0,0,0,0.5);">
+    <div style="font-size:1em; font-weight:900; color:#0a84ff; margin-bottom:14px;">🌐 IP 정보</div>
+    <div id="ipInfoBody" style="font-size:0.9em; line-height:1.8;">조회 중...</div>
+    <div style="display:flex; gap:8px; margin-top:16px;">
+      <button onclick="window.open('https://whois.domaintools.com/${safeIp}','_blank')" style="flex:1; padding:11px; border:1px solid var(--border-color,#444); border-radius:10px; background:transparent; color:var(--text-main,#fff); font-weight:700; cursor:pointer; font-size:0.88em;">🔍 WHOIS</button>
+      <button onclick="document.getElementById('ipInfoPopup').remove()" style="flex:1; padding:11px; border:none; border-radius:10px; background:#0a84ff; color:#fff; font-weight:800; cursor:pointer;">닫기</button>
+    </div>
+  </div>`;
+  popup.addEventListener("click", (e) => { if (e.target === popup) popup.remove(); });
+  document.body.appendChild(popup);
+  try {
+    const r = await fetch(`https://ipapi.co/${ip}/json/`);
+    const d = await r.json();
+    const body = document.getElementById("ipInfoBody");
+    if (!body) return;
+    if (d.error) {
+      body.innerHTML = `<span style="color:var(--text-sub);">조회 실패: ${_esc(d.reason || "알 수 없음")}</span>`;
+      return;
+    }
+    const rows = [
+      ["🔍 IP", d.ip],
+      ["🌍 국가", d.country_name ? `${d.country_name} (${d.country_code})` : null],
+      ["📍 지역", [d.region, d.city].filter(Boolean).join(", ") || null],
+      ["🏢 통신사", d.org || d.asn || null],
+      ["🕐 시간대", d.timezone || null],
+    ].filter(([, v]) => v);
+    body.innerHTML = rows
+      .map(
+        ([k, v]) =>
+          `<div style="display:flex; gap:8px;"><span style="color:var(--text-sub); min-width:70px;">${k}</span><span style="font-weight:700; word-break:break-all;">${_esc(String(v))}</span></div>`,
+      )
+      .join("");
+  } catch (e) {
+    const body = document.getElementById("ipInfoBody");
+    if (body) body.innerHTML = `<span style="color:var(--text-sub);">조회 실패: 네트워크 오류</span>`;
+  }
+}
