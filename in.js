@@ -1097,7 +1097,10 @@ async function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDon
     if (!(await uiConfirm(`⚠️ 정말 [${oldBL}] 입고 스케줄을 영구 삭제하시겠습니까?`, { danger: true }))) return;
   } else if (action === "EDIT") {
     payload.newBL = document.getElementById(`edit-bl-${idx}`).value;
-    payload.newPal = document.getElementById(`edit-pal-${idx}`).value;
+    payload.newPal = (function (v) {
+      const n = parseInt(v, 10);
+      return isNaN(n) ? "" : String(Math.max(0, n));
+    })(document.getElementById(`edit-pal-${idx}`).value);
     payload.newSType = document.getElementById(`edit-stype-${idx}`).value;
     payload.newFwd = document.getElementById(`edit-fwd-${idx}`).value;
     payload.newInvoice = document.getElementById(`edit-invoice-${idx}`).value;
@@ -1301,7 +1304,7 @@ async function openEditForm(day, idx, bl, dateStr, pal, etc) {
             <div style="display:flex; gap:10px;">
               <div style="flex:1;">
                 <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">수량 (PAL)</div>
-                <input type="number" id="edit-pal-${idx}" class="edit-input" value="${pal}">
+                <input type="number" min="0" id="edit-pal-${idx}" class="edit-input" value="${pal}">
               </div>
               <div style="flex:1;">
                 <div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">운송 타입</div>

@@ -2589,6 +2589,11 @@ function openAddFormWithDate(day) {
   setTimeout(() => document.getElementById("add-comp").focus(), 200);
 }
 
+// 수량 음수 방지: 빈값은 유지, 숫자는 0 이상으로 클램프
+function clampQty(v) {
+  const n = parseInt(v, 10);
+  return isNaN(n) ? "" : String(Math.max(0, n));
+}
 async function submitCMS(
   action,
   oldComp = null,
@@ -2657,8 +2662,8 @@ async function submitCMS(
     rawComp = document.getElementById("add-comp").value.trim();
     let finalComp = getFullName(rawComp);
     payload.newComp = isTask ? `[TASK]${finalComp}` : finalComp;
-    payload.newPal = document.getElementById("add-pal").value;
-    payload.newBox = document.getElementById("add-box").value;
+    payload.newPal = clampQty(document.getElementById("add-pal").value);
+    payload.newBox = clampQty(document.getElementById("add-box").value);
     startDateStr = document.getElementById("add-date").value || "미정";
     let endNode = document.getElementById("add-end-date");
     endDateStr = endNode ? endNode.value : "";
@@ -2669,8 +2674,8 @@ async function submitCMS(
     rawComp = document.getElementById(`edit-comp-${idx}`).value.trim();
     let finalComp = getFullName(rawComp);
     payload.newComp = isTask ? `[TASK]${finalComp}` : finalComp;
-    payload.newPal = document.getElementById(`edit-pal-${idx}`).value;
-    payload.newBox = document.getElementById(`edit-box-${idx}`).value;
+    payload.newPal = clampQty(document.getElementById(`edit-pal-${idx}`).value);
+    payload.newBox = clampQty(document.getElementById(`edit-box-${idx}`).value);
     payload.newDate = document.getElementById(`edit-date-${idx}`).value || "미정";
     let endNode = document.getElementById(`edit-${idx}-end-date`);
     endDateStr = endNode ? endNode.value : "";
@@ -2684,8 +2689,8 @@ async function submitCMS(
     let histArr = [];
     histRows.forEach((row) => {
       const dateText = row.querySelector(`.hist-date-${idx}`).innerText.trim();
-      const pVal = parseInt(row.querySelector(`.hist-pal-${idx}`).value) || 0;
-      const bVal = parseInt(row.querySelector(`.hist-box-${idx}`).value) || 0;
+      const pVal = Math.max(0, parseInt(row.querySelector(`.hist-pal-${idx}`).value) || 0);
+      const bVal = Math.max(0, parseInt(row.querySelector(`.hist-box-${idx}`).value) || 0);
       if (pVal > 0 || bVal > 0) {
         let pStr = pVal > 0 ? `${pVal}P` : "";
         let bStr = bVal > 0 ? `${bVal}B` : "";
@@ -2708,8 +2713,8 @@ async function submitCMS(
 
     // 🚨 [여기가 누락되었던 핵심 블록입니다] 수량 추가 시 값을 싣고, 화면(로컬)에도 즉시 반영!
   } else if (action === "ADD_QTY") {
-    payload.addPal = document.getElementById(`add-q-pal-${idx}`).value;
-    payload.addBox = document.getElementById(`add-q-box-${idx}`).value;
+    payload.addPal = clampQty(document.getElementById(`add-q-pal-${idx}`).value);
+    payload.addBox = clampQty(document.getElementById(`add-q-box-${idx}`).value);
 
     if (!payload.addPal && !payload.addBox) {
       showToast("⚠️ 추가할 파레트나 박스 수량을 입력해주세요.", 2000);
@@ -2872,6 +2877,85 @@ async function submitCMS(
     });
     // 💡 수정/수량추가 후엔 모달을 닫지 않고 상세보기로 복귀
     if (action === "EDIT" || action === "ADD_QTY") _reopenDetailAfter(payload.newDate || oldDate);
+  }, 50);
+}
+
+// 간트(여러날 이어진) 스케줄 전체 삭제 — 블록의 모든 날짜 DB행을 한 번에 삭제
+async function submitDeleteBlock(comp, dateStr, idx, isDone, blockStart, blockEnd) {
+  const confirmName = comp ? getFullName(comp.replace(/\[TASK\]/gi, "").trim()) : "";
+  if (
+    !(await uiConfirm(
+      `⚠️ [${confirmName}] 이어진 전체 스케줄을 한 번에 삭제합니다.\n(${blockStart} ~ ${blockEnd})\n정말 모두 삭제하시겠습니까?`,
+      { danger: true },
+    ))
+  )
+    return;
+
+  document.getElementById("modal").style.display = "none";
+  document.getElementById("addModal").style.display = "none";
+
+  setTimeout(() => {
+    // 블록 매칭 키 — showModal의 블록 감지와 동일 규칙(타입/이름/완료/수량)
+    const matchKey = (it) => {
+      let clean = it.company.replace(/\[TASK\]/gi, "").trim();
+      let isT =
+        it.company.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+      let isD = it.isDone === true || String(it.isDone) === "true";
+      return `${isT ? "T" : "O"}_${getFullName(clean)}_${isD}_${it.pal || ""}_${it.box || ""}`;
+    };
+
+    let day = dateStr === "미정" ? "pending" : parseInt(dateStr.split("-")[2], 10);
+    let refArr = day === "pending" ? serverData.pendingItems : serverData.monthData[day];
+    let refItem = refArr && refArr[idx];
+    if (!refItem) {
+      goToAsync(serverData.year, serverData.month);
+      return;
+    }
+    const key = matchKey(refItem);
+    const oldPal = String(refItem.pal || "");
+    const oldBox = String(refItem.box || "");
+
+    // 블록 날짜 펼치기 (현재 월 범위, 폭주 방지 가드)
+    let dates = [];
+    let cur = new Date(blockStart);
+    let end = new Date(blockEnd);
+    let guard = 0;
+    while (cur <= end && guard++ < 400) {
+      dates.push(
+        `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`,
+      );
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    // 1) 로컬에서 같은 키 항목 모두 제거 → 즉시 화면 반영
+    dates.forEach((dStr) => {
+      let dd = parseInt(dStr.split("-")[2], 10);
+      let arr = serverData.monthData[dd];
+      if (arr) {
+        for (let i = arr.length - 1; i >= 0; i--) {
+          if (matchKey(arr[i]) === key) arr.splice(i, 1);
+        }
+      }
+    });
+    renderCalendar();
+
+    // 2) 서버에 날짜별 DELETE (실패 시 전체 1회만 복구 → 렌더 폭주 방지)
+    dates.forEach((dStr) => {
+      apiCall({
+        source: "vercel",
+        domain: "out",
+        action: "DELETE",
+        data: { action: "DELETE", oldComp: comp, oldDate: dStr, oldDone: isDone, oldPal: oldPal, oldBox: oldBox },
+        token: adminToken,
+        admin_id: localStorage.getItem("admin_id"),
+      }).then((res) => {
+        if ((res === null || !res.success) && !window._recoverScheduled) {
+          window._recoverScheduled = true;
+          setTimeout(() => (window._recoverScheduled = false), 1500);
+          goToAsync(serverData.year, serverData.month);
+        }
+      });
+    });
   }, 50);
 }
 
@@ -3059,8 +3143,8 @@ function showModal(day, clickedIdx) {
           <div id="add-qty-wrap-${idx}" style="display:none; width:100%; margin-top:12px; padding-top:12px; border-top:1px dashed var(--border-color); flex-direction:column; gap:8px;">
             <div style="font-size:0.8em; color:var(--text-sub); font-weight:800;">📦 파레트/박스 수량 추가</div>
             <div style="display:flex; gap:8px; align-items:stretch;">
-               <input type="number" id="add-q-pal-${idx}" class="edit-input" placeholder="+ 파레트" style="padding:10px; flex:1;">
-               <input type="number" id="add-q-box-${idx}" class="edit-input" placeholder="+ 박스" style="padding:10px; flex:1;">
+               <input type="number" min="0" id="add-q-pal-${idx}" class="edit-input" placeholder="+ 파레트" style="padding:10px; flex:1;">
+               <input type="number" min="0" id="add-q-box-${idx}" class="edit-input" placeholder="+ 박스" style="padding:10px; flex:1;">
                <button onclick="submitCMS('ADD_QTY', '${_argq(item.company)}', '${dateStr}', ${idx})" class="save-btn" style="padding:10px; flex:0.6; font-size:0.9em; border-radius:8px;">추가</button>
             </div>
           </div>
@@ -3236,8 +3320,8 @@ async function openEditForm(
                     <span style="font-size:0.75em; background:#0a84ff; color:#fff; padding:2px 5px; border-radius:4px; font-weight:bold; white-space:nowrap; flex-shrink:0;">${i + 1}차</span>
                     <span class="hist-date-${idx}" style="font-size:0.85em; font-weight:900; color:#0a84ff; white-space:nowrap; flex-shrink:0;">${match[1]}</span>
                     
-                    <input type="number" class="hist-pal-${idx} edit-input" value="${pVal}" data-old="${pVal}" oninput="onHistQtyChange(this, ${idx}, 'pal')" style="padding:6px; font-size:0.85em; flex:1; min-width:0; text-align:center;" placeholder="PLT">
-                    <input type="number" class="hist-box-${idx} edit-input" value="${bVal}" data-old="${bVal}" oninput="onHistQtyChange(this, ${idx}, 'box')" style="padding:6px; font-size:0.85em; flex:1; min-width:0; text-align:center;" placeholder="BOX">
+                    <input type="number" min="0" class="hist-pal-${idx} edit-input" value="${pVal}" data-old="${pVal}" oninput="onHistQtyChange(this, ${idx}, 'pal')" style="padding:6px; font-size:0.85em; flex:1; min-width:0; text-align:center;" placeholder="PLT">
+                    <input type="number" min="0" class="hist-box-${idx} edit-input" value="${bVal}" data-old="${bVal}" oninput="onHistQtyChange(this, ${idx}, 'box')" style="padding:6px; font-size:0.85em; flex:1; min-width:0; text-align:center;" placeholder="BOX">
                     
                     <button onclick="deleteHistItem(${idx}, ${i})" style="background:rgba(255,59,48,0.1); color:#ff3b30; border:none; border-radius:6px; padding:6px 10px; font-weight:bold; cursor:pointer; font-size:0.85em; white-space:nowrap; flex-shrink:0;">삭제</button>
                 </div>`;
@@ -3285,7 +3369,7 @@ async function openEditForm(
               <input type="date" id="edit-date-${idx}" class="edit-input" style="flex:1;" value="${inputDateVal}" onchange="let t=document.getElementById('edit-${idx}-end-date'); t.setAttribute('min', this.value); t.min=this.value; if(t.value && t.value < this.value) t.value=this.value;">
               <div id="edit-${idx}-end-date-group" style="display:${isTaskMode ? "flex" : "none"}; flex:1; gap:8px; align-items:center;">
                 <span style="color:var(--text-sub); font-weight:bold;">~</span>
-                <input type="date" id="edit-${idx}-end-date" class="edit-input" style="flex:1;" placeholder="종료일" value="${inputEndDateVal}">
+                <input type="date" id="edit-${idx}-end-date" class="edit-input" style="flex:1;" placeholder="종료일" value="${inputEndDateVal}" min="${inputDateVal || ""}">
               </div>
             </div>
             
@@ -3294,11 +3378,11 @@ async function openEditForm(
             <div class="edit-row">
               <div>
                 <div class="form-label">총 파레트 (P)</div>
-                <input type="number" id="edit-pal-${idx}" class="edit-input" placeholder="0" value="${pal == "0" ? "" : pal}">
+                <input type="number" min="0" id="edit-pal-${idx}" class="edit-input" placeholder="0" value="${pal == "0" ? "" : pal}">
               </div>
               <div>
                 <div class="form-label">총 박스 (B)</div>
-                <input type="number" id="edit-box-${idx}" class="edit-input" placeholder="0" value="${box == "0" ? "" : box}">
+                <input type="number" min="0" id="edit-box-${idx}" class="edit-input" placeholder="0" value="${box == "0" ? "" : box}">
               </div>
             </div>
             
@@ -3311,7 +3395,14 @@ async function openEditForm(
               <button class="save-btn" onclick="submitCMS('EDIT', '${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">💾 저장</button>
               <button class="cancel-btn" onclick="closeEditForm('${day}', ${idx})">취소</button>
             </div>
-            <button class="delete-btn" onclick="submitCMS('DELETE', '${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">🗑️ 이 스케줄 삭제</button>
+            ${
+              blockEndDateStr && blockEndDateStr !== "null" && blockEndDateStr !== "" && blockEndDateStr !== blockStartDateStr
+                ? `<div style="display:flex; gap:8px;">
+                     <button class="delete-btn" style="flex:1;" onclick="submitCMS('DELETE', '${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '', '')">🗑️ 이 날짜만</button>
+                     <button class="delete-btn" style="flex:1;" onclick="submitDeleteBlock('${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">🗑️ 전체 스케줄</button>
+                   </div>`
+                : `<button class="delete-btn" onclick="submitCMS('DELETE', '${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">🗑️ 이 스케줄 삭제</button>`
+            }
           </div>
         `;
   attachAutocomplete(`edit-comp-${idx}`);
