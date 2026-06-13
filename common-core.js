@@ -110,14 +110,21 @@ async function apiGet(params) {
   function _apply() {
     if (!_box || !_el) return;
     const kbH = window.innerHeight - vv.height;
-    if (kbH > 80) {
-      _box.style.maxHeight = (vv.height * 0.92) + "px";
-      requestAnimationFrame(function() {
-        if (_el) _el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      });
-    } else {
-      _box.style.maxHeight = "";
-    }
+    if (kbH < 80) { _box.style.maxHeight = ""; return; }
+    _box.style.maxHeight = (vv.height * 0.92) + "px";
+    // scrollIntoView는 modal-box가 스크롤 불필요할 때 document body까지 올라가 모달 위치를 망침.
+    // 대신 getBoundingClientRect로 직접 modal-box.scrollTop만 조정.
+    requestAnimationFrame(function() {
+      if (!_el || !_box) return;
+      const elRect = _el.getBoundingClientRect();
+      const boxRect = _box.getBoundingClientRect();
+      const PAD = 30;
+      if (elRect.bottom > boxRect.bottom - PAD) {
+        _box.scrollTop += elRect.bottom - (boxRect.bottom - PAD);
+      } else if (elRect.top < boxRect.top + PAD) {
+        _box.scrollTop -= (boxRect.top + PAD) - elRect.top;
+      }
+    });
   }
 
   document.addEventListener("focusin", function(e) {
