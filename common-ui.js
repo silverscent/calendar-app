@@ -216,7 +216,7 @@ function refreshAdminList() {
                       <div style="display:flex; justify-content:space-between; align-items:flex-start; width:100%;">
                           <div>
                               <div style='font-weight:900; color:${isLocked ? "var(--text-sub)" : "var(--text-main)"}; font-size:1.02em; display:flex; align-items:center; gap:6px; ${isLocked ? "text-decoration:line-through;" : ""}'>
-                                  ${item.admin_name} <span style='font-size:0.85em; font-weight:500; color:var(--text-sub);'>(${item.admin_id})</span> ${statusBadge}
+                                  ${_esc(item.admin_name)} <span style='font-size:0.85em; font-weight:500; color:var(--text-sub);'>(${_esc(item.admin_id)})</span> ${statusBadge}
                               </div>
                               <div style='font-size:0.8em; color:var(--text-sub); margin-top:4px;'>등급: ${item.role === "SYSTEM" ? "System Admin" : "일반 관리자"}</div>
                               <div style='font-size:0.75em; color:var(--text-sub); margin-top:3px;'>🕒 최근 접속: ${item.last_login_at ? String(item.last_login_at).substring(0, 16).replace("T", " ") : "기록 없음"}</div>
@@ -517,11 +517,11 @@ function refreshAuditLogs() {
 
       item.innerHTML = `
                       <div style='display:flex; justify-content:space-between; margin-bottom:4px;'>
-                          <span style='font-weight:900; color:#0a84ff;'>ID: ${log.admin_id}</span>
+                          <span style='font-weight:900; color:#0a84ff;'>ID: ${_esc(log.admin_id)}</span>
                           <span style='font-size:0.85em; color:var(--text-sub);'>${dateStr}</span>
                       </div>
-                      <div style='color:var(--text-main); font-weight:700;'>액션: <span style='color:var(--sun-color);'>${log.action_type}</span></div>
-                      <div style='color:var(--text-sub); font-size:0.88em; margin-top:2px; word-break:break-all;'>내역: ${log.description}</div>
+                      <div style='color:var(--text-main); font-weight:700;'>액션: <span style='color:var(--sun-color);'>${_esc(log.action_type)}</span></div>
+                      <div style='color:var(--text-sub); font-size:0.88em; margin-top:2px; word-break:break-all;'>내역: ${_esc(log.description)}</div>
                   `;
       timeline.appendChild(item);
     });
@@ -583,9 +583,9 @@ function refreshConnLogs() {
       html += `
                   <div style="display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid var(--border-color); font-size:0.9em; white-space:nowrap;">
                       <span style="color:var(--text-sub); font-family:monospace; width:110px; flex-shrink:0;">${dateStr}</span>
-                      <span style="background:rgba(128,128,128,0.1); color:${tColor}; font-weight:900; width:50px; flex-shrink:0; text-align:center; padding:3px 0; border-radius:4px; font-size:0.85em;">${typeShort}</span>
-                      <span style="font-weight:900; color:var(--text-main); flex-shrink:0; width:80px; margin-left:8px;">${log.admin_id || "손님"}</span>
-                      <span style="color:var(--text-sub); flex:1; margin-left:12px;">${desc}</span>
+                      <span style="background:rgba(128,128,128,0.1); color:${tColor}; font-weight:900; width:50px; flex-shrink:0; text-align:center; padding:3px 0; border-radius:4px; font-size:0.85em;">${_esc(typeShort)}</span>
+                      <span style="font-weight:900; color:var(--text-main); flex-shrink:0; width:80px; margin-left:8px;">${_esc(log.admin_id || "손님")}</span>
+                      <span style="color:var(--text-sub); flex:1; margin-left:12px;">${_esc(desc)}</span>
                   </div>`;
     });
     timeline.innerHTML = html;
