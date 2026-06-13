@@ -1928,18 +1928,32 @@ function onOcrCellTap(td) {
 
 // 모바일: 셀 편집 시 소프트 키보드가 입력칸을 가리지 않도록, 그 셀을 표 영역 맨 위로 끌어올림
 //  (표 패널 top은 화면 상단부라 키보드(하단)보다 항상 위 → 맨 위로 보내면 확실히 보임)
+//  키보드 등장 타이밍/브라우저 자동 스크롤이 기기마다 달라, 여러 시점 + visualViewport 변화에 반복 보정.
 function _ocrLiftCellAboveKeyboard(td) {
   const pane = document.getElementById("ocrPaneTable");
   if (!pane || !td) return;
   const lift = () => {
     const input = td.querySelector("input");
-    if (!input) return; // 이미 편집 끝났으면 패스
+    if (!input) return false; // 편집 끝남
     const paneRect = pane.getBoundingClientRect();
     const tdRect = td.getBoundingClientRect();
-    pane.scrollTop += tdRect.top - paneRect.top - 6; // 편집 셀을 패널 맨 위로
+    const delta = tdRect.top - paneRect.top - 6;
+    if (Math.abs(delta) > 1) pane.scrollTop += delta; // 편집 셀을 패널 맨 위로
+    return true;
   };
-  lift(); // 즉시 1회
-  setTimeout(lift, 300); // 키보드 애니메이션 올라온 뒤 한 번 더 보정
+  lift();
+  const timers = [60, 160, 300, 450, 650, 900].map((ms) => setTimeout(lift, ms));
+  const vv = window.visualViewport;
+  const onVV = () => lift(); // 키보드가 실제로 올라오는 순간 다시 보정
+  if (vv) vv.addEventListener("resize", onVV);
+  // 입력칸이 사라지면(편집 종료) 타이머/리스너 정리
+  const watch = setInterval(() => {
+    if (!td.querySelector("input")) {
+      clearInterval(watch);
+      timers.forEach(clearTimeout);
+      if (vv) vv.removeEventListener("resize", onVV);
+    }
+  }, 400);
 }
 
 // 인라인 입력 편집 시작 (initial: 키보드로 글자 바로 쳐서 진입 시 그 글자로 덮어씀)
