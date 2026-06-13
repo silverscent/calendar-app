@@ -1932,21 +1932,26 @@ function onOcrCellTap(td) {
 function _ocrLiftCellAboveKeyboard(td) {
   const pane = document.getElementById("ocrPaneTable");
   if (!pane || !td) return;
-  // 🍎 iOS 버그 회피: -webkit-overflow-scrolling:touch 인 컨테이너는 사용자가 한 번 만지기 전엔
-  //    JS scrollTop이 안 먹음(첫 편집 안 올라가던 원인). 편집 동안 momentum을 auto로 바꿔 강제로 먹게 함.
-  const prevWOS = pane.style.webkitOverflowScrolling;
-  pane.style.webkitOverflowScrolling = "auto";
+  // ⚠️ 포커스 직후 같은 틱에서 스크롤/CSS를 건드리면 iOS PWA에서 키보드가 안 뜸 → 전부 '지연 실행'으로 처리.
+  let started = false;
+  let prevWOS = null;
   const lift = () => {
     const input = td.querySelector("input");
-    if (!input) return false; // 편집 끝남
+    if (!input) return; // 편집 끝남
+    // 🍎 iOS 버그 회피: -webkit-overflow-scrolling:touch 컨테이너는 사용자가 한 번 만지기 전 JS scrollTop이 안 먹음
+    //    → 첫 보정 때 momentum을 auto로 전환(키보드는 이미 떠 있는 시점이라 안전).
+    if (!started) {
+      started = true;
+      prevWOS = pane.style.webkitOverflowScrolling;
+      pane.style.webkitOverflowScrolling = "auto";
+    }
     const paneRect = pane.getBoundingClientRect();
     const tdRect = td.getBoundingClientRect();
     const delta = tdRect.top - paneRect.top - 6;
     if (Math.abs(delta) > 1) pane.scrollTop += delta; // 편집 셀을 패널 맨 위로
-    return true;
   };
-  lift();
-  const timers = [60, 160, 300, 450, 650, 900].map((ms) => setTimeout(lift, ms));
+  // 포커스 틱에서는 아무것도 안 함. 키보드가 뜨기 시작한 뒤부터 여러 번 보정.
+  const timers = [50, 160, 300, 450, 650, 900].map((ms) => setTimeout(lift, ms));
   const vv = window.visualViewport;
   const onVV = () => lift(); // 키보드가 실제로 올라오는 순간 다시 보정
   if (vv) vv.addEventListener("resize", onVV);
@@ -1956,7 +1961,7 @@ function _ocrLiftCellAboveKeyboard(td) {
       clearInterval(watch);
       timers.forEach(clearTimeout);
       if (vv) vv.removeEventListener("resize", onVV);
-      pane.style.webkitOverflowScrolling = prevWOS || "";
+      if (started) pane.style.webkitOverflowScrolling = prevWOS || "";
     }
   }, 400);
 }
