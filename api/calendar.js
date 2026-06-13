@@ -1673,10 +1673,11 @@ module.exports = async function (req, res) {
         // 웹 OCR 대조창에서 셀 수정 후 '확정' → inbound 테이블에 upsert (텔레그램 /ocr 과 동일 로직)
         try {
           const rows = data && Array.isArray(data.rows) ? data.rows : [];
-          if (rows.length === 0) {
+          const delRows = data && Array.isArray(data.deletes) ? data.deletes : [];
+          if (rows.length === 0 && delRows.length === 0) {
             return res.status(200).json({ success: false, msg: "적용할 데이터가 없습니다." });
           }
-          if (rows.length > 200) {
+          if (rows.length > 200 || delRows.length > 200) {
             return res.status(200).json({ success: false, msg: "한 번에 적용 가능한 행 수(200)를 초과했습니다." });
           }
 
@@ -1692,6 +1693,26 @@ module.exports = async function (req, res) {
           let insertCount = 0;
           let updateCount = 0;
           let skipCount = 0;
+          let deleteCount = 0;
+
+          // 🗑️ 대조표에서 행 데이터를 전부 지운 건 → 해당 입고 일정 삭제
+          for (const r of delRows) {
+            const bl = String(r.bl || "").replace(/[\s•·\-\*]/g, "");
+            const inv = String(r.invoice || "").trim();
+            const dt = normDate(r.inDate);
+            let result = null;
+            if (inv) {
+              [result] = await pool.query(`DELETE FROM inbound WHERE invoice = ?`, [inv]);
+            } else if (bl && bl !== "발행전") {
+              [result] = await pool.query(`DELETE FROM inbound WHERE TRIM(bl_number) = ? AND receive_date <=> ?`, [
+                bl,
+                dt,
+              ]);
+            } else {
+              continue;
+            }
+            deleteCount += result && result.affectedRows ? result.affectedRows : 0;
+          }
 
           for (const r of rows) {
             const bl = String(r.bl || "").replace(/[\s•·\-\*]/g, "");
@@ -1740,11 +1761,15 @@ module.exports = async function (req, res) {
             if (ip.includes(",")) ip = ip.split(",")[0];
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, 'OCR_APPLY', ?, ?)",
-              [currentAdmin, `OCR 대조 수정 확정 (신규 ${insertCount}건 / 수정 ${updateCount}건 / 완료건너뜀 ${skipCount}건)`, ip],
+              [
+                currentAdmin,
+                `OCR 대조 수정 확정 (신규 ${insertCount}건 / 수정 ${updateCount}건 / 삭제 ${deleteCount}건 / 완료건너뜀 ${skipCount}건)`,
+                ip,
+              ],
             );
           } catch (e) {}
 
-          return res.status(200).json({ success: true, insertCount, updateCount, skipCount, total: rows.length });
+          return res.status(200).json({ success: true, insertCount, updateCount, skipCount, deleteCount, total: rows.length });
         } catch (err) {
           console.error("OCR 적용 에러:", err);
           return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });

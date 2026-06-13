@@ -1422,6 +1422,8 @@ let ocrEditRows = []; // 대조창에서 수정 중인 행 데이터(확정 시 
 let ocrOrigRows = []; // 불러온 직후 원본(변경된 행만 골라내기 위한 기준)
 let ocrHiliteIdx = null; // 현재 하이라이트 중인 행 index (왼쪽 이미지 밴드 + 오른쪽 셀)
 let _ocrSelectedCell = null; // 첫 탭으로 선택된 셀 {idx, field} — 같은 셀 두 번째 탭에서 편집
+let _ocrKbBound = false; // PC 키보드(엑셀형) 핸들러 1회만 바인딩
+let _ocrClipboard = null; // Ctrl+C 내부 폴백(클립보드 권한 없을 때)
 const _ocrG = {
   dragging: false,
   moved: false,
@@ -1649,6 +1651,11 @@ function renderOcrTable() {
   });
   html += `</tbody></table>`;
   inner.innerHTML = html;
+  // PC 키보드(엑셀형 이동/편집/복사) 핸들러 1회 바인딩
+  if (!_ocrKbBound) {
+    document.addEventListener("keydown", _onOcrKeydown);
+    _ocrKbBound = true;
+  }
 }
 
 // ➕ 대조 표에 빈 행 추가 — OCR이 누락한 일정을 이미지 보면서 직접 입력 → '확정'으로 저장
@@ -1784,6 +1791,125 @@ function highlightOcrRow(idx) {
   positionOcrHilite();
 }
 
+// 셀 선택(테두리 + 이미지 정렬 + 줄 하이라이트) — 탭/키보드 공통
+function selectOcrCell(idx, field, locate = true) {
+  const inner = document.getElementById("ocrTableInner");
+  if (!inner || !ocrEditRows[idx]) return;
+  inner.querySelectorAll('td[data-sel="1"]').forEach((c) => {
+    c.removeAttribute("data-sel");
+    c.style.boxShadow = "";
+  });
+  const td = inner.querySelector(`td[data-idx="${idx}"][data-field="${field}"]`);
+  if (!td) return;
+  td.setAttribute("data-sel", "1");
+  td.style.boxShadow = "inset 0 0 0 2px #4a90e2";
+  _ocrSelectedCell = { idx, field };
+  try {
+    td.scrollIntoView({ block: "nearest", inline: "nearest" });
+  } catch (_) {}
+  if (locate) {
+    locateOcrImage(idx, field); // 왼쪽 이미지를 그 줄·그 열로 확대·정렬
+    highlightOcrRow(idx); // 그 줄 양쪽 하이라이트
+  }
+}
+
+const _ocrColIndex = (field) => OCR_COLS.findIndex((c) => c.key === field);
+
+// 화살표/탭 이동 (엑셀형) — 범위 밖이면 가장자리에 머무름
+function moveOcrSel(dRow, dCol) {
+  if (!_ocrSelectedCell) return;
+  const maxRow = ocrEditRows.length - 1;
+  const maxCol = OCR_COLS.length - 1;
+  let ni = Math.max(0, Math.min(maxRow, _ocrSelectedCell.idx + dRow));
+  let nc = Math.max(0, Math.min(maxCol, _ocrColIndex(_ocrSelectedCell.field) + dCol));
+  selectOcrCell(ni, OCR_COLS[nc].key);
+}
+
+// 셀 값 직접 설정(키보드 Delete/붙여넣기 등) → 데이터 + 화면 + 수정표시
+function setOcrCellValue(idx, field, val) {
+  if (!ocrEditRows[idx]) return;
+  ocrEditRows[idx][field] = val;
+  const inner = document.getElementById("ocrTableInner");
+  const td = inner && inner.querySelector(`td[data-idx="${idx}"][data-field="${field}"]`);
+  if (td && !td.querySelector("input")) {
+    td.innerHTML = _esc(val);
+    td.style.background = "#fff8d6"; // 수정 표시(노랑)
+    if (_ocrSelectedCell && _ocrSelectedCell.idx === idx && _ocrSelectedCell.field === field) {
+      td.setAttribute("data-sel", "1");
+      td.style.boxShadow = "inset 0 0 0 2px #4a90e2";
+    }
+  }
+}
+
+// PC 키보드 핸들러 — 대조표가 열려있고 셀이 선택된 상태에서만 동작(모바일/다른 입력엔 영향 X)
+function _onOcrKeydown(e) {
+  const modal = document.getElementById("ocrImageModal");
+  const pane = document.getElementById("ocrPaneTable");
+  if (!modal || modal.style.display !== "flex") return;
+  if (!pane || pane.style.display === "none") return;
+  if (!_ocrSelectedCell) return;
+  const inner = document.getElementById("ocrTableInner");
+  if (!inner) return;
+  // 셀 편집 중(input 존재)이면 input 자체 keydown(Enter/Tab/Esc)이 처리 → 여기선 손대지 않음
+  if (inner.querySelector("td input")) return;
+  // 표 밖의 다른 입력(검색창 등)에 포커스가 있으면 무시
+  const ae = document.activeElement;
+  if (ae && /^(input|textarea|select)$/i.test(ae.tagName) && !ae.closest("#ocrTableInner")) return;
+
+  const k = e.key;
+  const cur = _ocrSelectedCell;
+  if (k === "ArrowUp") {
+    e.preventDefault();
+    moveOcrSel(-1, 0);
+  } else if (k === "ArrowDown") {
+    e.preventDefault();
+    moveOcrSel(1, 0);
+  } else if (k === "ArrowLeft") {
+    e.preventDefault();
+    moveOcrSel(0, -1);
+  } else if (k === "ArrowRight") {
+    e.preventDefault();
+    moveOcrSel(0, 1);
+  } else if (k === "Tab") {
+    e.preventDefault();
+    moveOcrSel(0, e.shiftKey ? -1 : 1);
+  } else if (k === "Enter" || k === "F2") {
+    e.preventDefault();
+    const td = inner.querySelector(`td[data-idx="${cur.idx}"][data-field="${cur.field}"]`);
+    if (td) startEditOcrCell(td, cur.idx, cur.field);
+  } else if ((e.ctrlKey || e.metaKey) && (k === "c" || k === "C")) {
+    e.preventDefault();
+    const v = ocrEditRows[cur.idx] ? String(ocrEditRows[cur.idx][cur.field] ?? "") : "";
+    _ocrClipboard = v;
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).catch(() => {});
+    const td = inner.querySelector(`td[data-idx="${cur.idx}"][data-field="${cur.field}"]`);
+    if (td) {
+      const ob = td.style.boxShadow;
+      td.style.boxShadow = "inset 0 0 0 2px #27ae60"; // 복사 순간 초록 깜빡
+      setTimeout(() => (td.style.boxShadow = ob), 220);
+    }
+  } else if ((e.ctrlKey || e.metaKey) && (k === "v" || k === "V")) {
+    e.preventDefault();
+    const apply = (t) => setOcrCellValue(cur.idx, cur.field, String(t == null ? "" : t).replace(/[\r\n\t]/g, " ").trim());
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard
+        .readText()
+        .then(apply)
+        .catch(() => {
+          if (_ocrClipboard != null) apply(_ocrClipboard);
+        });
+    } else if (_ocrClipboard != null) apply(_ocrClipboard);
+  } else if (k === "Delete" || k === "Backspace") {
+    e.preventDefault();
+    setOcrCellValue(cur.idx, cur.field, "");
+  } else if (k.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // 글자 바로 입력 → 그 글자로 편집 시작(엑셀처럼 덮어쓰기)
+    e.preventDefault();
+    const td = inner.querySelector(`td[data-idx="${cur.idx}"][data-field="${cur.field}"]`);
+    if (td) startEditOcrCell(td, cur.idx, cur.field, k);
+  }
+}
+
 // 셀 탭/클릭 진입점:
 //  - 첫 탭(또는 다른 셀): 이미지 정렬 + 하이라이트만 (키보드 X) → 비교 가능
 //  - 같은 셀 두 번째 탭: 인라인 편집 시작
@@ -1797,45 +1923,55 @@ function onOcrCellTap(td) {
     startEditOcrCell(td, idx, field); // 두 번째 탭 → 편집
     return;
   }
-  // 첫 탭 → 선택(이미지 이동 + 하이라이트), 편집 안 함
-  _ocrSelectedCell = { idx, field };
-  // 이전 선택 셀 테두리 제거
-  const inner = document.getElementById("ocrTableInner");
-  if (inner) {
-    inner.querySelectorAll('td[data-sel="1"]').forEach((c) => {
-      c.removeAttribute("data-sel");
-      c.style.boxShadow = "";
-    });
-    td.setAttribute("data-sel", "1");
-    td.style.boxShadow = "inset 0 0 0 2px #4a90e2";
-  }
-  locateOcrImage(idx, field); // 왼쪽 이미지를 그 줄·그 열로 확대·정렬
-  highlightOcrRow(idx); // 그 줄 양쪽 하이라이트
+  selectOcrCell(idx, field); // 첫 탭 → 선택(이미지 이동 + 하이라이트)
 }
 
-// 인라인 입력 편집 시작
-function startEditOcrCell(td, idx, field) {
+// 인라인 입력 편집 시작 (initial: 키보드로 글자 바로 쳐서 진입 시 그 글자로 덮어씀)
+function startEditOcrCell(td, idx, field, initial) {
   if (td.querySelector("input")) return;
   const cur = ocrEditRows[idx][field] != null ? String(ocrEditRows[idx][field]) : "";
   const align = (OCR_COLS.find((c) => c.key === field) || {}).align || "center";
-  td.innerHTML = `<input type="text" value="${_esc(cur)}" style="width:100%; box-sizing:border-box; border:2px solid #4a90e2; border-radius:3px; padding:3px 2px; font-size:11px; text-align:${align}; outline:none;">`;
+  const startVal = initial != null ? initial : cur;
+  td.innerHTML = `<input type="text" value="${_esc(startVal)}" style="width:100%; box-sizing:border-box; border:2px solid #4a90e2; border-radius:3px; padding:3px 2px; font-size:11px; text-align:${align}; outline:none;">`;
   const input = td.querySelector("input");
   input.focus();
-  input.select();
-  const commit = () => {
+  if (initial != null) {
+    const L = input.value.length;
+    input.setSelectionRange(L, L); // 글자 덮어쓰기 진입 → 커서 끝
+  } else {
+    input.select();
+  }
+  let done = false;
+  // move: "down"(Enter) | "right"/"left"(Tab) | "stay"(blur/제자리)
+  const commit = (move) => {
+    if (done) return;
+    done = true;
     ocrEditRows[idx][field] = input.value;
     td.innerHTML = _esc(input.value);
     td.style.background = "#fff8d6"; // 수정 표시(노랑)
-    _ocrSelectedCell = null; // 편집 끝 → 다음엔 다시 첫 탭부터
+    const ci = _ocrColIndex(field);
+    if (move === "down") selectOcrCell(Math.min(idx + 1, ocrEditRows.length - 1), field);
+    else if (move === "right") selectOcrCell(idx, OCR_COLS[Math.min(ci + 1, OCR_COLS.length - 1)].key);
+    else if (move === "left") selectOcrCell(idx, OCR_COLS[Math.max(ci - 1, 0)].key);
+    else selectOcrCell(idx, field); // 제자리 재선택 → 키보드 내비 계속 가능
   };
-  input.addEventListener("blur", commit);
+  const cancel = () => {
+    if (done) return;
+    done = true;
+    td.innerHTML = _esc(cur);
+    selectOcrCell(idx, field);
+  };
+  input.addEventListener("blur", () => commit("stay"));
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      input.blur();
+      commit("down"); // 적용 + 아래로 이동(이동가능상태)
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      commit(e.shiftKey ? "left" : "right");
     } else if (e.key === "Escape") {
-      td.innerHTML = _esc(cur);
-      _ocrSelectedCell = null;
+      e.preventDefault();
+      cancel();
     }
   });
 }
@@ -1973,20 +2109,47 @@ async function applyOcrEdits(btn) {
     showToast("⚠️ 적용할 데이터가 없습니다.", 2500);
     return;
   }
-  // 변경된 행만 추려서 전송 (전체 덮어쓰기 방지)
+  // 행에 의미있는 데이터가 하나라도 있는지 (pal 0 / 미정 / 빈값은 '없음'으로 취급)
+  const meaningful = (r) => {
+    if (!r) return false;
+    const t = (v) => String(v == null ? "" : v).trim();
+    return (
+      t(r.bl) !== "" ||
+      t(r.invoice) !== "" ||
+      t(r.fwd) !== "" ||
+      t(r.etc) !== "" ||
+      t(r.eta) !== "" ||
+      t(r.sType) !== "" ||
+      (t(r.pal) !== "" && t(r.pal) !== "0") ||
+      (t(r.inDate) !== "" && t(r.inDate) !== "미정")
+    );
+  };
+
+  // 변경된 행만 추려서 전송 (전체 덮어쓰기 방지) + 다 비운 행은 삭제 대상으로 분리
   const FLD = ["bl", "pal", "eta", "inDate", "fwd", "sType", "invoice", "etc"];
-  const changed = ocrEditRows.filter((r, i) => {
-    // B/L·인보이스 둘 다 빈 행은 저장 대상 아님(빈 행 추가 후 미입력 등) → 쓰레기 INSERT 방지
-    const hasKey = String(r.bl || "").trim() !== "" || String(r.invoice || "").trim() !== "";
-    if (!hasKey) return false;
+  const changed = [];
+  const deletes = [];
+  ocrEditRows.forEach((r, i) => {
     const o = ocrOrigRows[i] || {};
-    return FLD.some((f) => String(r[f] == null ? "" : r[f]) !== String(o[f] == null ? "" : o[f]));
+    if (!meaningful(r)) {
+      // 행 데이터를 전부 지운 경우: 원래 일정이 있던 행이면 '삭제', 빈 행 그대로면 무시
+      if (meaningful(o)) deletes.push({ bl: o.bl || "", invoice: o.invoice || "", inDate: o.inDate || "" });
+      return;
+    }
+    if (FLD.some((f) => String(r[f] == null ? "" : r[f]) !== String(o[f] == null ? "" : o[f]))) changed.push(r);
   });
-  if (changed.length === 0) {
+
+  if (changed.length === 0 && deletes.length === 0) {
     showToast("변경된 내용이 없습니다.", 2500);
     return;
   }
-  if (!(await uiConfirm(`수정한 ${changed.length}건만 입고 DB에 반영할까요?`))) return;
+
+  let confirmMsg = "";
+  if (changed.length) confirmMsg += `수정/추가 ${changed.length}건`;
+  if (deletes.length) confirmMsg += (confirmMsg ? "\n" : "") + `🗑️ 빈 행 ${deletes.length}건의 입고 일정을 삭제`;
+  confirmMsg += "\n입고 DB에 반영할까요?";
+  if (!(await uiConfirm(confirmMsg, deletes.length ? { danger: true, okText: "반영" } : { okText: "반영" }))) return;
+
   const orig = btn ? btn.innerHTML : "";
   if (btn) {
     btn.disabled = true;
@@ -1997,16 +2160,18 @@ async function applyOcrEdits(btn) {
     domain: "system",
     action: "APPLY_OCR_DATA",
     admin_id: localStorage.getItem("admin_id"),
-    data: { rows: changed },
+    data: { rows: changed, deletes: deletes },
   }).then(function (res) {
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = orig;
     }
     if (res && res.success) {
-      showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount}${res.skipCount > 0 ? ` / 완료건 건너뜀 ${res.skipCount}` : ""})`, 3000);
-      ocrOrigRows = JSON.parse(JSON.stringify(ocrEditRows)); // 기준 갱신
+      const delPart = res.deleteCount > 0 ? ` / 삭제 ${res.deleteCount}` : "";
+      const skipPart = res.skipCount > 0 ? ` / 완료건 건너뜀 ${res.skipCount}` : "";
+      showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount}${delPart}${skipPart})`, 3000);
       if (typeof navMonth === "function") navMonth(0);
+      loadOcrSplitData(); // 대조표 새로고침(삭제된 빈 행 제거 + 최신값 반영 + 기준 갱신)
     } else {
       showToast("⚠️ " + ((res && res.msg) || "반영에 실패했습니다."), 3000);
     }
