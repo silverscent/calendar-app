@@ -1928,57 +1928,68 @@ function onOcrCellTap(td) {
 
 // 📱 셀 편집 시: OCR 모달은 화면 꽉 찬 높이라 키보드가 하단을 가림 → '일반 모달처럼' 키보드 위 영역만큼으로
 //   모달을 줄여 상단에 붙이고(visualViewport 기준), 편집 셀을 보이는 영역 안으로 스크롤.
+//   ⚠️ 핵심: 포커스 틱/직후엔 모달 레이아웃을 절대 안 건드린다(건드리면 iOS가 키보드 등장을 취소함).
+//      키보드가 실제로 떠서 viewport가 줄어든 뒤(visualViewport resize)에만 적용.
 function _ocrFitModalAboveKeyboard(td) {
   const modal = document.getElementById("ocrImageModal");
   const box = modal && modal.querySelector(".modal-box");
   const pane = document.getElementById("ocrPaneTable");
   const vv = window.visualViewport;
-  if (!modal || !box || !pane || !td) return;
+  if (!modal || !box || !pane || !td || !vv) return; // vv 없으면 키보드 등장 우선(레이아웃 안 건드림)
 
+  let applied = false;
   const restore = () => {
+    if (!applied) return;
+    applied = false;
     modal.style.alignItems = "";
     box.style.removeProperty("height");
     box.style.removeProperty("max-height");
     box.style.transform = "";
   };
-
-  const apply = () => {
+  const fit = () => {
     const input = td.querySelector("input");
-    if (!input) return false; // 편집 종료
-    const kbVisible = vv ? vv.height < window.innerHeight - 80 : false;
+    if (!input) return; // 편집 종료
+    const kbVisible = vv.height < window.innerHeight - 80;
     if (kbVisible) {
       // 모달을 키보드 위 영역만큼으로 줄여 상단에 붙임 → 표 전체가 키보드 위로 올라옴
       modal.style.alignItems = "flex-start";
       box.style.setProperty("height", vv.height + "px", "important");
       box.style.setProperty("max-height", vv.height + "px", "important");
       box.style.transform = vv.offsetTop ? `translateY(${vv.offsetTop}px)` : "";
+      applied = true;
+      // 편집 셀이 보이는 영역 안에 오도록 스크롤
+      const paneRect = pane.getBoundingClientRect();
+      const tdRect = td.getBoundingClientRect();
+      if (tdRect.bottom > paneRect.bottom - 4) pane.scrollTop += tdRect.bottom - (paneRect.bottom - 4);
+      else if (tdRect.top < paneRect.top + 4) pane.scrollTop += tdRect.top - (paneRect.top + 4);
     } else {
       restore();
     }
-    // 편집 셀이 패널 보이는 영역 안에 오도록 스크롤
-    const paneRect = pane.getBoundingClientRect();
-    const tdRect = td.getBoundingClientRect();
-    if (tdRect.bottom > paneRect.bottom - 4) pane.scrollTop += tdRect.bottom - (paneRect.bottom - 4);
-    else if (tdRect.top < paneRect.top + 4) pane.scrollTop += tdRect.top - (paneRect.top + 4);
-    return true;
   };
 
-  apply();
-  const timers = [0, 80, 200, 350, 550, 800].map((ms) => setTimeout(apply, ms));
-  const onVV = () => apply(); // 키보드 등장/높이변화 순간 즉시 반영
-  if (vv) {
-    vv.addEventListener("resize", onVV);
-    vv.addEventListener("scroll", onVV);
-  }
+  // 키보드가 떠서 viewport가 변한 뒤에만(디바운스로 안정 후) 모달을 맞춤 → 포커스 틱 무간섭
+  let deb = null;
+  const onVV = () => {
+    if (deb) clearTimeout(deb);
+    deb = setTimeout(() => {
+      if (td.querySelector("input")) fit();
+    }, 100);
+  };
+  vv.addEventListener("resize", onVV);
+  vv.addEventListener("scroll", onVV);
+  // resize 이벤트가 안 오는 환경 대비 늦게 한 번 시도(이때쯤 키보드 떠 있음)
+  const fallback = setTimeout(() => {
+    if (td.querySelector("input")) fit();
+  }, 500);
+
   // 편집 끝나면(입력칸 사라지면) 정리 + 모달 원복
   const watch = setInterval(() => {
     if (!td.querySelector("input")) {
       clearInterval(watch);
-      timers.forEach(clearTimeout);
-      if (vv) {
-        vv.removeEventListener("resize", onVV);
-        vv.removeEventListener("scroll", onVV);
-      }
+      clearTimeout(fallback);
+      if (deb) clearTimeout(deb);
+      vv.removeEventListener("resize", onVV);
+      vv.removeEventListener("scroll", onVV);
       // 다른 셀로 편집이 이어지는 중이면 모달 상태 유지(셀 이동 시 깜빡임 방지)
       if (!document.querySelector("#ocrTableInner td input")) restore();
     }
