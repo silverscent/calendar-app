@@ -1588,6 +1588,36 @@ function initOcrSplitDivider() {
   divider.addEventListener("pointercancel", end);
 }
 
+// 현재 달력(serverData)에 저장된 입고 일정 → 대조표 행 형식으로 변환 (직접 추가분 포함)
+function collectInboundSchedules() {
+  const rows = [];
+  const pad = (n) => String(n).padStart(2, "0");
+  const toRow = (it, inDate) => ({
+    bl: it.bl || "",
+    pal: it.pal != null && it.pal !== "" ? String(it.pal) : "0",
+    eta: "",
+    inDate: inDate,
+    fwd: it.fwd || "",
+    sType: it.sType || "",
+    invoice: it.invoice || "",
+    etc: it.etc || "",
+    iy: null,
+    ih: null,
+    cx: null,
+    _fromDb: true, // OCR 파싱이 아니라 달력 저장분(직접 추가 등) — 검증 제외 + 파란 음영
+  });
+  if (serverData && serverData.monthData) {
+    Object.keys(serverData.monthData).forEach((d) => {
+      const dateStr = `${serverData.year}-${pad(serverData.month)}-${pad(d)}`;
+      (serverData.monthData[d] || []).forEach((it) => rows.push(toRow(it, dateStr)));
+    });
+  }
+  if (serverData && Array.isArray(serverData.pendingItems)) {
+    serverData.pendingItems.forEach((it) => rows.push(toRow(it, "미정")));
+  }
+  return rows;
+}
+
 // 대조창 데이터 로드 → 편집용 배열 생성 → 표 렌더 (제스처는 모달 열 때 이미 바인딩됨)
 function loadOcrSplitData() {
   ocrHiliteIdx = null;
@@ -1597,28 +1627,50 @@ function loadOcrSplitData() {
   apiCall({ source: "vercel", domain: "system", action: "GET_LAST_OCR_DATA" }).then(function (data) {
     const innerNow = document.getElementById("ocrTableInner");
     if (!innerNow) return;
-    if (!data || !data.parsedData || !Array.isArray(data.parsedData) || data.parsedData.length === 0) {
-      ocrEditRows = [];
-      innerNow.innerHTML = `<div style="padding:20px; text-align:center; color:#888; font-size:12px;">저장된 파싱 데이터가 없습니다.</div>`;
-      currentRawOcrString = (data && data.rawData) || "가져온 Raw 데이터가 존재하지 않습니다.";
+    currentRawOcrString = (data && data.rawData) || "가져온 Raw 데이터가 존재하지 않습니다.";
+
+    // 1) OCR 파싱 행(좌표 + 현재 inbound 값 병합본) → 표준 편집 객체로 정규화
+    let parsedRows = [];
+    if (data && Array.isArray(data.parsedData)) {
+      parsedRows = data.parsedData.map((r) => ({
+        bl: r.bl || "",
+        pal: r.pal != null ? String(r.pal) : "0",
+        eta: r.eta || "",
+        inDate: r.inDate || "미정",
+        fwd: r.fwd || "",
+        sType: r.sType || "",
+        invoice: r.invoice || "",
+        etc: r.etc || "",
+        iy: typeof r.iy === "number" ? r.iy : null, // 이미지 내 세로 위치(px)
+        ih: typeof r.ih === "number" ? r.ih : null,
+        cx: r.cx && typeof r.cx === "object" ? r.cx : null, // 열별 X(px) 맵
+      }));
+    }
+
+    // 2) 현재 달력에 저장된 입고 일정 중 OCR 파싱에 없는 것(직접 추가분 등)을 병합 → 대조표에서 바로 편집
+    const norm = (v) => String(v == null ? "" : v).replace(/\s+/g, "").toUpperCase();
+    const keyOf = (r) =>
+      norm(r.bl) && norm(r.bl) !== "발행전" ? "BL:" + norm(r.bl) : norm(r.invoice) ? "INV:" + norm(r.invoice) : "";
+    const seen = new Set();
+    parsedRows.forEach((r) => {
+      const k = keyOf(r);
+      if (k) seen.add(k);
+    });
+    const dbRows = collectInboundSchedules().filter((r) => {
+      const k = keyOf(r);
+      if (!k) return true; // 식별키 없으면 일단 표시
+      if (seen.has(k)) return false; // OCR 행에 이미 있으면 중복 제외
+      seen.add(k);
+      return true;
+    });
+
+    ocrEditRows = parsedRows.concat(dbRows);
+    ocrOrigRows = JSON.parse(JSON.stringify(ocrEditRows)); // 변경 비교 기준
+
+    if (ocrEditRows.length === 0) {
+      innerNow.innerHTML = `<div style="padding:20px; text-align:center; color:#888; font-size:12px;">표시할 입고 일정이 없습니다.</div>`;
       return;
     }
-    currentRawOcrString = data.rawData || "가져온 Raw 데이터가 존재하지 않습니다.";
-    // 서버 파싱 결과 → 표준 편집 객체로 정규화
-    ocrEditRows = data.parsedData.map((r) => ({
-      bl: r.bl || "",
-      pal: r.pal != null ? String(r.pal) : "0",
-      eta: r.eta || "",
-      inDate: r.inDate || "미정",
-      fwd: r.fwd || "",
-      sType: r.sType || "",
-      invoice: r.invoice || "",
-      etc: r.etc || "",
-      iy: typeof r.iy === "number" ? r.iy : null, // 이미지 내 세로 위치(px)
-      ih: typeof r.ih === "number" ? r.ih : null,
-      cx: r.cx && typeof r.cx === "object" ? r.cx : null, // 열별 X(px) 맵
-    }));
-    ocrOrigRows = JSON.parse(JSON.stringify(ocrEditRows)); // 변경 비교 기준
     renderOcrTable();
   });
 }
@@ -1634,7 +1686,8 @@ function renderOcrTable() {
   });
   html += `</tr></thead><tbody>`;
   ocrEditRows.forEach((row, idx) => {
-    const bg = idx % 2 ? "#fafbfc" : "#fff";
+    // 달력 저장분(직접 추가 등)은 연한 파랑으로 구분 (OCR 파싱 행과 시각적 구분)
+    const bg = row._fromDb ? "#eaf4ff" : idx % 2 ? "#fafbfc" : "#fff";
     html += `<tr style="background:${bg};">`;
     OCR_COLS.forEach((c) => {
       const v = row[c.key] != null ? String(row[c.key]) : "";
@@ -1665,6 +1718,7 @@ function addOcrBlankRow() {
     iy: null,
     ih: null,
     cx: null,
+    _fromDb: true, // 직접 추가 행 — OCR 원본 검증 제외
   });
   renderOcrTable();
   // 새 행으로 스크롤 + 잠깐 강조
@@ -1871,27 +1925,30 @@ function verifyOcrRows() {
   const details = []; // 사유 상세 목록
   ocrEditRows.forEach((r, idx) => {
     const issues = {}; // field -> 사유
-    // B/L: 형식 + 원본존재
-    if (r.bl) {
-      if (!isBLok(r.bl)) issues.bl = "B/L 형식 아님";
-      else if (!inRaw(r.bl)) issues.bl = "원본에 없음";
-    }
-    // 인보이스: 있으면 형식·존재 / 없는데 비고에 인보이스 형식이 있으면 '비고로 샘'
-    if (r.invoice) {
-      if (!isInvOk(r.invoice)) issues.invoice = "인보이스 형식 아님";
-      else if (!inRaw(r.invoice)) issues.invoice = "원본에 없음";
-    } else if (r.etc && hasInvLike(r.etc)) {
-      issues.etc = "인보이스가 비고에 섞인 듯";
-    }
-    // 날짜: 형식 + 존재
-    ["eta", "inDate"].forEach((f) => {
-      if (r[f]) {
-        if (!isDateOk(r[f])) issues[f] = "날짜 형식 아님";
-        else if (!inRaw(r[f])) issues[f] = "원본에 없음";
+    // 달력 저장분/직접 추가 행(_fromDb)은 OCR 원본 텍스트 대조 대상이 아님 → 셀 색만 원복하고 건너뜀
+    if (!r._fromDb) {
+      // B/L: 형식 + 원본존재
+      if (r.bl) {
+        if (!isBLok(r.bl)) issues.bl = "B/L 형식 아님";
+        else if (!inRaw(r.bl)) issues.bl = "원본에 없음";
       }
-    });
-    // PAL: 숫자 형식
-    if (r.pal && !isPalOk(r.pal)) issues.pal = "PAL 형식 아님";
+      // 인보이스: 있으면 형식·존재 / 없는데 비고에 인보이스 형식이 있으면 '비고로 샘'
+      if (r.invoice) {
+        if (!isInvOk(r.invoice)) issues.invoice = "인보이스 형식 아님";
+        else if (!inRaw(r.invoice)) issues.invoice = "원본에 없음";
+      } else if (r.etc && hasInvLike(r.etc)) {
+        issues.etc = "인보이스가 비고에 섞인 듯";
+      }
+      // 날짜: 형식 + 존재
+      ["eta", "inDate"].forEach((f) => {
+        if (r[f]) {
+          if (!isDateOk(r[f])) issues[f] = "날짜 형식 아님";
+          else if (!inRaw(r[f])) issues[f] = "원본에 없음";
+        }
+      });
+      // PAL: 숫자 형식
+      if (r.pal && !isPalOk(r.pal)) issues.pal = "PAL 형식 아님";
+    }
 
     const cells = inner ? inner.querySelectorAll(`td[data-idx="${idx}"]`) : [];
     cells.forEach((td) => {
@@ -1921,12 +1978,14 @@ function verifyOcrRows() {
   // 행 개수 대조 — 공백 기준 토큰 분리 후 완전 매칭(SEA+인보이스 연결 오매칭 방지)
   const rawTokens = currentRawOcrString.toUpperCase().split(/[\s\n\r•·*/().,\-]+/).filter(Boolean);
   const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{2,5}\d{5,9}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
+  // 행수 비교는 OCR 파싱 행만 대상(직접 추가/달력 저장분 _fromDb 제외)
+  const ocrRowCount = ocrEditRows.filter((r) => !r._fromDb).length;
   const countNote =
-    rawRowCount && rawRowCount !== ocrEditRows.length ? ` · ⚠️행수 원본 ${rawRowCount}/표 ${ocrEditRows.length}` : "";
+    rawRowCount && rawRowCount !== ocrRowCount ? ` · ⚠️행수 원본 ${rawRowCount}/표 ${ocrRowCount}` : "";
 
   const problem = warnRows || countNote;
   const head = warnRows
-    ? `🔍 ${ocrEditRows.length}건 중 ${warnRows}건 확인필요${countNote}`
+    ? `🔍 ${ocrRowCount}건 중 ${warnRows}건 확인필요${countNote}`
     : countNote
     ? `⚠️ 개별 오류 없음${countNote}`
     : `✅ 검증 완료 — 이상 없음`;
@@ -1966,6 +2025,9 @@ async function applyOcrEdits(btn) {
   // 변경된 행만 추려서 전송 (전체 덮어쓰기 방지)
   const FLD = ["bl", "pal", "eta", "inDate", "fwd", "sType", "invoice", "etc"];
   const changed = ocrEditRows.filter((r, i) => {
+    // B/L·인보이스 둘 다 빈 행은 저장 대상 아님(빈 행 추가 후 미입력 등) → 쓰레기 INSERT 방지
+    const hasKey = String(r.bl || "").trim() !== "" || String(r.invoice || "").trim() !== "";
+    if (!hasKey) return false;
     const o = ocrOrigRows[i] || {};
     return FLD.some((f) => String(r[f] == null ? "" : r[f]) !== String(o[f] == null ? "" : o[f]));
   });
