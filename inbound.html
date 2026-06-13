@@ -1876,32 +1876,209 @@
         font-weight: 800;
       }
 
-      /* 🤖 단독 AI 버튼 스타일 */
-      .fab-single-ai {
+      /* 🚀 확장형 FAB 전용 스타일 (출고와 동일) */
+      .fab-wrapper {
         position: fixed;
         right: 20px;
-        bottom: max(30px, env(safe-area-inset-bottom));
+        bottom: 30px;
+        z-index: 1500;
+        width: max-content;
+      }
+      .fab-main {
         width: 52px;
         height: 52px;
         border-radius: 50%;
-        background: linear-gradient(145deg, #7c7af0, #a855f7);
+        background: linear-gradient(145deg, #2196f3, #0a60e0);
         color: white;
         border: 1px solid rgba(255, 255, 255, 0.18);
-        font-size: 22px;
-        box-shadow: 0 4px 18px rgba(120, 90, 250, 0.38), 0 1px 4px rgba(0, 0, 0, 0.14);
-        z-index: 1500;
-        cursor: pointer;
+        font-size: 28px;
+        font-weight: 300;
+        box-shadow: 0 4px 18px rgba(10, 120, 255, 0.38), 0 1px 4px rgba(0, 0, 0, 0.14);
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+        cursor: pointer;
+        transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
         -webkit-tap-highlight-color: transparent;
-        touch-action: none;
-        overscroll-behavior: contain;
       }
-      .fab-single-ai:active {
+      .fab-wrapper.open .fab-main {
+        transform: rotate(45deg);
+        background: linear-gradient(145deg, #ff4b3a, #d11a0d);
+        box-shadow: 0 4px 18px rgba(255, 59, 48, 0.4), 0 1px 4px rgba(0, 0, 0, 0.14);
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+      .fab-main:active {
         transform: scale(0.88) translateY(3px);
-        box-shadow: 0 2px 10px rgba(120, 90, 250, 0.3);
+        box-shadow: 0 2px 10px rgba(10, 120, 255, 0.3);
+      }
+      .fab-sub-container {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 12px;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+        pointer-events: none;
+      }
+      .fab-wrapper:not(.open) .fab-sub-container {
+        position: absolute;
+        height: 0;
+        overflow: visible;
+        pointer-events: none;
+      }
+      .fab-wrapper.snap-right .fab-sub-container {
+        right: 0;
+        left: auto;
+        align-items: flex-end;
+      }
+      .fab-wrapper.snap-left .fab-sub-container {
+        left: 0;
+        right: auto;
+        align-items: flex-start;
+      }
+      .fab-wrapper.snap-bottom .fab-sub-container {
+        bottom: 100%;
+        top: auto;
+        margin-bottom: 12px;
+      }
+      .fab-wrapper.snap-top .fab-sub-container {
+        top: 100%;
+        bottom: auto;
+        margin-top: 12px;
+      }
+      .fab-wrapper.open .fab-sub-container {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transition: opacity 0.18s ease;
+        position: absolute;
+        height: auto;
+      }
+      .fab-wrapper.open.snap-bottom .fab-sub-item {
+        animation: fabItemPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+      }
+      .fab-wrapper.open.snap-bottom .fab-sub-item:nth-last-child(1) {
+        animation-delay: 0.02s;
+      }
+      .fab-wrapper.open.snap-bottom .fab-sub-item:nth-last-child(2) {
+        animation-delay: 0.1s;
+      }
+      .fab-wrapper.open.snap-bottom .fab-sub-item:nth-last-child(3) {
+        animation-delay: 0.18s;
+      }
+      .fab-wrapper.open.snap-top .fab-sub-item {
+        animation: fabItemPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+      }
+      .fab-wrapper.open.snap-top .fab-sub-item:nth-child(1) {
+        animation-delay: 0.02s;
+      }
+      .fab-wrapper.open.snap-top .fab-sub-item:nth-child(2) {
+        animation-delay: 0.1s;
+      }
+      .fab-wrapper.open.snap-top .fab-sub-item:nth-child(3) {
+        animation-delay: 0.18s;
+      }
+      @keyframes fabItemPop {
+        from {
+          opacity: 0;
+          transform: translateY(10px) scale(0.5);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+      .fab-sub-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+      }
+      .fab-wrapper.snap-right .fab-sub-item {
+        flex-direction: row;
+        justify-content: flex-end;
+      }
+      .fab-wrapper.snap-left .fab-sub-item {
+        flex-direction: row-reverse;
+        justify-content: flex-start;
+      }
+      .fab-label {
+        background: rgba(40, 44, 52, 0.9);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 10px;
+        font-size: 0.85em;
+        font-weight: 800;
+        backdrop-filter: blur(5px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      }
+      body.light-mode .fab-label {
+        background: rgba(255, 255, 255, 0.9);
+        color: #222;
+      }
+      .fab-sub-btn {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: none;
+        flex: 0 0 48px;
+        min-width: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        transition: 0.2s;
+      }
+      .fab-sub-btn:active {
+        transform: scale(0.9);
+      }
+      .fab-sub-btn.ai {
+        background: linear-gradient(135deg, #5e5ce6, #bf5af2);
+        color: white;
+      }
+      .fab-sub-btn.add {
+        background: #34c759;
+        color: white;
+      }
+      .fab-wrapper.snap-bottom,
+      .fab-wrapper.snap-top {
+        flex-direction: column;
+      }
+      .fab-wrapper.snap-bottom .fab-main {
+        order: 1;
+      }
+      .fab-wrapper.snap-bottom .fab-sub-container {
+        order: 0;
+      }
+      .fab-wrapper.snap-top .fab-main {
+        order: 0;
+      }
+      .fab-wrapper.snap-top .fab-sub-container {
+        order: 1;
+      }
+
+      /* 💡 신규 등록 모달 헤더 픽스 & 내부 스크롤 설정 */
+      #addModal .modal-box {
+        padding-top: 15px;
+        display: flex;
+        flex-direction: column;
+        max-height: 85dvh;
+        padding-bottom: max(15px, env(safe-area-inset-bottom));
+      }
+      #addModal .modal-header {
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0;
+        margin-bottom: 0 !important;
+      }
+      #addModal .edit-form {
+        overflow-y: auto;
+        padding: 15px 5px 20px 0;
+        flex: 1;
+        margin-top: 0;
       }
 
       /* ════════════════════════════════════════
@@ -5290,12 +5467,114 @@
     </div>
 
     <script src="in.js" defer></script>
-    <div
-      class="fab-single-ai"
-      id="inboundAiFab"
-      style="display: none; position: fixed; right: 20px; bottom: 30px; z-index: 1500"
-    >
-      🤖
+    <div id="fabBtn" class="fab-wrapper" style="display: none">
+      <div class="fab-sub-container">
+        <div class="fab-sub-item" id="fab-sub-ai-wrap" style="display: none">
+          <div class="fab-label">AI 질의</div>
+          <button
+            class="fab-sub-btn ai"
+            onclick="
+              toggleFabMenu();
+              openAiQuery();
+            "
+          >
+            🤖
+          </button>
+        </div>
+        <div class="fab-sub-item">
+          <div class="fab-label">신규 등록</div>
+          <button
+            class="fab-sub-btn add"
+            onclick="
+              toggleFabMenu();
+              openAddForm();
+            "
+          >
+            ✏️
+          </button>
+        </div>
+      </div>
+      <button class="fab-main" onclick="toggleFabMenu()">+</button>
+    </div>
+
+    <div id="addModal" class="overlay-modal" onclick="if (event.target === this) this.style.display = 'none';">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title" style="color: #0a84ff">➕ 신규 입고 등록</div>
+          <div style="display: flex; gap: 10px; align-items: center">
+            <button
+              class="save-btn"
+              style="padding: 6px 14px; font-size: 0.9em; margin: 0; border-radius: 8px; box-shadow: none"
+              onclick="submitCMS('ADD')"
+            >
+              저장
+            </button>
+            <button class="close-btn" onclick="document.getElementById('addModal').style.display = 'none'">✕</button>
+          </div>
+        </div>
+
+        <div class="edit-form">
+          <div class="form-label">📦 B/L 번호 (필수)</div>
+          <input type="text" id="add-bl" class="edit-input" placeholder="예: ABCD1234567" autocomplete="off" />
+
+          <div style="display: flex; gap: 10px">
+            <div style="flex: 1">
+              <div class="form-label" style="margin-top: 10px">수량 (PAL)</div>
+              <input type="number" min="0" id="add-pal" class="edit-input" placeholder="0" />
+            </div>
+            <div style="flex: 1">
+              <div class="form-label" style="margin-top: 10px">운송 타입</div>
+              <select
+                id="add-stype"
+                class="edit-input"
+                style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23a0a0a0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E'); background-repeat: no-repeat; background-position: right 15px top 50%; background-size: 10px auto"
+              >
+                <option value="SEA">🚢 해상 (SEA)</option>
+                <option value="AIR">✈️ 항공 (AIR)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 10px">
+            <div style="flex: 1">
+              <div class="form-label" style="margin-top: 10px">포워더 (FWD)</div>
+              <input type="text" id="add-fwd" class="edit-input" placeholder="-" autocomplete="off" />
+            </div>
+            <div style="flex: 1">
+              <div class="form-label" style="margin-top: 10px">인보이스</div>
+              <input type="text" id="add-invoice" class="edit-input" placeholder="-" autocomplete="off" />
+            </div>
+          </div>
+
+          <div
+            class="form-label"
+            style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center"
+          >
+            <span>입고일 (날짜)</span>
+            <span
+              style="
+                color: #ff3b30;
+                cursor: pointer;
+                font-weight: 800;
+                font-size: 0.85em;
+                padding: 4px 8px;
+                background: rgba(255, 59, 48, 0.1);
+                border-radius: 6px;
+                transition: 0.2s;
+              "
+              onclick="document.getElementById('add-date').value = '';"
+              onmousedown="this.style.transform = 'scale(0.9)'"
+              onmouseup="this.style.transform = 'scale(1)'"
+              >✕ 미정(대기)으로 등록</span
+            >
+          </div>
+          <input type="date" id="add-date" class="edit-input" />
+
+          <div class="form-label" style="margin-top: 10px">비고 (메모 입력)</div>
+          <input type="text" id="add-etc" class="edit-input" placeholder="예: 냉장 보관" autocomplete="off" />
+        </div>
+      </div>
     </div>
 
     <div

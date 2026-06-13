@@ -526,7 +526,23 @@ function updateLocalState(action, payload, idx) {
   let arr = oldDay === "pending" ? serverData.pendingItems : serverData.monthData[oldDay];
   if (!arr) return;
 
-  if (action === "EDIT") {
+  if (action === "ADD") {
+    // 신규 등록 → 해당 날짜(또는 대기)에 즉시 한 건 추가 (id는 다음 동기화 때 서버값으로 채워짐)
+    let newItem = {
+      bl: payload.newBL,
+      company: payload.newBL, // 시스템 호환용
+      pal: payload.newPal || "",
+      sType: payload.newSType || "",
+      fwd: payload.newFwd || "",
+      invoice: payload.newInvoice || "",
+      etc: payload.newEtc || "",
+      isDone: false,
+      id: null,
+    };
+    if (newDay !== "pending" && !serverData.monthData[newDay]) serverData.monthData[newDay] = [];
+    let newArr = newDay === "pending" ? serverData.pendingItems : serverData.monthData[newDay];
+    newArr.push(newItem);
+  } else if (action === "EDIT") {
     let item = arr.splice(idx, 1)[0];
 
     // 🚨 [핵심 픽스] 수정된 모든 데이터를 내 폰 화면(로컬 객체)에도 즉시 덮어씌웁니다!
@@ -1067,6 +1083,33 @@ function clearClickedHighlight() {
   document.querySelectorAll(".item-tag.item-clicked").forEach((n) => n.classList.remove("item-clicked"));
 }
 
+// 수량 음수 방지: 빈값은 유지, 숫자는 0 이상으로 클램프
+function clampQty(v) {
+  const n = parseInt(v, 10);
+  return isNaN(n) ? "" : String(Math.max(0, n));
+}
+
+// ➕ 신규 입고 등록 폼 열기 (FAB '신규 등록' 버튼)
+function openAddForm() {
+  if (isMultiMode) toggleMultiMode();
+  document.getElementById("add-bl").value = "";
+  document.getElementById("add-pal").value = "";
+  document.getElementById("add-stype").value = "SEA";
+  document.getElementById("add-fwd").value = "";
+  document.getElementById("add-invoice").value = "";
+  document.getElementById("add-date").value = "";
+  document.getElementById("add-etc").value = "";
+  document.getElementById("addModal").style.display = "flex";
+}
+
+// 달력 날짜 롱프레스 → 그 날짜로 신규 등록 폼 열기
+function openAddFormWithDate(day) {
+  openAddForm();
+  let dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  document.getElementById("add-date").value = dateStr;
+  setTimeout(() => document.getElementById("add-bl").focus(), 200);
+}
+
 async function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = false) {
   if (action === "EDIT" || action === "DELETE") _editState = null; // 수정 세션 종료
   let oldPal = "";
@@ -1106,6 +1149,20 @@ async function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDon
     payload.newInvoice = document.getElementById(`edit-invoice-${idx}`).value;
     payload.newDate = document.getElementById(`edit-date-${idx}`).value || "미정";
     payload.newEtc = document.getElementById(`edit-etc-${idx}`).value;
+  } else if (action === "ADD") {
+    let bl = document.getElementById("add-bl").value.trim();
+    if (!bl) {
+      showToast("⚠️ B/L 번호는 필수입니다.", 2000);
+      return;
+    }
+    payload.newBL = bl;
+    payload.newPal = clampQty(document.getElementById("add-pal").value);
+    payload.newSType = document.getElementById("add-stype").value;
+    payload.newFwd = document.getElementById("add-fwd").value.trim();
+    payload.newInvoice = document.getElementById("add-invoice").value.trim();
+    payload.newDate = document.getElementById("add-date").value || "미정";
+    payload.newEtc = document.getElementById("add-etc").value.trim();
+    document.getElementById("addModal").style.display = "none";
   }
 
   document.getElementById("modal").style.display = "none";
@@ -1123,6 +1180,8 @@ async function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDon
       if (res === null || !res.success) {
         showToast("❌ 서버 실패! 원상복구합니다.", 2500);
         goToAsync(serverData.year, serverData.month);
+      } else if (action === "ADD") {
+        showToast("✅ 신규 입고가 등록되었습니다.", 2000);
       }
     });
     // 💡 수정 후엔 모달을 닫지 않고 상세보기로 복귀
@@ -1426,6 +1485,7 @@ function showLastOcrImage() {
               isAdmin
                 ? `<button id="ocrRawBtn" onclick="toggleRawOcrView()" style="flex:0 0 auto; padding:11px 10px; background:var(--border-color,#444); color:var(--text-main,#fff); border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px;">📄 Raw</button>
             <button id="ocrCompareBtn" onclick="toggleOcrCompare(this)" style="flex:1.3 1 auto; padding:11px 8px; background:#4a90e2; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📊 대조·수정 켜기</button>
+            <button id="ocrAddRowBtn" onclick="addOcrBlankRow()" style="display:none; flex:0 0 auto; padding:11px 10px; background:#0a84ff; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">➕ 행</button>
             <button id="ocrVerifyBtn" onclick="verifyOcrRows(this)" style="display:none; flex:1 1 auto; padding:11px 8px; background:#f39c12; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">🔍 검증</button>
             <button id="ocrApplyBtn" onclick="applyOcrEdits(this)" style="display:none; flex:1 1 auto; padding:11px 8px; background:#27ae60; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📌 확정</button>`
                 : ``
@@ -1449,6 +1509,7 @@ function toggleOcrCompare(btn) {
   const imgPane = document.getElementById("ocrPaneImg");
   const applyBtn = document.getElementById("ocrApplyBtn");
   const verifyBtn = document.getElementById("ocrVerifyBtn");
+  const addRowBtn = document.getElementById("ocrAddRowBtn");
   const rawBtn = document.getElementById("ocrRawBtn");
   const rawContainer = document.getElementById("raw-ocr-textarea-container");
   const divider = document.getElementById("ocrSplitDivider");
@@ -1463,6 +1524,7 @@ function toggleOcrCompare(btn) {
     if (divider) divider.style.display = "none";
     if (applyBtn) applyBtn.style.display = "none";
     if (verifyBtn) verifyBtn.style.display = "none";
+    if (addRowBtn) addRowBtn.style.display = "none";
     if (rawBtn) rawBtn.style.display = ""; // 이미지보기로 복귀 → Raw 버튼 다시 표시
     btn.innerHTML = "📊 대조·수정 켜기";
     btn.style.background = "#4a90e2";
@@ -1476,6 +1538,7 @@ function toggleOcrCompare(btn) {
     if (divider) divider.style.display = "flex"; // 가운데 드래그 구분선 노출
     if (applyBtn) applyBtn.style.display = "block";
     if (verifyBtn) verifyBtn.style.display = "block";
+    if (addRowBtn) addRowBtn.style.display = "block";
     if (rawBtn) rawBtn.style.display = "none"; // 대조·수정 모드에선 Raw 버튼 숨김
     if (rawContainer) rawContainer.style.display = "none"; // 열려있던 Raw 패널 닫기
     btn.innerHTML = "🖼️ 이미지만 보기";
@@ -1582,6 +1645,40 @@ function renderOcrTable() {
   });
   html += `</tbody></table>`;
   inner.innerHTML = html;
+}
+
+// ➕ 대조 표에 빈 행 추가 — OCR이 누락한 일정을 이미지 보면서 직접 입력 → '확정'으로 저장
+function addOcrBlankRow() {
+  if (!isAdmin) {
+    showToast("⚠️ 로그인한 관리자만 추가할 수 있습니다.", 2500);
+    return;
+  }
+  ocrEditRows.push({
+    bl: "",
+    pal: "0",
+    eta: "",
+    inDate: "미정",
+    fwd: "",
+    sType: "",
+    invoice: "",
+    etc: "",
+    iy: null,
+    ih: null,
+    cx: null,
+  });
+  renderOcrTable();
+  // 새 행으로 스크롤 + 잠깐 강조
+  const pane = document.getElementById("ocrPaneTable");
+  const inner = document.getElementById("ocrTableInner");
+  if (pane) pane.scrollTop = pane.scrollHeight;
+  if (inner) {
+    const lastRow = inner.querySelectorAll("tbody tr");
+    const tr = lastRow[lastRow.length - 1];
+    if (tr) {
+      tr.querySelectorAll("td").forEach((td) => (td.style.background = "#fff8d6"));
+    }
+  }
+  showToast("➕ 빈 행을 추가했습니다. 셀을 두 번 탭해 입력 후 '확정'하세요.", 2600);
 }
 
 // 왼쪽 이미지 위 하이라이트 밴드 element 확보
