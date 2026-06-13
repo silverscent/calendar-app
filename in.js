@@ -1477,7 +1477,7 @@ function showLastOcrImage() {
             <div id="ocrSplitDivider" title="드래그해서 좌우 너비 조절" style="display:none; flex:0 0 8px; align-items:center; justify-content:center; cursor:col-resize; background:#cfd4da; touch-action:none; position:relative; z-index:6;">
               <div style="width:2px; height:44px; border-radius:2px; background:#7b828c; pointer-events:none;"></div>
             </div>
-            <div id="ocrPaneTable" style="flex:0 0 0%; width:0; min-width:0; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff; position:relative; display:none;">
+            <div id="ocrPaneTable" style="flex:0 0 0%; width:0; min-width:0; overflow:auto; -webkit-overflow-scrolling:auto; background:#fff; position:relative; display:none;">
               <div id="ocrTableInner" style="padding:2px; min-width:max-content; transform-origin:0 0;"></div>
             </div>
           </div>
@@ -1932,36 +1932,26 @@ function onOcrCellTap(td) {
 function _ocrLiftCellAboveKeyboard(td) {
   const pane = document.getElementById("ocrPaneTable");
   if (!pane || !td) return;
-  // ⚠️ 포커스 직후 같은 틱에서 스크롤/CSS를 건드리면 iOS PWA에서 키보드가 안 뜸 → 전부 '지연 실행'으로 처리.
-  let started = false;
-  let prevWOS = null;
+  // ⚠️ 포커스 직후 같은 틱에서 스크롤하면 iOS PWA에서 키보드가 안 뜸 → 보정은 전부 '지연 실행'.
+  //    (패널 momentum 스크롤은 이미 꺼둠 → cold 상태에서도 키보드/스크롤 정상)
   const lift = () => {
     const input = td.querySelector("input");
     if (!input) return; // 편집 끝남
-    // 🍎 iOS 버그 회피: -webkit-overflow-scrolling:touch 컨테이너는 사용자가 한 번 만지기 전 JS scrollTop이 안 먹음
-    //    → 첫 보정 때 momentum을 auto로 전환(키보드는 이미 떠 있는 시점이라 안전).
-    if (!started) {
-      started = true;
-      prevWOS = pane.style.webkitOverflowScrolling;
-      pane.style.webkitOverflowScrolling = "auto";
-    }
     const paneRect = pane.getBoundingClientRect();
     const tdRect = td.getBoundingClientRect();
     const delta = tdRect.top - paneRect.top - 6;
     if (Math.abs(delta) > 1) pane.scrollTop += delta; // 편집 셀을 패널 맨 위로
   };
-  // 포커스 틱에서는 아무것도 안 함. 키보드가 뜨기 시작한 뒤부터 여러 번 보정.
   const timers = [50, 160, 300, 450, 650, 900].map((ms) => setTimeout(lift, ms));
   const vv = window.visualViewport;
   const onVV = () => lift(); // 키보드가 실제로 올라오는 순간 다시 보정
   if (vv) vv.addEventListener("resize", onVV);
-  // 입력칸이 사라지면(편집 종료) 타이머/리스너 정리 + momentum 복구
+  // 입력칸이 사라지면(편집 종료) 타이머/리스너 정리
   const watch = setInterval(() => {
     if (!td.querySelector("input")) {
       clearInterval(watch);
       timers.forEach(clearTimeout);
       if (vv) vv.removeEventListener("resize", onVV);
-      if (started) pane.style.webkitOverflowScrolling = prevWOS || "";
     }
   }, 400);
 }
