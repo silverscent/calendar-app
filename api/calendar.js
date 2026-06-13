@@ -487,9 +487,21 @@ module.exports = async function (req, res) {
       // 👤 관리자 리스트 조회 (🚨 기존 GET_ADMIN_LIST를 이걸로 교체! status 컬럼을 가져와야 함)
       else if (action === "GET_ADMIN_LIST") {
         try {
-          // status·역할·마지막 로그인·등록일까지 함께 (정보 디테일 강화)
+          // admins.last_login_at과 audit_logs 최근 접속 중 더 최근 값을 last_login_at으로 반환
           const [rows] = await pool.query(
-            "SELECT admin_id, admin_name, role, status, DATE_ADD(last_login_at, INTERVAL 9 HOUR) AS last_login_at, DATE_ADD(created_at, INTERVAL 9 HOUR) AS created_at FROM admins ORDER BY created_at ASC",
+            `SELECT a.admin_id, a.admin_name, a.role, a.status,
+               DATE_ADD(a.created_at, INTERVAL 9 HOUR) AS created_at,
+               DATE_ADD(
+                 GREATEST(
+                   COALESCE(a.last_login_at, '2000-01-01 00:00:00'),
+                   COALESCE((
+                     SELECT MAX(l.created_at) FROM admin_audit_logs l
+                     WHERE l.admin_id = a.admin_id
+                     AND l.action_type IN ('LOGIN_SUCCESS','AUTO_LOGIN')
+                   ), '2000-01-01 00:00:00')
+                 ), INTERVAL 9 HOUR
+               ) AS last_login_at
+             FROM admins a ORDER BY a.created_at ASC`,
           );
           return res.status(200).json({ success: true, list: rows });
         } catch (e) {
