@@ -1559,15 +1559,11 @@ async function showIpInfo(ip) {
   const _showResult = (d) => {
     const body = document.getElementById("ipInfoBody");
     if (!body) return;
-    if (d.error) {
-      body.innerHTML = `<span style="color:var(--text-sub);">조회 실패: ${_esc(d.reason || "알 수 없음")}</span>`;
-      return;
-    }
     const rows = [
       ["🔍 IP", d.ip],
-      ["🌍 국가", d.country_name ? `${d.country_name} (${d.country_code})` : null],
+      ["🌍 국가", d.country || null],
       ["📍 지역", [d.region, d.city].filter(Boolean).join(", ") || null],
-      ["🏢 통신사", d.org || d.asn || null],
+      ["🏢 통신사", d.org || null],
       ["🕐 시간대", d.timezone || null],
     ].filter(([, v]) => v);
     body.innerHTML = rows
@@ -1579,11 +1575,14 @@ async function showIpInfo(ip) {
 
   const res = await apiCall({ source: "vercel", action: "GET_IP_INFO", data: { ip } });
   const body = document.getElementById("ipInfoBody");
-  if (!res || res.error) {
-    if (body) body.innerHTML = `<span style="color:var(--text-sub);">조회 실패: ${_esc((res && res.reason) || "서버 오류")}</span>`;
+  if (!res) {
+    if (body) body.innerHTML = `<span style="color:var(--text-sub);">조회 실패: API 오류</span>`;
     return;
   }
-  const d = res.info;
-  if (d && !d.error) _ipInfoCache.set(ip, d);
-  _showResult(d || { error: true, reason: "응답 없음" });
+  if (!res.success) {
+    if (body) body.innerHTML = `<span style="color:var(--text-sub);">조회 실패: ${_esc(res.reason || "알 수 없음")}</span>`;
+    return;
+  }
+  _ipInfoCache.set(ip, res.info);
+  _showResult(res.info);
 }

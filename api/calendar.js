@@ -1139,13 +1139,14 @@ module.exports = async function (req, res) {
       else if (action === "GET_IP_INFO") {
         try {
           const { ip } = data || {};
-          if (!ip || !/^[\d.a-f:]+$/i.test(ip)) return res.status(200).json({ error: "잘못된 IP" });
-          const r = await fetch(`https://ipapi.co/${ip}/json/`);
-          if (!r.ok) return res.status(200).json({ error: "조회실패", reason: `HTTP ${r.status}` });
+          if (!ip || !/^[\d.a-f:]+$/i.test(ip)) return res.status(200).json({ success: false, reason: "잘못된 IP" });
+          const r = await fetch(`https://ipinfo.io/${ip}/json`);
+          if (!r.ok) return res.status(200).json({ success: false, reason: `HTTP ${r.status}` });
           const d = await r.json();
+          if (d.bogon || d.error) return res.status(200).json({ success: false, reason: "사설/예약 IP" });
           return res.status(200).json({ success: true, info: d });
         } catch (e) {
-          return res.status(200).json({ error: "조회실패", reason: "네트워크 오류" });
+          return res.status(200).json({ success: false, reason: "외부 API 오류" });
         }
       }
 
