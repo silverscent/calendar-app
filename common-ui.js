@@ -4,6 +4,25 @@
 // 각 HTML 인라인 스크립트에 정의됨. 함수는 호출 시점에 그 전역을 참조.
 // ============================================================
 
+// ── 페이지네이션 바 렌더링 (3곳에서 반복되던 패턴 공통화)
+//    prevFn/nextFn: onclick에 들어갈 전역 함수명 문자열 (e.g. "changeDbPage")
+function _renderPager(pager, res, prevFn, nextFn, opts) {
+  if (!pager || !res || res.totalPages <= 1) return;
+  opts = opts || {};
+  const pad = opts.compact ? "6px 12px" : "8px 16px";
+  const btnStyle = `padding:${pad}; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;`;
+  const countHtml = (!opts.compact && res.totalCount != null)
+    ? ` <span style="font-size:0.85em; color:var(--text-sub); font-weight:normal; margin-left:5px;">(총 ${res.totalCount}건)</span>`
+    : "";
+  const midStyle = opts.compact
+    ? `color:var(--text-main); font-weight:900; font-size:0.95em; padding:0 10px;`
+    : `color:var(--text-main); font-weight:900; font-size:1em;`;
+  pager.innerHTML =
+    `<button onclick="${prevFn}(-1)" ${res.page === 1 ? "disabled" : ""} style="${btnStyle}">${opts.compact ? "◀" : "◀ 이전"}</button>` +
+    `<span style="${midStyle}">${res.page} <span style="color:var(--text-sub); font-weight:normal;">/ ${res.totalPages}</span>${countHtml}</span>` +
+    `<button onclick="${nextFn}(1)" ${res.page === res.totalPages ? "disabled" : ""} style="${btnStyle}">${opts.compact ? "▶" : "다음 ▶"}</button>`;
+}
+
 function searchRawDatabaseRows() {
   const keyword = document.getElementById("dbMasterSearchKeyword").value.trim();
   const filterCol = document.getElementById("dbMasterFilterCol").value;
@@ -123,13 +142,7 @@ function searchRawDatabaseRows() {
     html += `</tbody></table>`;
     container.innerHTML = html;
 
-    // 하단 페이지네이션 바 (이전/다음) 렌더링
-    if (pager && res.totalPages > 1) {
-      let pageHtml = `<button onclick="changeDbPage(-1)" ${res.page === 1 ? "disabled" : ""} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">◀ 이전</button>`;
-      pageHtml += `<span style="color:var(--text-main); font-weight:900; font-size:1em;">${res.page} <span style="color:var(--text-sub); font-weight:normal;">/ ${res.totalPages}</span> <span style="font-size:0.85em; color:var(--text-sub); font-weight:normal; margin-left:5px;">(총 ${res.totalCount}건)</span></span>`;
-      pageHtml += `<button onclick="changeDbPage(1)" ${res.page === res.totalPages ? "disabled" : ""} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">다음 ▶</button>`;
-      pager.innerHTML = pageHtml;
-    }
+    _renderPager(pager, res, "changeDbPage", "changeDbPage");
   });
 }
 
@@ -206,7 +219,7 @@ function refreshAdminList() {
                                   ${item.admin_name} <span style='font-size:0.85em; font-weight:500; color:var(--text-sub);'>(${item.admin_id})</span> ${statusBadge}
                               </div>
                               <div style='font-size:0.8em; color:var(--text-sub); margin-top:4px;'>등급: ${item.role === "SYSTEM" ? "System Admin" : "일반 관리자"}</div>
-                              <div style='font-size:0.75em; color:var(--text-sub); margin-top:3px;'>🕒 최근 로그인: ${item.last_login_at ? String(item.last_login_at).substring(0, 16).replace("T", " ") : "기록 없음"}</div>
+                              <div style='font-size:0.75em; color:var(--text-sub); margin-top:3px;'>🕒 최근 접속: ${item.last_login_at ? String(item.last_login_at).substring(0, 16).replace("T", " ") : "기록 없음"}</div>
                           </div>
                           <button onclick="showAdminConnInfo('${item.admin_id}', '${item.admin_name}')" style="flex-shrink:0; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:6px 10px; font-size:0.8em; cursor:pointer; font-weight:900; white-space:nowrap;">📡 접속확인</button>
                       </div>
@@ -513,13 +526,7 @@ function refreshAuditLogs() {
       timeline.appendChild(item);
     });
 
-    // 🆕 하단 페이지네이션 바 (이전/다음) 렌더링
-    if (pager && res.totalPages > 1) {
-      let pageHtml = `<button onclick="changeLogPage(-1)" ${res.page === 1 ? "disabled" : ""} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">◀ 이전</button>`;
-      pageHtml += `<span style="color:var(--text-main); font-weight:900; font-size:1em;">${res.page} <span style="color:var(--text-sub); font-weight:normal;">/ ${res.totalPages}</span> <span style="font-size:0.85em; color:var(--text-sub); font-weight:normal; margin-left:5px;">(총 ${res.totalCount}건)</span></span>`;
-      pageHtml += `<button onclick="changeLogPage(1)" ${res.page === res.totalPages ? "disabled" : ""} style="padding:8px 16px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">다음 ▶</button>`;
-      pager.innerHTML = pageHtml;
-    }
+    _renderPager(pager, res, "changeLogPage", "changeLogPage");
   });
 }
 
@@ -585,12 +592,7 @@ function refreshConnLogs() {
 
     // ... (위쪽 코드는 그대로 유지) ...
 
-    if (pager && res.totalPages > 1) {
-      let pageHtml = `<button onclick="changeConnLogPage(-1)" ${res.page === 1 ? "disabled" : ""} style="padding:6px 12px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">◀</button>`;
-      pageHtml += `<span style="color:var(--text-main); font-weight:900; font-size:0.95em; padding:0 10px;">${res.page} <span style="color:var(--text-sub); font-weight:normal;">/ ${res.totalPages}</span></span>`;
-      pageHtml += `<button onclick="changeConnLogPage(1)" ${res.page === res.totalPages ? "disabled" : ""} style="padding:6px 12px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); border-radius:8px; cursor:pointer; font-weight:bold;">▶</button>`;
-      pager.innerHTML = pageHtml;
-    }
+    _renderPager(pager, res, "changeConnLogPage", "changeConnLogPage", { compact: true });
   });
 }
 
@@ -1443,6 +1445,7 @@ function changeConnLogPage(dir) {
         t.closest(".overlay-modal") ||
         t.closest(".modal") ||
         t.closest("#dashboardModal") ||
+        t.closest("#masterDashboardModal") ||
         t.closest(".pending-item")));
 
   document.addEventListener(

@@ -35,7 +35,10 @@ async function sendTgPhoto(chatId, photo, caption = null) {
 // 🇰🇷 한국 시간 기준 날짜 포맷 함수
 function getKstDateStr(dateObj) {
   const kst = new Date(dateObj.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-  return `${kst.getFullYear()}-${String(kst.getMonth() + 1).padStart(2, "0")}-${String(kst.getDate()).padStart(2, "0")}`;
+  return _ymdStr(kst.getFullYear(), kst.getMonth() + 1, kst.getDate());
+}
+function _ymdStr(y, m, d) {
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
 // 🛡️ DB 날짜 안전 변환기
@@ -344,7 +347,7 @@ module.exports = async function handler(req, res) {
         let rawDateStr = "미정";
         if (r.outbound_date && r.outbound_date !== "미정") {
           let dDate = new Date(r.outbound_date);
-          rawDateStr = `${dDate.getFullYear()}-${String(dDate.getMonth() + 1).padStart(2, "0")}-${String(dDate.getDate()).padStart(2, "0")}`;
+          rawDateStr = getKstDateStr(dDate);
         }
         const isOtherLocation = /(구역|창고|도크|바닥|외부|별도|야드)/.test(etc);
         let isTaskMode =
@@ -854,7 +857,7 @@ module.exports = async function handler(req, res) {
           }
           const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
           if (isDate) {
-            dateStr = `${now.getFullYear()}-${String(mStr).padStart(2, "0")}-${String(dStr).padStart(2, "0")}`;
+            dateStr = _ymdStr(now.getFullYear(), mStr, dStr);
             continue;
           }
           if (p === "오늘") {

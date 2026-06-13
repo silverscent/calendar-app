@@ -93,7 +93,7 @@ function computeWeekHeights() {
     let wIdx = Math.floor((serverData.firstDay + d - 1) / 7);
     if (!weekHeights[wIdx]) weekHeights[wIdx] = "auto";
 
-    let dYmd = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    let dYmd = _ymd(serverData.year, serverData.month, d);
     let hName = window.yearlyHolidays ? window.yearlyHolidays[dYmd] : null;
     let hasSched = serverData.monthData[d] && serverData.monthData[d].length > 0;
 
@@ -180,7 +180,7 @@ function renderCalendar() {
     let cellClass = isThisMonthView && day === todayDayNumber ? "day-cell today-cell" : "day-cell";
     let dayData = serverData.monthData[day];
     let bindCell = `onmousedown="startPress(event, 'cell', ${day})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="startPress(event, 'cell', ${day})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleCellClick(event, ${day})"`;
-    let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    let currentYmd = _ymd(serverData.year, serverData.month, day);
 
     let holidayName = window.yearlyHolidays ? window.yearlyHolidays[currentYmd] : null;
     let isHoliday = !!holidayName;
@@ -923,7 +923,7 @@ async function endDrag(e) {
   let oldDateStr =
     dragData.day === "pending"
       ? "미정"
-      : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+      : _ymd(serverData.year, serverData.month, dragData.day);
   if (targetCell && !targetCell.classList.contains("empty")) {
     let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
     // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
@@ -953,7 +953,7 @@ async function endDrag(e) {
 
         // 🚨 [패치 4] Vercel 서버로 순서표 전송! (이게 빠져서 새로고침 시 튕겼음!)
         let orderPayload = { dailyOrders: {} };
-        let dStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+        let dStr = _ymd(serverData.year, serverData.month, dragData.day);
         orderPayload.dailyOrders[dStr] = [];
         arr.forEach((it, i) => {
           it.sortIdx = i; // 로컬 반영
@@ -984,7 +984,7 @@ async function endDrag(e) {
     }
 
     if (newDay === dragData.day) return;
-    let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
+    let newDateStr = _ymd(serverData.year, serverData.month, newDay);
     let rawName = item.company || item.bl;
     let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
     if (await uiConfirm(`🚚 [${cleanName}] 일정을 ${newDay}일로 이동하시겠습니까?`)) {
@@ -1039,7 +1039,7 @@ function handleItemClick(e, day, idx, bl, isDone) {
     let dateStr =
       day === "pending"
         ? "미정"
-        : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        : _ymd(serverData.year, serverData.month, day);
     let isItemDone = isDone === true || String(isDone) === "true";
     let itemKey = `${bl}_${dateStr}_${isItemDone}_${idx}`;
     let item = day === "pending" ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
@@ -1105,7 +1105,7 @@ function openAddForm() {
 // 달력 날짜 롱프레스 → 그 날짜로 신규 등록 폼 열기
 function openAddFormWithDate(day) {
   openAddForm();
-  let dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  let dateStr = _ymd(serverData.year, serverData.month, day);
   document.getElementById("add-date").value = dateStr;
   setTimeout(() => document.getElementById("add-bl").focus(), 200);
 }
@@ -1233,7 +1233,7 @@ function showModal(day, clickedIdx) {
     const dayOfWeekIdx = ["일", "월", "화", "수", "목", "금", "토"];
     const dayOfWeek = dayOfWeekIdx[new Date(serverData.year, serverData.month - 1, day).getDay()];
     titleText = `${serverData.month}월 ${day}일 (${dayOfWeek})`;
-    dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    dateStr = _ymd(serverData.year, serverData.month, day);
   }
   document.getElementById("modalTitle").innerText = titleText;
   let contentHtml = "";
@@ -2054,12 +2054,15 @@ function startEditOcrCell(td, idx, field, initial) {
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      commit("down"); // 적용 + 아래로 이동(이동가능상태)
+      e.stopPropagation(); // _onOcrKeydown 재진입 방지 (마지막 행: 수정→선택 전환)
+      commit("down");
     } else if (e.key === "Tab") {
       e.preventDefault();
+      e.stopPropagation(); // _onOcrKeydown 재진입 방지 (이중 이동 방지)
       commit(e.shiftKey ? "left" : "right");
     } else if (e.key === "Escape") {
       e.preventDefault();
+      e.stopPropagation();
       cancel();
     }
   });

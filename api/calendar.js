@@ -365,6 +365,10 @@ module.exports = async function (req, res) {
             "INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, ?, ?, ?)",
             [admin_id || "GUEST", access_type || "GUEST", finalDesc, ip],
           );
+          // AUTO_LOGIN이면 admins.last_login_at도 함께 갱신 → 관리자 목록 "최근 접속"에 반영
+          if (access_type === "AUTO_LOGIN" && admin_id && admin_id !== "GUEST") {
+            await pool.query("UPDATE admins SET last_login_at = NOW() WHERE admin_id = ?", [admin_id]);
+          }
           return res.status(200).json({ success: true });
         } catch (e) {
           console.error("접속 로그 기록 에러:", e);

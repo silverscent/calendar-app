@@ -11,6 +11,14 @@ function _notify(msg) {
   else alert(msg);
 }
 
+// ── YYYY-MM-DD 날짜 문자열 조립 (두 파일에서 수십 번 반복되던 패턴 공통화)
+function _ymd(y, m, d) {
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+function _dateToYmd(date) {
+  return _ymd(date.getFullYear(), date.getMonth() + 1, date.getDate());
+}
+
 // ── 사용자 입력을 innerHTML에 삽입할 때 XSS 방지
 function _esc(s) {
   if (s == null) return "";

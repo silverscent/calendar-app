@@ -770,7 +770,7 @@ function computeGanttSlots() {
     let wIdx = Math.floor((serverData.firstDay + d - 1) / 7);
     if (!weekHeights[wIdx]) weekHeights[wIdx] = "auto";
 
-    let dYmd = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    let dYmd = _ymd(serverData.year, serverData.month, d);
     let hName = window.yearlyHolidays ? window.yearlyHolidays[dYmd] : null;
     let hasSched = serverData.monthData[d] && serverData.monthData[d].length > 0;
 
@@ -850,7 +850,7 @@ function renderCalendar() {
     let isToday = isThisMonthView && day === todayDayNumber;
     let cellClass = isToday ? "day-cell today-cell" : "day-cell";
 
-    let currentYmd = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    let currentYmd = _ymd(serverData.year, serverData.month, day);
 
     // 🚨 [수정] 이름이 있는지 확인해서 true/false 결정
     let holidayName = window.yearlyHolidays ? window.yearlyHolidays[currentYmd] : null;
@@ -2353,7 +2353,7 @@ async function endDrag(e) {
   let oldDateStr =
     dragData.day === "pending"
       ? "미정"
-      : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+      : _ymd(serverData.year, serverData.month, dragData.day);
 
   if (targetCell && !targetCell.classList.contains("empty")) {
     let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
@@ -2415,7 +2415,7 @@ async function endDrag(e) {
         let dStr =
           dragData.day === "pending"
             ? "미정"
-            : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(dragData.day).padStart(2, "0")}`;
+            : _ymd(serverData.year, serverData.month, dragData.day);
         orderPayload.dailyOrders[dStr] = [];
 
         let targetArr = dragData.day === "pending" ? serverData.pendingItems : serverData.monthData[dragData.day];
@@ -2453,7 +2453,7 @@ async function endDrag(e) {
 
     if (newDay === dragData.day) return;
 
-    let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
+    let newDateStr = _ymd(serverData.year, serverData.month, newDay);
     let rawName = item.company || item.bl;
     let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
     if (await uiConfirm(`🚚 [${cleanName}] 일정을 ${newDay}일로 이동하시겠습니까?`)) {
@@ -2519,7 +2519,7 @@ function handleItemClick(e, day, idx, comp, isDone) {
     let dateStr =
       day === "pending"
         ? "미정"
-        : `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        : _ymd(serverData.year, serverData.month, day);
     let isItemDone = isDone === true || String(isDone) === "true";
     let itemKey = `${comp}_${dateStr}_${isItemDone}_${idx}`;
     let item = day === "pending" ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
@@ -2563,7 +2563,7 @@ function clearClickedHighlight() {
 
 function openAddFormWithDate(day) {
   openAddForm();
-  let dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  let dateStr = _ymd(serverData.year, serverData.month, day);
 
   document.getElementById("add-date").value = dateStr;
 
@@ -2765,7 +2765,7 @@ async function submitCMS(
       let datesToProcess = [];
       while (sDate <= eDate) {
         datesToProcess.push(
-          `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, "0")}-${String(sDate.getDate()).padStart(2, "0")}`,
+          _dateToYmd(sDate),
         );
         sDate.setDate(sDate.getDate() + 1);
       }
@@ -2803,7 +2803,7 @@ async function submitCMS(
         while (curr <= oldEDate && _g1++ < 400) {
           // _g1: 날짜 범위가 비정상적으로 커도 루프 폭주(프리징) 방지 (최대 400일)
           oldDates.push(
-            `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`,
+            _dateToYmd(curr),
           );
           curr.setDate(curr.getDate() + 1);
         }
@@ -2821,7 +2821,7 @@ async function submitCMS(
         while (curr <= newEDate && _g2++ < 400) {
           // _g2: 루프 폭주(프리징) 방지 (최대 400일)
           newDates.push(
-            `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}-${String(curr.getDate()).padStart(2, "0")}`,
+            _dateToYmd(curr),
           );
           curr.setDate(curr.getDate() + 1);
         }
@@ -2923,7 +2923,7 @@ async function submitDeleteBlock(comp, dateStr, idx, isDone, blockStart, blockEn
     let guard = 0;
     while (cur <= end && guard++ < 400) {
       dates.push(
-        `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`,
+        _dateToYmd(cur),
       );
       cur.setDate(cur.getDate() + 1);
     }
@@ -3020,7 +3020,7 @@ function showModal(day, clickedIdx) {
     const dayOfWeekIdx = ["일", "월", "화", "수", "목", "금", "토"];
     const dayOfWeek = dayOfWeekIdx[new Date(serverData.year, serverData.month - 1, day).getDay()];
     titleText = `${serverData.month}월 ${day}일 (${dayOfWeek})`;
-    dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    dateStr = _ymd(serverData.year, serverData.month, day);
   }
   document.getElementById("modalTitle").innerText = titleText;
   let contentHtml = "";
@@ -3067,10 +3067,10 @@ function showModal(day, clickedIdx) {
           else break;
         }
 
-        blockStartDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
+        blockStartDateStr = _ymd(serverData.year, serverData.month, startDay);
         blockEndDateStr =
           startDay !== endDay
-            ? `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`
+            ? _ymd(serverData.year, serverData.month, endDay)
             : "";
       }
 
