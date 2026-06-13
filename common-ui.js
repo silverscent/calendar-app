@@ -198,13 +198,13 @@ function refreshAdminList() {
         actionArea = `<span style='color:#0a84ff; font-size:0.85em; font-weight:800;'>🔒 System Admin</span>`;
       } else if (isLocked) {
         actionArea = `
-                          <button onclick="reactivateAdminAccount('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(52,199,89,0.1); border:1px solid #34c759; color:#34c759; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>♻️ 복구</button>
-                          <button onclick="hardDeleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:8px; border-radius:8px; font-weight:900; font-size:0.85em; cursor:pointer;'>완전삭제</button>
+                          <button onclick="reactivateAdminAccount('${_argq(item.admin_id)}', '${_argq(item.admin_name)}')" style='flex:1; background:rgba(52,199,89,0.1); border:1px solid #34c759; color:#34c759; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>♻️ 복구</button>
+                          <button onclick="hardDeleteAdminAccount('${_argq(item.admin_id)}', '${_argq(item.admin_name)}')" style='flex:1; background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:8px; border-radius:8px; font-weight:900; font-size:0.85em; cursor:pointer;'>완전삭제</button>
                       `;
       } else {
         actionArea = `
-                          <button onclick="resetAdminPassword('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(255,159,10,0.1); border:1px solid #ff9f0a; color:#ff9f0a; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>비번초기화</button>
-                          <button onclick="deleteAdminAccount('${item.admin_id}', '${item.admin_name}')" style='flex:1; background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>비활성화</button>
+                          <button onclick="resetAdminPassword('${_argq(item.admin_id)}', '${_argq(item.admin_name)}')" style='flex:1; background:rgba(255,159,10,0.1); border:1px solid #ff9f0a; color:#ff9f0a; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>비번초기화</button>
+                          <button onclick="deleteAdminAccount('${_argq(item.admin_id)}', '${_argq(item.admin_name)}')" style='flex:1; background:rgba(255,59,48,0.1); border:1px solid #ff3b30; color:#ff3b30; padding:8px; border-radius:8px; font-weight:800; font-size:0.85em; cursor:pointer;'>비활성화</button>
                       `;
       }
 
@@ -221,7 +221,7 @@ function refreshAdminList() {
                               <div style='font-size:0.8em; color:var(--text-sub); margin-top:4px;'>등급: ${item.role === "SYSTEM" ? "System Admin" : "일반 관리자"}</div>
                               <div style='font-size:0.75em; color:var(--text-sub); margin-top:3px;'>🕒 최근 접속: ${item.last_login_at ? String(item.last_login_at).substring(0, 16).replace("T", " ") : "기록 없음"}</div>
                           </div>
-                          <button onclick="showAdminConnInfo('${item.admin_id}', '${item.admin_name}')" style="flex-shrink:0; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:6px 10px; font-size:0.8em; cursor:pointer; font-weight:900; white-space:nowrap;">📡 접속확인</button>
+                          <button onclick="showAdminConnInfo('${_argq(item.admin_id)}', '${_argq(item.admin_name)}')" style="flex-shrink:0; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:6px 10px; font-size:0.8em; cursor:pointer; font-weight:900; white-space:nowrap;">📡 접속확인</button>
                       </div>
                       <div style='display:flex; width:100%; gap:8px; margin-top:4px;'>${actionArea}</div>
                   `;

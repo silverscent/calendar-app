@@ -5400,7 +5400,7 @@ function showAdminConnInfo(adminId, adminName) {
       html += `
                   <div style="background:var(--card-bg); border:1px solid var(--border-color); border-radius:8px; padding:10px; font-size:0.85em;">
                       <div style="color:#0a84ff; font-weight:900; margin-bottom:6px;">⏱️ ${timeStr}</div>
-                      <div style="color:var(--text-main); line-height:1.4; word-break:keep-all;">${cleanDesc}</div>
+                      <div style="color:var(--text-main); line-height:1.4; word-break:keep-all;">${_esc(cleanDesc)}</div>
                   </div>`;
     });
     list.innerHTML = html;
