@@ -2308,7 +2308,7 @@ document.addEventListener("touchend", endDrag);
 document.addEventListener("mouseup", endDrag);
 document.addEventListener("touchcancel", endDrag); // 터치 취소 시 드래그 얼어붙음 방지
 
-function endDrag(e) {
+async function endDrag(e) {
   if (!isDragging) return;
   isDragging = false;
   if (dragReq) {
@@ -2456,14 +2456,14 @@ function endDrag(e) {
     let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
     let rawName = item.company || item.bl;
     let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
-    if (confirm(`🚚 [${cleanName}] 일정을 ${newDay}일로 이동하시겠습니까?`)) {
+    if (await uiConfirm(`🚚 [${cleanName}] 일정을 ${newDay}일로 이동하시겠습니까?`)) {
       executeMove(item, oldDateStr, newDateStr, dragData.idx);
     }
   } else if (isOutsideCalendar || targetPending) {
     if (dragData.day === "pending") return;
     let rawName = item.company || item.bl;
     let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
-    if (confirm(`🚚 [${cleanName}] 일정을 '미정(대기)'으로 변경하시겠습니까?`)) {
+    if (await uiConfirm(`🚚 [${cleanName}] 일정을 '미정(대기)'으로 변경하시겠습니까?`)) {
       executeMove(item, oldDateStr, "미정", dragData.idx);
     }
   }
@@ -2589,7 +2589,7 @@ function openAddFormWithDate(day) {
   setTimeout(() => document.getElementById("add-comp").focus(), 200);
 }
 
-function submitCMS(
+async function submitCMS(
   action,
   oldComp = null,
   oldDate = null,
@@ -2642,9 +2642,9 @@ function submitCMS(
 
   let confirmName = oldComp ? getFullName(oldComp.replace(/\[TASK\]/gi, "").trim()) : "";
   if (action === "DONE") {
-    if (!confirm(`✅ [${confirmName}] 일정을 완료 처리하시겠습니까?`)) return;
+    if (!(await uiConfirm(`✅ [${confirmName}] 일정을 완료 처리하시겠습니까?`))) return;
   } else if (action === "UNDO_DONE") {
-    if (!confirm(`⏪ [${confirmName}] 일정의 완료 상태를 취소하시겠습니까?`)) return;
+    if (!(await uiConfirm(`⏪ [${confirmName}] 일정의 완료 상태를 취소하시겠습니까?`))) return;
   }
 
   let isTask = false;
@@ -2737,7 +2737,8 @@ function submitCMS(
     showToast("⚠️ 업체/작업명은 필수입니다.", 2000);
     return;
   }
-  if (action === "DELETE" && !confirm(`⚠️ 정말 [${confirmName}] 일정을 영구 삭제하시겠습니까?`)) return;
+  if (action === "DELETE" && !(await uiConfirm(`⚠️ 정말 [${confirmName}] 일정을 영구 삭제하시겠습니까?`, { danger: true })))
+    return;
 
   if (action === "ADD" || action === "EDIT") {
     if (startDateStr !== "미정" && endDateStr && endDateStr < startDateStr) {
@@ -2874,7 +2875,7 @@ function submitCMS(
   }, 50);
 }
 
-function executeMultiAction(action) {
+async function executeMultiAction(action) {
   // ❌ [삭제됨] if(isProcessing) { showToast('⏳ 처리 중입니다.', 1000); return; }
 
   if (selectedItems.length === 0) {
@@ -2882,7 +2883,7 @@ function executeMultiAction(action) {
     return;
   }
   let actionName = action === "MULTI_DONE" ? "완료 처리" : action === "MULTI_UNDO_DONE" ? "완료 취소" : "영구 삭제";
-  if (!confirm(`⚠️ 선택된 ${selectedItems.length}개의 일정을 일괄 [${actionName}] 하시겠습니까?`)) return;
+  if (!(await uiConfirm(`⚠️ 선택된 ${selectedItems.length}개의 일정을 일괄 [${actionName}] 하시겠습니까?`))) return;
 
   // ❌ [삭제됨] isProcessing = true;
   let itemsToProcess = [...selectedItems];
@@ -3142,9 +3143,9 @@ function _isEditDirty() {
 // 저장/수정 후 상세보기 모달 다시 열기 (해당 날짜에 항목이 남아있을 때)
 
 // 수정폼 닫고 상세보기로 복귀 (취소 버튼)
-function closeEditForm(day, idx) {
+async function closeEditForm(day, idx) {
   if (_isEditDirty()) {
-    if (!confirm("⚠️ 저장하지 않은 변경사항이 있습니다.\n변경을 취소하고 상세보기로 돌아갈까요?")) return;
+    if (!(await uiConfirm("⚠️ 저장하지 않은 변경사항이 있습니다.\n변경을 취소하고 상세보기로 돌아갈까요?"))) return;
   }
   _editState = null;
   tempEditColorObj = null;
@@ -3153,7 +3154,7 @@ function closeEditForm(day, idx) {
   showModal(day);
 }
 
-function openEditForm(
+async function openEditForm(
   day,
   idx,
   comp,
@@ -3168,7 +3169,10 @@ function openEditForm(
   // 🔁 다른 일정을 수정 중이었다면: 변경사항 확인 후 전환 (아코디언)
   if (_editState && _editState.idx !== idx) {
     if (_isEditDirty()) {
-      const save = confirm("✏️ 수정 중인 변경사항이 있습니다.\n[확인] 저장하고 이동 / [취소] 변경 취소하고 이동");
+      const save = await uiConfirm("✏️ 수정 중인 변경사항이 있습니다.", {
+        okText: "저장하고 이동",
+        cancelText: "변경취소 이동",
+      });
       if (save) {
         const a = _editState.saveArgs;
         _editState = null;
@@ -4965,7 +4969,7 @@ function cancelEditMode() {
     wrapper.style.boxShadow = "inset 0 2px 10px rgba(0,0,0,0.05)";
   }
 }
-function saveCompEdit(oldCompName) {
+async function saveCompEdit(oldCompName) {
   const newCompName = document.getElementById("crm-edit-fullname").value.trim();
   if (!newCompName) {
     showToast("업체 풀네임은 필수입니다.", 2000);
@@ -4989,7 +4993,7 @@ function saveCompEdit(oldCompName) {
       showToast(`⚠️ [${newCompName}]은(는) 이미 등록된 업체명입니다.`, 2500);
       return;
     }
-    if (confirm(`업체 명칭을 [${oldCompName}]에서 [${newCompName}]으로 변경하시겠습니까?`)) {
+    if (await uiConfirm(`업체 명칭을 [${oldCompName}]에서 [${newCompName}]으로 변경하시겠습니까?`)) {
       delete compInfoDB[oldCompName];
 
       // 기존 색상 정보도 새 이름으로 인계!
@@ -5032,11 +5036,12 @@ function saveCompEdit(oldCompName) {
   renderCalendar(); // 달력 즉시 새로고침 (색상 완벽 반영됨!)
 }
 
-function deleteCompInfo(comp) {
+async function deleteCompInfo(comp) {
   if (
-    !confirm(
+    !(await uiConfirm(
       `⚠️ 정말 [${comp}] 업체를 목록에서 완전히 삭제하시겠습니까?\n\n※ 이미 등록된 달력 일정에는 영향을 주지 않습니다.`,
-    )
+      { danger: true },
+    ))
   )
     return;
   delete compInfoDB[comp];
@@ -5179,10 +5184,10 @@ function openColorPickerV3(compName) {
 }
 
 // 💡 색상 선택 및 실시간 팝업 로직
-function selectPaletteColor(stdName, colorIdx, usedBy) {
+async function selectPaletteColor(stdName, colorIdx, usedBy) {
   if (usedBy) {
     let confirmMsg = `⚠️ 이 색상은 현재 [${usedBy}] 업체가 사용 중입니다.\n\n강제로 이 색상을 같이 사용하시겠습니까?`;
-    if (!confirm(confirmMsg)) return;
+    if (!(await uiConfirm(confirmMsg))) return;
   }
 
   tempEditColorIdx = colorIdx;

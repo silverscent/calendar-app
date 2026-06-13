@@ -98,3 +98,51 @@ async function apiGet(params) {
     setLoadingState(false);
   }
 }
+
+// ── 커스텀 확인창 (Promise<boolean>). iOS WebKit에서 native confirm()이 멈추는(프리징) 버그 회피용.
+//    사용: if (!(await uiConfirm("메시지"))) return;
+function uiConfirm(message, opts) {
+  opts = opts || {};
+  return new Promise((resolve) => {
+    const prev = document.getElementById("uiConfirmOverlay");
+    if (prev) prev.remove();
+    const ov = document.createElement("div");
+    ov.id = "uiConfirmOverlay";
+    ov.style.cssText =
+      "position:fixed; inset:0; z-index:99999; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.5); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); padding:24px; box-sizing:border-box;";
+    const box = document.createElement("div");
+    box.style.cssText =
+      "background:var(--card-bg,#26282c); color:var(--text-main,#fff); width:100%; max-width:340px; border-radius:18px; padding:22px 20px 16px; box-shadow:0 12px 40px rgba(0,0,0,0.45); text-align:center; box-sizing:border-box;";
+    const msg = document.createElement("div");
+    msg.style.cssText =
+      "font-size:1em; font-weight:700; line-height:1.55; white-space:pre-line; margin-bottom:18px; word-break:keep-all;";
+    msg.textContent = message; // 텍스트로 안전하게 삽입(HTML 주입 방지)
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex; gap:8px;";
+    const cancel = document.createElement("button");
+    cancel.textContent = opts.cancelText || "취소";
+    cancel.style.cssText =
+      "flex:1; padding:13px; border:none; border-radius:12px; background:var(--border-color,#3a3d42); color:var(--text-main,#fff); font-weight:800; font-size:1em; cursor:pointer;";
+    const ok = document.createElement("button");
+    ok.textContent = opts.okText || "확인";
+    ok.style.cssText =
+      "flex:1; padding:13px; border:none; border-radius:12px; background:" +
+      (opts.danger ? "#ff3b30" : "#0a84ff") +
+      "; color:#fff; font-weight:800; font-size:1em; cursor:pointer;";
+    row.appendChild(cancel);
+    row.appendChild(ok);
+    box.appendChild(msg);
+    box.appendChild(row);
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    const done = (val) => {
+      ov.remove();
+      resolve(val);
+    };
+    ok.addEventListener("click", () => done(true));
+    cancel.addEventListener("click", () => done(false));
+    ov.addEventListener("click", (e) => {
+      if (e.target === ov) done(false);
+    });
+  });
+}

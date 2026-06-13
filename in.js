@@ -860,7 +860,7 @@ document.addEventListener("touchend", endDrag);
 document.addEventListener("mouseup", endDrag);
 document.addEventListener("touchcancel", endDrag); // 터치 취소 시 드래그 얼어붙음 방지
 
-function endDrag(e) {
+async function endDrag(e) {
   if (!isDragging) return;
   isDragging = false;
   if (dragReq) {
@@ -971,14 +971,14 @@ function endDrag(e) {
     let newDateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(newDay).padStart(2, "0")}`;
     let rawName = item.company || item.bl;
     let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
-    if (confirm(`🚚 [${cleanName}] 일정을 ${newDay}일로 이동하시겠습니까?`)) {
+    if (await uiConfirm(`🚚 [${cleanName}] 일정을 ${newDay}일로 이동하시겠습니까?`)) {
       executeMove(item, oldDateStr, newDateStr, dragData.idx);
     }
   } else if (isOutsideCalendar || targetPending) {
     if (dragData.day === "pending") return;
     let rawName = item.company || item.bl;
     let cleanName = rawName.replace(/\[TASK\]/gi, "").trim();
-    if (confirm(`🚚 [${cleanName}] 일정을 '미정(대기)'으로 변경하시겠습니까?`)) {
+    if (await uiConfirm(`🚚 [${cleanName}] 일정을 '미정(대기)'으로 변경하시겠습니까?`)) {
       executeMove(item, oldDateStr, "미정", dragData.idx);
     }
   }
@@ -1067,7 +1067,7 @@ function clearClickedHighlight() {
   document.querySelectorAll(".item-tag.item-clicked").forEach((n) => n.classList.remove("item-clicked"));
 }
 
-function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = false) {
+async function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = false) {
   if (action === "EDIT" || action === "DELETE") _editState = null; // 수정 세션 종료
   let oldPal = "";
   let itemId = null; // 🚨 ID 변수 추가
@@ -1090,11 +1090,11 @@ function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = fa
 
   let payload = { action: action, id: itemId, oldBL: oldBL, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal };
   if (action === "DONE") {
-    if (!confirm(`✅ [${oldBL}] 입고를 완료 처리하시겠습니까?`)) return;
+    if (!(await uiConfirm(`✅ [${oldBL}] 입고를 완료 처리하시겠습니까?`))) return;
   } else if (action === "UNDO_DONE") {
-    if (!confirm(`⏪ [${oldBL}] 입고 완료 상태를 취소하시겠습니까?`)) return;
+    if (!(await uiConfirm(`⏪ [${oldBL}] 입고 완료 상태를 취소하시겠습니까?`))) return;
   } else if (action === "DELETE") {
-    if (!confirm(`⚠️ 정말 [${oldBL}] 입고 스케줄을 영구 삭제하시겠습니까?`)) return;
+    if (!(await uiConfirm(`⚠️ 정말 [${oldBL}] 입고 스케줄을 영구 삭제하시겠습니까?`, { danger: true }))) return;
   } else if (action === "EDIT") {
     payload.newBL = document.getElementById(`edit-bl-${idx}`).value;
     payload.newPal = document.getElementById(`edit-pal-${idx}`).value;
@@ -1127,14 +1127,14 @@ function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = fa
   }, 50);
 }
 
-function executeMultiAction(action) {
+async function executeMultiAction(action) {
   if (selectedItems.length === 0) {
     showToast("항목을 먼저 터치하여 선택해 주세요.", 2000);
     return;
   }
   let actionName =
     action === "MULTI_DONE" ? "입고 완료 처리" : action === "MULTI_UNDO_DONE" ? "완료 취소" : "영구 삭제";
-  if (!confirm(`⚠️ 선택된 ${selectedItems.length}개의 일정을 일괄 [${actionName}] 하시겠습니까?`)) return;
+  if (!(await uiConfirm(`⚠️ 선택된 ${selectedItems.length}개의 일정을 일괄 [${actionName}] 하시겠습니까?`))) return;
 
   let itemsToProcess = [...selectedItems];
   toggleMultiMode();
@@ -1253,20 +1253,23 @@ function _isEditDirty() {
   return _snapshotEdit(_editState.idx) !== _editState.snapshot;
 }
 
-function closeEditForm(day, idx) {
+async function closeEditForm(day, idx) {
   if (_isEditDirty()) {
-    if (!confirm("⚠️ 저장하지 않은 변경사항이 있습니다.\n변경을 취소하고 상세보기로 돌아갈까요?")) return;
+    if (!(await uiConfirm("⚠️ 저장하지 않은 변경사항이 있습니다.\n변경을 취소하고 상세보기로 돌아갈까요?"))) return;
   }
   _editState = null;
   renderCalendar();
   showModal(day);
 }
 
-function openEditForm(day, idx, bl, dateStr, pal, etc) {
+async function openEditForm(day, idx, bl, dateStr, pal, etc) {
   // 🔁 다른 일정 수정 중이면 변경사항 확인 후 전환 (아코디언)
   if (_editState && _editState.idx !== idx) {
     if (_isEditDirty()) {
-      const save = confirm("✏️ 수정 중인 변경사항이 있습니다.\n[확인] 저장하고 이동 / [취소] 변경 취소하고 이동");
+      const save = await uiConfirm("✏️ 수정 중인 변경사항이 있습니다.", {
+        okText: "저장하고 이동",
+        cancelText: "변경취소 이동",
+      });
       if (save) {
         const a = _editState.saveArgs;
         _editState = null;
@@ -1851,7 +1854,7 @@ function resetOcrTransform() {
 }
 
 // '수정 확정' → 서버 upsert
-function applyOcrEdits(btn) {
+async function applyOcrEdits(btn) {
   if (!isAdmin) {
     showToast("⚠️ 로그인한 관리자만 수정할 수 있습니다.", 2500);
     return;
@@ -1870,7 +1873,7 @@ function applyOcrEdits(btn) {
     showToast("변경된 내용이 없습니다.", 2500);
     return;
   }
-  if (!confirm(`수정한 ${changed.length}건만 입고 DB에 반영할까요?`)) return;
+  if (!(await uiConfirm(`수정한 ${changed.length}건만 입고 DB에 반영할까요?`))) return;
   const orig = btn ? btn.innerHTML : "";
   if (btn) {
     btn.disabled = true;

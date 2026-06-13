@@ -654,7 +654,7 @@ function toggleAdmin() {
   openLoginModal();
 }
 
-function saveFullRowDB(id) {
+async function saveFullRowDB(id) {
   let updateData = { rowId: id };
 
   if (currentType === "out") {
@@ -681,7 +681,7 @@ function saveFullRowDB(id) {
     updateData.is_ai_modified = Number(document.getElementById(`db-i-ai-${id}`).value.trim() || 0);
   }
 
-  if (!confirm(`[ID: ${id}] 변경된 모든 컬럼 데이터를 덮어쓰시겠습니까?`)) return;
+  if (!(await uiConfirm(`[ID: ${id}] 변경된 모든 컬럼 데이터를 덮어쓰시겠습니까?`))) return;
 
   showToast("⏳ DB 동기화 중...", 0);
   apiCall({
@@ -702,8 +702,8 @@ function saveFullRowDB(id) {
   });
 }
 
-function addNewRowDirectDB(type) {
-  if (!confirm("입력하신 내용으로 DB에 신규 데이터를 강제 생성하시겠습니까?")) return;
+async function addNewRowDirectDB(type) {
+  if (!(await uiConfirm("입력하신 내용으로 DB에 신규 데이터를 강제 생성하시겠습니까?"))) return;
 
   let insertData = {};
   if (type === "out") {
@@ -825,7 +825,7 @@ function handleLogin() {
   });
 }
 
-function handleBioToggleChange(checkbox) {
+async function handleBioToggleChange(checkbox) {
   if (checkbox.checked) {
     if (!window.PublicKeyCredential) {
       alert("이 기기 브라우저에서는 생체 인증(WebAuthn)을 지원하지 않습니다.");
@@ -846,7 +846,7 @@ function handleBioToggleChange(checkbox) {
       return;
     }
 
-    if (confirm("생체 인증 로그인을 해제하시겠습니까?\n(※ 기기에 저장된 패스키는 브라우저 설정에서 직접 지워주세요)")) {
+    if (await uiConfirm("생체 인증 로그인을 해제하시겠습니까?\n(※ 기기에 저장된 패스키는 브라우저 설정에서 직접 지워주세요)")) {
       localStorage.removeItem("bio_registered");
       localStorage.removeItem("bio_id");
       localStorage.removeItem("bio_token");
@@ -857,7 +857,7 @@ function handleBioToggleChange(checkbox) {
   }
 }
 
-function executeMyPasswordChange() {
+async function executeMyPasswordChange() {
   const currentInput = document.getElementById("mySettingsCurrentPw");
   const newInput = document.getElementById("mySettingsNewPw");
   if (!currentInput || !newInput) return;
@@ -873,7 +873,7 @@ function executeMyPasswordChange() {
     showToast("⚠️ 새 비밀번호는 현재 비밀번호와 다르게 입력해 주세요.", 2000);
     return;
   }
-  if (!confirm("정말 비밀번호를 변경하시겠습니까?")) return;
+  if (!(await uiConfirm("정말 비밀번호를 변경하시겠습니까?"))) return;
 
   showToast("⏳ 보안 검증 및 변경 중...", 0);
 
@@ -922,7 +922,7 @@ function checkAndFetchHolidays(year) {
   });
 }
 
-function createNewAdminAccount() {
+async function createNewAdminAccount() {
   const id = document.getElementById("newAdminId").value.trim();
   const name = document.getElementById("newAdminName").value.trim();
   const pw = document.getElementById("newAdminPw").value.trim();
@@ -932,7 +932,7 @@ function createNewAdminAccount() {
     return;
   }
 
-  if (!confirm(`[${name}(${id})] 계정을 신규 운영 관리자로 등록합니까?`)) return;
+  if (!(await uiConfirm(`[${name}(${id})] 계정을 신규 운영 관리자로 등록합니까?`))) return;
 
   showToast("⏳ 원격 데이터베이스 동기화 중...", 0);
   apiCall({
@@ -1089,11 +1089,12 @@ function switchMasterTab(tabId) {
   if (tabId === "filter-mgr") loadOcrFilterWords();
 }
 
-function deleteRowDirectFromDB(rowId) {
+async function deleteRowDirectFromDB(rowId) {
   if (
-    !confirm(
+    !(await uiConfirm(
       `⚠️ [초긴급 경고]\n데이터베이스 일련번호 [ID: ${rowId}] 로우를 영구 파기합니까?\n달력 동기화 데이터 꼬임 현상을 정밀 강제 수정할 때만 실행하세요.`,
-    )
+      { danger: true },
+    ))
   )
     return;
 
@@ -1135,10 +1136,10 @@ function toggleNewAdminForm() {
   }
 }
 
-function resetAdminPassword(id, name) {
+async function resetAdminPassword(id, name) {
   const newPw = prompt(`[${name}(${id})] 계정의 새로운 비밀번호를 입력하세요:`);
   if (!newPw || newPw.trim() === "") return;
-  if (!confirm(`정말 해당 계정의 비밀번호를 변경하시겠습니까?`)) return;
+  if (!(await uiConfirm(`정말 해당 계정의 비밀번호를 변경하시겠습니까?`))) return;
 
   showToast("⏳ 비밀번호 변경 중...", 0);
   apiCall({
@@ -1153,11 +1154,12 @@ function resetAdminPassword(id, name) {
   });
 }
 
-function hardDeleteAdminAccount(id, name) {
+async function hardDeleteAdminAccount(id, name) {
   if (
-    !confirm(
+    !(await uiConfirm(
       `🚨 최후 경고: [${name}(${id})] 계정을 데이터베이스에서 완전히 삭제(Hard Delete)합니까?\n이 작업은 되돌릴 수 없으며 접속 기록 외 모든 정보가 파기됩니다!`,
-    )
+      { danger: true },
+    ))
   )
     return;
   showToast("💥 계정 영구 파기 중...", 0);
@@ -1192,8 +1194,8 @@ function openLoginModal() {
   }, 150);
 }
 
-function deleteAdminAccount(id, name) {
-  if (!confirm(`[확인] [${name}(${id})] 관리자 권한을 회수하고 계정을 비활성화 하시겠습니까?`)) return;
+async function deleteAdminAccount(id, name) {
+  if (!(await uiConfirm(`[확인] [${name}(${id})] 관리자 권한을 회수하고 계정을 비활성화 하시겠습니까?`))) return;
   showToast("⏳ 권한 회수 중...", 0);
   apiCall({
     source: "vercel",
@@ -1211,8 +1213,8 @@ function deleteAdminAccount(id, name) {
   });
 }
 
-function reactivateAdminAccount(id, name) {
-  if (!confirm(`[${name}(${id})] 계정을 다시 활성화(ACTIVE) 복구하시겠습니까?`)) return;
+async function reactivateAdminAccount(id, name) {
+  if (!(await uiConfirm(`[${name}(${id})] 계정을 다시 활성화(ACTIVE) 복구하시겠습니까?`))) return;
   showToast("⏳ 계정 복구 중...", 0);
   apiCall({
     source: "vercel",
@@ -1348,8 +1350,8 @@ function handleCellClick(e, day) {
   showModal(day);
 }
 
-function removeOcrFilterWord(idx) {
-  if (!confirm(`'${globalOcrFilters[idx]}' 단어를 필터에서 삭제하시겠습니까?`)) return;
+async function removeOcrFilterWord(idx) {
+  if (!(await uiConfirm(`'${globalOcrFilters[idx]}' 단어를 필터에서 삭제하시겠습니까?`))) return;
   globalOcrFilters.splice(idx, 1);
   renderOcrFilterBadges();
   saveOcrFilterWordsToServer();
