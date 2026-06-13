@@ -178,7 +178,7 @@ module.exports = async function (req, res) {
           `SELECT id, company, pal, box, etc, isDone, sort_idx FROM outbound WHERE outbound_date IS NULL ORDER BY sort_idx ASC, id ASC`,
         );
         monthRows.forEach((row) => {
-          const day = new Date(row.outbound_date).getDate();
+          const day = new Date(row.outbound_date).getUTCDate();
           if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
           formattedData.monthData[day].push({
             id: row.id,
@@ -210,7 +210,7 @@ module.exports = async function (req, res) {
           `SELECT id, bl_number, pallets, remarks, s_type, fwd, invoice, status, is_ai_modified, sort_idx FROM inbound WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`,
         );
         monthRows.forEach((row) => {
-          const day = new Date(row.receive_date).getDate();
+          const day = new Date(row.receive_date).getUTCDate();
           if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
           formattedData.monthData[day].push({
             id: row.id,
