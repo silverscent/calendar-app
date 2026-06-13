@@ -3400,7 +3400,7 @@ async function openEditForm(
               blockEndDateStr && blockEndDateStr !== "null" && blockEndDateStr !== "" && blockEndDateStr !== blockStartDateStr
                 ? `<div style="display:flex; gap:8px;">
                      <button class="delete-btn" style="flex:1;" onclick="submitCMS('DELETE', '${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '', '')">🗑️ 이 날짜만</button>
-                     <button class="delete-btn" style="flex:1;" onclick="submitDeleteBlock('${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">🗑️ 전체 스케줄</button>
+                     <button class="delete-btn" style="flex:1; background:#e0241b; color:#fff; border:1px solid #b71c10;" onclick="submitDeleteBlock('${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">🗑️ 전체 스케줄</button>
                    </div>`
                 : `<button class="delete-btn" onclick="submitCMS('DELETE', '${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">🗑️ 이 스케줄 삭제</button>`
             }
