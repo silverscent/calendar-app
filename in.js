@@ -1467,12 +1467,6 @@ function showLastOcrImage() {
     if (url && url.startsWith("http")) {
       document.getElementById("ocrImageContent").innerHTML = `
         <div style="display:flex; flex-direction:column; width:100%; height:100%; overflow:hidden;">
-          <div id="ocrEditBar" style="display:none; flex:0 0 auto; align-items:center; gap:6px; margin-bottom:6px; padding:7px; background:#fff; border:2px solid #4a90e2; border-radius:10px; box-shadow:0 4px 14px rgba(0,0,0,0.18);">
-            <span id="ocrEditBarLabel" style="font-weight:800; font-size:12px; color:#4a90e2; white-space:nowrap;"></span>
-            <input id="ocrEditBarInput" type="text" autocomplete="off" style="flex:1 1 auto; min-width:0; font-size:16px; padding:8px 9px; border:1px solid #ccc; border-radius:8px; color:#222; background:#fff;">
-            <button id="ocrEditBarOk" style="flex:0 0 auto; padding:9px 12px; background:#27ae60; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:13px;">적용</button>
-            <button id="ocrEditBarCancel" style="flex:0 0 auto; padding:9px 10px; background:#e0e3e8; color:#333; border:none; border-radius:8px; font-weight:bold; font-size:13px;">취소</button>
-          </div>
           <div id="ocrHint" style="flex:0 0 auto; font-size:11px; color:var(--text-sub,#888); padding:0 2px 6px; text-align:center; line-height:1.4;">
             두 손가락=확대 · 한 손가락=이동
           </div>
@@ -1932,88 +1926,60 @@ function onOcrCellTap(td) {
   selectOcrCell(idx, field); // 첫 탭 → 선택(이미지 이동 + 하이라이트)
 }
 
-// 모바일 여부 (좁은 화면 = 소프트 키보드 환경) → 상단 입력바로 편집
-function _isMobileEdit() {
-  return !!(window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
-}
-
-// 📱 모바일 편집: 인라인 대신 '대조창 상단 고정 입력바'에서 편집 → 키보드가 절대 못 가림(스크롤 의존 X)
-function startEditOcrCellBar(td, idx, field, initial) {
-  const bar = document.getElementById("ocrEditBar");
-  const input = document.getElementById("ocrEditBarInput");
-  const labelEl = document.getElementById("ocrEditBarLabel");
-  const okBtn = document.getElementById("ocrEditBarOk");
-  const cancelBtn = document.getElementById("ocrEditBarCancel");
-  if (!bar || !input || !okBtn || !cancelBtn) return; // 입력바 없으면 편집 생략
-  const cur = ocrEditRows[idx][field] != null ? String(ocrEditRows[idx][field]) : "";
-  const col = OCR_COLS.find((c) => c.key === field) || {};
-  labelEl.textContent = (col.label || field) + " :";
-  input.value = initial != null ? initial : cur;
-  bar.style.display = "flex";
-  selectOcrCell(idx, field, false); // 어느 셀 편집 중인지 파란 테두리 유지(이미지 이동은 생략)
-  td.style.background = "#fff8d6";
-
-  let done = false;
-  const cleanup = () => {
-    okBtn.onpointerdown = null;
-    cancelBtn.onpointerdown = null;
-    input.onkeydown = null;
-    input.onblur = null;
+// 📱 셀 편집 시 소프트 키보드가 입력칸을 가리지 않게:
+//   ① iOS가 fixed 모달 안 input을 보이려고 밀어올린 '문서 스크롤'을 되돌리고(모달이 키보드 뒤로 안 내려감)
+//   ② 편집 셀을 표 패널 상단으로 올림.
+//   첫 키보드 등장은 iOS가 늦게/반복적으로 문서를 밀어서 한두 번 보정으론 못 이김 → rAF로 ~1.2초간 매 프레임 보정.
+function _ocrLiftCellAboveKeyboard(td) {
+  const pane = document.getElementById("ocrPaneTable");
+  if (!pane || !td) return;
+  const correct = () => {
+    const input = td.querySelector("input");
+    if (!input) return false; // 편집 종료
+    // ① iOS가 input 보이려고 문서(body/window)를 밀어올린 것 원복
+    try {
+      if (window.pageYOffset) window.scrollTo(0, 0);
+    } catch (_) {}
+    const se = document.scrollingElement;
+    if (se && se.scrollTop) se.scrollTop = 0;
+    if (document.body && document.body.scrollTop) document.body.scrollTop = 0;
+    // ② 편집 셀을 패널 상단으로 (상대 좌표라 문서 밀림과 무관하게 정확)
+    const paneRect = pane.getBoundingClientRect();
+    const tdRect = td.getBoundingClientRect();
+    const delta = tdRect.top - paneRect.top - 6;
+    if (Math.abs(delta) > 1) pane.scrollTop += delta;
+    return true;
   };
-  const finish = (save) => {
-    if (done) return;
-    done = true;
-    if (save) {
-      ocrEditRows[idx][field] = input.value;
-      const cell = document.querySelector(`#ocrTableInner td[data-idx="${idx}"][data-field="${field}"]`);
-      if (cell) {
-        cell.innerHTML = _esc(input.value);
-        cell.style.background = "#fff8d6"; // 수정 표시(노랑)
+  // 첫 키보드 등장 동안(~1.2초) 매 프레임 보정 → iOS의 반복적 문서 밀림을 이김(안정되면 사실상 no-op)
+  const start = Date.now();
+  let raf = null;
+  const loop = () => {
+    if (correct() === false) return;
+    if (Date.now() - start < 1200) raf = requestAnimationFrame(loop);
+  };
+  raf = requestAnimationFrame(loop);
+  const vv = window.visualViewport;
+  const onVV = () => correct(); // 키보드 등장(resize)/iOS 문서이동(scroll) 순간 즉시 보정
+  if (vv) {
+    vv.addEventListener("resize", onVV);
+    vv.addEventListener("scroll", onVV);
+  }
+  // 편집 끝나면(입력칸 사라지면) 정리
+  const watch = setInterval(() => {
+    if (!td.querySelector("input")) {
+      clearInterval(watch);
+      if (raf) cancelAnimationFrame(raf);
+      if (vv) {
+        vv.removeEventListener("resize", onVV);
+        vv.removeEventListener("scroll", onVV);
       }
     }
-    bar.style.display = "none";
-    input.blur();
-    cleanup();
-    selectOcrCell(idx, field, false);
-  };
-  // 버튼은 pointerdown으로 처리(터치에서 blur보다 먼저 실행 → 적용/취소 확실)
-  okBtn.onpointerdown = (e) => {
-    e.preventDefault();
-    finish(true);
-  };
-  cancelBtn.onpointerdown = (e) => {
-    e.preventDefault();
-    finish(false);
-  };
-  input.onkeydown = (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      finish(true);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      finish(false);
-    }
-  };
-  // 다른 곳 탭으로 포커스 잃으면 저장(버튼 탭은 위 pointerdown이 먼저 처리)
-  input.onblur = () =>
-    setTimeout(() => {
-      if (!done) finish(true);
-    }, 200);
-
-  input.focus();
-  const L = input.value.length;
-  try {
-    input.setSelectionRange(initial != null ? L : 0, L);
-  } catch (_) {}
+  }, 300);
 }
 
 // 인라인 입력 편집 시작 (initial: 키보드로 글자 바로 쳐서 진입 시 그 글자로 덮어씀)
 function startEditOcrCell(td, idx, field, initial) {
   if (td.querySelector("input")) return;
-  if (_isMobileEdit()) {
-    startEditOcrCellBar(td, idx, field, initial); // 📱 상단 입력바 사용
-    return;
-  }
   const cur = ocrEditRows[idx][field] != null ? String(ocrEditRows[idx][field]) : "";
   const align = (OCR_COLS.find((c) => c.key === field) || {}).align || "center";
   const startVal = initial != null ? initial : cur;
@@ -2026,6 +1992,7 @@ function startEditOcrCell(td, idx, field, initial) {
   } else {
     input.select();
   }
+  _ocrLiftCellAboveKeyboard(td); // 📱 편집 셀을 키보드 위로 올림(rAF 보정, 포커스 틱엔 영향 없음)
   let done = false;
   // move: "down"(Enter) | "right"/"left"(Tab) | "stay"(blur/제자리)
   const commit = (move) => {
