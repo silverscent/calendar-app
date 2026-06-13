@@ -317,7 +317,7 @@ module.exports = async function (req, res) {
               .json({ success: false, forceLogout: true, msg: "세션이 만료되었습니다. 다시 로그인하세요." });
           }
           effectiveAdminId = tokenAdmin;
-        } else if (!admin_id) {
+        } else {
           return res
             .status(200)
             .json({ success: false, forceLogout: true, msg: "로그인 세션이 만료되었거나 유효하지 않습니다." });
@@ -329,18 +329,6 @@ module.exports = async function (req, res) {
             .status(200)
             .json({ success: false, forceLogout: true, msg: "관리자에 의해 계정이 비활성화되었습니다." });
         }
-      }
-
-      // ── 자동로그인 사용자 토큰 발급 (과도기용: admin_id만으로 발급)
-      //    ⚠️ 폴백 제거 시 이 액션도 함께 제거할 것
-      if (action === "ISSUE_LEGACY_TOKEN") {
-        if (!admin_id) return res.status(200).json({ success: false });
-        const [rows] = await pool.query("SELECT admin_id, admin_name, role, status FROM admins WHERE admin_id = ?", [
-          admin_id,
-        ]);
-        if (rows.length === 0 || rows[0].status === "LOCKED") return res.status(200).json({ success: false });
-        const session_token = generateToken(rows[0].admin_id);
-        return res.status(200).json({ success: true, session_token });
       }
 
       // ── 생체인증 재로그인용 세션 토큰 검증

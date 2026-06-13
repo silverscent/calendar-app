@@ -3369,21 +3369,6 @@ window.addEventListener("DOMContentLoaded", () => {
     localStorage.removeItem("bio_registered");
     localStorage.removeItem("bio_id");
   }
-  // 과도기: 자동로그인 사용자인데 토큰이 없으면 조용히 발급받아 저장
-  (function () {
-    let isAdm = localStorage.getItem("isAdmin") === "true" || sessionStorage.getItem("isAdmin") === "true";
-    let aid = localStorage.getItem("admin_id") || sessionStorage.getItem("admin_id");
-    if (isAdm && aid && !window._sessionToken) {
-      apiCall({ source: "vercel", action: "ISSUE_LEGACY_TOKEN", admin_id: aid }).then(function (r) {
-        if (r && r.success && r.session_token) {
-          window._sessionToken = r.session_token;
-          const isAuto = localStorage.getItem("auto_login") !== "false";
-          (isAuto ? localStorage : sessionStorage).setItem("session_token", r.session_token);
-        }
-      });
-    }
-  })();
-
   // 👇 🚨 [자동로그인 & GUEST 사이트 접속 추적기] 여기에 삽입! 👇
   let isAdm = localStorage.getItem("isAdmin") === "true" || sessionStorage.getItem("isAdmin") === "true";
   let currentAdminId = localStorage.getItem("admin_id") || sessionStorage.getItem("admin_id") || "GUEST";
