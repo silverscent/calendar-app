@@ -1558,7 +1558,7 @@ module.exports = async function (req, res) {
           }
 
           // 좌표(iy/ih/cx)는 캐시 그대로 두되, 값(pal/날짜/인보이스/비고 등)은 현재 inbound DB로 갱신
-          //  → 달력에서 따로 고친 내용이 대조창에도 반영됨
+          //  → 달력에서 따로 고친 내용이 대조창에도 반영됨. 완료된 건은 대조창에서 제외(없어지는 형태).
           let parsedData = parseJSON(parsedDataStr);
           if (Array.isArray(parsedData) && parsedData.length > 0) {
             try {
@@ -1566,7 +1566,7 @@ module.exports = async function (req, res) {
               const invList = parsedData.map((r) => (r.invoice || "").toString().trim()).filter(Boolean);
               const blList = parsedData.map((r) => cleanBL(r.bl)).filter((b) => b && b !== "발행전");
               const sel =
-                "SELECT bl_number, pallets, DATE_FORMAT(eta,'%Y-%m-%d') AS eta, DATE_FORMAT(receive_date,'%Y-%m-%d') AS receive_date, fwd, s_type, invoice, remarks FROM inbound WHERE ";
+                "SELECT bl_number, pallets, DATE_FORMAT(eta,'%Y-%m-%d') AS eta, DATE_FORMAT(receive_date,'%Y-%m-%d') AS receive_date, fwd, s_type, invoice, remarks, status FROM inbound WHERE ";
               const byInv = {};
               const byBl = {};
               if (invList.length) {
@@ -1581,12 +1581,18 @@ module.exports = async function (req, res) {
                   byBl[cleanBL(d.bl_number)] = d;
                 });
               }
-              parsedData = parsedData.map((r) => {
+              // OCR 파싱행: 현재 inbound 값으로 갱신하되, 완료된 건은 제외
+              const merged = [];
+              for (const r of parsedData) {
                 const inv = (r.invoice || "").toString().trim();
                 const blc = cleanBL(r.bl);
                 const d = (inv && byInv[inv]) || (blc && blc !== "발행전" && byBl[blc]) || null;
-                if (!d) return r; // 달력에 없으면(삭제 등) OCR 스냅샷 유지
-                return {
+                if (!d) {
+                  merged.push(r); // 달력에 없으면(삭제 등) OCR 스냅샷 유지
+                  continue;
+                }
+                if (d.status === "완료") continue; // 입고 완료 → 대조창에서 제외
+                merged.push({
                   ...r, // iy/ih/cx 등 좌표 유지
                   bl: d.bl_number || r.bl,
                   pal: d.pallets != null ? String(d.pallets) : r.pal,
@@ -1596,8 +1602,59 @@ module.exports = async function (req, res) {
                   sType: d.s_type || "",
                   invoice: d.invoice || "",
                   etc: d.remarks || "",
-                };
-              });
+                });
+              }
+              parsedData = merged;
+
+              // 🗓️ OCR 이미지에 찍힌 입고일의 최소~최대 범위 안에 있는 입고 일정도 함께 표시
+              //   → 직접 추가/수정한 건도 같은 기간이면 대조창에 뜨고, 완료되면 빠짐.
+              //   → OCR 시점이 아니라 '이미지의 입고일 범위' 기준이라 새 이미지로 OCR해도 임의로 사라지지 않음.
+              try {
+                const dates = parsedData
+                  .map((r) => (r.inDate && /^\d{4}-\d{2}-\d{2}$/.test(r.inDate) ? r.inDate : null))
+                  .filter(Boolean)
+                  .sort();
+                if (dates.length) {
+                  const minDate = dates[0];
+                  const maxDate = dates[dates.length - 1];
+                  const have = new Set();
+                  parsedData.forEach((r) => {
+                    const inv = (r.invoice || "").toString().trim();
+                    const blc = cleanBL(r.bl);
+                    if (inv) have.add("INV:" + inv.toUpperCase());
+                    if (blc && blc !== "발행전") have.add("BL:" + blc.toUpperCase());
+                  });
+                  const [extra] = await pool.query(
+                    "SELECT bl_number, pallets, DATE_FORMAT(eta,'%Y-%m-%d') AS eta, DATE_FORMAT(receive_date,'%Y-%m-%d') AS receive_date, fwd, s_type, invoice, remarks FROM inbound WHERE receive_date BETWEEN ? AND ? AND status <> '완료' ORDER BY receive_date ASC, id ASC LIMIT 300",
+                    [minDate, maxDate],
+                  );
+                  extra.forEach((d) => {
+                    const inv = (d.invoice || "").toString().trim();
+                    const blc = cleanBL(d.bl_number);
+                    const k1 = inv ? "INV:" + inv.toUpperCase() : "";
+                    const k2 = blc && blc !== "발행전" ? "BL:" + blc.toUpperCase() : "";
+                    if ((k1 && have.has(k1)) || (k2 && have.has(k2))) return; // 이미 표에 있음
+                    if (k1) have.add(k1);
+                    if (k2) have.add(k2);
+                    parsedData.push({
+                      bl: d.bl_number || "",
+                      pal: d.pallets != null ? String(d.pallets) : "0",
+                      eta: d.eta || "",
+                      inDate: d.receive_date || "미정",
+                      fwd: d.fwd || "",
+                      sType: d.s_type || "",
+                      invoice: d.invoice || "",
+                      etc: d.remarks || "",
+                      iy: null,
+                      ih: null,
+                      cx: null,
+                      _fromDb: true, // OCR 파싱 외 추가 표시분(좌표 없음) — 클라: 검증 제외 + 파란 음영
+                    });
+                  });
+                }
+              } catch (rangeErr) {
+                console.error("OCR 대조 날짜범위 병합 실패:", rangeErr);
+              }
             } catch (mergeErr) {
               console.error("OCR 대조 inbound 병합 실패:", mergeErr);
             }

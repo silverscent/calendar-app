@@ -1588,37 +1588,9 @@ function initOcrSplitDivider() {
   divider.addEventListener("pointercancel", end);
 }
 
-// 현재 달력(serverData)에 저장된 입고 일정 → 대조표 행 형식으로 변환 (직접 추가분 포함)
-function collectInboundSchedules() {
-  const rows = [];
-  const pad = (n) => String(n).padStart(2, "0");
-  const toRow = (it, inDate) => ({
-    bl: it.bl || "",
-    pal: it.pal != null && it.pal !== "" ? String(it.pal) : "0",
-    eta: "",
-    inDate: inDate,
-    fwd: it.fwd || "",
-    sType: it.sType || "",
-    invoice: it.invoice || "",
-    etc: it.etc || "",
-    iy: null,
-    ih: null,
-    cx: null,
-    _fromDb: true, // OCR 파싱이 아니라 달력 저장분(직접 추가 등) — 검증 제외 + 파란 음영
-  });
-  if (serverData && serverData.monthData) {
-    Object.keys(serverData.monthData).forEach((d) => {
-      const dateStr = `${serverData.year}-${pad(serverData.month)}-${pad(d)}`;
-      (serverData.monthData[d] || []).forEach((it) => rows.push(toRow(it, dateStr)));
-    });
-  }
-  if (serverData && Array.isArray(serverData.pendingItems)) {
-    serverData.pendingItems.forEach((it) => rows.push(toRow(it, "미정")));
-  }
-  return rows;
-}
-
 // 대조창 데이터 로드 → 편집용 배열 생성 → 표 렌더 (제스처는 모달 열 때 이미 바인딩됨)
+//  서버가 [OCR 파싱행 + 마지막 OCR 이후 추가/수정된 입고일정(_fromDb)]을 합쳐서 내려줌.
+//  → 직접 추가분도 보이되, 새 이미지로 OCR하면 _fromDb 범위가 리셋되어 자동으로 빠짐(무한 누적 방지)
 function loadOcrSplitData() {
   ocrHiliteIdx = null;
   const inner = document.getElementById("ocrTableInner");
@@ -1629,46 +1601,25 @@ function loadOcrSplitData() {
     if (!innerNow) return;
     currentRawOcrString = (data && data.rawData) || "가져온 Raw 데이터가 존재하지 않습니다.";
 
-    // 1) OCR 파싱 행(좌표 + 현재 inbound 값 병합본) → 표준 편집 객체로 정규화
-    let parsedRows = [];
-    if (data && Array.isArray(data.parsedData)) {
-      parsedRows = data.parsedData.map((r) => ({
-        bl: r.bl || "",
-        pal: r.pal != null ? String(r.pal) : "0",
-        eta: r.eta || "",
-        inDate: r.inDate || "미정",
-        fwd: r.fwd || "",
-        sType: r.sType || "",
-        invoice: r.invoice || "",
-        etc: r.etc || "",
-        iy: typeof r.iy === "number" ? r.iy : null, // 이미지 내 세로 위치(px)
-        ih: typeof r.ih === "number" ? r.ih : null,
-        cx: r.cx && typeof r.cx === "object" ? r.cx : null, // 열별 X(px) 맵
-      }));
-    }
-
-    // 2) 현재 달력에 저장된 입고 일정 중 OCR 파싱에 없는 것(직접 추가분 등)을 병합 → 대조표에서 바로 편집
-    const norm = (v) => String(v == null ? "" : v).replace(/\s+/g, "").toUpperCase();
-    const keyOf = (r) =>
-      norm(r.bl) && norm(r.bl) !== "발행전" ? "BL:" + norm(r.bl) : norm(r.invoice) ? "INV:" + norm(r.invoice) : "";
-    const seen = new Set();
-    parsedRows.forEach((r) => {
-      const k = keyOf(r);
-      if (k) seen.add(k);
-    });
-    const dbRows = collectInboundSchedules().filter((r) => {
-      const k = keyOf(r);
-      if (!k) return true; // 식별키 없으면 일단 표시
-      if (seen.has(k)) return false; // OCR 행에 이미 있으면 중복 제외
-      seen.add(k);
-      return true;
-    });
-
-    ocrEditRows = parsedRows.concat(dbRows);
+    const parsed = data && Array.isArray(data.parsedData) ? data.parsedData : [];
+    ocrEditRows = parsed.map((r) => ({
+      bl: r.bl || "",
+      pal: r.pal != null ? String(r.pal) : "0",
+      eta: r.eta || "",
+      inDate: r.inDate || "미정",
+      fwd: r.fwd || "",
+      sType: r.sType || "",
+      invoice: r.invoice || "",
+      etc: r.etc || "",
+      iy: typeof r.iy === "number" ? r.iy : null, // 이미지 내 세로 위치(px)
+      ih: typeof r.ih === "number" ? r.ih : null,
+      cx: r.cx && typeof r.cx === "object" ? r.cx : null, // 열별 X(px) 맵
+      _fromDb: !!r._fromDb, // 마지막 OCR 이후 달력에서 추가/수정된 행(좌표 없음) — 검증 제외 + 파란 음영
+    }));
     ocrOrigRows = JSON.parse(JSON.stringify(ocrEditRows)); // 변경 비교 기준
 
     if (ocrEditRows.length === 0) {
-      innerNow.innerHTML = `<div style="padding:20px; text-align:center; color:#888; font-size:12px;">표시할 입고 일정이 없습니다.</div>`;
+      innerNow.innerHTML = `<div style="padding:20px; text-align:center; color:#888; font-size:12px;">저장된 파싱 데이터가 없습니다.</div>`;
       return;
     }
     renderOcrTable();
