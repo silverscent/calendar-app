@@ -59,12 +59,6 @@ let isShowHoliday = localStorage.getItem("cal_show_holiday") !== "false";
 
 let activeRequests = 0;
 
-function updateSyncTime() {
-  const now = new Date();
-  const hh = String(now.getHours()).padStart(2, "0");
-  const mm = String(now.getMinutes()).padStart(2, "0");
-  document.getElementById("lastSyncTime").innerText = `${hh}:${mm}`;
-}
 
 function updateFooterUI() {
   const footer = document.getElementById("infoFooter");
@@ -2478,23 +2472,6 @@ function toggleTheme() {
     document.documentElement.style.background = "#212225";
   }
 }
-function changeSize(size) {
-  document.querySelectorAll(".size-btn").forEach((btn) => btn.classList.remove("active"));
-  const body = document.body;
-  if (size === "S") {
-    body.style.fontSize = "80%";
-    document.getElementById("btnS").classList.add("active");
-  }
-  if (size === "M") {
-    body.style.fontSize = "95%";
-    document.getElementById("btnM").classList.add("active");
-  }
-  if (size === "L") {
-    body.style.fontSize = "120%";
-    document.getElementById("btnL").classList.add("active");
-  }
-  localStorage.setItem("cal_fontSize", size);
-}
 
 // =====================================================
 // 🚀 [스텔스 자동 동기화 엔진] (귀신 데이터 & 가짜 토스트 완벽 차단)
@@ -4010,25 +3987,6 @@ function _pcTipHtml(tip) {
     }
   }
   return html;
-}
-function togglePcLeft() {
-  const c = document.body.classList.toggle("pc-left-collapsed");
-  try {
-    localStorage.setItem("pc_left", c ? "collapsed" : "open");
-  } catch (e) {}
-}
-function togglePcRight() {
-  const c = document.body.classList.toggle("pc-right-collapsed");
-  try {
-    localStorage.setItem("pc_right", c ? "collapsed" : "open");
-  } catch (e) {}
-}
-function closePcOverlays() {
-  document.body.classList.add("pc-left-collapsed", "pc-right-collapsed");
-  try {
-    localStorage.setItem("pc_left", "collapsed");
-    localStorage.setItem("pc_right", "collapsed");
-  } catch (e) {}
 }
 // 좌측 임계 창폭(입고, 우측 닫힘 기준). 우측은 패널폭(336) 만큼 더 넓어야 열림
 const PC_DOCK_MIN = 783;

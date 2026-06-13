@@ -154,3 +154,34 @@ function uiConfirm(message, opts) {
     });
   });
 }
+
+// ── 두 페이지 완전 동일 유틸 (in.js / out.js 중복 제거)
+
+function updateSyncTime() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  document.getElementById("lastSyncTime").innerText = `${hh}:${mm}`;
+}
+
+function changeSize(size) {
+  document.querySelectorAll(".size-btn").forEach((btn) => btn.classList.remove("active"));
+  const body = document.body;
+  if (size === "S") { body.style.fontSize = "80%"; document.getElementById("btnS").classList.add("active"); }
+  if (size === "M") { body.style.fontSize = "95%";  document.getElementById("btnM").classList.add("active"); }
+  if (size === "L") { body.style.fontSize = "120%"; document.getElementById("btnL").classList.add("active"); }
+  localStorage.setItem("cal_fontSize", size);
+}
+
+function togglePcLeft() {
+  const c = document.body.classList.toggle("pc-left-collapsed");
+  try { localStorage.setItem("pc_left", c ? "collapsed" : "open"); } catch (e) {}
+}
+function togglePcRight() {
+  const c = document.body.classList.toggle("pc-right-collapsed");
+  try { localStorage.setItem("pc_right", c ? "collapsed" : "open"); } catch (e) {}
+}
+function closePcOverlays() {
+  document.body.classList.add("pc-left-collapsed", "pc-right-collapsed");
+  try { localStorage.setItem("pc_left", "collapsed"); localStorage.setItem("pc_right", "collapsed"); } catch (e) {}
+}
