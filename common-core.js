@@ -99,6 +99,59 @@ async function apiGet(params) {
   }
 }
 
+// ── iOS PWA: 모달 내 입력 포커스 시 키보드가 입력창 가리는 현상 방지
+//    visualViewport.resize 이후에만 반응 (포커스 틱에서 레이아웃 변경하면 iOS가 키보드 차단)
+//    ocrImageModal은 자체 _ocrFitModalAboveKeyboard 처리하므로 제외
+(function _initModalKeyboardAvoid() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  let _box = null, _el = null, _onVV = null;
+
+  function _apply() {
+    if (!_box || !_el) return;
+    const kbH = window.innerHeight - vv.height;
+    if (kbH > 80) {
+      _box.style.maxHeight = (vv.height * 0.92) + "px";
+      requestAnimationFrame(function() {
+        if (_el) _el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      });
+    } else {
+      _box.style.maxHeight = "";
+    }
+  }
+
+  document.addEventListener("focusin", function(e) {
+    const el = e.target;
+    if (!el || (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA")) return;
+    const box = el.closest && el.closest(".modal-box");
+    if (!box) return;
+    const modal = box.closest && box.closest(".overlay-modal");
+    if (!modal || modal.id === "ocrImageModal") return;
+
+    _box = box;
+    _el = el;
+    if (_onVV) vv.removeEventListener("resize", _onVV);
+    _onVV = function() { setTimeout(_apply, 80); };
+    vv.addEventListener("resize", _onVV);
+    // 키보드가 이미 올라와 있는 상태에서 필드 이동 시 즉시 적용
+    if (window.innerHeight - vv.height > 80) setTimeout(_apply, 80);
+  }, true);
+
+  document.addEventListener("focusout", function(e) {
+    if (!_box) return;
+    setTimeout(function() {
+      const next = document.activeElement;
+      if (next && next.closest && next.closest(".modal-box") === _box) {
+        _el = next; return; // 같은 모달 내 다른 필드로 이동 — 유지
+      }
+      if (_onVV) vv.removeEventListener("resize", _onVV);
+      _onVV = null;
+      if (_box) _box.style.maxHeight = "";
+      _box = null; _el = null;
+    }, 150);
+  }, true);
+})();
+
 // ── 커스텀 확인창 (Promise<boolean>). iOS WebKit에서 native confirm()이 멈추는(프리징) 버그 회피용.
 //    사용: if (!(await uiConfirm("메시지"))) return;
 function uiConfirm(message, opts) {
