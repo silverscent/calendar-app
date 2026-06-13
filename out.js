@@ -2565,21 +2565,22 @@ function openAddFormWithDate(day) {
   openAddForm();
   let dateStr = `${serverData.year}-${String(serverData.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
-  const startDateInput = document.getElementById("add-date");
-  const endDateInput = document.getElementById("add-end-date");
+  document.getElementById("add-date").value = dateStr;
 
-  startDateInput.value = dateStr;
+  // 🍎 iOS 네이티브 date 피커는 '나중에 JS로 바꾼 min'을 회색처리에 반영 안 함(생성 시점 min만 읽음).
+  //    → min을 박은 '새 노드로 교체'해서 iOS가 시작일 이전을 회색 비활성화하도록 강제.
+  let endOld = document.getElementById("add-end-date");
+  let endNew = endOld.cloneNode(true);
+  endNew.value = "";
+  endNew.setAttribute("min", dateStr);
+  endNew.min = dateStr;
+  endOld.parentNode.replaceChild(endNew, endOld);
 
-  endDateInput.setAttribute("min", dateStr);
-  endDateInput.min = dateStr;
-  endDateInput.value = "";
-
-  endDateInput.onfocus = function () {
+  endNew.onfocus = function () {
     if (!this.value && this.min) this.value = this.min;
   };
-
-  // 🚨 [아이폰 철통 방어벽 추가] 실수로 이전 날짜를 골랐을 때 강제 복구!
-  endDateInput.onchange = function () {
+  // 🚨 [아이폰 철통 방어벽] 그래도 이전 날짜를 골랐을 때 강제 복구!
+  endNew.onchange = function () {
     if (this.value && this.min && this.value < this.min) {
       showToast("⚠️ 종료일은 시작일보다 빠를 수 없습니다.", 2000);
       this.value = this.min;
