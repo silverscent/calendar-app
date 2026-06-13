@@ -1942,16 +1942,23 @@ function _ocrLiftCellAboveKeyboard(td) {
     const delta = tdRect.top - paneRect.top - 6;
     if (Math.abs(delta) > 1) pane.scrollTop += delta; // 편집 셀을 패널 맨 위로
   };
-  const timers = [50, 160, 300, 450, 650, 900].map((ms) => setTimeout(lift, ms));
+  // 첫 키보드 등장은 애니메이션+iOS 자동스크롤이 늦게 끝나므로 2초까지 여러 번 보정
+  const timers = [50, 160, 300, 450, 650, 900, 1200, 1500, 2000].map((ms) => setTimeout(lift, ms));
   const vv = window.visualViewport;
-  const onVV = () => lift(); // 키보드가 실제로 올라오는 순간 다시 보정
-  if (vv) vv.addEventListener("resize", onVV);
+  const onVV = () => lift(); // 키보드 등장(resize) + iOS가 화면 내릴 때(scroll) 다시 보정
+  if (vv) {
+    vv.addEventListener("resize", onVV);
+    vv.addEventListener("scroll", onVV);
+  }
   // 입력칸이 사라지면(편집 종료) 타이머/리스너 정리
   const watch = setInterval(() => {
     if (!td.querySelector("input")) {
       clearInterval(watch);
       timers.forEach(clearTimeout);
-      if (vv) vv.removeEventListener("resize", onVV);
+      if (vv) {
+        vv.removeEventListener("resize", onVV);
+        vv.removeEventListener("scroll", onVV);
+      }
     }
   }, 400);
 }
