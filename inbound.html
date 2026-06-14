@@ -2952,7 +2952,7 @@
           gap: 6px;
         }
         body.pc-dense .pclb-toggle-row .bl-toggle-label {
-          font-size: 1.35em !important;
+          font-size: 0.82em !important;
           font-weight: 900;
         }
         body.pc-dense .pclb-toggle-row .bl-toggle-track {
@@ -2968,11 +2968,12 @@
         body.pc-dense .pclb-toggle-row .bl-toggle.on .bl-toggle-knob {
           transform: translateX(17px);
         }
-        /* 공휴일 + 테마 나란히 */
+        /* 공휴일 + 테마 나란히 — 필 버튼 스타일 */
         body.pc-dense .pclb-row2 {
           display: flex;
-          gap: 4px;
-          margin: 2px 0;
+          gap: 6px;
+          margin: 4px 0;
+          padding: 0 6px;
         }
         body.pc-dense .pclb-row2 .pclb-item {
           flex: 1;
@@ -2980,6 +2981,21 @@
           white-space: nowrap;
           overflow: hidden;
           font-size: 0.82em;
+          font-weight: 700;
+          padding: 7px 6px;
+          border-radius: 20px;
+          border: 1px solid var(--border-color);
+          background: var(--btn-bg);
+          transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        body.pc-dense .pclb-row2 .pclb-item:hover {
+          background: rgba(10,132,255,0.1);
+          border-color: rgba(10,132,255,0.35);
+        }
+        body.pc-dense .pclb-row2 .pclb-item.pclb-on {
+          background: rgba(10,132,255,0.15) !important;
+          border-color: rgba(10,132,255,0.45) !important;
+          color: #0a84ff !important;
         }
         /* 🔍 사이드바 일정 검색 */
         body.pc-dense .pclb-search {
