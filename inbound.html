@@ -3220,10 +3220,14 @@
         body.pc-dense #pcLeftTab {
           left: 0;
           border-radius: 0 12px 12px 0;
+          opacity: 0.45;
+          transition: opacity 0.2s, padding 0.15s;
         }
         body.pc-dense #pcRightTab {
           right: 0;
           border-radius: 12px 0 0 12px;
+          opacity: 0.45;
+          transition: opacity 0.2s, padding 0.15s;
         }
         body.pc-dense.pc-left-collapsed #pcLeftTab {
           display: flex;
@@ -3233,9 +3237,11 @@
         }
         body.pc-dense #pcLeftTab:hover {
           padding-left: 14px;
+          opacity: 1;
         }
         body.pc-dense #pcRightTab:hover {
           padding-right: 14px;
+          opacity: 1;
         }
         /* 패널/사이드바 접기 버튼 */
         body.pc-dense .pc-collapse-btn {
@@ -3287,6 +3293,11 @@
           border-radius: 10px;
           padding: 3px;
           box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+          opacity: 0.45;
+          transition: opacity 0.2s;
+        }
+        body.pc-dense.pc-left-collapsed #pcMiniNav:hover {
+          opacity: 1;
         }
         body.pc-dense #pcMiniNav button {
           border: none;
