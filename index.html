@@ -369,6 +369,31 @@
         transform: rotate(180deg) scale(0.9);
       }
 
+      /* PC 상단 메뉴 버튼 (모바일 숨김, PC 모드에서 JS+CSS로 표시) */
+      .pc-top-btn {
+        display: none;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 13px;
+        border-radius: 9px;
+        border: 1px solid var(--border-color);
+        background: var(--btn-bg);
+        color: var(--text-main);
+        font-size: 0.82em;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .pc-top-btn:hover {
+        background: rgba(10,132,255,0.1);
+        border-color: rgba(10,132,255,0.4);
+      }
+      .pc-top-btn.pc-top-ai {
+        color: #0a84ff;
+        border-color: rgba(10,132,255,0.3);
+      }
+
       .admin-actions {
         display: none;
         gap: 8px;
@@ -3016,6 +3041,11 @@
         #pcDenseToggle {
           display: inline-flex !important;
         }
+        /* PC 모드 상단 버튼: JS가 inline display:none 제거하면 표시 */
+        body.pc-dense #pcTopAdd,
+        body.pc-dense #pcTopAi {
+          display: inline-flex;
+        }
         /* 빈 날도 너무 납작해지지 않게 */
         body.pc-dense .day-cell {
           min-height: 96px;
@@ -4146,6 +4176,8 @@
         </div>
 
         <div class="action-row-right">
+          <button class="pc-top-btn" id="pcTopAdd" style="display:none" onclick="openAddForm()">✏️ 신규 등록</button>
+          <button class="pc-top-btn pc-top-ai" id="pcTopAi" style="display:none" onclick="openAiQuery()">🤖 AI 질의</button>
           <button class="info-btn" id="compInfoBtn" onclick="openCompListModal()">ℹ️</button>
           <div class="sync-area" id="syncArea" style="display: flex">
             <span class="sync-time" id="lastSyncTime"></span>

@@ -637,6 +637,11 @@ function showAiFabIfAdmin() {
     const aiSub = document.getElementById("fab-sub-ai-wrap");
     if (aiSub) aiSub.style.display = "flex";
   }
+  // PC 상단 메뉴 버튼: admin일 때 inline style 제거 → CSS body.pc-dense 규칙이 표시 제어
+  const pcTopAdd = document.getElementById("pcTopAdd");
+  const pcTopAi = document.getElementById("pcTopAi");
+  if (pcTopAdd) pcTopAdd.style.display = isAdminFlag ? "" : "none";
+  if (pcTopAi) pcTopAi.style.display = isAdminFlag ? "" : "none";
 
   const inboundFab = document.getElementById("inboundAiFab");
   if (inboundFab) {

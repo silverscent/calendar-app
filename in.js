@@ -25,6 +25,12 @@ function toggleBlDisplayMode() {
 function syncBlToggleUI() {
   const isInv = blDisplayMode === "invoice";
   document.querySelectorAll(".bl-toggle").forEach((el) => el.classList.toggle("on", isInv));
+  const seg = document.getElementById("blSegWrap");
+  if (seg) {
+    const btns = seg.querySelectorAll(".bl-seg-btn");
+    if (btns[0]) btns[0].classList.toggle("active", !isInv);
+    if (btns[1]) btns[1].classList.toggle("active", isInv);
+  }
 }
 // 칩 하단에 보여줄 끝4자리(현재 모드 기준) 계산
 function chipSubText(item) {
