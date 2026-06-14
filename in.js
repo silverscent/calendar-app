@@ -363,11 +363,43 @@ function renderPcSidePanel() {
   if (pend.length === 0) {
     html += `<div style="color:var(--text-sub); font-size:0.85em; padding:6px 2px;">대기 중인 건이 없습니다.</div>`;
   } else {
-    pend.forEach((it) => {
+    pend.forEach((it, idx) => {
       const isAir = it.sType === "AIR";
       const dot = isAir ? "#ff7eff" : "#26e2fd";
-      const blShort = it.bl && it.bl.startsWith("발행전") ? "발행전" : _esc(it.bl || "");
-      html += `<div class="pcp-pend-item"><span class="pcp-dot" style="background:${dot}"></span><b style="min-width:26px;">${_esc(String(it.pal || 0))}</b><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${blShort}</span></div>`;
+      const typeLabel = isAir ? "✈️ AIR" : "🚢 SEA";
+      const isItemDone = it.isDone === true || String(it.isDone) === "true";
+      const pal = parseInt(it.pal || 0);
+      const rawEtc = String(it.etc || "");
+      const meaningfulEtc = rawEtc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, "").trim();
+      const blLabel = it.bl && it.bl.startsWith("발행전") ? "발행전" : (it.bl || "");
+
+      // 툴팁
+      let tip = blLabel || "(B/L 없음)";
+      tip += `\n수량: ${pal} PAL`;
+      tip += `\n타입: ${it.sType || "-"}`;
+      if (it.fwd) tip += `\nFWD: ${it.fwd}`;
+      if (it.invoice) tip += `\nINV: ${it.invoice}`;
+      if (meaningfulEtc) tip += `\n비고: ${meaningfulEtc}`;
+      tip += `\n상태: ${isItemDone ? "✅ 입고완료" : "⏳ 입고대기(미정)"}`;
+
+      const qtyBadge = `<span style="font-size:0.8em; font-weight:800; color:var(--text-sub); background:var(--btn-bg,rgba(128,128,128,0.12)); border-radius:5px; padding:1px 6px; flex-shrink:0; pointer-events:none;">${pal}P</span>`;
+      const typeBadge = `<span style="font-size:0.72em; background:${isAir ? "rgba(255,126,255,0.12)" : "rgba(38,226,253,0.12)"}; color:${dot}; border:1px solid ${isAir ? "rgba(255,126,255,0.25)" : "rgba(38,226,253,0.25)"}; border-radius:4px; padding:1px 5px; font-weight:700; flex-shrink:0; pointer-events:none;">${typeLabel}</span>`;
+      const statusDot = isItemDone ? `<span style="font-size:0.8em; color:#34c759; flex-shrink:0; pointer-events:none;">✅</span>` : "";
+
+      html += `<div class="pcp-pend-item" style="cursor:grab;" data-tip="${_esc(tip)}"
+        onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()"
+        ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()"
+        oncontextmenu="event.preventDefault();"
+        onclick="handleItemClick(event, 'pending', ${idx}, '${_argq(it.bl)}', ${isItemDone})">
+        <div style="display:flex; align-items:center; gap:6px; width:100%; pointer-events:none;">
+          <span style="color:var(--text-sub); font-size:0.85em; flex-shrink:0; opacity:0.45; letter-spacing:-1px; pointer-events:none;">⠿</span>
+          <div style="width:9px; height:9px; border-radius:50%; background:${dot}; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.15); pointer-events:none;"></div>
+          <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; pointer-events:none;">${_esc(blLabel)}</span>
+          ${typeBadge}${statusDot}${qtyBadge}
+        </div>
+        ${meaningfulEtc ? `<div style="font-size:0.78em; color:var(--text-sub); margin-top:3px; padding-left:21px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;">${_esc(meaningfulEtc)}</div>` : ""}
+        ${it.fwd ? `<div style="font-size:0.78em; color:var(--text-sub); margin-top:1px; padding-left:21px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;">${_esc(it.fwd)}</div>` : ""}
+      </div>`;
     });
   }
   html += `</div>`;
@@ -3942,7 +3974,7 @@ function ensurePcTip() {
   document.body.appendChild(t);
   document.addEventListener("mouseover", (e) => {
     if (!document.body.classList.contains("pc-dense")) return;
-    const tag = e.target.closest && e.target.closest(".item-tag[data-tip]");
+    const tag = e.target.closest && e.target.closest(".item-tag[data-tip], .pcp-pend-item[data-tip]");
     if (!tag) return;
     t.innerHTML = _pcTipHtml(tag.getAttribute("data-tip") || "");
     t.style.display = "block";
@@ -3968,7 +4000,7 @@ function ensurePcTip() {
     t.style.top = y + "px";
   });
   document.addEventListener("mouseout", (e) => {
-    if (e.target.closest && e.target.closest(".item-tag[data-tip]")) t.style.display = "none";
+    if (e.target.closest && e.target.closest(".item-tag[data-tip], .pcp-pend-item[data-tip]")) t.style.display = "none";
   });
 }
 // data-tip(여러 줄) → 제목 + 라벨/값 정렬 HTML
