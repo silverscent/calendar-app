@@ -1579,6 +1579,8 @@ function renderPcLeftbar() {
     <button class="pclb-item ${holidayOn ? "pclb-on" : ""}" onclick="toggleHoliday(); renderPcLeftbar()">🏖️ 공휴일 ${holidayOn ? "ON" : "OFF"}</button>
 
     <div class="pclb-sec">기능</div>
+    ${admin ? `<button class="pclb-item pclb-add-btn" onclick="openAddForm()">✏️ 신규 등록</button>` : ""}
+    ${admin ? `<button class="pclb-item pclb-ai-btn" onclick="openAiQuery()">🤖 AI 질의</button>` : ""}
     <button class="pclb-item" onclick="openDashboard()">📊 통계 대시보드</button>
     <button class="pclb-item" onclick="openCompListModal()">🏢 거래처 정보</button>
     <button class="pclb-item" onclick="toggleMultiMode()">☑️ 다중 선택</button>

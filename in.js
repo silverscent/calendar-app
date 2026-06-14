@@ -25,12 +25,6 @@ function toggleBlDisplayMode() {
 function syncBlToggleUI() {
   const isInv = blDisplayMode === "invoice";
   document.querySelectorAll(".bl-toggle").forEach((el) => el.classList.toggle("on", isInv));
-  const seg = document.getElementById("blSegWrap");
-  if (seg) {
-    const btns = seg.querySelectorAll(".bl-seg-btn");
-    if (btns[0]) btns[0].classList.toggle("active", !isInv);
-    if (btns[1]) btns[1].classList.toggle("active", isInv);
-  }
 }
 // 칩 하단에 보여줄 끝4자리(현재 모드 기준) 계산
 function chipSubText(item) {
@@ -4106,12 +4100,11 @@ function renderPcLeftbar() {
     </div>
     <button class="pclb-item ${holidayOn ? "pclb-on" : ""}" onclick="toggleHoliday(); renderPcLeftbar()">🏖️ 공휴일 ${holidayOn ? "ON" : "OFF"}</button>
     <div class="pclb-toggle-row">
-      <span class="pclb-toggle-cap">🏷️ 칩 표시</span>
       <button
         type="button"
         class="bl-toggle ${blDisplayMode === "invoice" ? "on" : ""}"
         onclick="toggleBlDisplayMode()"
-        title="칩 하단 표시 전환: B/L ↔ 인보이스"
+        title="B/L ↔ 인보이스 전환"
         aria-label="B/L 인보이스 표시 전환"
       >
         <span class="bl-toggle-label off">B/L</span>
@@ -4121,6 +4114,8 @@ function renderPcLeftbar() {
     </div>
 
     <div class="pclb-sec">기능</div>
+    ${admin ? `<button class="pclb-item pclb-add-btn" onclick="openAddForm()">✏️ 신규 등록</button>` : ""}
+    ${admin ? `<button class="pclb-item pclb-ai-btn" onclick="openAiQuery()">🤖 AI 질의</button>` : ""}
     <button class="pclb-item" onclick="openDashboard()">📊 통계 대시보드</button>
     <button class="pclb-item" onclick="showLastOcrImage()">🖼️ OCR</button>
     <button class="pclb-item" onclick="toggleMultiMode()">☑️ 다중 선택</button>

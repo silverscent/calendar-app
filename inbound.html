@@ -326,61 +326,6 @@
         transform: rotate(180deg) scale(0.9);
       }
 
-      /* PC 상단 메뉴 버튼 */
-      .pc-top-btn {
-        display: none;
-        align-items: center;
-        gap: 5px;
-        padding: 6px 13px;
-        border-radius: 9px;
-        border: 1px solid var(--border-color);
-        background: var(--btn-bg);
-        color: var(--text-main);
-        font-size: 0.82em;
-        font-weight: 700;
-        cursor: pointer;
-        white-space: nowrap;
-        transition: background 0.15s, border-color 0.15s;
-      }
-      .pc-top-btn:hover {
-        background: rgba(10,132,255,0.1);
-        border-color: rgba(10,132,255,0.4);
-      }
-      .pc-top-btn.pc-top-ai {
-        color: #0a84ff;
-        border-color: rgba(10,132,255,0.3);
-      }
-
-      /* B/L ↔ INV 세그먼트 버튼 */
-      .bl-seg {
-        display: inline-flex;
-        border-radius: 10px;
-        overflow: hidden;
-        border: 1.5px solid rgba(10,132,255,0.35);
-        margin-left: 10px;
-        flex-shrink: 0;
-      }
-      .bl-seg-btn {
-        padding: 5px 15px;
-        font-size: 0.88em;
-        font-weight: 900;
-        letter-spacing: 0.5px;
-        background: transparent;
-        color: var(--text-sub);
-        border: none;
-        cursor: pointer;
-        transition: background 0.15s, color 0.15s;
-        -webkit-tap-highlight-color: transparent;
-      }
-      .bl-seg-btn.active {
-        background: #0a84ff;
-        color: #fff;
-      }
-      .bl-seg-btn:not(.active):hover {
-        background: rgba(10,132,255,0.12);
-        color: var(--text-main);
-      }
-
       .admin-actions {
         display: none;
         gap: 8px;
@@ -2574,11 +2519,6 @@
         #pcDenseToggle {
           display: inline-flex !important;
         }
-        /* PC 모드 상단 버튼: JS가 inline display:none 제거하면 표시 */
-        body.pc-dense #pcTopAdd,
-        body.pc-dense #pcTopAi {
-          display: inline-flex;
-        }
         /* 칩을 세로블록 → 내용 크기만큼만 한 줄 가로형으로 (오른쪽 빈여백 제거) */
         body.pc-dense .item-tag {
           flex-direction: row;
@@ -2982,6 +2922,14 @@
           background: rgba(10, 132, 255, 0.13);
           color: #0a84ff;
         }
+        body.pc-dense .pclb-add-btn {
+          color: #0a84ff;
+          font-weight: 700;
+        }
+        body.pc-dense .pclb-ai-btn {
+          color: #bf5af2;
+          font-weight: 700;
+        }
         /* 글자크기 세그먼트 */
         body.pc-dense .pclb-seg {
           display: flex;
@@ -2991,19 +2939,33 @@
           padding: 3px;
           margin: 2px 0;
         }
-        /* 칩 표시 토글 행 (좌측바: 캡션 + 모바일형 스위치) */
+        /* 칩 표시 토글 행 — PC 모드: 레이블 숨기고 스위치만 키워서 표시 */
         body.pc-dense .pclb-toggle-row {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          padding: 7px 11px;
-          font-size: 0.9em;
-          font-weight: 600;
-          color: var(--text-main);
+          justify-content: center;
+          padding: 8px 11px;
         }
         body.pc-dense .pclb-toggle-row .bl-toggle {
           margin: 0;
-          padding: 0;
+          padding: 3px;
+          gap: 0;
+        }
+        body.pc-dense .pclb-toggle-row .bl-toggle-label {
+          display: none;
+        }
+        body.pc-dense .pclb-toggle-row .bl-toggle-track {
+          width: 54px;
+          height: 30px;
+        }
+        body.pc-dense .pclb-toggle-row .bl-toggle-knob {
+          width: 24px;
+          height: 24px;
+          top: 3px;
+          left: 3px;
+        }
+        body.pc-dense .pclb-toggle-row .bl-toggle.on .bl-toggle-knob {
+          transform: translateX(24px);
         }
         /* 🔍 사이드바 일정 검색 */
         body.pc-dense .pclb-search {
@@ -3774,8 +3736,6 @@
         </div>
 
         <div class="action-row-right">
-          <button class="pc-top-btn" id="pcTopAdd" style="display:none" onclick="openAddForm()">✏️ 신규 등록</button>
-          <button class="pc-top-btn pc-top-ai" id="pcTopAi" style="display:none" onclick="openAiQuery()">🤖 AI 질의</button>
           <button class="ocr-btn" onclick="showLastOcrImage()">OCR 🖼️</button>
           <div class="sync-area" id="syncArea" style="display: flex">
             <span class="sync-time" id="lastSyncTime"></span>
@@ -3803,10 +3763,17 @@
         >
         <span id="ocrTimeText" style="color: var(--text-main)">불러오는 중...</span>
       </div>
-      <div class="bl-seg" id="blSegWrap">
-        <button class="bl-seg-btn" onclick="if(blDisplayMode!=='bl')toggleBlDisplayMode()" aria-label="B/L 표시">B/L</button>
-        <button class="bl-seg-btn" onclick="if(blDisplayMode!=='invoice')toggleBlDisplayMode()" aria-label="인보이스 표시">INV</button>
-      </div>
+      <button
+        type="button"
+        class="bl-toggle"
+        onclick="toggleBlDisplayMode()"
+        title="칩 하단 표시 전환: B/L ↔ 인보이스"
+        aria-label="B/L 인보이스 표시 전환"
+      >
+        <span class="bl-toggle-label off">B/L</span>
+        <span class="bl-toggle-track"><span class="bl-toggle-knob"></span></span>
+        <span class="bl-toggle-label on">INV</span>
+      </button>
       <div class="legend-bar">
         <div class="legend-item">
           <div class="legend-color" style="background: #26e2fd; border: 1px solid rgba(0, 0, 0, 0.1)"></div>
