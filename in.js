@@ -3989,7 +3989,7 @@ function _pcTipHtml(tip) {
   return html;
 }
 // 좌측 임계 창폭(입고, 우측 닫힘 기준). 우측은 패널폭(336) 만큼 더 넓어야 열림
-const PC_DOCK_MIN = 783;
+const PC_DOCK_MIN = 802;
 const PC_RIGHT_EXTRA = 336;
 // 사용자가 수동으로 접어둔(collapsed) 패널은 창을 키워도 자동으로 열지 않음.
 // 열어둔(open)·기본(null) 상태일 때만 창 폭에 따라 자동 여닫음.
