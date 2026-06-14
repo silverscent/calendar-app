@@ -4098,7 +4098,10 @@ function renderPcLeftbar() {
       <button class="pclb-seg-btn ${on("btnM")}" onclick="changeSize('M'); renderPcLeftbar()">A</button>
       <button class="pclb-seg-btn ${on("btnL")}" onclick="changeSize('L'); renderPcLeftbar()">A+</button>
     </div>
-    <button class="pclb-item ${holidayOn ? "pclb-on" : ""}" onclick="toggleHoliday(); renderPcLeftbar()">🏖️ 공휴일 ${holidayOn ? "ON" : "OFF"}</button>
+    <div class="pclb-row2">
+      <button class="pclb-item ${holidayOn ? "pclb-on" : ""}" onclick="toggleHoliday(); renderPcLeftbar()">🏖️ ${holidayOn ? "ON" : "OFF"}</button>
+      <button class="pclb-item" onclick="toggleTheme(); renderPcLeftbar()">${dark ? "🌙 Dark" : "☀️ Light"}</button>
+    </div>
     <div class="pclb-toggle-row">
       <button
         type="button"
@@ -4123,7 +4126,6 @@ function renderPcLeftbar() {
 
     <div class="pclb-sec">계정 / 설정</div>
     <button class="pclb-item ${admin ? "pclb-on" : ""}" onclick="toggleAdmin(); setTimeout(renderPcLeftbar, 60)">${admin ? "🔓 관리자 모드" : "🔒 관리자 로그인"}</button>
-    <button class="pclb-item" onclick="toggleTheme(); renderPcLeftbar()">${dark ? "🌙 다크 테마" : "☀️ 라이트 테마"}</button>
 
     <div class="pclb-info">
       <div>🖼️ OCR <b>${_esc((document.getElementById("ocrTimeText")?.innerText || "-").trim())}</b></div>

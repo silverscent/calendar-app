@@ -2939,7 +2939,7 @@
           padding: 3px;
           margin: 2px 0;
         }
-        /* 칩 표시 토글 행 — PC 모드: 레이블 숨기고 스위치만 키워서 표시 */
+        /* 칩 표시 토글 행 — PC 모드: 스위치 확대 */
         body.pc-dense .pclb-toggle-row {
           display: flex;
           align-items: center;
@@ -2949,10 +2949,11 @@
         body.pc-dense .pclb-toggle-row .bl-toggle {
           margin: 0;
           padding: 3px;
-          gap: 0;
+          gap: 6px;
         }
         body.pc-dense .pclb-toggle-row .bl-toggle-label {
-          display: none;
+          font-size: 0.95em;
+          font-weight: 900;
         }
         body.pc-dense .pclb-toggle-row .bl-toggle-track {
           width: 54px;
@@ -2966,6 +2967,16 @@
         }
         body.pc-dense .pclb-toggle-row .bl-toggle.on .bl-toggle-knob {
           transform: translateX(24px);
+        }
+        /* 공휴일 + 테마 나란히 */
+        body.pc-dense .pclb-row2 {
+          display: flex;
+          gap: 4px;
+          margin: 2px 0;
+        }
+        body.pc-dense .pclb-row2 .pclb-item {
+          flex: 1;
+          text-align: center;
         }
         /* 🔍 사이드바 일정 검색 */
         body.pc-dense .pclb-search {
