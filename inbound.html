@@ -3289,15 +3289,54 @@
         body.pc-dense #modal .modal-box {
           max-width: 560px;
         }
-        /* 통계·OCR·거래처 모달: PC에선 좁은 500px 대신 넉넉한 폭 */
+        /* ─── PC 모드 대시보드 전면 개선 ─── */
         body.pc-dense #dashboardModal .modal-box {
-          max-width: 960px !important;
+          max-width: min(92vw, 1180px) !important;
+          width: min(92vw, 1180px);
         }
-        /* 도넛(점유율) 차트는 넓은 폭에서 늘어지지 않게 폭 제한·중앙 */
-        body.pc-dense #dashboardModal .chart-container:has(#shareChart) {
-          max-width: 480px;
-          margin-left: auto;
-          margin-right: auto;
+        body.pc-dense #dashboardModal .dash-card {
+          text-align: left !important;
+          padding: 14px 18px 14px 16px !important;
+          border-left: 4px solid #0a84ff;
+          background: linear-gradient(135deg, var(--card-bg) 80%, rgba(10,132,255,0.04) 100%);
+        }
+        body.pc-dense #dashboardModal .dash-card-title {
+          font-size: 0.76em;
+          text-transform: uppercase;
+          letter-spacing: 0.6px;
+          font-weight: 700;
+          opacity: 0.7;
+        }
+        body.pc-dense #dashboardModal .dash-card-value {
+          font-size: 2.2em;
+          letter-spacing: -1px;
+          line-height: 1.1;
+          margin: 5px 0 3px;
+        }
+        body.pc-dense #dashboardModal .dash-charts-wrap {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 14px;
+          align-items: flex-start;
+        }
+        body.pc-dense #dashboardModal .dash-charts-wrap > :has(#mainChart) {
+          flex: 6 1 0;
+          height: 300px !important;
+          min-height: 300px !important;
+          margin-bottom: 0 !important;
+          order: 1;
+        }
+        body.pc-dense #dashboardModal .dash-charts-wrap > :has(#shareChart) {
+          flex: 4 1 0;
+          height: 300px !important;
+          min-height: 300px !important;
+          margin-bottom: 0 !important;
+          order: 2;
+        }
+        body.pc-dense #dashboardModal .dash-charts-wrap > #barDetailBox {
+          order: 3;
+          flex: 0 0 100%;
+          margin-bottom: 0;
         }
         body.pc-dense #ocrImageModal .modal-box {
           max-width: 1120px !important;
@@ -5438,6 +5477,7 @@
           </div>
         </div>
 
+        <div class="dash-charts-wrap">
         <div class="chart-container" style="height: 220px; display: block; margin-bottom: 8px">
           <canvas id="mainChart"></canvas>
         </div>
@@ -5464,6 +5504,7 @@
             <canvas id="shareChart"></canvas>
           </div>
         </div>
+        </div><!-- /dash-charts-wrap -->
       </div>
     </div>
 
