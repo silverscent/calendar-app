@@ -2468,27 +2468,23 @@
       #pcTip::after {
         content: "";
         position: absolute;
-        width: 11px;
-        height: 11px;
-        background: rgba(255, 255, 255, 0.60);
-        border-left: 1px solid rgba(255, 255, 255, 0.6);
-        border-top: 1px solid rgba(255, 255, 255, 0.6);
-        transform: rotate(45deg);
-        top: -6px;
-        left: 15px;
-        z-index: -1;
+        width: 0;
+        height: 0;
+        background: none;
+        border: 7px solid transparent;
+        border-bottom: 8px solid rgba(255, 255, 255, 0.75);
+        top: -15px;
+        left: 13px;
       }
       #pcTip.tip-fx::after {
         left: auto;
-        right: 15px;
+        right: 13px;
       }
       #pcTip.tip-fy::after {
         top: auto;
-        bottom: -6px;
-        border-left: none;
-        border-top: none;
-        border-right: 1px solid rgba(255, 255, 255, 0.6);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+        bottom: -15px;
+        border-bottom: 7px solid transparent;
+        border-top: 8px solid rgba(255, 255, 255, 0.75);
       }
       #pcTip .pctip-title {
         font-weight: 800;
