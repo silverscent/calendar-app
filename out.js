@@ -1313,7 +1313,7 @@ function ensurePcTip() {
   document.body.appendChild(t);
   document.addEventListener("mouseover", (e) => {
     if (!document.body.classList.contains("pc-dense")) return;
-    const tag = e.target.closest && e.target.closest(".item-tag[data-tip]");
+    const tag = e.target.closest && e.target.closest(".item-tag[data-tip], .pcp-pend-item[data-tip]");
     if (!tag) return;
     t.innerHTML = _pcTipHtml(tag.getAttribute("data-tip") || "");
     t.style.display = "block";
@@ -1339,7 +1339,7 @@ function ensurePcTip() {
     t.style.top = y + "px";
   });
   document.addEventListener("mouseout", (e) => {
-    if (e.target.closest && e.target.closest(".item-tag[data-tip]")) t.style.display = "none";
+    if (e.target.closest && e.target.closest(".item-tag[data-tip], .pcp-pend-item[data-tip]")) t.style.display = "none";
   });
 }
 // data-tip(여러 줄) → 제목 + 라벨/값 정렬 HTML
@@ -1483,14 +1483,46 @@ function renderPcSidePanel() {
   if (pend.length === 0) {
     html += `<div style="color:var(--text-sub); font-size:0.85em; padding:6px 2px;">대기 중인 건이 없습니다.</div>`;
   } else {
-    pend.forEach((it) => {
-      const comp = _esc(
-        String(it.company || "")
-          .replace(/\[TASK\]/gi, "")
-          .trim(),
-      );
-      const qty = parseInt(it.pal || 0) ? `${it.pal}P` : parseInt(it.box || 0) ? `${it.box}B` : "";
-      html += `<div class="pcp-pend-item"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${comp}</span><b>${qty}</b></div>`;
+    pend.forEach((it, idx) => {
+      const cleanComp = String(it.company || "").replace(/\[TASK\]/gi, "").trim();
+      const isTask = /\[TASK\]/i.test(it.company || "");
+      const isItemDone = it.isDone === true || String(it.isDone) === "true";
+      const pal = parseInt(it.pal || 0), box = parseInt(it.box || 0);
+      const colorObj = getCompanyColor(cleanComp);
+      const rawEtc = String(it.etc || "");
+      const meaningfulEtc = rawEtc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고일자동수정|출고완료|작업완료|TASK)\]/gi, "").trim();
+
+      // 툴팁 내용
+      let tip = getFullName(cleanComp);
+      if (pal) tip += `\n팔레트: ${pal} P`;
+      if (box) tip += `\n박스: ${box} B`;
+      if (!pal && !box) tip += `\n수량: -`;
+      if (meaningfulEtc) tip += `\n비고: ${meaningfulEtc}`;
+      tip += `\n상태: ${isItemDone ? "✅ 출고완료" : isTask ? "⏳ 작업대기" : "⏳ 출고대기(미정)"}`;
+
+      const qtyBadge = (pal || box)
+        ? `<span style="font-size:0.8em; font-weight:800; color:var(--text-sub); background:var(--btn-bg,rgba(128,128,128,0.12)); border-radius:5px; padding:1px 6px; flex-shrink:0; pointer-events:none;">${pal ? pal + "P" : box + "B"}</span>`
+        : "";
+      const taskBadge = isTask
+        ? `<span style="font-size:0.72em; background:rgba(90,200,250,0.12); color:#5ac8fa; border:1px solid rgba(90,200,250,0.25); border-radius:4px; padding:1px 5px; font-weight:700; flex-shrink:0; pointer-events:none;">작업</span>`
+        : "";
+      const statusDot = isItemDone
+        ? `<span style="font-size:0.8em; color:#34c759; flex-shrink:0; pointer-events:none;">✅</span>`
+        : "";
+
+      html += `<div class="pcp-pend-item" style="cursor:grab;" data-tip="${_esc(tip)}"
+        onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()"
+        ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()"
+        oncontextmenu="event.preventDefault();"
+        onclick="handleItemClick(event, 'pending', ${idx}, '${_argq(it.company)}', ${isItemDone})">
+        <div style="display:flex; align-items:center; gap:6px; width:100%; pointer-events:none;">
+          <span style="color:var(--text-sub); font-size:0.85em; flex-shrink:0; opacity:0.45; letter-spacing:-1px; pointer-events:none;">⠿</span>
+          <div style="width:9px; height:9px; border-radius:50%; background:${colorObj.bg}; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.15); pointer-events:none;"></div>
+          <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; pointer-events:none;">${_esc(getFullName(cleanComp))}</span>
+          ${taskBadge}${statusDot}${qtyBadge}
+        </div>
+        ${meaningfulEtc ? `<div style="font-size:0.78em; color:var(--text-sub); margin-top:3px; padding-left:21px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;">${_esc(meaningfulEtc)}</div>` : ""}
+      </div>`;
     });
   }
   html += `</div>`;

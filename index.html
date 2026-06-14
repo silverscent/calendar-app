@@ -3086,12 +3086,18 @@
         }
         body.pc-dense .pcp-pend-item {
           display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 6px 4px;
+          flex-direction: column;
+          gap: 0;
+          padding: 8px 6px;
           border-bottom: 1px solid var(--border-color);
           font-size: 0.85em;
+          border-radius: 8px;
+          transition: background 0.12s;
+          user-select: none;
+          -webkit-user-select: none;
         }
+        body.pc-dense .pcp-pend-item:last-child { border-bottom: none; }
+        body.pc-dense .pcp-pend-item:hover { background: var(--hover-bg, rgba(128,128,128,0.07)); }
         body.pc-dense .pcp-btn {
           width: 100%;
           padding: 9px;
