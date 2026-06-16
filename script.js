@@ -684,8 +684,23 @@ function cleanOldCache() {
 // ═══════════════════════════════════════════════
 // ── 5. 초기화
 // ═══════════════════════════════════════════════
+// ♿ 아이콘 전용 버튼에 스크린리더용 라벨 부여 (기호/이모지뿐이라 음성 안내가 안 되던 버튼들)
+//    selector가 해당 페이지에 없으면 그냥 건너뜀(출고/입고 공용 안전)
+function initA11yLabels() {
+  const setLabel = (sel, label) =>
+    document.querySelectorAll(sel).forEach((el) => {
+      if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", label);
+    });
+  setLabel(".close-btn", "닫기");
+  setLabel(".fab-main", "빠른 작업 메뉴");
+  setLabel(".fab-sub-btn.ai", "AI 질의");
+  setLabel(".fab-sub-btn.add", "신규 등록");
+  setLabel("#compInfoBtn", "거래처 정보");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   cleanOldCache();
   initDraggableFab();
   showAiFabIfAdmin();
+  initA11yLabels();
 });

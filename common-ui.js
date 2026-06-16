@@ -1235,7 +1235,9 @@ async function reactivateAdminAccount(id, name) {
 }
 
 function showToast(msg, duration = 2500) {
-  if (msg.includes("중...") || msg.includes("완료")) return;
+  // 로딩성 지속 토스트("...중...", duration:0)는 동기화 글로우/로딩바로 대체되므로 생략.
+  // "완료" 성공 결과 토스트는 표시(이전엔 함께 차단되어 저장/삭제 성공 피드백이 사라졌었음).
+  if (msg.includes("중...")) return;
 
   const toast = document.getElementById("toast");
   toast.innerText = msg;
@@ -1269,6 +1271,9 @@ function setLoadingState(isLoading) {
     if (activeRequests > 0) topFrame.classList.add("syncing-glow");
     else topFrame.classList.remove("syncing-glow");
   }
+  // PC 모드는 .top-wrapper가 숨겨져 글로우가 안 보임 → body 클래스로 상단 로딩바 표시.
+  // (CSS가 body.pc-dense 한정이라 모바일에는 영향 없음)
+  document.body.classList.toggle("is-syncing", activeRequests > 0);
 }
 
 function addOcrFilterWord() {

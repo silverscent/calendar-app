@@ -1125,7 +1125,7 @@ function runPcSearch() {
   window._pcSearchEd = ed;
   // 검색어가 있을 때만 검색 (기간만으로는 결과 출력 안 함 — 기간은 보조 필터)
   if (kw.length < 1) {
-    box.innerHTML = `<div class="pcsr-empty">업체·작업 검색어를 입력하세요${sd || ed ? " (기간은 보조 필터)" : ""}</div>`;
+    box.innerHTML = `<div class="pcsr-empty"><span class="pcsr-empty-ico">🔎</span><span>업체·작업 검색어를 입력하세요</span>${sd || ed ? `<span class="pcsr-empty-sub">기간은 보조 필터</span>` : ""}</div>`;
     window._pcSearchHtml = box.innerHTML;
     return;
   }
@@ -1137,7 +1137,7 @@ function runPcSearch() {
       if (sn && sn.includes(kw)) companies.push(mName);
     }
   }
-  box.innerHTML = `<div class="pcsr-empty">검색 중…</div>`;
+  box.innerHTML = `<div class="pcsr-empty"><span class="pcsr-empty-ico">⏳</span><span>검색 중…</span></div>`;
   apiCall({
     source: "vercel",
     action: "SEARCH_SCHEDULES",
@@ -1148,7 +1148,7 @@ function runPcSearch() {
     companies: companies,
   }).then((res) => {
     if (!res || !res.success || !Array.isArray(res.rows) || res.rows.length === 0) {
-      box.innerHTML = `<div class="pcsr-empty">결과 없음</div>`;
+      box.innerHTML = `<div class="pcsr-empty"><span class="pcsr-empty-ico">📭</span><span>결과 없음</span><span class="pcsr-empty-sub">다른 검색어로 시도해 보세요</span></div>`;
       window._pcSearchHtml = box.innerHTML;
       return;
     }
@@ -1239,6 +1239,75 @@ function reapplyPcHl() {
     target.scrollIntoView({ behavior: "smooth", block: "center" });
     h.scrolled = true;
   }
+}
+
+// 🔍 FAB 일정 검색 (모바일 등 상단바 포화 → FAB 메뉴에서 검색). 결과 탭 시 기존 pcJumpTo 재사용.
+function openFabSearch() {
+  const m = document.getElementById("fabSearchModal");
+  if (!m) return;
+  m.style.display = "flex";
+  const inp = document.getElementById("fabSearchKw");
+  const box = document.getElementById("fabSearchResults");
+  if (inp) inp.value = "";
+  if (box)
+    box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">🔎</span><span>업체·작업 검색어를 입력하세요</span></div>`;
+  setTimeout(() => inp && inp.focus(), 150);
+}
+function closeFabSearch() {
+  const m = document.getElementById("fabSearchModal");
+  if (m) m.style.display = "none";
+}
+let _fabSearchTimer = null;
+function fabSearchInput() {
+  if (_fabSearchTimer) clearTimeout(_fabSearchTimer);
+  _fabSearchTimer = setTimeout(runFabSearch, 280); // 디바운스
+}
+function runFabSearch() {
+  const inp = document.getElementById("fabSearchKw");
+  const box = document.getElementById("fabSearchResults");
+  if (!inp || !box) return;
+  const kw = inp.value.trim();
+  if (kw.length < 1) {
+    box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">🔎</span><span>업체·작업 검색어를 입력하세요</span></div>`;
+    return;
+  }
+  // 약어(CRM 단축명)로도 검색되도록 매칭되는 정식 업체명 확장
+  let companies = [];
+  if (typeof compInfoDB === "object" && compInfoDB) {
+    for (const mName in compInfoDB) {
+      const sn = (compInfoDB[mName] && compInfoDB[mName].shortName) || "";
+      if (sn && sn.includes(kw)) companies.push(mName);
+    }
+  }
+  box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">⏳</span><span>검색 중…</span></div>`;
+  apiCall({ source: "vercel", action: "SEARCH_SCHEDULES", type: "out", keyword: kw, companies: companies }).then(
+    (res) => {
+      if (!res || !res.success || !Array.isArray(res.rows) || res.rows.length === 0) {
+        box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">📭</span><span>결과 없음</span><span class="fsr-empty-sub">다른 검색어로 시도해 보세요</span></div>`;
+        return;
+      }
+      box.innerHTML =
+        `<div class="fsr-cnt">${res.rows.length}건</div>` +
+        res.rows
+          .map((r) => {
+            const d = (r.date || "").slice(0, 10);
+            const raw = r.company || "-";
+            const isTask = raw.startsWith("[TASK]");
+            const comp = _esc(raw.replace(/^\[TASK\]/, "").trim() || "-");
+            const done = r.isDone === true || String(r.isDone) === "1" || String(r.isDone) === "true";
+            const dot = isTask ? "#af52de" : done ? "#34c759" : "#ff9f0a";
+            const pal = parseInt(r.pal) || 0;
+            const bx = parseInt(r.box) || 0;
+            const sub = isTask ? "작업" : `${pal}P · ${bx}B`;
+            return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(raw)}')">
+              <span class="fsr-dot" style="background:${dot}"></span>
+              <span class="fsr-main"><b>${isTask ? "🛠 " : ""}${comp}</b><span class="fsr-sub">${sub}</span></span>
+              <span class="fsr-meta">${d}</span>
+            </button>`;
+          })
+          .join("");
+    },
+  );
 }
 
 // ⌨️ 키보드 단축키 (PC): ←/→ 달 이동, T 오늘, Esc 모달 닫기
@@ -1481,7 +1550,7 @@ function renderPcSidePanel() {
     <div class="pcp-card">
       <div class="pcp-title">⏳ 출고 대기 / 미정 (${pend.length}건)</div>`;
   if (pend.length === 0) {
-    html += `<div style="color:var(--text-sub); font-size:0.85em; padding:6px 2px;">대기 중인 건이 없습니다.</div>`;
+    html += `<div class="pcp-empty"><span class="pcp-empty-ico">✅</span><span>대기 중인 건이 없습니다</span></div>`;
   } else {
     pend.forEach((it, idx) => {
       const cleanComp = String(it.company || "").replace(/\[TASK\]/gi, "").trim();
@@ -1577,8 +1646,14 @@ function renderPcLeftbar() {
       <button class="pclb-seg-btn ${on("btnL")}" onclick="changeSize('L'); renderPcLeftbar()">A+</button>
     </div>
     <div class="pclb-row2">
-      <button class="pclb-item ${holidayOn ? "pclb-on" : ""}" onclick="toggleHoliday(); renderPcLeftbar()">🏖️ ${holidayOn ? "ON" : "OFF"}</button>
-      <button class="pclb-item" onclick="toggleTheme(); renderPcLeftbar()">${dark ? "🌙 Dark" : "☀️ Light"}</button>
+      <button class="pclb-item pclb-r2-holiday ${holidayOn ? "pclb-on" : ""}" onclick="toggleHoliday(); renderPcLeftbar()">
+        <span class="pclb-r2-icon">🏖️</span>
+        <span class="pclb-r2-txt">${holidayOn ? "ON" : "OFF"}</span>
+      </button>
+      <button class="pclb-item pclb-r2-theme ${dark ? "pclb-dark" : "pclb-light"}" onclick="toggleTheme(); renderPcLeftbar()">
+        <span class="pclb-r2-icon">${dark ? "🌙" : "☀️"}</span>
+        <span class="pclb-r2-txt">${dark ? "Dark" : "Light"}</span>
+      </button>
     </div>
 
     <div class="pclb-sec">기능</div>
@@ -4302,6 +4377,9 @@ function toggleTheme() {
     localStorage.setItem("cal_theme", "dark");
     document.documentElement.style.background = "#212225";
   }
+  // PWA 상태바/주소창 색도 테마에 맞게 (다크에서 흰 상태바 방지)
+  const tcMeta = document.querySelector('meta[name="theme-color"]');
+  if (tcMeta) tcMeta.setAttribute("content", isDarkMode ? "#212225" : "#f4f6f9");
 }
 
 let tempEditColorObj = null;

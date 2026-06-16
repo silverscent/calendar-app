@@ -77,6 +77,9 @@
           document.documentElement.style.background = bg;
           // 부트 스플래시 배경을 첫 페인트부터 테마에 맞게 고정(클래스 적용 타이밍 의존 X)
           document.documentElement.style.setProperty("--boot-bg", bg);
+          // PWA 상태바/주소창 색도 첫 페인트부터 테마에 맞게 (다크에서 흰 상태바 방지)
+          var _tc = document.querySelector('meta[name="theme-color"]');
+          if (_tc) _tc.setAttribute("content", bg);
         } catch (e) {}
         // 부트 로더 안전장치: 렌더 실패해도 5초 후 강제 숨김
         window.addEventListener("load", function () {
@@ -1377,6 +1380,29 @@
       button:active {
         opacity: 0.55;
       }
+
+      /* ♿ 키보드 포커스 표시 — 마우스/터치엔 안 뜨고 키보드 탐색 시에만 (모바일·PC 공통).
+         outline은 요소의 border-radius를 자동으로 따라가므로 모양 변형 없음 */
+      :focus-visible {
+        outline: 2px solid #0a84ff;
+        outline-offset: 2px;
+      }
+      /* ♿ '모션 최소화' 선호 사용자: 장식 애니메이션/트랜지션 제거 (로딩 스피너만 유지) */
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.001ms !important;
+          scroll-behavior: auto !important;
+        }
+        .spinner,
+        #bootLoader .spinner {
+          animation-duration: 1s !important;
+          animation-iteration-count: infinite !important;
+        }
+      }
       .spinner {
         border: 4px solid rgba(255, 255, 255, 0.2);
         border-top: 4px solid #fff;
@@ -2522,6 +2548,101 @@
         background: #34c759;
         color: white;
       }
+      .fab-sub-btn.search {
+        background: linear-gradient(135deg, #0a84ff, #0056b3);
+        color: white;
+      }
+      /* 🔍 FAB 일정 검색 모달 결과 (#id 스코프 → 다른 화면 영향 없음, 모바일·PC 공통) */
+      #fabSearchModal .fsr-results {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        max-height: 55vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      #fabSearchModal .fsr-cnt {
+        font-size: 0.8em;
+        color: var(--text-sub);
+        font-weight: 800;
+        padding: 2px 4px 6px;
+      }
+      #fabSearchModal .fsr-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        text-align: left;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 12px 14px;
+        cursor: pointer;
+        color: var(--text-main);
+        transition:
+          transform 0.12s,
+          background 0.12s;
+      }
+      #fabSearchModal .fsr-item:active {
+        transform: scale(0.98);
+        background: var(--bg-color);
+      }
+      #fabSearchModal .fsr-dot {
+        flex: 0 0 auto;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+      }
+      #fabSearchModal .fsr-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      #fabSearchModal .fsr-main b {
+        font-size: 0.98em;
+        font-weight: 800;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #fabSearchModal .fsr-sub {
+        font-size: 0.8em;
+        color: var(--text-sub);
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #fabSearchModal .fsr-meta {
+        flex: 0 0 auto;
+        font-size: 0.82em;
+        color: var(--text-sub);
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      #fabSearchModal .fsr-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        text-align: center;
+        color: var(--text-sub);
+        font-weight: 600;
+        padding: 40px 16px;
+        font-size: 0.92em;
+        line-height: 1.4;
+      }
+      #fabSearchModal .fsr-empty-ico {
+        font-size: 2.4em;
+        opacity: 0.5;
+        line-height: 1;
+      }
+      #fabSearchModal .fsr-empty-sub {
+        font-size: 0.85em;
+        opacity: 0.7;
+      }
 
       /* ════════════════════════════════════════════════ */
       /* index.html <style> 안 (기존 snap-* 관련 CSS 전부 삭제 후 이걸로 교체) */
@@ -3093,6 +3214,22 @@
         }
         body.pc-dense .pcp-pend-item:last-child { border-bottom: none; }
         body.pc-dense .pcp-pend-item:hover { background: var(--hover-bg, rgba(128,128,128,0.07)); }
+        body.pc-dense .pcp-empty {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+          text-align: center;
+          color: var(--text-sub);
+          font-size: 0.82em;
+          font-weight: 600;
+          padding: 18px 10px;
+        }
+        body.pc-dense .pcp-empty-ico {
+          font-size: 1.7em;
+          opacity: 0.65;
+          line-height: 1;
+        }
         body.pc-dense .pcp-btn {
           width: 100%;
           padding: 9px;
@@ -3333,7 +3470,7 @@
           color: #bf5af2;
           font-weight: 700;
         }
-        /* 공휴일 + 테마 나란히 — 필 버튼 스타일 */
+        /* 공휴일 + 테마 — 카드형 버튼 */
         body.pc-dense .pclb-row2 {
           display: flex;
           gap: 6px;
@@ -3342,26 +3479,44 @@
         }
         body.pc-dense .pclb-row2 .pclb-item {
           flex: 1;
-          text-align: center;
-          white-space: nowrap;
-          overflow: hidden;
-          font-size: 0.82em;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 3px;
+          padding: 9px 4px 8px;
+          border-radius: 12px;
+          border: 1.5px solid var(--border-color);
+          background: transparent;
+          font-size: 1em;
           font-weight: 700;
-          padding: 7px 6px;
-          border-radius: 20px;
-          border: 1px solid var(--border-color);
-          background: var(--btn-bg);
-          transition: background 0.15s, border-color 0.15s, color 0.15s;
+          overflow: hidden;
+          transition: all 0.15s;
         }
-        body.pc-dense .pclb-row2 .pclb-item:hover {
-          background: rgba(10,132,255,0.1);
-          border-color: rgba(10,132,255,0.35);
+        body.pc-dense .pclb-row2 .pclb-r2-icon { font-size: 1.25em; line-height: 1; }
+        body.pc-dense .pclb-row2 .pclb-r2-txt { font-size: 0.68em; font-weight: 800; letter-spacing: 0.4px; }
+        body.pc-dense .pclb-row2 .pclb-r2-holiday:hover {
+          background: rgba(255,149,0,0.08);
+          border-color: rgba(255,149,0,0.3);
         }
-        body.pc-dense .pclb-row2 .pclb-item.pclb-on {
-          background: rgba(10,132,255,0.15) !important;
-          border-color: rgba(10,132,255,0.45) !important;
-          color: #0a84ff !important;
+        body.pc-dense .pclb-row2 .pclb-r2-holiday.pclb-on {
+          background: rgba(255,149,0,0.12);
+          border-color: rgba(255,149,0,0.5);
+          color: #ff9500;
         }
+        body.pc-dense .pclb-row2 .pclb-r2-holiday.pclb-on:hover { background: rgba(255,149,0,0.18); }
+        body.pc-dense .pclb-row2 .pclb-item.pclb-on::before { display: none; }
+        body.pc-dense .pclb-row2 .pclb-r2-theme.pclb-dark {
+          background: rgba(94,92,230,0.1);
+          border-color: rgba(94,92,230,0.4);
+          color: #7b79e8;
+        }
+        body.pc-dense .pclb-row2 .pclb-r2-theme.pclb-dark:hover { background: rgba(94,92,230,0.17); }
+        body.pc-dense .pclb-row2 .pclb-r2-theme.pclb-light {
+          background: rgba(255,179,0,0.1);
+          border-color: rgba(255,179,0,0.45);
+          color: #c07800;
+        }
+        body.pc-dense .pclb-row2 .pclb-r2-theme.pclb-light:hover { background: rgba(255,179,0,0.17); }
         body.pc-dense .pclb-seg {
           display: flex;
           gap: 4px;
@@ -3505,16 +3660,32 @@
           flex-direction: column;
           gap: 1px;
         }
-        body.pc-dense .pcsr-empty,
-        body.pc-dense .pcsr-cnt {
-          font-size: 0.68em;
+        body.pc-dense .pcsr-empty {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 5px;
+          text-align: center;
+          font-size: 0.72em;
           color: var(--text-sub);
           font-weight: 600;
-          padding: 3px 6px;
+          padding: 22px 10px;
+          line-height: 1.4;
+        }
+        body.pc-dense .pcsr-empty-ico {
+          font-size: 1.9em;
+          opacity: 0.5;
+          line-height: 1;
+        }
+        body.pc-dense .pcsr-empty-sub {
+          font-size: 0.85em;
+          opacity: 0.7;
         }
         body.pc-dense .pcsr-cnt {
+          font-size: 0.68em;
           color: var(--pc-accent);
           font-weight: 700;
+          padding: 3px 6px;
         }
         body.pc-dense .pcsr-item {
           display: flex;
@@ -4019,6 +4190,33 @@
         to {
           opacity: 1;
           transform: none;
+        }
+      }
+
+      /* PC 모드 동기화 로딩바 — 모바일은 top-wrapper 글로우, PC는 top-wrapper가 숨겨지므로 상단 바로 대체 */
+      @media (hover: hover) and (pointer: fine) {
+        body.pc-dense.is-syncing::before {
+          content: "";
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 3px;
+          z-index: 99990;
+          background: linear-gradient(90deg, transparent, #0a84ff, #34c759, #ffd60a, transparent);
+          background-size: 45% 100%;
+          background-repeat: no-repeat;
+          background-position: -45% 0;
+          animation: pcSyncSweep 0.9s infinite linear;
+          pointer-events: none;
+        }
+        @keyframes pcSyncSweep {
+          0% {
+            background-position: -45% 0;
+          }
+          100% {
+            background-position: 145% 0;
+          }
         }
       }
 
@@ -6302,8 +6500,43 @@
             ✏️
           </button>
         </div>
+        <div class="fab-sub-item">
+          <div class="fab-label">일정 검색</div>
+          <button
+            class="fab-sub-btn search"
+            onclick="
+              toggleFabMenu();
+              openFabSearch();
+            "
+          >
+            🔍
+          </button>
+        </div>
       </div>
       <button class="fab-main" onclick="toggleFabMenu()">+</button>
+    </div>
+
+    <!-- 🔍 FAB 일정 검색 모달 -->
+    <div id="fabSearchModal" class="overlay-modal" onclick="if (event.target === this) closeFabSearch();">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title">🔍 일정 검색</div>
+          <button class="close-btn" onclick="closeFabSearch()">✕</button>
+        </div>
+        <input
+          id="fabSearchKw"
+          class="edit-input"
+          type="text"
+          inputmode="search"
+          placeholder="업체명 검색"
+          autocomplete="off"
+          oninput="fabSearchInput()"
+          onkeydown="if (event.key === 'Enter') runFabSearch()"
+          style="margin-bottom: 14px"
+        />
+        <div id="fabSearchResults" class="fsr-results"></div>
+      </div>
     </div>
 
     <div

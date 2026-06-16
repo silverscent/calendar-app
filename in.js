@@ -361,7 +361,7 @@ function renderPcSidePanel() {
     <div class="pcp-card">
       <div class="pcp-title">⏳ 입고 보류 / 대기 (${pend.length}건)</div>`;
   if (pend.length === 0) {
-    html += `<div style="color:var(--text-sub); font-size:0.85em; padding:6px 2px;">대기 중인 건이 없습니다.</div>`;
+    html += `<div class="pcp-empty"><span class="pcp-empty-ico">✅</span><span>대기 중인 건이 없습니다</span></div>`;
   } else {
     pend.forEach((it, idx) => {
       const isAir = it.sType === "AIR";
@@ -2503,6 +2503,9 @@ function toggleTheme() {
     localStorage.setItem("cal_theme", "dark");
     document.documentElement.style.background = "#212225";
   }
+  // PWA 상태바/주소창 색도 테마에 맞게 (다크에서 흰 상태바 방지)
+  const tcMeta = document.querySelector('meta[name="theme-color"]');
+  if (tcMeta) tcMeta.setAttribute("content", isDarkMode ? "#212225" : "#f4f6f9");
 }
 
 // =====================================================
@@ -3809,14 +3812,14 @@ function runPcSearch() {
   const kw = inp.value.trim();
   window._pcSearchKw = kw;
   if (kw.length < 2) {
-    box.innerHTML = `<div class="pcsr-empty">2글자 이상 입력하세요 (B/L·인보이스)</div>`;
+    box.innerHTML = `<div class="pcsr-empty"><span class="pcsr-empty-ico">🔎</span><span>2글자 이상 입력하세요</span><span class="pcsr-empty-sub">B/L · 인보이스</span></div>`;
     window._pcSearchHtml = box.innerHTML;
     return;
   }
-  box.innerHTML = `<div class="pcsr-empty">검색 중…</div>`;
+  box.innerHTML = `<div class="pcsr-empty"><span class="pcsr-empty-ico">⏳</span><span>검색 중…</span></div>`;
   apiCall({ source: "vercel", action: "SEARCH_SCHEDULES", type: "in", keyword: kw }).then((res) => {
     if (!res || !res.success || !Array.isArray(res.rows) || res.rows.length === 0) {
-      box.innerHTML = `<div class="pcsr-empty">결과 없음</div>`;
+      box.innerHTML = `<div class="pcsr-empty"><span class="pcsr-empty-ico">📭</span><span>결과 없음</span><span class="pcsr-empty-sub">다른 검색어로 시도해 보세요</span></div>`;
       window._pcSearchHtml = box.innerHTML;
       return;
     }
@@ -3897,6 +3900,61 @@ function reapplyPcHl() {
     target.scrollIntoView({ behavior: "smooth", block: "center" });
     h.scrolled = true;
   }
+}
+
+// 🔍 FAB 일정 검색 (모바일 등 상단바 포화 → FAB 메뉴에서 검색). 결과 탭 시 기존 pcJumpTo 재사용.
+function openFabSearch() {
+  const m = document.getElementById("fabSearchModal");
+  if (!m) return;
+  m.style.display = "flex";
+  const inp = document.getElementById("fabSearchKw");
+  const box = document.getElementById("fabSearchResults");
+  if (inp) inp.value = "";
+  if (box)
+    box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">🔎</span><span>2글자 이상 입력하세요</span><span class="fsr-empty-sub">B/L · 인보이스</span></div>`;
+  setTimeout(() => inp && inp.focus(), 150);
+}
+function closeFabSearch() {
+  const m = document.getElementById("fabSearchModal");
+  if (m) m.style.display = "none";
+}
+let _fabSearchTimer = null;
+function fabSearchInput() {
+  if (_fabSearchTimer) clearTimeout(_fabSearchTimer);
+  _fabSearchTimer = setTimeout(runFabSearch, 280); // 디바운스
+}
+function runFabSearch() {
+  const inp = document.getElementById("fabSearchKw");
+  const box = document.getElementById("fabSearchResults");
+  if (!inp || !box) return;
+  const kw = inp.value.trim();
+  if (kw.length < 2) {
+    box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">🔎</span><span>2글자 이상 입력하세요</span><span class="fsr-empty-sub">B/L · 인보이스</span></div>`;
+    return;
+  }
+  box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">⏳</span><span>검색 중…</span></div>`;
+  apiCall({ source: "vercel", action: "SEARCH_SCHEDULES", type: "in", keyword: kw }).then((res) => {
+    if (!res || !res.success || !Array.isArray(res.rows) || res.rows.length === 0) {
+      box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">📭</span><span>결과 없음</span><span class="fsr-empty-sub">다른 검색어로 시도해 보세요</span></div>`;
+      return;
+    }
+    box.innerHTML =
+      `<div class="fsr-cnt">${res.rows.length}건</div>` +
+      res.rows
+        .map((r) => {
+          const d = (r.date || "").slice(0, 10);
+          const blShort = r.bl && String(r.bl).startsWith("발행전") ? "발행전" : _esc(r.bl || "-");
+          const inv = r.invoice ? `<span class="fsr-sub">INV ${_esc(r.invoice)}</span>` : "";
+          const done = r.status === "완료";
+          const dot = done ? "#34c759" : "#0a84ff";
+          return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(r.bl || "")}')">
+            <span class="fsr-dot" style="background:${dot}"></span>
+            <span class="fsr-main"><b>${blShort}</b>${inv}</span>
+            <span class="fsr-meta">${_esc(r.pal || 0)}P · ${d}</span>
+          </button>`;
+        })
+        .join("");
+  });
 }
 
 // ⌨️ 키보드 단축키 (PC): ←/→ 달 이동, T 오늘, Esc 모달 닫기
@@ -4099,8 +4157,14 @@ function renderPcLeftbar() {
       <button class="pclb-seg-btn ${on("btnL")}" onclick="changeSize('L'); renderPcLeftbar()">A+</button>
     </div>
     <div class="pclb-row2">
-      <button class="pclb-item ${holidayOn ? "pclb-on" : ""}" onclick="toggleHoliday(); renderPcLeftbar()">🏖️ ${holidayOn ? "ON" : "OFF"}</button>
-      <button class="pclb-item" onclick="toggleTheme(); renderPcLeftbar()">${dark ? "🌙 Dark" : "☀️ Light"}</button>
+      <button class="pclb-item pclb-r2-holiday ${holidayOn ? "pclb-on" : ""}" onclick="toggleHoliday(); renderPcLeftbar()">
+        <span class="pclb-r2-icon">🏖️</span>
+        <span class="pclb-r2-txt">${holidayOn ? "ON" : "OFF"}</span>
+      </button>
+      <button class="pclb-item pclb-r2-theme ${dark ? "pclb-dark" : "pclb-light"}" onclick="toggleTheme(); renderPcLeftbar()">
+        <span class="pclb-r2-icon">${dark ? "🌙" : "☀️"}</span>
+        <span class="pclb-r2-txt">${dark ? "Dark" : "Light"}</span>
+      </button>
     </div>
     <div class="pclb-toggle-row">
       <button
