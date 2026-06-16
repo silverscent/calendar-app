@@ -520,7 +520,6 @@ window.addEventListener("DOMContentLoaded", () => {
     if (serverData.year === currentYear && serverData.month === currentMonth) {
       serverData = newData;
       renderCalendar();
-      showToast("✅ 최신화 완료!", 1000);
     }
   })();
   // 💡 [최종 위치] AI FAB 관리자 권한 확인 및 노출
