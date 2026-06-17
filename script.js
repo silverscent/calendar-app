@@ -257,10 +257,13 @@ async function runAiQuery() {
 
   try {
     const adminId = localStorage.getItem("admin_id") || sessionStorage.getItem("admin_id");
+    // 보안 액션은 session_token 필수(토큰 폴백 제거됨). apiCall을 안 거치는 raw fetch라 직접 첨부.
+    const sessionToken =
+      window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
     const res = await fetch("/api/calendar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "AI_QUERY", admin_id: adminId, data: { question } }),
+      body: JSON.stringify({ action: "AI_QUERY", admin_id: adminId, session_token: sessionToken, data: { question } }),
     });
     const result = await res.json();
     if (loading) loading.style.display = "none";
