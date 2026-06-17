@@ -1167,7 +1167,7 @@ function runPcSearch() {
           const sub = isTask ? "작업" : `${pal}P · ${bx}B`;
           return `<button class="pcsr-item" onclick="pcJumpTo('${d}','${_argq(raw)}')">
               <span class="pcsr-dot" style="background:${dot}"></span>
-              <span class="pcsr-main"><b>${isTask ? "🛠 " : ""}${comp}</b><span class="pcsr-inv">${sub}</span></span>
+              <span class="pcsr-main"><span class="pcsr-big" style="font-weight:700">${isTask ? "🛠 " : ""}${comp}</span><span class="pcsr-inv">${sub}</span></span>
               <span class="pcsr-meta">${d}</span>
             </button>`;
         })
@@ -1312,7 +1312,7 @@ function runFabSearch() {
             const sub = isTask ? "작업" : `${pal}P · ${bx}B`;
             return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(raw)}')">
               <span class="fsr-dot" style="background:${dot}"></span>
-              <span class="fsr-main"><b>${isTask ? "🛠 " : ""}${comp}</b><span class="fsr-sub">${sub}</span></span>
+              <span class="fsr-main"><span class="fsr-big" style="font-weight:700">${isTask ? "🛠 " : ""}${comp}</span><span class="fsr-sub">${sub}</span></span>
               <span class="fsr-meta">${d}</span>
             </button>`;
           })
