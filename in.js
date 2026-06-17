@@ -3915,7 +3915,7 @@ function openFabSearch() {
   if (inp) inp.value = "";
   if (box)
     box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">🔎</span><span>2글자 이상 입력하세요</span><span class="fsr-empty-sub">B/L · 인보이스</span></div>`;
-  setTimeout(() => inp && inp.focus(), 150);
+  if (inp) inp.focus();
 }
 function closeFabSearch() {
   const m = document.getElementById("fabSearchModal");

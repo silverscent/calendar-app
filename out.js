@@ -1251,7 +1251,7 @@ function openFabSearch() {
   if (inp) inp.value = "";
   if (box)
     box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">🔎</span><span>업체·작업 검색어를 입력하세요</span></div>`;
-  setTimeout(() => inp && inp.focus(), 150);
+  if (inp) inp.focus();
 }
 function closeFabSearch() {
   const m = document.getElementById("fabSearchModal");
