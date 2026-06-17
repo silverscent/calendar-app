@@ -2183,17 +2183,21 @@ function verifyOcrRows() {
   // 행 개수 대조 — 공백 기준 토큰 분리 후 완전 매칭(SEA+인보이스 연결 오매칭 방지)
   const rawTokens = currentRawOcrString.toUpperCase().split(/[\s\n\r•·*/().,\-]+/).filter(Boolean);
   const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{2,5}\d{5,9}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
-  // 행수 비교는 OCR 파싱 행만 대상(직접 추가/달력 저장분 _fromDb 제외)
-  const ocrRowCount = ocrEditRows.filter((r) => !r._fromDb).length;
-  const countNote =
-    rawRowCount && rawRowCount !== ocrRowCount ? ` · ⚠️행수 원본 ${rawRowCount}/표 ${ocrRowCount}` : "";
+  // 행수 비교: OCR 파싱 행 + 이미 완료처리된 _fromDb 행 중 원본에 실제 있는 것
+  const nonDbCount = ocrEditRows.filter((r) => !r._fromDb).length;
+  const doneInRaw = ocrEditRows.filter((r) => r._fromDb && norm(r.bl || "") && rawNorm.includes(norm(r.bl || ""))).length;
+  const ocrRowCount = nonDbCount;
+  const effectiveCount = nonDbCount + doneInRaw;
+  const countWarn = rawRowCount && rawRowCount !== effectiveCount ? `⚠️행수 원본 ${rawRowCount}/표 ${nonDbCount}` : "";
+  const countInfo = !countWarn && doneInRaw > 0 ? `완료건 ${doneInRaw}건 제외` : "";
+  const countNote = countWarn ? ` · ${countWarn}` : countInfo ? ` · (${countInfo})` : "";
 
-  const problem = warnRows || countNote;
+  const problem = warnRows || countWarn;
   const head = warnRows
     ? `🔍 ${ocrRowCount}건 중 ${warnRows}건 확인필요${countNote}`
-    : countNote
+    : countWarn
     ? `⚠️ 개별 오류 없음${countNote}`
-    : `✅ 검증 완료 — 이상 없음`;
+    : `✅ 검증 완료 — 이상 없음${countNote}`;
   // 사유를 안내줄에 직접 표시(모바일 title 미지원) — 너무 많으면 앞 6건만
   let detailHtml = "";
   if (details.length) {
