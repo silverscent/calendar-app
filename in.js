@@ -3969,8 +3969,8 @@ function runFabSearch() {
           const invMatch = !!invRaw && invRaw.toLowerCase().includes(kwL2);
           const blDisplay = isPreBL ? "발행전" : _hlKw(blRaw, kw);
           const blStyle = blMatch ? ' style="font-weight:700"' : '';
-          const invStyle = `style="color:var(--text-sub)${invMatch ? ";font-weight:700" : ""}"`;
-          const invLine = invRaw ? `<span class="fsr-big" ${invStyle}>INV: ${_hlKw(invRaw, kw)}</span>` : "";
+          const invStyle = invMatch ? ' style="font-weight:700"' : '';
+          const invLine = invRaw ? `<span class="fsr-big"${invStyle}>INV: ${_hlKw(invRaw, kw)}</span>` : "";
           const done = r.status === "완료";
           const dot = done ? "#34c759" : "#0a84ff";
           return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(blRaw)}')">
