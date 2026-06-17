@@ -4246,6 +4246,7 @@ document.addEventListener("DOMContentLoaded", function () {
       initPcPanels();
       renderPcSidePanel();
       renderPcLeftbar();
+      renderCalendar();
     }
   } catch (e) {}
 
