@@ -130,11 +130,12 @@ module.exports = async function handler(req, res) {
         const todayStr = getKstDateStr(now);
         const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
 
+        // 입고 조회 (휴무일 이월 포함)
         const [rawRows] = await pool.query(
           `SELECT * FROM inbound WHERE receive_date BETWEEN ? AND ? ORDER BY receive_date ASC`,
           [startStr, todayStr],
         );
-        let rows = [];
+        let inRows = [];
         rawRows.forEach((r) => {
           if (r.status === "완료" || String(r.status).includes("취소")) return;
           let origDate = new Date(r.receive_date);
@@ -144,16 +145,30 @@ module.exports = async function handler(req, res) {
             r.isMoved = origDate.getTime() !== adjDate.getTime();
             r.origDateStr = formatDbDateShort(r.receive_date);
             r.adjDateStr = formatDbDateShort(adjDate);
-            rows.push(r);
+            inRows.push(r);
           }
         });
 
-        let msg = `🚨 3PL 오늘 입고 자동 알림 🚨 (${todayStr}, ${dayNames[currentDay]}요일)\n••••••••••••••••••••••••••••••`;
-        if (rows.length === 0) msg += `\n📭 오늘 입고 예정 데이터가 없습니다.`;
-        else {
-          msg += `\n📌 오늘 입고 항목 : ${rows.length}건\n------------------------------`;
+        // 출고 조회 (오늘 출고 예정, 미완료)
+        const [outRows] = await pool.query(
+          `SELECT company, pal, box, etc FROM outbound WHERE outbound_date = ? AND isDone = 0 ORDER BY id ASC`,
+          [todayStr],
+        );
+
+        // 입고도 없고 출고도 없으면 알림 생략
+        if (inRows.length === 0 && outRows.length === 0) {
+          return res.status(200).json({ success: true, msg: "Alert Checked (No events today)" });
+        }
+
+        let msg = `🚨 3PL 오늘 일정 알림 🚨 (${todayStr}, ${dayNames[currentDay]}요일)\n••••••••••••••••••••••••••••••`;
+
+        // 입고 섹션
+        if (inRows.length === 0) {
+          msg += `\n📭 오늘 입고 예정 없음`;
+        } else {
+          msg += `\n📌 오늘 입고 항목 : ${inRows.length}건\n------------------------------`;
           let totalPalToday = 0;
-          rows.forEach((r, idx) => {
+          inRows.forEach((r, idx) => {
             totalPalToday += parseInt(r.pallets) || 0;
             let sTypeRaw = String(r.s_type || "").toUpperCase();
             let sType = sTypeRaw === "AIR" ? "탑차량" : sTypeRaw === "SEA" ? "컨테이너" : sTypeRaw;
@@ -162,8 +177,29 @@ module.exports = async function handler(req, res) {
             if (r.remarks) msg += `\n✏️ ETC       : ${r.remarks}`;
             msg += `\n------------------------------`;
           });
-          msg += `\n📊 오늘 총 PAL 수: ${totalPalToday}\n••••••••••••••••••••••••••••••`;
+          msg += `\n📊 입고 총 PAL: ${totalPalToday}`;
         }
+
+        // 출고 섹션
+        msg += `\n••••••••••••••••••••••••••••••`;
+        if (outRows.length === 0) {
+          msg += `\n🚛 오늘 출고 예정 없음`;
+        } else {
+          msg += `\n🚛 오늘 출고 항목 : ${outRows.length}건\n------------------------------`;
+          let totalOutPal = 0;
+          outRows.forEach((r, idx) => {
+            let pCount = parseInt(r.pal) || 0;
+            let bCount = parseInt(r.box) || 0;
+            totalOutPal += pCount;
+            let qtyText = pCount > 0 && bCount > 0 ? `${pCount}P (${bCount}B)` : pCount > 0 ? `${pCount}P` : bCount > 0 ? `${bCount}B` : "?";
+            let etcText = r.etc ? `\n✏️ ETC       : ${r.etc}` : "";
+            msg += `\n${idx + 1}️⃣ 업체: ${r.company}\n📦 수량       : ${qtyText}${etcText}\n------------------------------`;
+          });
+          msg += `\n📊 출고 총 PAL: ${totalOutPal}`;
+        }
+        msg += `\n••••••••••••••••••••••••••••••`;
+
+        // 입고 보류/미정 항목
         const [pendings] = await pool.query(
           `SELECT bl_number, pallets FROM inbound WHERE status = '입고대기' AND (receive_date IS NULL OR receive_date = '미정')`,
         );
@@ -173,6 +209,7 @@ module.exports = async function handler(req, res) {
             msg += `\n• B/L ${p.bl_number} | 📦 ${p.pallets} | 📅 미정`;
           });
         }
+
         await sendTgMsg(targetChatId, msg);
       }
       return res.status(200).json({ success: true, msg: "Alert Checked" });
