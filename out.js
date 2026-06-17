@@ -1261,6 +1261,16 @@ function fabSearchInput() {
   if (_fabSearchTimer) clearTimeout(_fabSearchTimer);
   _fabSearchTimer = setTimeout(runFabSearch, 280); // 디바운스
 }
+function _hlKw(raw, kw) {
+  const safe = _esc(String(raw || ""));
+  if (!kw) return safe;
+  try {
+    const pat = _esc(kw).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return safe.replace(new RegExp(`(${pat})`, "gi"), '<span class="fsr-hl">$1</span>');
+  } catch (e) {
+    return safe;
+  }
+}
 function runFabSearch() {
   const inp = document.getElementById("fabSearchKw");
   const box = document.getElementById("fabSearchResults");
@@ -1292,7 +1302,8 @@ function runFabSearch() {
             const d = (r.date || "").slice(0, 10);
             const raw = r.company || "-";
             const isTask = raw.startsWith("[TASK]");
-            const comp = _esc(raw.replace(/^\[TASK\]/, "").trim() || "-");
+            const compRaw = raw.replace(/^\[TASK\]/, "").trim() || "-";
+            const comp = _hlKw(compRaw, kw);
             const done = r.isDone === true || String(r.isDone) === "1" || String(r.isDone) === "true";
             const dot = isTask ? "#af52de" : done ? "#34c759" : "#ff9f0a";
             const pal = parseInt(r.pal) || 0;

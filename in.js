@@ -3923,6 +3923,16 @@ function fabSearchInput() {
   if (_fabSearchTimer) clearTimeout(_fabSearchTimer);
   _fabSearchTimer = setTimeout(runFabSearch, 280); // 디바운스
 }
+function _hlKw(raw, kw) {
+  const safe = _esc(String(raw || ""));
+  if (!kw) return safe;
+  try {
+    const pat = _esc(kw).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return safe.replace(new RegExp(`(${pat})`, "gi"), '<span class="fsr-hl">$1</span>');
+  } catch (e) {
+    return safe;
+  }
+}
 function runFabSearch() {
   const inp = document.getElementById("fabSearchKw");
   const box = document.getElementById("fabSearchResults");
@@ -3938,18 +3948,31 @@ function runFabSearch() {
       box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">📭</span><span>결과 없음</span><span class="fsr-empty-sub">다른 검색어로 시도해 보세요</span></div>`;
       return;
     }
+    const kwLower = kw.toLowerCase();
     box.innerHTML =
       `<div class="fsr-cnt">${res.rows.length}건</div>` +
       res.rows
         .map((r) => {
           const d = (r.date || "").slice(0, 10);
-          const blShort = r.bl && String(r.bl).startsWith("발행전") ? "발행전" : _esc(r.bl || "-");
-          const inv = r.invoice ? `<span class="fsr-sub">INV ${_esc(r.invoice)}</span>` : "";
+          const blRaw = r.bl || "";
+          const invRaw = r.invoice || "";
+          const isPreBL = blRaw.startsWith("발행전");
+          const blMatch = blRaw.toLowerCase().includes(kwLower);
+          const invMatch = !!invRaw && invRaw.toLowerCase().includes(kwLower);
+          let primary, secondary;
+          if (invMatch && !blMatch) {
+            primary = `<span class="fsr-type-badge fsr-inv">INV</span><span class="fsr-big">${_hlKw(invRaw, kw)}</span>`;
+            secondary = isPreBL ? "" : `<span class="fsr-sub">B/L ${_esc(blRaw)}</span>`;
+          } else {
+            const blDisplay = isPreBL ? "발행전" : _hlKw(blRaw, kw);
+            primary = `<span class="fsr-type-badge fsr-bl">B/L</span><span class="fsr-big">${blDisplay}</span>`;
+            secondary = invRaw ? `<span class="fsr-sub">INV ${invMatch ? _hlKw(invRaw, kw) : _esc(invRaw)}</span>` : "";
+          }
           const done = r.status === "완료";
           const dot = done ? "#34c759" : "#0a84ff";
-          return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(r.bl || "")}')">
+          return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(blRaw)}')">
             <span class="fsr-dot" style="background:${dot}"></span>
-            <span class="fsr-main"><b>${blShort}</b>${inv}</span>
+            <span class="fsr-main">${primary}${secondary}</span>
             <span class="fsr-meta">${_esc(r.pal || 0)}P · ${d}</span>
           </button>`;
         })
