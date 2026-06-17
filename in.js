@@ -3823,7 +3823,6 @@ function runPcSearch() {
       window._pcSearchHtml = box.innerHTML;
       return;
     }
-    const kwLower = kw.toLowerCase();
     box.innerHTML =
       `<div class="pcsr-cnt">${res.rows.length}건</div>` +
       res.rows
@@ -3832,22 +3831,13 @@ function runPcSearch() {
           const blRaw = r.bl || "";
           const invRaw = r.invoice || "";
           const isPreBL = blRaw.startsWith("발행전");
-          const blMatch = blRaw.toLowerCase().includes(kwLower);
-          const invMatch = !!invRaw && invRaw.toLowerCase().includes(kwLower);
-          let primary, secondary;
-          if (invMatch && !blMatch) {
-            primary = `<span class="pcsr-badge pcsr-badge-inv">INV</span><span class="pcsr-big">${_hlKw(invRaw, kw)}</span>`;
-            secondary = isPreBL ? "" : `<span class="pcsr-inv">B/L ${_esc(blRaw)}</span>`;
-          } else {
-            const blDisplay = isPreBL ? "발행전" : _hlKw(blRaw, kw);
-            primary = `<span class="pcsr-badge pcsr-badge-bl">B/L</span><span class="pcsr-big">${blDisplay}</span>`;
-            secondary = invRaw ? `<span class="pcsr-inv">INV ${invMatch ? _hlKw(invRaw, kw) : _esc(invRaw)}</span>` : "";
-          }
+          const blDisplay = isPreBL ? "발행전" : _hlKw(blRaw, kw);
+          const invLine = invRaw ? `<span class="pcsr-inv">INV: ${_hlKw(invRaw, kw)}</span>` : "";
           const done = r.status === "완료";
           const dot = done ? "#34c759" : "#0a84ff";
           return `<button class="pcsr-item" onclick="pcJumpTo('${d}','${_argq(blRaw)}')">
             <span class="pcsr-dot" style="background:${dot}"></span>
-            <span class="pcsr-main">${primary}${secondary}</span>
+            <span class="pcsr-main"><span class="pcsr-big">B/L: ${blDisplay}</span>${invLine}</span>
             <span class="pcsr-meta">${_esc(r.pal || 0)}P · ${d}</span>
           </button>`;
         })
@@ -3961,7 +3951,6 @@ function runFabSearch() {
       box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">📭</span><span>결과 없음</span><span class="fsr-empty-sub">다른 검색어로 시도해 보세요</span></div>`;
       return;
     }
-    const kwLower = kw.toLowerCase();
     box.innerHTML =
       `<div class="fsr-cnt">${res.rows.length}건</div>` +
       res.rows
@@ -3970,22 +3959,13 @@ function runFabSearch() {
           const blRaw = r.bl || "";
           const invRaw = r.invoice || "";
           const isPreBL = blRaw.startsWith("발행전");
-          const blMatch = blRaw.toLowerCase().includes(kwLower);
-          const invMatch = !!invRaw && invRaw.toLowerCase().includes(kwLower);
-          let primary, secondary;
-          if (invMatch && !blMatch) {
-            primary = `<span class="fsr-type-badge fsr-inv">INV</span><span class="fsr-big">${_hlKw(invRaw, kw)}</span>`;
-            secondary = isPreBL ? "" : `<span class="fsr-sub">B/L ${_esc(blRaw)}</span>`;
-          } else {
-            const blDisplay = isPreBL ? "발행전" : _hlKw(blRaw, kw);
-            primary = `<span class="fsr-type-badge fsr-bl">B/L</span><span class="fsr-big">${blDisplay}</span>`;
-            secondary = invRaw ? `<span class="fsr-sub">INV ${invMatch ? _hlKw(invRaw, kw) : _esc(invRaw)}</span>` : "";
-          }
+          const blDisplay = isPreBL ? "발행전" : _hlKw(blRaw, kw);
+          const invLine = invRaw ? `<span class="fsr-sub">INV: ${_hlKw(invRaw, kw)}</span>` : "";
           const done = r.status === "완료";
           const dot = done ? "#34c759" : "#0a84ff";
           return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(blRaw)}')">
             <span class="fsr-dot" style="background:${dot}"></span>
-            <span class="fsr-main">${primary}${secondary}</span>
+            <span class="fsr-main"><span class="fsr-big">B/L: ${blDisplay}</span>${invLine}</span>
             <span class="fsr-meta">${_esc(r.pal || 0)}P · ${d}</span>
           </button>`;
         })
