@@ -3823,18 +3823,31 @@ function runPcSearch() {
       window._pcSearchHtml = box.innerHTML;
       return;
     }
+    const kwLower = kw.toLowerCase();
     box.innerHTML =
       `<div class="pcsr-cnt">${res.rows.length}건</div>` +
       res.rows
         .map((r) => {
           const d = (r.date || "").slice(0, 10);
-          const blShort = r.bl && String(r.bl).startsWith("발행전") ? "발행전" : _esc(r.bl || "-");
-          const inv = r.invoice ? `<span class="pcsr-inv">INV ${_esc(r.invoice)}</span>` : "";
+          const blRaw = r.bl || "";
+          const invRaw = r.invoice || "";
+          const isPreBL = blRaw.startsWith("발행전");
+          const blMatch = blRaw.toLowerCase().includes(kwLower);
+          const invMatch = !!invRaw && invRaw.toLowerCase().includes(kwLower);
+          let primary, secondary;
+          if (invMatch && !blMatch) {
+            primary = `<span class="pcsr-badge pcsr-badge-inv">INV</span><span class="pcsr-big">${_hlKw(invRaw, kw)}</span>`;
+            secondary = isPreBL ? "" : `<span class="pcsr-inv">B/L ${_esc(blRaw)}</span>`;
+          } else {
+            const blDisplay = isPreBL ? "발행전" : _hlKw(blRaw, kw);
+            primary = `<span class="pcsr-badge pcsr-badge-bl">B/L</span><span class="pcsr-big">${blDisplay}</span>`;
+            secondary = invRaw ? `<span class="pcsr-inv">INV ${invMatch ? _hlKw(invRaw, kw) : _esc(invRaw)}</span>` : "";
+          }
           const done = r.status === "완료";
           const dot = done ? "#34c759" : "#0a84ff";
-          return `<button class="pcsr-item" onclick="pcJumpTo('${d}','${_argq(r.bl || "")}')">
+          return `<button class="pcsr-item" onclick="pcJumpTo('${d}','${_argq(blRaw)}')">
             <span class="pcsr-dot" style="background:${dot}"></span>
-            <span class="pcsr-main"><b>${blShort}</b>${inv}</span>
+            <span class="pcsr-main">${primary}${secondary}</span>
             <span class="pcsr-meta">${_esc(r.pal || 0)}P · ${d}</span>
           </button>`;
         })

@@ -1158,7 +1158,8 @@ function runPcSearch() {
           const d = (r.date || "").slice(0, 10);
           const raw = r.company || "-";
           const isTask = raw.startsWith("[TASK]");
-          const comp = _esc(raw.replace(/^\[TASK\]/, "").trim() || "-");
+          const compRaw = raw.replace(/^\[TASK\]/, "").trim() || "-";
+          const comp = _hlKw(compRaw, kw);
           const done = r.isDone === true || String(r.isDone) === "1" || String(r.isDone) === "true";
           const dot = isTask ? "#af52de" : done ? "#34c759" : "#ff9f0a";
           const pal = parseInt(r.pal) || 0;
