@@ -3832,13 +3832,13 @@ function runPcSearch() {
           const invRaw = r.invoice || "";
           const isPreBL = blRaw.startsWith("발행전");
           const blDisplay = isPreBL ? "발행전" : _hlKw(blRaw, kw);
-          const invLine = invRaw ? `<span class="pcsr-inv">INV: ${_hlKw(invRaw, kw)}</span>` : "";
+          const invPart = invRaw ? `INV: ${_hlKw(invRaw, kw)} · ` : "";
+          const subLine = `<span class="pcsr-inv">${invPart}${_esc(r.pal || 0)}P · ${d}</span>`;
           const done = r.status === "완료";
           const dot = done ? "#34c759" : "#0a84ff";
           return `<button class="pcsr-item" onclick="pcJumpTo('${d}','${_argq(blRaw)}')">
             <span class="pcsr-dot" style="background:${dot}"></span>
-            <span class="pcsr-main"><span class="pcsr-big">B/L: ${blDisplay}</span>${invLine}</span>
-            <span class="pcsr-meta">${_esc(r.pal || 0)}P · ${d}</span>
+            <span class="pcsr-main"><span class="pcsr-big">B/L: ${blDisplay}</span>${subLine}</span>
           </button>`;
         })
         .join("");
