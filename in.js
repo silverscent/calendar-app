@@ -2185,12 +2185,20 @@ function verifyOcrRows() {
   const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{2,5}\d{5,9}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
   // 행수 비교: OCR 파싱 행 + 이미 완료처리된 _fromDb 행 중 원본에 실제 있는 것
   const nonDbCount = ocrEditRows.filter((r) => !r._fromDb).length;
-  const doneInRaw = ocrEditRows.filter((r) => r._fromDb && norm(r.bl || "") && rawNorm.includes(norm(r.bl || ""))).length;
+  const doneInRaw = ocrEditRows.filter((r) => r._fromDb && norm(r.bl || "") && (rawNorm.includes(norm(r.bl || "")) || rawTokens.includes(norm(r.bl || "")))).length;
   const ocrRowCount = nonDbCount;
   const effectiveCount = nonDbCount + doneInRaw;
-  const countWarn = rawRowCount && rawRowCount !== effectiveCount ? `⚠️행수 원본 ${rawRowCount}/표 ${nonDbCount}` : "";
-  const countInfo = !countWarn && doneInRaw > 0 ? `완료건 ${doneInRaw}건 제외` : "";
-  const countNote = countWarn ? ` · ${countWarn}` : countInfo ? ` · (${countInfo})` : "";
+  // 표 > 원본: 있으면 안 되는 행 → ⚠️ / 원본 > 표: 이미 처리된 건 있을 수 있음 → ✅ with note
+  const tableMore = rawRowCount && effectiveCount > rawRowCount;
+  const rawMore = rawRowCount && effectiveCount < rawRowCount;
+  const countWarn = tableMore ? `⚠️행수 원본 ${rawRowCount}/표 ${ocrRowCount}` : "";
+  const countNote = countWarn
+    ? ` · ${countWarn}`
+    : rawMore
+    ? ` (원본 ${rawRowCount}건 중 ${ocrRowCount}건 대조, 나머지 ${rawRowCount - effectiveCount}건 이미 처리 추정)`
+    : doneInRaw > 0
+    ? ` · (완료건 ${doneInRaw}건 제외)`
+    : "";
 
   const problem = warnRows || countWarn;
   const head = warnRows
