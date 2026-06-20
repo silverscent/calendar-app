@@ -190,7 +190,12 @@ function getCompanyColor(companyName) {
   for (let i = 0; i < stdName.length; i++) hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
   let baseIdx = Math.abs(hash) % presetPalette.length;
 
+  // customColors(수동) + companyColors(해시 캐시) 모두 피함
   const usedIdxs = new Set(Object.values(customColors || {}));
+  Object.values(companyColors).forEach((colorObj) => {
+    const idx = presetPalette.findIndex((p) => p.bg === colorObj.bg);
+    if (idx !== -1) usedIdxs.add(idx);
+  });
   let colorIdx = baseIdx;
   for (let i = 0; i < presetPalette.length; i++) {
     let candidate = (baseIdx + i) % presetPalette.length;
