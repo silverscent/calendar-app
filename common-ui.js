@@ -1464,7 +1464,7 @@ function changeConnLogPage(dir) {
       pulling = true;
       reached = false;
     },
-    { passive: true },
+    { passive: true, capture: true }, // capture: stopPropagation() 무시하고 항상 받음
   );
 
   document.addEventListener(

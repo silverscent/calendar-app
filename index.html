@@ -6,7 +6,7 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -103,6 +103,7 @@
          아래는 혹시 JS 비활성/지연 시의 안전 기본값(기본 테마=라이트) */
       html {
         background: #f4f6f9;
+        touch-action: manipulation; /* 더블탭 확대 전역 차단 */
       }
 
       .dash-control-row {

@@ -5022,13 +5022,17 @@ function openCompListModal() {
 
   // 2단계: [백그라운드] 창이 떠 있는 동안 서버에서 최신 DB를 몰래 가져옵니다.
   apiCall({ source: "vercel", action: "GET_COMP_INFO_DB" }).then(function (dbData) {
-    if (dbData) {
-      compInfoDB = dbData;
-      localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB));
+    if (!dbData) return;
+    const prevSig = JSON.stringify(compInfoDB);
+    compInfoDB = dbData;
+    localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB));
+    migrateFixedCompanies();
+    const changed = JSON.stringify(compInfoDB) !== prevSig;
+    if (changed) {
+      renderCompList(); // 데이터 바뀐 경우에만 재렌더
+      renderCalendar();
     }
-    migrateFixedCompanies(); // 최신 서버 데이터 기준 1회 seed
-    renderCompList();
-    renderCalendar();
+    // 데이터 동일하면 태그 목록도 그대로 — 깜빡임 없음
   });
 }
 
