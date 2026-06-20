@@ -483,6 +483,15 @@ function goToAsync(year, month) {
 
   renderCalendar();
 
+  // OCR 시간 갱신 (새로고침·월 이동 시마다)
+  apiCall({ source: "vercel", domain: "system", action: "GET_OCR_LAST_TIME" }).then(function (res) {
+    if (res === null) return;
+    let timeStr = res && res.time ? res.time : typeof res === "string" ? res : "최근 처리내역 없음";
+    const el = document.getElementById("ocrTimeText");
+    if (el) el.innerText = timeStr;
+    if (typeof renderPcLeftbar === "function") renderPcLeftbar();
+  });
+
   window.currentNavId = (window.currentNavId || 0) + 1;
   let myNavId = window.currentNavId;
   let fetchStartTime = Date.now();
