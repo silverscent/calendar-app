@@ -2746,6 +2746,7 @@ async function submitCMS(
   const safeStr = (val) => (val === "" || val == null ? "" : String(val).trim());
   let currentIsDone = isDone === true || String(isDone) === "true";
 
+  let _itemId = null;
   if (idx !== null) {
     let day = oldDate === "미정" ? "pending" : parseInt(oldDate.split("-")[2], 10);
     let item =
@@ -2758,16 +2759,18 @@ async function submitCMS(
       oldPal = safeStr(item.pal);
       oldBox = safeStr(item.box);
       currentIsDone = item.isDone === true || String(item.isDone) === "true";
+      _itemId = item.id || null;
     }
   }
 
   let payload = {
     action: action,
+    id: _itemId,
     oldComp: oldComp,
     oldDate: oldDate,
     oldDone: currentIsDone,
-    oldPal: oldPal,
-    oldBox: oldBox,
+    oldPal: oldPal !== "" ? oldPal : "0", // "" → "0" 으로 정규화 (DB INSERT 시 0 저장)
+    oldBox: oldBox !== "" ? oldBox : "0",
   };
 
   let confirmName = oldComp ? getFullName(oldComp.replace(/\[TASK\]/gi, "").trim()) : "";
