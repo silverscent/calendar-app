@@ -533,6 +533,20 @@ window.addEventListener("DOMContentLoaded", () => {
         localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
         apiCall({ source: "vercel", action: "SAVE_GLOBAL_COLOR", deleteNames: ghostKeys });
       }
+      // customColors 미지정 업체 자동 고정 — 수동 지정과 동일하게 DB에 저장 (관리자만)
+      if (isAdmin) {
+        const newAssignments = {};
+        Object.keys(compInfoDB).forEach((compName) => {
+          if (customColors[compName] !== undefined) return;
+          const colorObj = getCompanyColor(compName); // companyColors 캐시에도 등록됨
+          const idx = presetPalette.findIndex((p) => p.bg === colorObj.bg);
+          if (idx !== -1) { customColors[compName] = idx; newAssignments[compName] = idx; }
+        });
+        if (Object.keys(newAssignments).length > 0) {
+          localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
+          apiCall({ source: "vercel", action: "SAVE_GLOBAL_COLOR", saveAll: newAssignments });
+        }
+      }
     }
 
     let newData = await apiGet({ type: currentType, year: currentYear, month: currentMonth });

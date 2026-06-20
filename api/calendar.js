@@ -1314,6 +1314,7 @@ module.exports = async function (req, res) {
         let colors = rows.length > 0 ? parseJSON(rows[0].setting_value) : {};
         if (compName) colors[compName] = colorIdx;
         if (Array.isArray(deleteNames)) deleteNames.forEach((n) => { delete colors[n]; });
+        if (data?.saveAll && typeof data.saveAll === "object") Object.assign(colors, data.saveAll);
         const jsonStr = JSON.stringify(colors);
         await pool.query(
           `INSERT INTO system_settings (setting_key, setting_value) VALUES ('GLOBAL_COMPANY_COLORS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
