@@ -1441,6 +1441,8 @@ module.exports = async function handler(req, res) {
               }
             });
             etc = etc.replace(/\d+월\s*(첫|둘째|둘쨋|셋째|셋쨋|넷째|넷쨋|다섯|마지막)?\s*주/g, "");
+            // 이메일 인사말·맺음말 제거 (공급사 서명 등)
+            etc = etc.replace(/안녕하세요[^가-힣a-z0-9]*/gi, "").replace(/감사합니다\.?/gi, "").replace(/\bregards\b[\s\S]*$/gi, "").replace(/\bthank\s+you\b[\s\S]*$/gi, "");
             etc = etc
               .replace(/^[\s\/,|_|-]+|[\s\/,|_|-]+$/g, "")
               .replace(/\/+/g, "/")
