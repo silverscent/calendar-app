@@ -525,8 +525,10 @@ window.addEventListener("DOMContentLoaded", () => {
     if (colors) {
       customColors = colors;
       localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(colors));
-      // ghost 키 정리: getFullName()으로 정규화한 이름과 다른 키 (옛 이름 등) → 관리자만 DB 반영
-      const ghostKeys = Object.keys(customColors).filter((k) => getFullName(k) !== k);
+      // ghost 키 정리: ① 옛 이름 매핑 불일치 ② CRM에 없는 업체 → 관리자만 DB 반영
+      const ghostKeys = Object.keys(customColors).filter(
+        (k) => getFullName(k) !== k || !compInfoDB[getFullName(k)]
+      );
       if (ghostKeys.length > 0 && isAdmin) {
         ghostKeys.forEach((k) => { delete customColors[k]; });
         localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
