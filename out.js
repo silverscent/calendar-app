@@ -5311,13 +5311,13 @@ function openNcColorPicker() {
     if (_ncColorIdx !== null && presetPalette[_ncColorIdx]?.bg === getCompanyColor(c).bg) return;
     usedBgs.add(getCompanyColor(c).bg);
   });
-  let html = `<div class="color-grid" style="margin-top:8px;">`;
+  let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:6px;margin-top:8px;background:var(--bg-color);padding:10px;border-radius:12px;border:1px solid var(--border-color);">`;
   presetPalette.forEach((p, idx) => {
     const isUsed = usedBgs.has(p.bg);
     const isSel = _ncColorIdx === idx;
     let cls = isUsed ? "reserved" : "available";
     if (isSel) cls += " selected";
-    html += `<div class="color-seat ${cls}" style="background:${p.bg};" onclick="selectNcColor(${idx})"></div>`;
+    html += `<div class="color-seat ${cls}" style="background:${p.bg};width:100%;height:auto;aspect-ratio:1/1;" onclick="selectNcColor(${idx})"></div>`;
   });
   html += `</div>`;
   area.innerHTML = html;
