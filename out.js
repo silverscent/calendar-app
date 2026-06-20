@@ -227,12 +227,21 @@ function shuffleColorInModal(compName, idx) {
 
   // 2. 다른 업체들이 쓰고 있는 배경색 차단 목록 생성
   let usedBgs = new Set();
+  // 현재 달력에 있는 업체 색상
   activeComps.forEach((c) => {
     if (c !== stdName) {
       let colorObj = getCompanyColor(c);
       if (colorObj) usedBgs.add(colorObj.bg);
     }
   });
+  // 이번 달에 없더라도 수동 지정된 색상은 모두 차단
+  if (customColors) {
+    for (let name in customColors) {
+      if (name !== stdName && customColors[name] !== undefined && presetPalette[customColors[name]]) {
+        usedBgs.add(presetPalette[customColors[name]].bg);
+      }
+    }
+  }
 
   // 3. 차단 목록에 없고, 방금 보여준 색도 아닌 '진짜 잉여 색상'만 후보로 올림
   let available = [];
