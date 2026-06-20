@@ -5220,13 +5220,14 @@ async function saveCompEdit(oldCompName) {
     tempEditColorObj = null;
     tempEditColorIdx = null;
   } else if (oldCompName !== newCompName) {
-    // 색상은 안 바꿨는데 이름만 바꾼 경우에도 바뀐 이름의 색상을 구글 시트에 업데이트
+    // 이름만 바꾼 경우: 새 이름 저장 + 구 이름 DB에서 제거
     localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
     apiCall({
       source: "vercel",
       action: "SAVE_GLOBAL_COLOR",
       compName: newCompName,
       colorIdx: customColors[newCompName],
+      deleteNames: [oldCompName],
     });
   }
 
@@ -5249,6 +5250,13 @@ async function deleteCompInfo(comp) {
   delete compInfoDB[comp];
   localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB));
   apiCall({ source: "vercel", action: "SAVE_COMP_INFO_DB", data: compInfoDB });
+  // 색상 슬롯도 함께 해제
+  if (customColors[comp] !== undefined) {
+    delete customColors[comp];
+    delete companyColors[comp];
+    localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
+    apiCall({ source: "vercel", action: "SAVE_GLOBAL_COLOR", deleteNames: [comp] });
+  }
   showToast(`🗑️ 삭제되었습니다.`);
 
   // 삭제 후 선택 초기화
