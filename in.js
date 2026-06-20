@@ -578,12 +578,13 @@ function updateLocalState(action, payload, idx) {
     let newArr = newDay === "pending" ? serverData.pendingItems : serverData.monthData[newDay];
     newArr.push(newItem);
   } else if (action === "EDIT") {
-    let item = arr.splice(idx, 1)[0];
+    const isSimpleEdit = oldDay === newDay; // 날짜 미변경: 제자리에서 수정
+    let item = isSimpleEdit ? arr[idx] : arr.splice(idx, 1)[0];
 
-    // 🚨 [핵심 픽스] 수정된 모든 데이터를 내 폰 화면(로컬 객체)에도 즉시 덮어씌웁니다!
+    // 수정된 데이터를 로컬 객체에 즉시 반영
     if (payload.newBL !== undefined) {
       item.bl = payload.newBL;
-      item.company = payload.newBL; // 시스템 호환용
+      item.company = payload.newBL;
     }
     if (payload.newPal !== undefined) item.pal = payload.newPal;
     if (payload.newSType !== undefined) item.sType = payload.newSType;
@@ -591,9 +592,11 @@ function updateLocalState(action, payload, idx) {
     if (payload.newInvoice !== undefined) item.invoice = payload.newInvoice;
     if (payload.newEtc !== undefined) item.etc = payload.newEtc;
 
-    if (newDay !== "pending" && !serverData.monthData[newDay]) serverData.monthData[newDay] = [];
-    let newArr = newDay === "pending" ? serverData.pendingItems : serverData.monthData[newDay];
-    newArr.push(item);
+    if (!isSimpleEdit) {
+      if (newDay !== "pending" && !serverData.monthData[newDay]) serverData.monthData[newDay] = [];
+      let newArr = newDay === "pending" ? serverData.pendingItems : serverData.monthData[newDay];
+      newArr.push(item);
+    }
   } else if (action === "DELETE") {
     arr.splice(idx, 1);
   } else if (action === "DONE") {

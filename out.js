@@ -2115,7 +2115,7 @@ function attachAutocomplete(inputId) {
     filtered.forEach((c) => {
       const sn = shortOf(c);
       const snTag = sn ? ` <span style="color:#888; font-size:0.85em;">${hl(sn)}</span>` : "";
-      html += `<div class="drop-item" onmousedown="document.getElementById('${inputId}').value='${c}'; document.getElementById('${inputId}-drop').style.display='none';">${hl(c)}${snTag}</div>`;
+      html += `<div class="drop-item" data-val="${_esc(c)}" onmousedown="document.getElementById('${inputId}').value=this.dataset.val; document.getElementById('${inputId}-drop').style.display='none';">${hl(c)}${snTag}</div>`;
     });
     drop.innerHTML = html;
     drop.style.display = "block";
