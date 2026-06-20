@@ -5325,20 +5325,14 @@ function openColorPickerV3(compName) {
   container.dataset.currentComp = stdName;
   container.style.display = "block";
 
-  // 1. 색상 사용 현황 수집
+  // 1. 색상 사용 현황 수집 — getCompanyColor() 통해 충돌방지 로직과 일치시킴
   let usedColorMap = {};
-  let allComps = Object.keys(compInfoDB);
-
-  allComps.forEach((c) => {
+  const allCompNames = new Set([...Object.keys(compInfoDB), ...Object.keys(customColors)]);
+  allCompNames.forEach((c) => {
     if (c === stdName) return;
-    let colorIdx;
-    if (customColors[c] !== undefined) colorIdx = Number(customColors[c]);
-    else {
-      let hash = 0;
-      for (let i = 0; i < c.length; i++) hash = c.charCodeAt(i) + ((hash << 5) - hash);
-      colorIdx = Math.abs(hash) % presetPalette.length;
-    }
-    usedColorMap[colorIdx] = c;
+    const colorObj = getCompanyColor(c);
+    const colorIdx = presetPalette.findIndex((p) => p.bg === colorObj.bg);
+    if (colorIdx !== -1 && usedColorMap[colorIdx] === undefined) usedColorMap[colorIdx] = c;
   });
 
   let currentDisplayIdx =
