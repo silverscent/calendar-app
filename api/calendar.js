@@ -1370,40 +1370,44 @@ module.exports = async function (req, res) {
 
         if (action === "DONE" || action === "UNDO_DONE") {
           const statName = action === "DONE" ? "✅ 완료" : "⏳ 대기(취소)";
-          await pool.query(
-            `UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
-            [action === "DONE" ? 1 : 0, targetName, targetDate, targetPal, targetBox],
-          );
+          if (data?.id) {
+            await pool.query(`UPDATE outbound SET isDone = ? WHERE id = ?`, [action === "DONE" ? 1 : 0, data.id]);
+          } else {
+            await pool.query(
+              `UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND COALESCE(NULLIF(pal,''),'0')=COALESCE(NULLIF(?,''),'0') AND COALESCE(NULLIF(box,''),'0')=COALESCE(NULLIF(?,''),'0')`,
+              [action === "DONE" ? 1 : 0, targetName, targetDate, targetPal, targetBox],
+            );
+          }
           await pool.query(
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_STATUS', ?)",
             [currentAdmin, `[출고 상태] ${targetName} ➡️ ${statName} (PL:${targetPal || 0}, BOX:${targetBox || 0})`],
           );
         } else if (action === "DELETE") {
-          await pool.query(`DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [
-            targetName,
-            targetDate,
-            targetPal,
-            targetBox,
-          ]);
+          if (data?.id) {
+            await pool.query(`DELETE FROM outbound WHERE id = ?`, [data.id]);
+          } else {
+            await pool.query(
+              `DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND COALESCE(NULLIF(pal,''),'0')=COALESCE(NULLIF(?,''),'0') AND COALESCE(NULLIF(box,''),'0')=COALESCE(NULLIF(?,''),'0')`,
+              [targetName, targetDate, targetPal, targetBox],
+            );
+          }
           await pool.query(
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_DELETE', ?)",
             [currentAdmin, `[출고 삭제] ${targetName} (PL:${targetPal || 0}, BOX:${targetBox || 0}) 파기`],
           );
         } else if (action === "EDIT") {
-          await pool.query(
-            `UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
-            [
-              newDate,
-              newName,
-              data?.newPal || "",
-              data?.newBox || "",
-              data?.newEtc || "",
-              targetName,
-              targetDate,
-              targetPal,
-              targetBox,
-            ],
-          );
+          if (data?.id) {
+            await pool.query(
+              `UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? WHERE id = ?`,
+              [newDate, newName, data?.newPal ?? "", data?.newBox ?? "", data?.newEtc ?? "", data.id],
+            );
+          } else {
+            await pool.query(
+              `UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? WHERE company = ? AND outbound_date <=> ? AND COALESCE(NULLIF(pal,''),'0')=COALESCE(NULLIF(?,''),'0') AND COALESCE(NULLIF(box,''),'0')=COALESCE(NULLIF(?,''),'0')`,
+              [newDate, newName, data?.newPal ?? "", data?.newBox ?? "", data?.newEtc ?? "",
+               targetName, targetDate, targetPal, targetBox],
+            );
+          }
 
           // 🚨 [스마트 로그 패치] 실제로 변경된 항목만 추출해서 로그 기록
           let changes = [];
@@ -1479,8 +1483,8 @@ module.exports = async function (req, res) {
           if (reqDateOut === "미정" || reqDateOut === "" || !reqDateOut) reqDateOut = null;
           else if (typeof reqDateOut === "string" && reqDateOut.length > 10) reqDateOut = reqDateOut.substring(0, 10);
 
-          let reqPalOut = data?.newPal || data?.pal || "";
-          let reqBoxOut = data?.newBox || data?.box || "";
+          let reqPalOut = data?.newPal || data?.pal || "0";
+          let reqBoxOut = data?.newBox || data?.box || "0";
           let reqEtcOut = data?.newEtc || data?.etc || "";
 
           const [exist] = await pool.query(`SELECT id FROM outbound WHERE TRIM(company) = ? AND outbound_date <=> ?`, [
@@ -1531,12 +1535,14 @@ module.exports = async function (req, res) {
         } else if (action === "MULTI_DELETE" && data?.items) {
           for (const it of data.items) {
             const tDate = it.dateStr === "미정" ? null : it.dateStr;
-            await pool.query(`DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`, [
-              it.comp,
-              tDate,
-              it.pal,
-              it.box,
-            ]);
+            if (it.id) {
+              await pool.query(`DELETE FROM outbound WHERE id = ?`, [it.id]);
+            } else {
+              await pool.query(
+                `DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND COALESCE(NULLIF(pal,''),'0')=COALESCE(NULLIF(?,''),'0') AND COALESCE(NULLIF(box,''),'0')=COALESCE(NULLIF(?,''),'0')`,
+                [it.comp, tDate, it.pal, it.box],
+              );
+            }
           }
           await pool.query(
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_DEL', ?)",
@@ -1547,10 +1553,14 @@ module.exports = async function (req, res) {
           const statName = action === "MULTI_DONE" ? "✅ 완료" : "⏳ 대기(취소)";
           for (const it of data.items) {
             const tDate = it.dateStr === "미정" ? null : it.dateStr;
-            await pool.query(
-              `UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ?`,
-              [isDoneVal, it.comp, tDate, it.pal, it.box],
-            );
+            if (it.id) {
+              await pool.query(`UPDATE outbound SET isDone = ? WHERE id = ?`, [isDoneVal, it.id]);
+            } else {
+              await pool.query(
+                `UPDATE outbound SET isDone = ? WHERE company = ? AND outbound_date <=> ? AND COALESCE(NULLIF(pal,''),'0')=COALESCE(NULLIF(?,''),'0') AND COALESCE(NULLIF(box,''),'0')=COALESCE(NULLIF(?,''),'0')`,
+                [isDoneVal, it.comp, tDate, it.pal, it.box],
+              );
+            }
           }
           await pool.query(
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_STAT', ?)",

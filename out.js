@@ -2655,6 +2655,7 @@ function handleItemClick(e, day, idx, comp, isDone) {
     } else {
       selectedItems.push({
         key: itemKey,
+        id: item?.id || null,
         comp: comp,
         dateStr: dateStr,
         isDone: isItemDone,
@@ -3055,6 +3056,15 @@ async function submitDeleteBlock(comp, dateStr, idx, isDone, blockStart, blockEn
       cur.setDate(cur.getDate() + 1);
     }
 
+    // 0) 로컬 제거 전에 날짜별 id 먼저 수집
+    const dateIdMap = {};
+    dates.forEach((dStr) => {
+      const dd = parseInt(dStr.split("-")[2], 10);
+      const arr = serverData.monthData[dd];
+      const found = arr && arr.find((it) => matchKey(it) === key);
+      dateIdMap[dStr] = found?.id || null;
+    });
+
     // 1) 로컬에서 같은 키 항목 모두 제거 → 즉시 화면 반영
     dates.forEach((dStr) => {
       let dd = parseInt(dStr.split("-")[2], 10);
@@ -3073,7 +3083,7 @@ async function submitDeleteBlock(comp, dateStr, idx, isDone, blockStart, blockEn
         source: "vercel",
         domain: "out",
         action: "DELETE",
-        data: { action: "DELETE", oldComp: comp, oldDate: dStr, oldDone: isDone, oldPal: oldPal, oldBox: oldBox },
+        data: { action: "DELETE", id: dateIdMap[dStr], oldComp: comp, oldDate: dStr, oldDone: isDone, oldPal: oldPal, oldBox: oldBox },
         token: adminToken,
         admin_id: localStorage.getItem("admin_id"),
       }).then((res) => {
