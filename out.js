@@ -5282,6 +5282,8 @@ async function deleteCompInfo(comp) {
 }
 
 // 신규 등록 로직
+let _ncColorIdx = null; // 신규 업체 선택 색상 인덱스 (null = 자동)
+
 function openNewCompModal() {
   document.getElementById("nc-full").value = "";
   document.getElementById("nc-short").value = "";
@@ -5292,7 +5294,42 @@ function openNewCompModal() {
   document.getElementById("nc-addr").value = "";
   document.getElementById("nc-phone").value = "";
   document.getElementById("nc-time").value = "";
+  _ncColorIdx = null;
+  const btn = document.getElementById("nc-color-btn");
+  if (btn) { btn.textContent = "🎨 색상 선택 (선택 안 하면 자동)"; btn.style.background = "rgba(10,132,255,0.1)"; btn.style.color = "#0a84ff"; btn.style.border = "1px solid rgba(10,132,255,0.3)"; }
+  const area = document.getElementById("nc-color-picker-area");
+  if (area) area.style.display = "none";
   document.getElementById("newCompModal").style.display = "flex";
+}
+
+function openNcColorPicker() {
+  const area = document.getElementById("nc-color-picker-area");
+  if (area.style.display === "block") { area.style.display = "none"; return; }
+  // 이미 사용 중인 색 수집
+  const usedBgs = new Set();
+  [...Object.keys(compInfoDB), ...Object.keys(customColors), ...Object.keys(companyColors)].forEach((c) => {
+    if (_ncColorIdx !== null && presetPalette[_ncColorIdx]?.bg === getCompanyColor(c).bg) return;
+    usedBgs.add(getCompanyColor(c).bg);
+  });
+  let html = `<div class="color-grid" style="margin-top:8px;">`;
+  presetPalette.forEach((p, idx) => {
+    const isUsed = usedBgs.has(p.bg);
+    const isSel = _ncColorIdx === idx;
+    let cls = isUsed ? "reserved" : "available";
+    if (isSel) cls += " selected";
+    html += `<div class="color-seat ${cls}" style="background:${p.bg};" onclick="selectNcColor(${idx})"></div>`;
+  });
+  html += `</div>`;
+  area.innerHTML = html;
+  area.style.display = "block";
+}
+
+function selectNcColor(idx) {
+  _ncColorIdx = idx;
+  const p = presetPalette[idx];
+  const btn = document.getElementById("nc-color-btn");
+  if (btn) { btn.style.background = p.bg; btn.style.color = p.cMain; btn.style.border = "none"; btn.textContent = "✅ 색상 선택됨 (다시 누르면 변경)"; }
+  document.getElementById("nc-color-picker-area").style.display = "none";
 }
 
 function saveNewComp() {
@@ -5314,11 +5351,19 @@ function saveNewComp() {
   };
   localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB));
   apiCall({ source: "vercel", action: "SAVE_COMP_INFO_DB", data: compInfoDB });
-  showToast(`✅ [${full}] 등록 완료!`);
 
+  // 색상 선택됐으면 저장, 아니면 자동 배정
+  if (_ncColorIdx !== null) {
+    customColors[full] = _ncColorIdx;
+    companyColors[full] = presetPalette[_ncColorIdx];
+    localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
+    apiCall({ source: "vercel", action: "SAVE_GLOBAL_COLOR", compName: full, colorIdx: _ncColorIdx });
+  }
+  _ncColorIdx = null;
+
+  showToast(`✅ [${full}] 등록 완료!`);
   document.getElementById("newCompModal").style.display = "none";
 
-  // 방금 만든 업체를 바로 선택 상태로 만들기!
   selectedCrmComp = full;
   renderCompList();
 }

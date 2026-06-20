@@ -2255,6 +2255,16 @@
         border-radius: 14px;
         border: 1px solid var(--border-color);
       }
+      /* PC 모드: 가로 공간 넓으니 한 줄에 더 표시 */
+      @media (hover: hover) and (pointer: fine) {
+        body.pc-dense .color-grid {
+          grid-template-columns: repeat(13, 42px);
+        }
+        body.pc-dense .color-seat {
+          width: 42px;
+          height: 42px;
+        }
+      }
       .color-seat {
         width: 46px;
         height: 46px;
@@ -6532,6 +6542,12 @@
           <div class="info-row">
             <span class="info-label">배송시간</span><input type="text" id="nc-time" class="edit-input" />
           </div>
+          <div class="info-row" style="margin-top:5px;">
+            <span class="info-label">달력 색상 (선택 안 하면 자동)</span>
+            <button type="button" id="nc-color-btn" style="width:100%;padding:12px;border-radius:12px;background:rgba(10,132,255,0.1);color:#0a84ff;border:1px solid rgba(10,132,255,0.3);font-weight:900;font-size:0.95em;cursor:pointer;transition:0.2s;margin-top:4px;"
+              onclick="openNcColorPicker()">🎨 색상 선택 (선택 안 하면 자동)</button>
+          </div>
+          <div id="nc-color-picker-area" style="display:none;"></div>
           <button class="save-btn" style="width: 100%; margin-top: 15px" onclick="saveNewComp()">💾 등록 완료</button>
         </div>
       </div>
