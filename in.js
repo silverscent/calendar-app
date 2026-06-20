@@ -2591,6 +2591,15 @@ function silentBackgroundSync() {
       showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
     }
     updateSyncTime();
+    // OCR 시간도 조용히 갱신
+    apiCall({ source: "vercel", domain: "system", action: "GET_OCR_LAST_TIME" }).then(function (r) {
+      if (!r) return;
+      const t = r.time || (typeof r === "string" ? r : null);
+      if (!t) return;
+      const el = document.getElementById("ocrTimeText");
+      if (el) el.innerText = t;
+      if (typeof renderPcLeftbar === "function") renderPcLeftbar();
+    });
   });
 }
 
