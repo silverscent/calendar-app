@@ -5366,9 +5366,13 @@ function openColorPickerV3(compName) {
   container.dataset.currentComp = stdName;
   container.style.display = "block";
 
-  // 1. 색상 사용 현황 수집 — getCompanyColor() 통해 충돌방지 로직과 일치시킴
+  // 1. 색상 사용 현황 수집 — CRM·customColors·달력 렌더된 업체(companyColors) 모두 포함
   let usedColorMap = {};
-  const allCompNames = new Set([...Object.keys(compInfoDB), ...Object.keys(customColors)]);
+  const allCompNames = new Set([
+    ...Object.keys(compInfoDB),
+    ...Object.keys(customColors),
+    ...Object.keys(companyColors),
+  ]);
   allCompNames.forEach((c) => {
     if (c === stdName) return;
     const colorObj = getCompanyColor(c);
