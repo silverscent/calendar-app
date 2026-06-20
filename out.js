@@ -185,12 +185,18 @@ function getCompanyColor(companyName) {
   }
   if (companyColors[stdName]) return companyColors[stdName];
 
-  // 2. 수동 지정이 없으면 글자를 계산해 절대 변하지 않는 고유 색상 부여 (남은 색상 계산 X)
+  // 2. 수동 지정이 없으면 해시 기반 자동 배정 — 이미 customColors로 수동 지정된 인덱스는 건너뜀
   let hash = 0;
   for (let i = 0; i < stdName.length; i++) hash = stdName.charCodeAt(i) + ((hash << 5) - hash);
-  let colorIdx = Math.abs(hash) % presetPalette.length;
+  let baseIdx = Math.abs(hash) % presetPalette.length;
 
-  // 화면 렌더링 중 서버 무한 통신 버그 제거 (메모리에만 저장)
+  const usedIdxs = new Set(Object.values(customColors || {}));
+  let colorIdx = baseIdx;
+  for (let i = 0; i < presetPalette.length; i++) {
+    let candidate = (baseIdx + i) % presetPalette.length;
+    if (!usedIdxs.has(candidate)) { colorIdx = candidate; break; }
+  }
+
   companyColors[stdName] = presetPalette[colorIdx];
   return presetPalette[colorIdx];
 }
