@@ -521,6 +521,13 @@ window.addEventListener("DOMContentLoaded", () => {
     if (colors) {
       customColors = colors;
       localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(colors));
+      // ghost 키 정리: getFullName()으로 정규화한 이름과 다른 키 (옛 이름 등) → 관리자만 DB 반영
+      const ghostKeys = Object.keys(customColors).filter((k) => getFullName(k) !== k);
+      if (ghostKeys.length > 0 && isAdmin) {
+        ghostKeys.forEach((k) => { delete customColors[k]; });
+        localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
+        apiCall({ source: "vercel", action: "SAVE_GLOBAL_COLOR", deleteNames: ghostKeys });
+      }
     }
 
     let newData = await apiGet({ type: currentType, year: currentYear, month: currentMonth });

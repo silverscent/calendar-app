@@ -1306,12 +1306,14 @@ module.exports = async function (req, res) {
         return res.status(200).json(rows.length > 0 ? parseJSON(rows[0].setting_value) : {});
       } else if (action === "SAVE_GLOBAL_COLOR") {
         const compName = data?.compName || payload.compName;
-        const colorIdx = data?.colorIdx || payload.colorIdx;
+        const colorIdx = data?.colorIdx ?? payload.colorIdx;
+        const deleteNames = data?.deleteNames || payload.deleteNames; // 삭제할 키 배열
         const [rows] = await pool.query(
           `SELECT setting_value FROM system_settings WHERE setting_key = 'GLOBAL_COMPANY_COLORS'`,
         );
         let colors = rows.length > 0 ? parseJSON(rows[0].setting_value) : {};
         if (compName) colors[compName] = colorIdx;
+        if (Array.isArray(deleteNames)) deleteNames.forEach((n) => { delete colors[n]; });
         const jsonStr = JSON.stringify(colors);
         await pool.query(
           `INSERT INTO system_settings (setting_key, setting_value) VALUES ('GLOBAL_COMPANY_COLORS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
