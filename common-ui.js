@@ -1446,12 +1446,10 @@ function changeConnLogPage(dir) {
   const blocked = (t) =>
     !t ||
     (t.closest &&
-      (t.closest(".item-tag") ||
-        t.closest(".overlay-modal") ||
+      (t.closest(".overlay-modal") ||
         t.closest(".modal") ||
         t.closest("#dashboardModal") ||
-        t.closest("#masterDashboardModal") ||
-        t.closest(".pending-item")));
+        t.closest("#masterDashboardModal")));
 
   document.addEventListener(
     "touchstart",
@@ -1471,6 +1469,8 @@ function changeConnLogPage(dir) {
     "touchmove",
     (e) => {
       if (!pulling) return;
+      // 아이템 드래그 중이면 PTR 취소
+      if (window.isDragging || window.fabDragging) { pulling = false; ind().style.transform = "translate(-50%,-70px)"; return; }
       let dy = e.touches[0].clientY - startY;
       const box = ind();
       if (dy <= 0) {
@@ -1522,6 +1522,18 @@ function changeConnLogPage(dir) {
     },
     { passive: true },
   );
+})();
+
+// ── 더블탭 확대 차단 (핀치 줌은 허용) ───────────────────────────────────────
+(function preventDoubleTapZoom() {
+  let lastTap = 0;
+  document.addEventListener("touchend", (e) => {
+    const now = Date.now();
+    if (now - lastTap < 300 && e.target && !e.target.closest(".ocrPaneImg, #ocrImgElement")) {
+      e.preventDefault(); // 더블탭 확대 차단 (OCR 이미지 뷰어는 제외)
+    }
+    lastTap = now;
+  }, { passive: false, capture: true });
 })();
 
 // ── IP 클릭 팝업 ──────────────────────────────────────────────────────────────
