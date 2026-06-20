@@ -353,6 +353,7 @@ function silentBackgroundSync() {
       });
     }
     updateSyncTime();
+    syncCrmDataBackground();
   });
 }
 

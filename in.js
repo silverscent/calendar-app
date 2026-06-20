@@ -2589,6 +2589,7 @@ function silentBackgroundSync() {
       localStorage.setItem(`cal_cache_${currentType}_${reqYear}_${reqMonth}`, JSON.stringify(res));
       renderCalendar();
       showToast("🔄 새로운 스케줄이 업데이트되었습니다.", 2000);
+      triggerStealthYearlySync(reqYear);
     }
     updateSyncTime();
     // OCR 시간도 조용히 갱신
