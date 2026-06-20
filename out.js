@@ -846,6 +846,7 @@ function renderPending() {
 }
 
 function renderCalendar() {
+  companyColors = {}; // 렌더마다 초기화 → 삭제된 업체 색 즉시 해제
   const { weekSlotHeights, weekHeights } = computeGanttSlots();
 
   document.getElementById("calTitle").innerText =
