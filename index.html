@@ -4374,18 +4374,10 @@
         body.pc-dense #compListModal #compTagsContainer .comp-tag-btn {
           width: 100%;
           justify-content: flex-start;
-          font-size: 0.9em;
-          padding: 9px 12px;
-          opacity: 1 !important; /* 흐림 제거 → 글씨 선명 */
-          filter: none !important; /* 회색조 제거 */
-          border-radius: 9px;
-          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); /* 컬러 배경 위 글씨 대비 */
+          font-weight: 500; /* 볼드 해제 → 글씨 또렷하게 */
         }
         body.pc-dense #compListModal #compTagsContainer .comp-tag-btn.active {
-          transform: none;
-          outline: 2px solid var(--text-main);
-          outline-offset: 1px;
-          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+          transform: none; /* 세로 목록에서 들썩임 방지 */
         }
         body.pc-dense #compListModal #compDetailContainer {
           grid-column: 2;
