@@ -1758,8 +1758,11 @@
       #dashboardModal {
         z-index: 3000;
       }
-      /* PC 전용 대시보드 상세 — 기본은 숨김(모바일 영향 0), pc-dense에서만 표시 */
+      /* PC 전용 요소 — 기본은 숨김(모바일 영향 0), pc-dense에서만 표시 */
       #dashPcExtra {
+        display: none;
+      }
+      #compareInlinePicker {
         display: none;
       }
       .dashboard-grid {
@@ -4209,9 +4212,86 @@
           min-width: 2px;
         }
         /* ─── PC 전용 정밀 비교 탭 (데스크탑 데이터 그리드 룩) ─── */
+        /* 인라인 월 선택기 */
+        body.pc-dense #compareInlinePicker {
+          display: block;
+          background: var(--card-bg);
+          border: 1px solid var(--border-color);
+          border-radius: 14px;
+          padding: 14px 16px;
+          margin-bottom: 12px;
+        }
+        body.pc-dense #compareInlinePicker .cmi-head {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+        }
+        body.pc-dense #compareInlinePicker .cmi-nav {
+          width: 30px;
+          height: 30px;
+          border-radius: 8px;
+          border: 1px solid var(--border-color);
+          background: var(--bg-color);
+          color: var(--text-main);
+          font-size: 1.1em;
+          font-weight: 900;
+          cursor: pointer;
+          line-height: 1;
+          transition: 0.12s;
+        }
+        body.pc-dense #compareInlinePicker .cmi-nav:hover {
+          border-color: var(--pc-accent);
+          color: var(--pc-accent);
+        }
+        body.pc-dense #compareInlinePicker .cmi-year {
+          font-weight: 900;
+          font-size: 1.05em;
+          min-width: 64px;
+          text-align: center;
+        }
+        body.pc-dense #compareInlinePicker .cmi-hint {
+          margin-left: auto;
+          font-size: 0.8em;
+          color: var(--text-sub);
+          font-weight: 700;
+        }
+        body.pc-dense #compareInlinePicker .cmi-grid {
+          display: grid;
+          grid-template-columns: repeat(6, 1fr);
+          gap: 8px;
+        }
+        body.pc-dense #compareInlinePicker .cmi-m {
+          padding: 10px 0;
+          border-radius: 9px;
+          border: 1px solid var(--border-color);
+          background: var(--bg-color);
+          color: var(--text-main);
+          font-weight: 800;
+          font-size: 0.9em;
+          cursor: pointer;
+          transition: 0.12s;
+        }
+        body.pc-dense #compareInlinePicker .cmi-m:hover {
+          border-color: var(--pc-accent);
+          transform: translateY(-1px);
+        }
+        body.pc-dense #compareInlinePicker .cmi-m.on {
+          background: var(--pc-accent);
+          border-color: var(--pc-accent);
+          color: #fff;
+          box-shadow: 0 3px 10px rgba(10, 132, 255, 0.3);
+        }
+        /* 인라인 피커가 있으니 PC에선 칩의 '+ 추가' 버튼 숨김 */
+        body.pc-dense #dashCompareView .compare-add-btn {
+          display: none;
+        }
         body.pc-dense #dashCompareView .compare-tags-container {
           gap: 8px;
           padding: 4px 0 2px;
+        }
+        body.pc-dense #dashCompareView .compare-tags-container:empty {
+          display: none;
         }
         body.pc-dense #dashCompareView .compare-tag {
           background: rgba(10, 132, 255, 0.08);
@@ -4220,11 +4300,6 @@
           border-radius: 8px;
           font-weight: 800;
           padding: 6px 10px;
-        }
-        body.pc-dense #dashCompareView .compare-add-btn {
-          border-radius: 8px;
-          border: 1px dashed var(--border-color);
-          font-weight: 800;
         }
         /* 실행 버튼: 풀폭 모바일 버튼 → 우측 정렬 인라인 */
         body.pc-dense #dashCompareView .compare-exec-btn {
@@ -4941,6 +5016,9 @@
               </div>
             </div>
           </div>
+
+          <!-- PC 전용: 인라인 월 선택기 (모바일은 CSS로 숨김, 칩+모달 유지) -->
+          <div id="compareInlinePicker"></div>
 
           <div class="compare-tags-container" id="compareTagsArea"></div>
 

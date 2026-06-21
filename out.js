@@ -4616,7 +4616,47 @@ function switchDashTab(tabName) {
     summaryView.style.display = "none";
     compareView.style.display = "block";
     renderCompareTags();
+    renderCompareInlinePicker();
   }
+}
+
+// 🖥️ [PC 전용] 인라인 월 선택기 — 연도 스텝퍼 + 12개월 토글(클릭 즉시 비교)
+let compareInlineYear = null;
+function renderCompareInlinePicker() {
+  const box = document.getElementById("compareInlinePicker");
+  if (!box) return;
+  if (compareInlineYear === null) {
+    compareInlineYear =
+      compareMonthsList.length > 0 ? compareMonthsList[compareMonthsList.length - 1].y : parseInt(serverData.year, 10);
+  }
+  let cells = "";
+  for (let m = 1; m <= 12; m++) {
+    const on = compareMonthsList.some((it) => it.y === compareInlineYear && it.m === m);
+    cells += `<button class="cmi-m${on ? " on" : ""}" onclick="toggleCompareInline(${compareInlineYear}, ${m})">${m}월</button>`;
+  }
+  box.innerHTML =
+    `<div class="cmi-head">` +
+    `<button class="cmi-nav" onclick="stepCompareInlineYear(-1)">‹</button>` +
+    `<span class="cmi-year">${compareInlineYear}년</span>` +
+    `<button class="cmi-nav" onclick="stepCompareInlineYear(1)">›</button>` +
+    `<span class="cmi-hint">월을 눌러 바로 비교에 추가/제거</span>` +
+    `</div><div class="cmi-grid">${cells}</div>`;
+}
+function stepCompareInlineYear(off) {
+  compareInlineYear += off;
+  renderCompareInlinePicker();
+}
+function toggleCompareInline(y, m) {
+  const i = compareMonthsList.findIndex((it) => it.y === y && it.m === m);
+  if (i !== -1) {
+    removeCompareMonth(i); // 제거 + 그리드 갱신
+  } else {
+    compareMonthsList.push({ y, m });
+    compareMonthsList.sort((a, b) => (a.y !== b.y ? a.y - b.y : a.m - b.m));
+    renderCompareTags();
+    executeCompare(); // 추가 즉시 데이터 불러와 비교 (없는 달은 서버 fetch)
+  }
+  renderCompareInlinePicker();
 }
 
 function renderCompareTags() {
@@ -4640,6 +4680,7 @@ function removeCompareMonth(idx) {
 
   compareMonthsList.splice(idx, 1);
   renderCompareTags();
+  if (typeof renderCompareInlinePicker === "function") renderCompareInlinePicker();
 
   if (compareMonthsList.length === 0) {
     document.getElementById("compareGridArea").style.display = "none";
