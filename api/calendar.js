@@ -95,6 +95,9 @@ function getSaturdayOfWeek(dateStr) {
   await tryIdx("ALTER TABLE inbound ADD INDEX idx_bl_number (bl_number(50))");
   await tryIdx("ALTER TABLE outbound ADD INDEX idx_outbound_date (outbound_date)");
   await tryIdx("ALTER TABLE admin_audit_logs ADD INDEX idx_audit_admin_action (admin_id, action_type)");
+  // 접속로그 목록(action_type 필터 + created_at 정렬) 및 로그인 실패 카운트(ip+action+created_at) 가속
+  await tryIdx("ALTER TABLE admin_audit_logs ADD INDEX idx_audit_action_created (action_type, created_at)");
+  await tryIdx("ALTER TABLE admin_audit_logs ADD INDEX idx_audit_ip_action (ip_address, action_type, created_at)");
 })();
 
 module.exports = async function (req, res) {
