@@ -4350,7 +4350,74 @@ function renderDashCharts() {
   } else if (sliderWrapper) {
     sliderWrapper.style.display = "none";
   }
+
+  // 🖥️ PC 전용 상세 패널 (순위표·KPI·월별) — 모바일은 CSS로 숨겨져 영향 없음
+  try {
+    renderDashPcExtra({
+      compMap,
+      sortedComps,
+      totalQty,
+      doneQty,
+      mode: window.dashMode,
+      barData,
+      labels,
+    });
+  } catch (e) {
+    console.warn("PC 대시보드 상세 렌더 실패:", e);
+  }
 } // renderDashCharts 종료
+
+// 🖥️ [PC 전용] 대시보드 상세 패널: 업체별 순위표 + KPI 확장 + (연간) 월별표
+function _dpxCard(t, v, accent) {
+  return `<div class="dpx-card"${accent ? ` style="border-left-color:${accent}"` : ""}><div class="dpx-card-t">${t}</div><div class="dpx-card-v">${v}</div></div>`;
+}
+function renderDashPcExtra(d) {
+  const box = document.getElementById("dashPcExtra");
+  if (!box) return;
+  const unitFull = window.dashUnit === "pal" ? "PAL" : "BOX";
+  const total = d.totalQty || 0;
+  const comps = (d.sortedComps || []).filter((c) => (d.compMap[c] || 0) > 0);
+  const activeCount = comps.length;
+  const topComp = comps[0] ? getShortName(comps[0]) : "-";
+  const rate = d.mode === "month" && total > 0 ? Math.round((d.doneQty / total) * 100) : null;
+
+  // KPI 카드 (확장)
+  let kpi = `<div class="dpx-kpi">`;
+  kpi += _dpxCard(`총 ${unitFull}`, total.toLocaleString());
+  kpi += _dpxCard("완료율", rate === null ? "—" : rate + "%", rate === null ? null : rate >= 100 ? "#34c759" : rate > 50 ? "#0a84ff" : "#ff9f0a");
+  kpi += _dpxCard("활성 업체", activeCount + "곳");
+  kpi += _dpxCard("최다 업체", topComp);
+  kpi += `</div>`;
+
+  // 업체별 순위표
+  let table = `<div class="dpx-sec-title">🏢 업체별 ${d.mode === "month" ? "월간" : "연간"} 순위</div>`;
+  table += `<table class="dpx-table"><thead><tr><th>#</th><th>업체</th><th class="dpx-num">${unitFull}</th><th class="dpx-num">점유율</th><th></th></tr></thead><tbody>`;
+  if (comps.length === 0) {
+    table += `<tr><td colspan="5" style="text-align:center;color:var(--text-sub);padding:16px;">데이터가 없습니다</td></tr>`;
+  } else {
+    comps.forEach((c, i) => {
+      const qty = d.compMap[c] || 0;
+      const pct = total > 0 ? Math.round((qty / total) * 100) : 0;
+      const color = getCompanyColor(c).bg;
+      table += `<tr><td class="dpx-rank">${i + 1}</td><td><span class="dpx-dot" style="background:${color}"></span>${_esc(c)}</td><td class="dpx-num">${qty.toLocaleString()}</td><td class="dpx-num">${pct}%</td><td class="dpx-barcell"><span class="dpx-bar" style="width:${pct}%;background:${color}"></span></td></tr>`;
+    });
+  }
+  table += `</tbody></table>`;
+
+  // 연간 모드: 월별 추이표
+  let monthly = "";
+  if (d.mode === "year" && Array.isArray(d.barData)) {
+    const ymax = Math.max(...d.barData, 1);
+    monthly = `<div class="dpx-sec-title">📅 월별 추이</div><table class="dpx-table"><thead><tr><th>월</th><th class="dpx-num">${unitFull}</th><th class="dpx-num">비중</th><th></th></tr></thead><tbody>`;
+    d.barData.forEach((v, i) => {
+      const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+      monthly += `<tr><td class="dpx-rank">${i + 1}월</td><td class="dpx-num">${(v || 0).toLocaleString()}</td><td class="dpx-num">${pct}%</td><td class="dpx-barcell"><span class="dpx-bar" style="width:${Math.round((v / ymax) * 100)}%;background:#0a84ff"></span></td></tr>`;
+    });
+    monthly += `</tbody></table>`;
+  }
+
+  box.innerHTML = kpi + table + monthly;
+}
 
 // =====================================================
 // 🚨 [패치] 바탕화면(빈 공간) 클릭 시 막대/파이차트 하이라이트 동시 해제
