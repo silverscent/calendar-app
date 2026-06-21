@@ -4301,15 +4301,9 @@
           font-weight: 800;
           padding: 6px 10px;
         }
-        /* 실행 버튼: 풀폭 모바일 버튼 → 우측 정렬 인라인 */
+        /* 실행 버튼: PC는 인라인 월 선택이 즉시 비교하므로 불필요 → 숨김 */
         body.pc-dense #dashCompareView .compare-exec-btn {
-          width: auto;
-          min-width: 220px;
-          display: block;
-          margin: 14px 0 4px auto;
-          padding: 11px 26px;
-          font-size: 0.95em;
-          border-radius: 10px;
+          display: none;
         }
         /* 표: 모달폭 꽉 채우고, 헤더 고정 + 세로 스크롤 */
         body.pc-dense #dashCompareView .compare-grid-wrapper {
