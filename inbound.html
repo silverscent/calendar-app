@@ -3794,8 +3794,72 @@
           max-height: 90vh !important;
           border-radius: 18px !important;
         }
+        /* ─── PC 전용 모달 내부 다듬기 (A 컴팩트 · B 마스터디테일 · D info-row 가로) ─── */
         body.pc-dense #compListModal .modal-box {
-          max-width: 900px !important;
+          max-width: 940px !important;
+          width: 940px;
+          display: grid;
+          grid-template-columns: 248px 1fr;
+          grid-template-rows: auto 1fr;
+          column-gap: 20px;
+          row-gap: 4px;
+          align-items: start;
+        }
+        body.pc-dense #compListModal .modal-header {
+          grid-column: 1 / -1;
+        }
+        body.pc-dense #compListModal #compTagsContainer {
+          grid-column: 1;
+          grid-row: 2;
+          flex-direction: column;
+          flex-wrap: nowrap;
+          gap: 5px;
+          max-height: 64vh;
+          overflow-y: auto;
+          border-bottom: none;
+          border-right: 1px solid var(--border-color);
+          padding: 4px 12px 4px 2px;
+          margin-bottom: 0;
+        }
+        body.pc-dense #compListModal #compTagsContainer .comp-tag-btn {
+          width: 100%;
+          justify-content: flex-start;
+          font-size: 0.86em;
+        }
+        body.pc-dense #compListModal #compDetailContainer {
+          grid-column: 2;
+          grid-row: 2;
+          margin-top: 0;
+          min-height: 0;
+        }
+        body.pc-dense #crm-read-mode .info-row {
+          flex-direction: row;
+          justify-content: space-between;
+          align-items: baseline;
+          gap: 16px;
+          padding: 7px 0;
+          border-bottom: 1px solid var(--border-color);
+        }
+        body.pc-dense #crm-read-mode .info-label {
+          white-space: nowrap;
+          flex: 0 0 auto;
+        }
+        body.pc-dense #crm-read-mode .info-value {
+          text-align: right;
+        }
+        body.pc-dense .modal-box .edit-input {
+          padding: 9px 11px;
+          font-size: 0.92em;
+        }
+        body.pc-dense #addModal .modal-box,
+        body.pc-dense #newCompModal .modal-box {
+          max-width: 600px;
+        }
+        body.pc-dense .modal-box .save-btn,
+        body.pc-dense .modal-box .cancel-btn,
+        body.pc-dense .modal-box .delete-btn {
+          padding: 11px 16px;
+          font-size: 0.92em;
         }
         body.pc-dense #modalContent .modal-card {
           margin-bottom: 6px;
