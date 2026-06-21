@@ -3379,6 +3379,101 @@ function renderDashCharts() {
       },
     },
   });
+
+  // 🖥️ PC 전용 상세 패널 — 모바일은 CSS로 숨겨져 영향 없음
+  try {
+    renderDashPcExtra({ compMap, totalQty, doneQty, seaData, airData, mode: window.dashMode });
+  } catch (e) {
+    console.warn("PC 대시보드 상세 렌더 실패:", e);
+  }
+}
+
+// 🖥️ [PC 전용] 입고 대시보드 상세: KPI확장 + 타입별 + 포워더 순위 + (연간) 월별표
+function _dpxCard(t, v, accent) {
+  return `<div class="dpx-card"${accent ? ` style="border-left-color:${accent}"` : ""}><div class="dpx-card-t">${t}</div><div class="dpx-card-v">${v}</div></div>`;
+}
+function renderDashPcExtra(d) {
+  const box = document.getElementById("dashPcExtra");
+  if (!box) return;
+  const total = d.totalQty || 0;
+  const sea = (d.compMap && d.compMap["🚢 해상 (SEA)"]) || 0;
+  const air = (d.compMap && d.compMap["✈️ 항공 (AIR)"]) || 0;
+  const rate = d.mode === "month" && total > 0 ? Math.round((d.doneQty / total) * 100) : null;
+  const activeUnits = (d.seaData || []).filter((v, i) => (d.seaData[i] || 0) + (d.airData[i] || 0) > 0).length || 1;
+  const avg = total > 0 ? Math.round(total / activeUnits) : 0;
+  const avgLabel = d.mode === "month" ? "일평균" : "월평균";
+
+  // KPI
+  let kpi = `<div class="dpx-kpi">`;
+  kpi += _dpxCard("총 PAL", total.toLocaleString());
+  kpi += _dpxCard("완료율", rate === null ? "—" : rate + "%", rate === null ? null : rate >= 100 ? "#34c759" : rate > 50 ? "#0a84ff" : "#ff9f0a");
+  kpi += _dpxCard("🚢 해상", sea.toLocaleString());
+  kpi += _dpxCard("✈️ 항공", air.toLocaleString());
+  kpi += _dpxCard(avgLabel, avg.toLocaleString());
+  kpi += `</div>`;
+
+  // 타입별 표
+  const typeRows = [
+    { name: "🚢 해상 (SEA)", qty: sea, color: "#0a84ff" },
+    { name: "✈️ 항공 (AIR)", qty: air, color: "#ff9f0a" },
+  ].filter((r) => r.qty > 0).sort((a, b) => b.qty - a.qty);
+  let typeTable = `<div class="dpx-sec-title">🚢✈️ 운송 타입별</div><table class="dpx-table"><thead><tr><th>타입</th><th class="dpx-num">PAL</th><th class="dpx-num">비중</th><th></th></tr></thead><tbody>`;
+  if (typeRows.length === 0) {
+    typeTable += `<tr><td colspan="4" style="text-align:center;color:var(--text-sub);padding:16px;">데이터가 없습니다</td></tr>`;
+  } else {
+    typeRows.forEach((r) => {
+      const pct = total > 0 ? Math.round((r.qty / total) * 100) : 0;
+      typeTable += `<tr><td>${r.name}</td><td class="dpx-num">${r.qty.toLocaleString()}</td><td class="dpx-num">${pct}%</td><td class="dpx-barcell"><span class="dpx-bar" style="width:${pct}%;background:${r.color}"></span></td></tr>`;
+    });
+  }
+  typeTable += `</tbody></table>`;
+
+  // 포워더별 순위 (월 모드: monthData에서 집계 / 연간: 데이터 없음 안내)
+  let fwdTable = "";
+  if (d.mode === "month") {
+    const fwdMap = {};
+    const cur = window.dashCurrentData;
+    const includePending = document.getElementById("includePendingCheck")?.checked;
+    const acc = (it) => {
+      const bl = String(it.bl || "").trim();
+      if (!bl || bl === "미정") return;
+      const qty = parseInt(it.pal) || 0;
+      const fwd = (String(it.fwd || "").trim()) || "(미지정)";
+      fwdMap[fwd] = (fwdMap[fwd] || 0) + qty;
+    };
+    if (cur && cur.monthData) {
+      const days = Object.keys(cur.monthData);
+      days.forEach((dd) => cur.monthData[dd].forEach(acc));
+      if (includePending && cur.pendingItems) cur.pendingItems.forEach(acc);
+    }
+    const fwds = Object.keys(fwdMap).filter((f) => fwdMap[f] > 0).sort((a, b) => fwdMap[b] - fwdMap[a]);
+    fwdTable = `<div class="dpx-sec-title">🚚 포워더별 순위 (월간)</div><table class="dpx-table"><thead><tr><th>#</th><th>포워더</th><th class="dpx-num">PAL</th><th class="dpx-num">점유율</th><th></th></tr></thead><tbody>`;
+    if (fwds.length === 0) {
+      fwdTable += `<tr><td colspan="5" style="text-align:center;color:var(--text-sub);padding:16px;">데이터가 없습니다</td></tr>`;
+    } else {
+      const fmax = fwdMap[fwds[0]] || 1;
+      fwds.forEach((f, i) => {
+        const qty = fwdMap[f];
+        const pct = total > 0 ? Math.round((qty / total) * 100) : 0;
+        fwdTable += `<tr><td class="dpx-rank">${i + 1}</td><td>${_esc(f)}</td><td class="dpx-num">${qty.toLocaleString()}</td><td class="dpx-num">${pct}%</td><td class="dpx-barcell"><span class="dpx-bar" style="width:${Math.round((qty / fmax) * 100)}%;background:#5e5ce6"></span></td></tr>`;
+      });
+    }
+    fwdTable += `</tbody></table>`;
+  }
+
+  // 연간 월별표 (월·해상·항공·합계)
+  let monthly = "";
+  if (d.mode === "year") {
+    monthly = `<div class="dpx-sec-title">📅 월별 추이</div><table class="dpx-table"><thead><tr><th>월</th><th class="dpx-num">🚢해상</th><th class="dpx-num">✈️항공</th><th class="dpx-num">합계</th></tr></thead><tbody>`;
+    for (let i = 0; i < 12; i++) {
+      const s = (d.seaData && d.seaData[i]) || 0;
+      const a = (d.airData && d.airData[i]) || 0;
+      monthly += `<tr><td class="dpx-rank">${i + 1}월</td><td class="dpx-num">${s.toLocaleString()}</td><td class="dpx-num">${a.toLocaleString()}</td><td class="dpx-num">${(s + a).toLocaleString()}</td></tr>`;
+    }
+    monthly += `</tbody></table>`;
+  }
+
+  box.innerHTML = kpi + typeTable + fwdTable + monthly;
 }
 
 // =====================================================
