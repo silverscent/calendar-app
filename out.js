@@ -1550,7 +1550,7 @@ function renderPcSidePanel() {
     peakPal = 0,
     taskCnt = 0,
     shipCnt = 0;
-  const wkStart = now.getDate() - ((now.getDay() + 6) % 7);
+  const wkStart = now.getDate() - now.getDay(); // 한 주 시작 = 일요일
   const wkEnd = wkStart + 6;
   for (let d = 1; d <= dim; d++) {
     const arr = md[d] || [];
@@ -1577,7 +1577,7 @@ function renderPcSidePanel() {
       <div class="pcp-tiles">
         <div class="pcp-tile"><span class="pcp-tile-v">${isCurMonth ? todayCnt : "–"}</span><span class="pcp-tile-l">오늘 출고</span></div>
         <div class="pcp-tile"><span class="pcp-tile-v">${isCurMonth ? weekCnt : "–"}</span><span class="pcp-tile-l">이번주</span></div>
-        <div class="pcp-tile"><span class="pcp-tile-v">${notDonePal}<small>P</small></span><span class="pcp-tile-l">미완료 물량</span></div>
+        <div class="pcp-tile"><span class="pcp-tile-v">${waitCnt}</span><span class="pcp-tile-l">미완료 일정</span></div>
         <div class="pcp-tile"><span class="pcp-tile-v">${peakDay ? peakDay + "일" : "–"}</span><span class="pcp-tile-l">최다일 ${peakDay ? peakPal + "P" : ""}</span></div>
       </div>
       <div class="pcp-ratio">

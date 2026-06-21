@@ -308,7 +308,7 @@ function renderPcSidePanel() {
     notDonePal = 0,
     peakDay = 0,
     peakPal = 0;
-  const wkStart = now.getDate() - ((now.getDay() + 6) % 7); // 이번주 월요일
+  const wkStart = now.getDate() - now.getDay(); // 한 주 시작 = 일요일
   const wkEnd = wkStart + 6;
   for (let d = 1; d <= dim; d++) {
     const arr = md[d] || [];
@@ -323,16 +323,16 @@ function renderPcSidePanel() {
       peakPal = dayPal;
       peakDay = d;
     }
-    if (isCurMonth && d === now.getDate()) todayCnt = arr.length;
-    if (isCurMonth && d >= wkStart && d <= wkEnd) weekCnt += arr.length;
+    if (isCurMonth && d === now.getDate()) todayCnt = dayPal; // PAL 합계
+    if (isCurMonth && d >= wkStart && d <= wkEnd) weekCnt += dayPal; // PAL 합계
   }
   const seaPct = seaCnt + airCnt ? Math.round((seaCnt / (seaCnt + airCnt)) * 100) : 0;
   const miniBoard = `
     <div class="pcp-card">
       <div class="pcp-title">📊 미니 통계</div>
       <div class="pcp-tiles">
-        <div class="pcp-tile"><span class="pcp-tile-v">${isCurMonth ? todayCnt : "–"}</span><span class="pcp-tile-l">오늘 입고</span></div>
-        <div class="pcp-tile"><span class="pcp-tile-v">${isCurMonth ? weekCnt : "–"}</span><span class="pcp-tile-l">이번주</span></div>
+        <div class="pcp-tile"><span class="pcp-tile-v">${isCurMonth ? todayCnt : "–"}<small>P</small></span><span class="pcp-tile-l">오늘 입고</span></div>
+        <div class="pcp-tile"><span class="pcp-tile-v">${isCurMonth ? weekCnt : "–"}<small>P</small></span><span class="pcp-tile-l">이번주</span></div>
         <div class="pcp-tile"><span class="pcp-tile-v">${notDonePal}<small>P</small></span><span class="pcp-tile-l">미완료 물량</span></div>
         <div class="pcp-tile"><span class="pcp-tile-v">${peakDay ? peakDay + "일" : "–"}</span><span class="pcp-tile-l">최다일 ${peakDay ? peakPal + "P" : ""}</span></div>
       </div>
