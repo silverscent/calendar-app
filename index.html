@@ -4349,9 +4349,9 @@
           max-width: 940px !important;
           width: 940px;
           display: grid;
-          grid-template-columns: 248px 1fr;
+          grid-template-columns: fit-content(220px) 1fr; /* 가장 긴 업체명에 맞춰 좌측 폭 축소 */
           grid-template-rows: auto 1fr;
-          column-gap: 20px;
+          column-gap: 18px;
           row-gap: 4px;
           align-items: start;
         }
