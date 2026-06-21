@@ -5490,9 +5490,17 @@ function openNcColorPicker() {
   area.style.display = "block";
 }
 
-function selectNcColor(idx) {
-  _ncColorIdx = idx;
+async function selectNcColor(idx) {
   const p = presetPalette[idx];
+  // 다른 업체가 이미 쓰는 색이면 경고 (CRM 수정 피커와 동일 동작)
+  let usedBy = null;
+  for (const c of [...Object.keys(compInfoDB), ...Object.keys(customColors), ...Object.keys(companyColors)]) {
+    if (getCompanyColor(c).bg === p.bg) { usedBy = getFullName(c); break; }
+  }
+  if (usedBy) {
+    if (!(await uiConfirm(`⚠️ 이 색상은 현재 [${usedBy}] 업체가 사용 중입니다.\n\n강제로 이 색상을 같이 사용하시겠습니까?`))) return;
+  }
+  _ncColorIdx = idx;
   const btn = document.getElementById("nc-color-btn");
   if (btn) { btn.style.background = p.bg; btn.style.color = p.cMain; btn.style.border = "none"; btn.textContent = "✅ 색상 선택됨 (다시 누르면 변경)"; }
   document.getElementById("nc-color-picker-area").style.display = "none";
