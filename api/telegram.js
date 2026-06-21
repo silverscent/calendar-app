@@ -242,7 +242,8 @@ module.exports = async function handler(req, res) {
     const message = payload.message;
     chatId = message.chat.id;
     const senderId = message.from.id;
-    const text = message.text || "";
+    // 그룹채팅 명령어 정규화: "/today@BotName" → "/today" (선두 명령어의 @봇이름 제거)
+    const text = (message.text || "").replace(/^(\/[^\s@]+)@\S+/, "$1");
     const isAdmin = String(senderId) === String(process.env.ADMIN_TELEGRAM_USER_ID);
 
     // 🔓 퍼블릭 명령어
