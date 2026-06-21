@@ -3936,6 +3936,41 @@ function openDashboard() {
   setTimeout(renderDashCharts, 380); // 모달 슬라이드인 끝난 뒤 생성해야 진입 애니메이션이 보임
 }
 
+// 📅 막대그래프에 '오늘 날짜' 점선 + 라벨 표시 (월별 모드 + 당월일 때만). 모바일·PC 공통.
+const _todayLinePlugin = {
+  id: "todayLine",
+  afterDatasetsDraw(chart) {
+    if (window.dashMode !== "month") return;
+    const now = new Date();
+    if (window.dashYear !== now.getFullYear() || window.dashMonth !== now.getMonth() + 1) return;
+    const idx = now.getDate() - 1;
+    const xScale = chart.scales.x;
+    const ca = chart.chartArea;
+    if (!xScale || !ca || idx < 0 || idx >= (chart.data.labels || []).length) return;
+    const x = xScale.getPixelForValue(idx);
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.setLineDash([4, 3]);
+    ctx.moveTo(x, ca.top);
+    ctx.lineTo(x, ca.bottom);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#ff3b30";
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const label = "오늘 " + now.getDate() + "일";
+    ctx.font = "700 10px -apple-system, BlinkMacSystemFont, sans-serif";
+    const tw = ctx.measureText(label).width;
+    let lx = Math.max(ca.left, Math.min(x - tw / 2 - 3, ca.right - tw - 6));
+    ctx.fillStyle = "#ff3b30";
+    ctx.fillRect(lx, ca.top + 1, tw + 6, 14);
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "top";
+    ctx.fillText(label, lx + 3, ca.top + 3);
+    ctx.restore();
+  },
+};
+
 // 📈 핵심 차트 그리기 엔진
 function renderDashCharts() {
   Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
@@ -4181,6 +4216,7 @@ function renderDashCharts() {
       labels: labels,
       datasets: [{ label: typeName, data: barData, backgroundColor: bgColors, borderRadius: 4 }],
     },
+    plugins: [_todayLinePlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,

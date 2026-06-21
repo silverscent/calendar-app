@@ -2967,6 +2967,41 @@ const pieHybridLabelPlugin = {
 
 _registerChartPlugins();
 
+// 📅 막대그래프에 '오늘 날짜' 점선 + 라벨 (월별 모드 + 당월일 때만). 모바일·PC 공통.
+const _todayLinePlugin = {
+  id: "todayLine",
+  afterDatasetsDraw(chart) {
+    if (window.dashMode !== "month") return;
+    const now = new Date();
+    if (window.dashYear !== now.getFullYear() || window.dashMonth !== now.getMonth() + 1) return;
+    const idx = now.getDate() - 1;
+    const xScale = chart.scales.x;
+    const ca = chart.chartArea;
+    if (!xScale || !ca || idx < 0 || idx >= (chart.data.labels || []).length) return;
+    const x = xScale.getPixelForValue(idx);
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.setLineDash([4, 3]);
+    ctx.moveTo(x, ca.top);
+    ctx.lineTo(x, ca.bottom);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#ff3b30";
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const label = "오늘 " + now.getDate() + "일";
+    ctx.font = "700 10px -apple-system, BlinkMacSystemFont, sans-serif";
+    const tw = ctx.measureText(label).width;
+    let lx = Math.max(ca.left, Math.min(x - tw / 2 - 3, ca.right - tw - 6));
+    ctx.fillStyle = "#ff3b30";
+    ctx.fillRect(lx, ca.top + 1, tw + 6, 14);
+    ctx.fillStyle = "#fff";
+    ctx.textBaseline = "top";
+    ctx.fillText(label, lx + 3, ca.top + 3);
+    ctx.restore();
+  },
+};
+
 function renderDashCharts() {
   Chart.defaults.color = document.body.classList.contains("light-mode") ? "#777" : "#a0a0a0";
   Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
@@ -3230,6 +3265,7 @@ function renderDashCharts() {
         { label: `✈️ 항공`, data: airData, backgroundColor: airBgColors, stack: "Stack 0", borderRadius: 4 },
       ],
     },
+    plugins: [_todayLinePlugin],
     options: {
       /* ... 기존 옵션 그대로 유지 ... */
       responsive: true,
@@ -3428,34 +3464,70 @@ function renderDashPcExtra(d) {
   }
   typeTable += `</tbody></table>`;
 
-  // 포워더별 순위 (월 모드: monthData에서 집계 / 연간: 데이터 없음 안내)
+  // 완료/잔여 현황 + 잔여(미완료) 입고 일정 (월 모드, 아직 다 완료 안 된 달만)
+  let remainBlock = "";
+  if (d.mode === "month") {
+    const cur = window.dashCurrentData;
+    const remainPal = Math.max(0, total - (d.doneQty || 0));
+    const remainList = [];
+    if (cur && cur.monthData) {
+      Object.keys(cur.monthData).forEach((dd) => {
+        cur.monthData[dd].forEach((it) => {
+          const bl = String(it.bl || "").trim();
+          if (!bl || bl === "미정") return;
+          const done = it.isDone === true || String(it.isDone) === "true";
+          if (!done) remainList.push({ day: parseInt(dd, 10), bl, pal: parseInt(it.pal) || 0, sType: it.sType || "" });
+        });
+      });
+    }
+    if (remainPal > 0 || remainList.length > 0) {
+      remainBlock = `<div class="dpx-sec-title">📦 완료 / 잔여 현황</div>`;
+      remainBlock += `<div class="dpx-prog"><span class="dpx-prog-done" style="width:${total > 0 ? Math.round((d.doneQty / total) * 100) : 0}%"></span></div>`;
+      remainBlock += `<div class="dpx-prog-lbl"><span>✅ 완료 ${(d.doneQty || 0).toLocaleString()} PAL</span><span>⏳ 잔여 ${remainPal.toLocaleString()} PAL</span></div>`;
+      if (remainList.length > 0) {
+        remainList.sort((a, b) => a.day - b.day);
+        remainBlock += `<table class="dpx-table" style="margin-top:10px;"><thead><tr><th>입고일</th><th>B/L</th><th class="dpx-num">PAL</th><th>타입</th></tr></thead><tbody>`;
+        remainList.forEach((r) => {
+          const tIcon = r.sType === "AIR" ? "✈️" : r.sType === "SEA" ? "🚢" : "";
+          remainBlock += `<tr><td class="dpx-rank">${r.day}일</td><td>${_esc(r.bl)}</td><td class="dpx-num">${r.pal.toLocaleString()}</td><td>${tIcon} ${_esc(r.sType)}</td></tr>`;
+        });
+        remainBlock += `</tbody></table>`;
+      }
+    }
+  }
+
+  // 포워더별 순위 (월 모드: monthData에서 집계, 대소문자 통합 / 연간: 데이터 없음)
   let fwdTable = "";
   if (d.mode === "month") {
-    const fwdMap = {};
+    const fwdMap = {}; // key=소문자, val={name, qty}
     const cur = window.dashCurrentData;
     const includePending = document.getElementById("includePendingCheck")?.checked;
     const acc = (it) => {
       const bl = String(it.bl || "").trim();
       if (!bl || bl === "미정") return;
       const qty = parseInt(it.pal) || 0;
-      const fwd = (String(it.fwd || "").trim()) || "(미지정)";
-      fwdMap[fwd] = (fwdMap[fwd] || 0) + qty;
+      const raw = String(it.fwd || "").trim();
+      const disp = raw || "(미지정)";
+      const key = disp.toLowerCase(); // 대소문자 차이 통합 (예: dsv ↔ DSV)
+      if (!fwdMap[key]) fwdMap[key] = { name: disp, qty: 0 };
+      // 표시명은 대문자 비율이 높은(더 정식 표기로 보이는) 쪽 우선 — 보통 약어는 대문자
+      if (raw && raw === raw.toUpperCase() && fwdMap[key].name !== disp) fwdMap[key].name = disp;
+      fwdMap[key].qty += qty;
     };
     if (cur && cur.monthData) {
-      const days = Object.keys(cur.monthData);
-      days.forEach((dd) => cur.monthData[dd].forEach(acc));
+      Object.keys(cur.monthData).forEach((dd) => cur.monthData[dd].forEach(acc));
       if (includePending && cur.pendingItems) cur.pendingItems.forEach(acc);
     }
-    const fwds = Object.keys(fwdMap).filter((f) => fwdMap[f] > 0).sort((a, b) => fwdMap[b] - fwdMap[a]);
+    const keys = Object.keys(fwdMap).filter((k) => fwdMap[k].qty > 0).sort((a, b) => fwdMap[b].qty - fwdMap[a].qty);
     fwdTable = `<div class="dpx-sec-title">🚚 포워더별 순위 (월간)</div><table class="dpx-table"><thead><tr><th>#</th><th>포워더</th><th class="dpx-num">PAL</th><th class="dpx-num">점유율</th><th></th></tr></thead><tbody>`;
-    if (fwds.length === 0) {
+    if (keys.length === 0) {
       fwdTable += `<tr><td colspan="5" style="text-align:center;color:var(--text-sub);padding:16px;">데이터가 없습니다</td></tr>`;
     } else {
-      const fmax = fwdMap[fwds[0]] || 1;
-      fwds.forEach((f, i) => {
-        const qty = fwdMap[f];
+      const fmax = fwdMap[keys[0]].qty || 1;
+      keys.forEach((k, i) => {
+        const qty = fwdMap[k].qty;
         const pct = total > 0 ? Math.round((qty / total) * 100) : 0;
-        fwdTable += `<tr><td class="dpx-rank">${i + 1}</td><td>${_esc(f)}</td><td class="dpx-num">${qty.toLocaleString()}</td><td class="dpx-num">${pct}%</td><td class="dpx-barcell"><span class="dpx-bar" style="width:${Math.round((qty / fmax) * 100)}%;background:#5e5ce6"></span></td></tr>`;
+        fwdTable += `<tr><td class="dpx-rank">${i + 1}</td><td>${_esc(fwdMap[k].name)}</td><td class="dpx-num">${qty.toLocaleString()}</td><td class="dpx-num">${pct}%</td><td class="dpx-barcell"><span class="dpx-bar" style="width:${Math.round((qty / fmax) * 100)}%;background:#5e5ce6"></span></td></tr>`;
       });
     }
     fwdTable += `</tbody></table>`;
@@ -3473,7 +3545,7 @@ function renderDashPcExtra(d) {
     monthly += `</tbody></table>`;
   }
 
-  box.innerHTML = kpi + typeTable + fwdTable + monthly;
+  box.innerHTML = kpi + typeTable + remainBlock + fwdTable + monthly;
 }
 
 // =====================================================

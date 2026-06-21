@@ -4083,7 +4083,15 @@
           height: 300px !important;
           min-height: 300px !important;
           margin-bottom: 0 !important;
+          padding-bottom: 0 !important;
+          justify-content: center;
           order: 2;
+        }
+        /* 출고 파이 캔버스 박스: 고정 280px → flex로 칸 높이에 맞춤 (입고와 동일 정렬) */
+        body.pc-dense #dashboardModal .pc-share-canvas {
+          height: auto !important;
+          flex: 1;
+          min-height: 0;
         }
         body.pc-dense #dashboardModal .dash-charts-wrap > #barDetailBox {
           order: 3;
@@ -4779,7 +4787,7 @@
               >
             </div>
 
-            <div style="position: relative; width: 100%; height: 280px">
+            <div class="pc-share-canvas" style="position: relative; width: 100%; height: 280px">
               <canvas id="shareChart"></canvas>
             </div>
 
