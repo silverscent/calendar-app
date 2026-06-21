@@ -3641,6 +3641,7 @@
         }
         body.pc-dense #dashboardModal .dash-charts-wrap > :has(#mainChart) {
           flex: 6 1 0;
+          min-width: 0; /* flex 자식이 캔버스보다 작게 줄어들 수 있게 → 같은 줄 유지 */
           height: 300px !important;
           min-height: 300px !important;
           margin-bottom: 0 !important;
@@ -3648,6 +3649,7 @@
         }
         body.pc-dense #dashboardModal .dash-charts-wrap > :has(#shareChart) {
           flex: 4 1 0;
+          min-width: 0;
           height: 300px !important;
           min-height: 300px !important;
           margin-bottom: 0 !important;
