@@ -86,9 +86,12 @@ async function apiCall(payload) {
 // ── GET 요청 공통 래퍼. params 객체를 쿼리스트링으로 변환.
 async function apiGet(params) {
   setLoadingState(true);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
   try {
     const qs = new URLSearchParams({ api: "true", ...params, t: Date.now() }).toString();
-    const r = await fetch(`${VERCEL_API_URL}?${qs}`);
+    const r = await fetch(`${VERCEL_API_URL}?${qs}`, { signal: controller.signal });
+    clearTimeout(timeoutId);
     const d = await r.json();
     if (d && d.error) {
       _notify("🔥 에러: " + d.error);
@@ -96,6 +99,7 @@ async function apiGet(params) {
     }
     return d;
   } catch (e) {
+    clearTimeout(timeoutId);
     if (_isSilentError(e)) {
       console.warn("스텔스 차단 (GET):", e.message);
       return null;

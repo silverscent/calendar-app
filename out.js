@@ -2605,6 +2605,7 @@ function executeMove(item, oldDateStr, newDateStr, idx) {
 
   let payload = {
     action: "EDIT",
+    id: item.id || null, // 🚨 id 우선 매칭 (같은 날 동일 업체·수량 2건 오이동 방지)
     oldComp: item.company,
     oldDate: oldDateStr,
     oldDone: currentIsDone,
