@@ -3545,7 +3545,13 @@ function renderDashPcExtra(d) {
     monthly += `</tbody></table>`;
   }
 
-  box.innerHTML = kpi + typeTable + remainBlock + fwdTable + monthly;
+  let html = kpi + `<div class="dpx-grid">`;
+  html += `<div class="dpx-sec">${typeTable}</div>`;
+  if (fwdTable) html += `<div class="dpx-sec">${fwdTable}</div>`;
+  if (remainBlock) html += `<div class="dpx-sec dpx-wide">${remainBlock}</div>`;
+  if (monthly) html += `<div class="dpx-sec dpx-wide">${monthly}</div>`;
+  html += `</div>`;
+  box.innerHTML = html;
 }
 
 // =====================================================

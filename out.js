@@ -4425,34 +4425,51 @@ function renderDashPcExtra(d) {
   kpi += _dpxCard("최다 업체", topComp);
   kpi += `</div>`;
 
-  // 업체별 순위표
-  let table = `<div class="dpx-sec-title">🏢 업체별 ${d.mode === "month" ? "월간" : "연간"} 순위</div>`;
-  table += `<table class="dpx-table"><thead><tr><th>#</th><th>업체</th><th class="dpx-num">${unitFull}</th><th class="dpx-num">점유율</th><th></th></tr></thead><tbody>`;
-  if (comps.length === 0) {
-    table += `<tr><td colspan="5" style="text-align:center;color:var(--text-sub);padding:16px;">데이터가 없습니다</td></tr>`;
-  } else {
-    comps.forEach((c, i) => {
+  // 업체별 순위표 — 업체가 많으면 좌/우 반으로 갈라 한 줄에 두 표(행 위치 정렬)
+  const _rankTbl = (list, startIdx) => {
+    let t = `<table class="dpx-table"><thead><tr><th>#</th><th>업체</th><th class="dpx-num">${unitFull}</th><th class="dpx-num">점유율</th><th></th></tr></thead><tbody>`;
+    list.forEach((c, i) => {
       const qty = d.compMap[c] || 0;
       const pct = total > 0 ? Math.round((qty / total) * 100) : 0;
       const color = getCompanyColor(c).bg;
-      table += `<tr><td class="dpx-rank">${i + 1}</td><td><span class="dpx-dot" style="background:${color}"></span>${_esc(c)}</td><td class="dpx-num">${qty.toLocaleString()}</td><td class="dpx-num">${pct}%</td><td class="dpx-barcell"><span class="dpx-bar" style="width:${pct}%;background:${color}"></span></td></tr>`;
+      t += `<tr><td class="dpx-rank">${startIdx + i + 1}</td><td><span class="dpx-dot" style="background:${color}"></span>${_esc(c)}</td><td class="dpx-num">${qty.toLocaleString()}</td><td class="dpx-num">${pct}%</td><td class="dpx-barcell"><span class="dpx-bar" style="width:${pct}%;background:${color}"></span></td></tr>`;
     });
+    t += `</tbody></table>`;
+    return t;
+  };
+  const rankTitle = `🏢 업체별 ${d.mode === "month" ? "월간" : "연간"} 순위`;
+  let rankBlock;
+  if (comps.length === 0) {
+    rankBlock = `<div class="dpx-sec dpx-wide"><div class="dpx-sec-title">${rankTitle}</div><div class="dpx-empty">데이터가 없습니다</div></div>`;
+  } else if (comps.length > 6) {
+    const half = Math.ceil(comps.length / 2);
+    rankBlock =
+      `<div class="dpx-sec"><div class="dpx-sec-title">${rankTitle}</div>${_rankTbl(comps.slice(0, half), 0)}</div>` +
+      `<div class="dpx-sec"><div class="dpx-sec-title">&nbsp;</div>${_rankTbl(comps.slice(half), half)}</div>`;
+  } else {
+    rankBlock = `<div class="dpx-sec dpx-wide"><div class="dpx-sec-title">${rankTitle}</div>${_rankTbl(comps, 0)}</div>`;
   }
-  table += `</tbody></table>`;
 
-  // 연간 모드: 월별 추이표
-  let monthly = "";
+  // 연간 모드: 월별 추이표 (2열로 좌 1~6월 / 우 7~12월)
+  let monthlyBlock = "";
   if (d.mode === "year" && Array.isArray(d.barData)) {
     const ymax = Math.max(...d.barData, 1);
-    monthly = `<div class="dpx-sec-title">📅 월별 추이</div><table class="dpx-table"><thead><tr><th>월</th><th class="dpx-num">${unitFull}</th><th class="dpx-num">비중</th><th></th></tr></thead><tbody>`;
-    d.barData.forEach((v, i) => {
-      const pct = total > 0 ? Math.round((v / total) * 100) : 0;
-      monthly += `<tr><td class="dpx-rank">${i + 1}월</td><td class="dpx-num">${(v || 0).toLocaleString()}</td><td class="dpx-num">${pct}%</td><td class="dpx-barcell"><span class="dpx-bar" style="width:${Math.round((v / ymax) * 100)}%;background:#0a84ff"></span></td></tr>`;
-    });
-    monthly += `</tbody></table>`;
+    const mTbl = (from, to) => {
+      let t = `<table class="dpx-table"><thead><tr><th>월</th><th class="dpx-num">${unitFull}</th><th class="dpx-num">비중</th><th></th></tr></thead><tbody>`;
+      for (let i = from; i < to; i++) {
+        const v = d.barData[i] || 0;
+        const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+        t += `<tr><td class="dpx-rank">${i + 1}월</td><td class="dpx-num">${v.toLocaleString()}</td><td class="dpx-num">${pct}%</td><td class="dpx-barcell"><span class="dpx-bar" style="width:${Math.round((v / ymax) * 100)}%;background:#0a84ff"></span></td></tr>`;
+      }
+      t += `</tbody></table>`;
+      return t;
+    };
+    monthlyBlock =
+      `<div class="dpx-sec"><div class="dpx-sec-title">📅 월별 추이 (상반기)</div>${mTbl(0, 6)}</div>` +
+      `<div class="dpx-sec"><div class="dpx-sec-title">📅 월별 추이 (하반기)</div>${mTbl(6, 12)}</div>`;
   }
 
-  box.innerHTML = kpi + table + monthly;
+  box.innerHTML = kpi + `<div class="dpx-grid">` + rankBlock + monthlyBlock + `</div>`;
 }
 
 // =====================================================

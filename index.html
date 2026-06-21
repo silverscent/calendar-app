@@ -4140,6 +4140,23 @@
           font-weight: 900;
           font-size: 1.02em;
           margin: 16px 0 8px;
+          min-height: 1.2em; /* &nbsp; 빈 제목도 같은 높이 → 좌우 표 첫 행 정렬 */
+        }
+        /* 섹션 2열 그리드: 짧은 표는 한 줄에 둘씩, 행 위치 정렬 */
+        body.pc-dense .dpx-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 4px 28px;
+          align-items: start;
+        }
+        body.pc-dense .dpx-sec.dpx-wide {
+          grid-column: 1 / -1;
+        }
+        body.pc-dense .dpx-empty {
+          text-align: center;
+          color: var(--text-sub);
+          padding: 16px;
+          font-weight: 700;
         }
         body.pc-dense .dpx-table {
           width: 100%;
@@ -4153,6 +4170,9 @@
           border-bottom: 2px solid var(--border-color);
           padding: 6px 8px;
           font-weight: 800;
+        }
+        body.pc-dense .dpx-table th.dpx-num {
+          text-align: right; /* 숫자 헤더를 숫자 위에 정렬 → 어떤 값인지 명확 */
         }
         body.pc-dense .dpx-table td {
           padding: 7px 8px;
@@ -4180,7 +4200,7 @@
           vertical-align: middle;
         }
         body.pc-dense .dpx-barcell {
-          width: 130px;
+          width: 80px;
         }
         body.pc-dense .dpx-bar {
           display: block;
