@@ -4074,6 +4074,7 @@
           min-width: 0; /* flex 자식이 캔버스보다 작게 줄어들 수 있게 → 같은 줄 유지 */
           height: 300px !important;
           min-height: 300px !important;
+          box-sizing: border-box; /* 막대·파이 칸 높이 동일하게(패딩 포함 300px) */
           margin-bottom: 0 !important;
           order: 1;
         }
@@ -4082,8 +4083,8 @@
           min-width: 0;
           height: 300px !important;
           min-height: 300px !important;
+          box-sizing: border-box;
           margin-bottom: 0 !important;
-          padding-bottom: 0 !important;
           justify-content: center;
           order: 2;
         }
