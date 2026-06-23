@@ -1767,8 +1767,8 @@ module.exports = async function (req, res) {
           }
 
           for (const r of rows) {
-            const bl = String(r.bl || "").replace(/[\s•·\-\*]/g, "");
-            const pal = parseInt(r.pal) || 0;
+            const bl = String(r.bl || "").replace(/[\s•·\-\*]/g, "").slice(0, 100);
+            const pal = Math.min(Math.max(parseInt(r.pal) || 0, 0), 99999);
             const inDate = normDate(r.inDate);
             const eta = normDate(r.eta);
             const fwd = String(r.fwd || "").slice(0, 100);
@@ -1778,31 +1778,36 @@ module.exports = async function (req, res) {
             const invoice = String(r.invoice || "").slice(0, 100);
             const etc = String(r.etc || "").slice(0, 500);
 
-            let exist = [];
-            if (invoice) {
-              [exist] = await pool.query(`SELECT id, status FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
-            }
-            if (exist.length === 0 && bl !== "발행전" && bl !== "") {
-              [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
-            }
-
-            if (exist.length > 0) {
-              // 이미 완료 처리된 일정은 덮어쓰지 않음
-              if (exist[0].status === "완료") {
-                skipCount++;
-                continue;
+            // 한 행이 실패해도 전체 확정이 죽지 않도록 행별 방어
+            try {
+              let exist = [];
+              if (invoice) {
+                [exist] = await pool.query(`SELECT id, status FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
               }
-              await pool.query(
-                `UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=1 WHERE id=?`,
-                [bl, pal, inDate, etc, sType, fwd, invoice, eta, exist[0].id],
-              );
-              updateCount++;
-            } else {
-              await pool.query(
-                `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, 1)`,
-                [bl, pal, inDate, sType, fwd, invoice, eta, etc],
-              );
-              insertCount++;
+              if (exist.length === 0 && bl !== "발행전" && bl !== "") {
+                [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
+              }
+
+              if (exist.length > 0) {
+                if (exist[0].status === "완료") {
+                  skipCount++;
+                  continue;
+                }
+                await pool.query(
+                  `UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=1 WHERE id=?`,
+                  [bl, pal, inDate, etc, sType, fwd, invoice, eta, exist[0].id],
+                );
+                updateCount++;
+              } else {
+                await pool.query(
+                  `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, 1)`,
+                  [bl, pal, inDate, sType, fwd, invoice, eta, etc],
+                );
+                insertCount++;
+              }
+            } catch (rowErr) {
+              skipCount++;
+              console.error(`[APPLY_OCR] 행 반영 실패 (${bl || invoice}):`, rowErr.sqlMessage || rowErr.message);
             }
           }
           // ⚠️ LAST_OCR_DATA(좌표 캐시)는 덮어쓰지 않음 — 좌표 보존 + 대조창은 GET 때 현재 inbound 값을 합쳐서 보여줌

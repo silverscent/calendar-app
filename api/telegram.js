@@ -1429,13 +1429,14 @@ module.exports = async function handler(req, res) {
           }
 
           for (const r of finalRows) {
-            let bl = String(r.bl || "").replace(/[\s•·\-\*]/g, "");
-            let pal = parseInt(r.pal) || 0;
+            // 컬럼 한도 초과("Data too long")로 OCR이 죽지 않도록 모든 값에 길이·범위 가드
+            let bl = String(r.bl || "").replace(/[\s•·\-\*]/g, "").slice(0, 100);
+            let pal = Math.min(Math.max(parseInt(r.pal) || 0, 0), 99999); // 음수·비정상 큰 수 방어
             let inDate = makeSafeDate(r.inDate);
             let eta = makeSafeDate(r.eta);
-            let fwd = r.fwd || "";
-            let sType = String(r.sType || "").toUpperCase();
-            let invoice = r.invoice || "";
+            let fwd = String(r.fwd || "").slice(0, 100);
+            let sType = String(r.sType || "").toUpperCase().slice(0, 20);
+            let invoice = String(r.invoice || "").slice(0, 100);
             let etc = r.etc || "";
 
             // 필터 적용
