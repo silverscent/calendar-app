@@ -132,8 +132,14 @@ function renderPending() {
       let isPendingAir = item.sType === "AIR";
       let pendingPastelBg = isPendingAir ? "#ff7eff" : "#26e2fd";
       let circleHtml = `<div style="width:12px; height:12px; border-radius:50%; background:${pendingPastelBg}; margin-right:8px; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`;
+      // 입고일 미정이라도 ETA(정상 날짜)가 있으면 예측용으로 표시
+      let etaTag = "";
+      if (typeof _isReasonableDate === "function" && _isReasonableDate(item.eta)) {
+        const em = item.eta.slice(5, 10).replace("-", "/");
+        etaTag = `<div class="pending-vol" style="color:#0a84ff;">🗓️ ETA ${em}</div>`;
+      }
 
-      pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${_esc(item.bl)}</div><div class="pending-vol">📦 ${_esc(item.pal)}P (${_esc(item.sType)})</div>${etcTag}</div></div>`;
+      pListHtml += `<div class="pending-item" id="main-pending-${idx}" ${bindPending}><div style="display:flex; align-items:center; width:100%; pointer-events:none;">${circleHtml}<div class="pending-comp">${checkIcon}${_esc(item.bl)}</div><div class="pending-vol">📦 ${_esc(item.pal)}P (${_esc(item.sType)})</div>${etaTag}${etcTag}</div></div>`;
     });
     document.getElementById("pendingList").innerHTML = pListHtml;
   } else {
@@ -1308,7 +1314,7 @@ function showModal(day, clickedIdx) {
                               <div class="modal-info">
                                   <div class="modal-comp-row"><span class="modal-comp">${item.pal}P</span>${actionBtns}</div>
                                   <div class="modal-vol">📄 B/L: ${_esc(item.bl)} | ${typeIcon} 타입: ${_esc(item.sType)}</div>
-                                  <div class="modal-detail-text">🏢 FWD: ${_esc(item.fwd || "-")} | 🧾 INV: ${_esc(item.invoice || "-")}</div>
+                                  <div class="modal-detail-text">🏢 FWD: ${_esc(item.fwd || "-")} | 🧾 INV: ${_esc(item.invoice || "-")}${dateStr === "미정" && typeof _isReasonableDate === "function" && _isReasonableDate(item.eta) ? ` | 🗓️ ETA: ${_esc(item.eta.slice(5, 10).replace("-", "/"))}` : ""}</div>
                                   ${etcHtml}
                               </div>
                               ${stampHtml}
@@ -1628,6 +1634,23 @@ function initOcrSplitDivider() {
   divider.addEventListener("pointercancel", end);
 }
 
+// 2000~2100 범위 + 실제 유효 날짜인지 (1900-01-00 등은 false)
+function _isReasonableDate(v) {
+  const m = String(v == null ? "" : v).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return false;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  if (y < 2000 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(y, mo - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+}
+// OCR 날짜 정규화: 빈값/미정→그대로, 비정상 날짜(1900 등)→"미정", 정상→그대로
+function _normOcrDate(v) {
+  const s = String(v == null ? "" : v).trim();
+  if (!s) return "";
+  if (s === "미정") return "미정";
+  return _isReasonableDate(s) ? s : "미정";
+}
+
 // 대조창 데이터 로드 → 편집용 배열 생성 → 표 렌더 (제스처는 모달 열 때 이미 바인딩됨)
 //  서버가 [OCR 파싱행 + 마지막 OCR 이후 추가/수정된 입고일정(_fromDb)]을 합쳐서 내려줌.
 //  → 직접 추가분도 보이되, 새 이미지로 OCR하면 _fromDb 범위가 리셋되어 자동으로 빠짐(무한 누적 방지)
@@ -1645,8 +1668,8 @@ function loadOcrSplitData() {
     ocrEditRows = parsed.map((r) => ({
       bl: r.bl || "",
       pal: r.pal != null ? String(r.pal) : "0",
-      eta: r.eta || "",
-      inDate: r.inDate || "미정",
+      eta: _normOcrDate(r.eta), // 1900 등 비정상 날짜 → 미정
+      inDate: _normOcrDate(r.inDate) || "미정",
       fwd: r.fwd || "",
       sType: r.sType || "",
       invoice: r.invoice || "",
@@ -2167,11 +2190,12 @@ function verifyOcrRows() {
       } else if (r.etc && hasInvLike(r.etc)) {
         issues.etc = "인보이스가 비고에 섞인 듯";
       }
-      // 날짜: 비정상(1900 등)이면 '미정 변경'(파랑), 정상인데 원본에 없으면 '확인필요'(빨강)
+      // 날짜: 빈값·미정은 정상. 비정상 날짜(1900 등)면 '미정 변경'(파랑), 정상인데 원본에 없으면 '확인필요'(빨강)
       ["eta", "inDate"].forEach((f) => {
-        if (r[f]) {
-          if (!isReasonableDate(r[f])) dateFix[f] = true; // 저장 시 미정으로 처리됨
-          else if (!inRaw(r[f])) issues[f] = "원본에 없음";
+        const v = String(r[f] || "").trim();
+        if (v && v !== "미정") {
+          if (!isReasonableDate(v)) dateFix[f] = true;
+          else if (!inRaw(v)) issues[f] = "원본에 없음";
         }
       });
       // PAL: 숫자 형식

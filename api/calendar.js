@@ -216,11 +216,11 @@ module.exports = async function (req, res) {
         });
       } else {
         const [monthRows] = await pool.query(
-          `SELECT id, bl_number, pallets, remarks, s_type, fwd, invoice, status, is_ai_modified, sort_idx, receive_date FROM inbound WHERE receive_date >= ? AND receive_date < ? ORDER BY sort_idx ASC, id ASC`,
+          `SELECT id, bl_number, pallets, remarks, s_type, fwd, invoice, status, is_ai_modified, sort_idx, receive_date, DATE_FORMAT(eta,'%Y-%m-%d') AS eta FROM inbound WHERE receive_date >= ? AND receive_date < ? ORDER BY sort_idx ASC, id ASC`,
           [startYmd, endYmd],
         );
         const [pendingRows] = await pool.query(
-          `SELECT id, bl_number, pallets, remarks, s_type, fwd, invoice, status, is_ai_modified, sort_idx FROM inbound WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`,
+          `SELECT id, bl_number, pallets, remarks, s_type, fwd, invoice, status, is_ai_modified, sort_idx, DATE_FORMAT(eta,'%Y-%m-%d') AS eta FROM inbound WHERE receive_date IS NULL OR status = '미정' ORDER BY sort_idx ASC, id ASC`,
         );
         monthRows.forEach((row) => {
           const day = new Date(row.receive_date).getUTCDate();
@@ -234,6 +234,7 @@ module.exports = async function (req, res) {
             sType: row.s_type,
             fwd: row.fwd,
             invoice: row.invoice,
+            eta: row.eta || "",
             isDone: row.status === "완료",
             isAi: row.is_ai_modified === 1,
             sortIdx: row.sort_idx !== null ? row.sort_idx : 999,
@@ -249,6 +250,7 @@ module.exports = async function (req, res) {
             sType: row.s_type,
             fwd: row.fwd,
             invoice: row.invoice,
+            eta: row.eta || "",
             isDone: row.status === "완료",
             isAi: row.is_ai_modified === 1,
             sortIdx: row.sort_idx !== null ? row.sort_idx : 999,
