@@ -2131,6 +2131,15 @@ function verifyOcrRows() {
   const isInvOk = (v) => /^\d{7,8}$/.test(String(v).trim()) || /^PI-?\d{4}-?\d{3,4}$/i.test(String(v).trim());
   const hasInvLike = (v) => /\d{7,8}/.test(String(v)) || /PI-?\d{4}-?\d{3,4}/i.test(String(v));
   const isDateOk = (v) => /^\d{4}-\d{1,2}-\d{1,2}$/.test(String(v).trim());
+  // 2000~2100 범위 + 실제 달력상 유효한 날짜만 정상. 1900-01-00 등은 '날짜 이상'(저장 시 미정)
+  const isReasonableDate = (v) => {
+    const m = String(v).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (!m) return false;
+    const y = +m[1], mo = +m[2], d = +m[3];
+    if (y < 2000 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+    const dt = new Date(y, mo - 1, d);
+    return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+  };
   const isPalOk = (v) => /^\d{1,3}$/.test(String(v).trim());
   const inRaw = (v) => {
     const k = norm(v);
@@ -2139,9 +2148,11 @@ function verifyOcrRows() {
 
   const inner = document.getElementById("ocrTableInner");
   let warnRows = 0;
+  let dateFixCount = 0; // 날짜 이상 → 미정 변경 건수
   const details = []; // 사유 상세 목록
   ocrEditRows.forEach((r, idx) => {
-    const issues = {}; // field -> 사유
+    const issues = {}; // field -> 사유 (빨강=확인필요)
+    const dateFix = {}; // field -> true (파랑=날짜이상 미정변경)
     // 달력 저장분/직접 추가 행(_fromDb)은 OCR 원본 텍스트 대조 대상이 아님 → 셀 색만 원복하고 건너뜀
     if (!r._fromDb) {
       // B/L: 형식 + 원본존재
@@ -2156,10 +2167,10 @@ function verifyOcrRows() {
       } else if (r.etc && hasInvLike(r.etc)) {
         issues.etc = "인보이스가 비고에 섞인 듯";
       }
-      // 날짜: 형식 + 존재
+      // 날짜: 비정상(1900 등)이면 '미정 변경'(파랑), 정상인데 원본에 없으면 '확인필요'(빨강)
       ["eta", "inDate"].forEach((f) => {
         if (r[f]) {
-          if (!isDateOk(r[f])) issues[f] = "날짜 형식 아님";
+          if (!isReasonableDate(r[f])) dateFix[f] = true; // 저장 시 미정으로 처리됨
           else if (!inRaw(r[f])) issues[f] = "원본에 없음";
         }
       });
@@ -2174,20 +2185,28 @@ function verifyOcrRows() {
       td.removeAttribute("title");
     });
     const keys = Object.keys(issues);
-    if (keys.length) {
-      warnRows++;
+    const dfKeys = Object.keys(dateFix);
+    if (keys.length || dfKeys.length) {
+      if (keys.length) warnRows++;
+      dateFixCount += dfKeys.length;
       cells.forEach((td) => {
         const f = td.getAttribute("data-field");
         if (issues[f]) {
           td.style.background = "#ffd1d1"; // 확인필요 = 빨강
           td.title = issues[f];
+        } else if (dateFix[f]) {
+          td.style.background = "#cfe3ff"; // 날짜 이상 → 미정 변경 = 파랑
+          td.title = "날짜 이상 → 저장 시 미정으로 처리됩니다";
         }
       });
-      // 사유 상세(모바일은 title 안 보이므로 안내줄에 풀어서 표시)
       const blLabel = r.bl || "발행전";
       keys.forEach((f) => {
         const colLabel = (OCR_COLS.find((c) => c.key === f) || {}).label || f;
         details.push(`${idx + 1}행(${blLabel}) ${colLabel}: ${issues[f]}`);
+      });
+      dfKeys.forEach((f) => {
+        const colLabel = (OCR_COLS.find((c) => c.key === f) || {}).label || f;
+        details.push(`${idx + 1}행(${blLabel}) ${colLabel}: 날짜 이상 → 미정 변경`);
       });
     }
   });
@@ -2213,11 +2232,13 @@ function verifyOcrRows() {
     : "";
 
   const problem = warnRows || countWarn;
-  const head = warnRows
-    ? `🔍 ${ocrRowCount}건 중 ${warnRows}건 확인필요${countNote}`
-    : countWarn
-    ? `⚠️ 개별 오류 없음${countNote}`
-    : `✅ 검증 완료 — 이상 없음${countNote}`;
+  const dateNote = dateFixCount ? ` · 📅 날짜 이상 → 미정 변경 ${dateFixCount}건` : "";
+  const head =
+    (warnRows
+      ? `🔍 ${ocrRowCount}건 중 ${warnRows}건 확인필요${countNote}`
+      : countWarn
+      ? `⚠️ 개별 오류 없음${countNote}`
+      : `✅ 검증 완료 — 이상 없음${countNote}`) + dateNote;
   // 사유를 안내줄에 직접 표시(모바일 title 미지원) — 너무 많으면 앞 6건만
   let detailHtml = "";
   if (details.length) {
@@ -4048,7 +4069,7 @@ function runPcSearch() {
           const metaLine = `<span class="pcsr-inv pcsr-inv-meta">${_esc(r.pal || 0)}P · ${d || "미정"}</span>`;
           const done = r.status === "완료";
           const dot = done ? "#34c759" : "#0a84ff";
-          return `<button class="pcsr-item" onclick="pcJumpTo('${d}','${_argq(blRaw)}')">
+          return `<button class="pcsr-item" onclick="pcJumpTo('${d}','${_argq(blRaw)}','${_argq(invRaw)}')">
             <span class="pcsr-dot" style="background:${dot}"></span>
             <span class="pcsr-main"><span class="pcsr-big"${blStyle}>B/L: ${blDisplay}</span>${invLine}${metaLine}</span>
           </button>`;
@@ -4072,10 +4093,14 @@ function pcSearchReset() {
 }
 
 // 검색결과 클릭 → 해당 월로 이동 후 그 일정 하이라이트
-function pcJumpTo(dateStr, key) {
+function pcJumpTo(dateStr, key, inv) {
   if (!dateStr) {
-    // 미정/대기 건 — 날짜가 없으니 대기 목록을 연다
-    if (typeof showModal === "function") showModal("pending");
+    // 미정/대기 건 — 날짜가 없으니 대기 목록을 열고 해당 항목 강조
+    const pend = serverData.pendingItems || [];
+    let pIdx = -1;
+    if (inv) pIdx = pend.findIndex((it) => String(it.invoice || "") === inv);
+    if (pIdx < 0 && key) pIdx = pend.findIndex((it) => String(it.bl || "") === key);
+    if (typeof showModal === "function") showModal("pending", pIdx >= 0 ? pIdx : null);
     return;
   }
   const box = document.getElementById("pcSearchResults");
@@ -4184,7 +4209,7 @@ function runFabSearch() {
           const invLine = invRaw ? `<span class="fsr-big"${invStyle}>INV: ${_hlKw(invRaw, kw)}</span>` : "";
           const done = r.status === "완료";
           const dot = done ? "#34c759" : "#0a84ff";
-          return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(blRaw)}')">
+          return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(blRaw)}','${_argq(invRaw)}')">
             <span class="fsr-dot" style="background:${dot}"></span>
             <span class="fsr-main"><span class="fsr-big"${blStyle}>B/L: ${blDisplay}</span>${invLine}</span>
             <span class="fsr-meta">${_esc(r.pal || 0)}P · ${d || "미정"}</span>

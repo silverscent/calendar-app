@@ -1242,8 +1242,10 @@ function pcSearchReset() {
 
 function pcJumpTo(dateStr, key) {
   if (!dateStr) {
-    // 미정/대기 건 — 날짜가 없으니 대기 목록을 연다
-    if (typeof showModal === "function") showModal("pending");
+    // 미정/대기 건 — 대기 목록 열고 해당 업체 강조 (key=원본 company, [TASK] 포함)
+    const pend = serverData.pendingItems || [];
+    let pIdx = key ? pend.findIndex((it) => String(it.company || "") === key) : -1;
+    if (typeof showModal === "function") showModal("pending", pIdx >= 0 ? pIdx : null);
     return;
   }
   const box = document.getElementById("pcSearchResults");
