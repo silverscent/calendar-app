@@ -1395,11 +1395,17 @@ module.exports = async function handler(req, res) {
           let updateCount = 0;
           let insertCount = 0;
           let skipCount = 0;
+          // 실제 달력상 유효하고 최근 연도(2000~2100) 범위인 날짜만 통과. 1900-01-00 같은 값은 null(미정) 처리.
           const makeSafeDate = (val) => {
             if (!val) return null;
-            let s = String(val).trim();
-            if (!/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(s)) return null;
-            return s.replace(/\//g, "-");
+            const s = String(val).trim().replace(/\//g, "-");
+            const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            if (!m) return null;
+            const y = +m[1], mo = +m[2], d = +m[3];
+            if (y < 2000 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+            const dt = new Date(y, mo - 1, d); // 2월 30일·일 00 등 차단
+            if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+            return `${m[1]}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
           };
 
           // 🛠️ 필터 데이터 로드
@@ -1452,31 +1458,37 @@ module.exports = async function handler(req, res) {
             r.etc = etc;
 
             let isAiVal = aiSuccess ? 1 : 0;
-            let exist = [];
-            if (invoice) {
-              [exist] = await pool.query(`SELECT id, status FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
-            }
-            if (exist.length === 0 && bl !== "발행전" && bl !== "") {
-              [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
-            }
-
-            if (exist.length > 0) {
-              // 이미 완료 처리된 일정은 덮어쓰지 않음
-              if (exist[0].status === "완료") {
-                skipCount++;
-                continue;
+            // 한 행이 실패해도 전체 OCR이 죽지 않도록 행별 방어 (부분 반영·미스터리 변경 방지)
+            try {
+              let exist = [];
+              if (invoice) {
+                [exist] = await pool.query(`SELECT id, status FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
               }
-              await pool.query(
-                `UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`,
-                [bl, pal, inDate, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id],
-              );
-              updateCount++;
-            } else {
-              await pool.query(
-                `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, ?)`,
-                [bl, pal, inDate, sType, fwd, invoice, eta, etc, isAiVal],
-              );
-              insertCount++;
+              if (exist.length === 0 && bl !== "발행전" && bl !== "") {
+                [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
+              }
+
+              if (exist.length > 0) {
+                // 이미 완료 처리된 일정은 덮어쓰지 않음
+                if (exist[0].status === "완료") {
+                  skipCount++;
+                  continue;
+                }
+                await pool.query(
+                  `UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=? WHERE id=?`,
+                  [bl, pal, inDate, etc, sType, fwd, invoice, eta, isAiVal, exist[0].id],
+                );
+                updateCount++;
+              } else {
+                await pool.query(
+                  `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, ?)`,
+                  [bl, pal, inDate, sType, fwd, invoice, eta, etc, isAiVal],
+                );
+                insertCount++;
+              }
+            } catch (rowErr) {
+              skipCount++;
+              console.error(`[OCR] 행 반영 실패 (${bl || invoice}):`, rowErr.sqlMessage || rowErr.message);
             }
           }
 

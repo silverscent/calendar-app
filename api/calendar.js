@@ -1729,12 +1729,17 @@ module.exports = async function (req, res) {
           }
 
           // 날짜 정규화: YYYY-MM-DD 만 허용, 그 외/미정/빈값은 null
+          // 실제 유효하고 2000~2100 범위인 날짜만 통과 (1900-01-00 등은 null=미정)
           const normDate = (v) => {
             const s = safeDate(v);
             if (!s) return null;
             const m = String(s).match(/(\d{4})\D?(\d{1,2})\D?(\d{1,2})/);
             if (!m) return null;
-            return `${m[1]}-${String(m[2]).padStart(2, "0")}-${String(m[3]).padStart(2, "0")}`;
+            const y = +m[1], mo = +m[2], d = +m[3];
+            if (y < 2000 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+            const dt = new Date(y, mo - 1, d);
+            if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+            return `${m[1]}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
           };
 
           let insertCount = 0;
