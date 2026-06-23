@@ -1083,6 +1083,63 @@
           font-size: max(16px, 1em) !important;
         }
       }
+
+      /* 📱 좁은 폰(갤럭시 S23 등 ≤392px) 전용 압축 — 짧은 컨트롤 버튼이 두 줄로 깨지지 않게.
+         아이폰 12 Pro Max(428px) 등 넓은 화면엔 미적용(영향 0). 읽는 본문 글씨는 A+ 그대로 유지. */
+      @media (max-width: 392px) {
+        /* 모든 버튼·칩·라벨·비교셀 텍스트를 한 줄 고정 — [버튼]이 [버/튼] 두 줄로 안 깨지게 */
+        button,
+        .size-btn,
+        .multi-btn,
+        .info-btn,
+        .sync-btn,
+        .edit-toggle-btn,
+        .done-toggle-btn,
+        .dash-tab-btn,
+        .compare-add-btn,
+        .comp-tag-btn,
+        .type-pill,
+        .fsr-meta,
+        .pcsr-inv-meta,
+        .pcsr-meta,
+        .compare-th,
+        .comp-name-txt,
+        .vol-txt,
+        .rate-txt,
+        .compare-tag,
+        .status-badge,
+        .type-label,
+        .dash-card-title {
+          white-space: nowrap;
+        }
+        /* 상단 폰트조절·툴바: A+에도 커지지 않게 고정 px + 간격 축소 */
+        .top-row { gap: 6px; }
+        .size-toggle { gap: 3px; }
+        .size-btn { font-size: 12px; padding: 6px 8px; }
+        .action-row-right { gap: 6px; }
+        .info-btn, .sync-btn { font-size: 13px; }
+        .sync-time { font-size: 11px; }
+        .multi-btn { font-size: 12px; padding: 6px 9px; }
+        /* 상세 모달 액션 버튼: 한 줄 유지 + 간격/패딩 축소 */
+        .action-btn-group { gap: 5px; }
+        .edit-toggle-btn, .done-toggle-btn { padding: 7px 9px; font-size: 12px; }
+        .btn-row { gap: 7px; }
+        /* 대시보드 탭/토글/네비 */
+        .dash-tab-row { gap: 6px; }
+        .dash-tab-btn { font-size: 12.5px; padding: 8px 6px; }
+        .dash-control-row { gap: 8px; }
+        .dash-toggles button { font-size: 12px; padding: 5px 8px; }
+        .dash-nav button { font-size: 13px; }
+        /* 정밀비교 표: 셀 글씨 살짝 줄여 두 줄 방지 */
+        .compare-th { font-size: 11px; padding: 9px 4px; }
+        .comp-name-txt { font-size: 0.85em; }
+        .vol-txt { font-size: 0.98em; }
+        .compare-cell { padding: 9px 7px; }
+        /* 거래처(CRM) 칩·라벨 */
+        .comp-tag-btn { font-size: 0.8em; padding: 5px 9px; }
+        .info-label { font-size: 0.76em; }
+      }
+
       .edit-input {
         width: 100%;
         box-sizing: border-box;
