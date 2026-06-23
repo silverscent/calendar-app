@@ -4045,7 +4045,7 @@ function runPcSearch() {
           const blStyle = blMatch ? ' style="font-weight:700"' : '';
           const invStyle = invMatch ? ' style="font-weight:700"' : '';
           const invLine = invRaw ? `<span class="pcsr-inv"${invStyle}>INV: ${_hlKw(invRaw, kw)}</span>` : "";
-          const metaLine = `<span class="pcsr-inv pcsr-inv-meta">${_esc(r.pal || 0)}P · ${d}</span>`;
+          const metaLine = `<span class="pcsr-inv pcsr-inv-meta">${_esc(r.pal || 0)}P · ${d || "미정"}</span>`;
           const done = r.status === "완료";
           const dot = done ? "#34c759" : "#0a84ff";
           return `<button class="pcsr-item" onclick="pcJumpTo('${d}','${_argq(blRaw)}')">
@@ -4073,7 +4073,11 @@ function pcSearchReset() {
 
 // 검색결과 클릭 → 해당 월로 이동 후 그 일정 하이라이트
 function pcJumpTo(dateStr, key) {
-  if (!dateStr) return;
+  if (!dateStr) {
+    // 미정/대기 건 — 날짜가 없으니 대기 목록을 연다
+    if (typeof showModal === "function") showModal("pending");
+    return;
+  }
   const box = document.getElementById("pcSearchResults");
   if (box) window._pcSearchScroll = box.scrollTop; // 결과 스크롤 위치 기억
   const [y, m, day] = dateStr.split("-").map((v) => parseInt(v, 10));
@@ -4183,7 +4187,7 @@ function runFabSearch() {
           return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(blRaw)}')">
             <span class="fsr-dot" style="background:${dot}"></span>
             <span class="fsr-main"><span class="fsr-big"${blStyle}>B/L: ${blDisplay}</span>${invLine}</span>
-            <span class="fsr-meta">${_esc(r.pal || 0)}P · ${d}</span>
+            <span class="fsr-meta">${_esc(r.pal || 0)}P · ${d || "미정"}</span>
           </button>`;
         })
         .join("");

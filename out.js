@@ -1212,7 +1212,7 @@ function runPcSearch() {
           return `<button class="pcsr-item" onclick="pcJumpTo('${d}','${_argq(raw)}')">
               <span class="pcsr-dot" style="background:${dot}"></span>
               <span class="pcsr-main"><span class="pcsr-big" style="font-weight:700">${isTask ? "🛠 " : ""}${comp}</span><span class="pcsr-inv">${sub}</span></span>
-              <span class="pcsr-meta">${d}</span>
+              <span class="pcsr-meta">${d || "미정"}</span>
             </button>`;
         })
         .join("");
@@ -1241,7 +1241,11 @@ function pcSearchReset() {
 }
 
 function pcJumpTo(dateStr, key) {
-  if (!dateStr) return;
+  if (!dateStr) {
+    // 미정/대기 건 — 날짜가 없으니 대기 목록을 연다
+    if (typeof showModal === "function") showModal("pending");
+    return;
+  }
   const box = document.getElementById("pcSearchResults");
   if (box) window._pcSearchScroll = box.scrollTop; // 결과 스크롤 위치 기억
   const [y, m, day] = dateStr.split("-").map((v) => parseInt(v, 10));
@@ -1357,7 +1361,7 @@ function runFabSearch() {
             return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(raw)}')">
               <span class="fsr-dot" style="background:${dot}"></span>
               <span class="fsr-main"><span class="fsr-big" style="font-weight:700">${isTask ? "🛠 " : ""}${comp}</span><span class="fsr-sub">${sub}</span></span>
-              <span class="fsr-meta">${d}</span>
+              <span class="fsr-meta">${d || "미정"}</span>
             </button>`;
           })
           .join("");

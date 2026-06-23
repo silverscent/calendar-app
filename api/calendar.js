@@ -869,20 +869,21 @@ module.exports = async function (req, res) {
               params.push(endDate);
             }
             if (where.length === 0) return res.status(200).json({ success: true, rows: [] });
-            where.push("outbound_date IS NOT NULL");
+            // 미정/대기(outbound_date NULL)도 포함. 단, 작업기간(startDate/endDate)을 지정하면 그 조건상 자연 제외됨.
             const sql =
               "SELECT id, company, pal, box, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date, etc, isDone FROM outbound WHERE " +
               where.join(" AND ") +
-              " ORDER BY outbound_date DESC LIMIT 200";
+              " ORDER BY outbound_date IS NULL, outbound_date DESC LIMIT 200";
             [rows] = await pool.query(sql, params);
           } else {
             // 입고: B/L · 인보이스 부분 검색 (+ 운송타입/포워더/비고도 함께)
             if (!kwRaw) return res.status(200).json({ success: true, rows: [] });
+            // 미정/대기(receive_date NULL)도 포함 — 인보이스만 있는 발행전 대기건도 검색되게
             const sql =
               "SELECT id, bl_number AS bl, invoice, pallets AS pal, DATE_FORMAT(receive_date, '%Y-%m-%d') AS date, " +
               "DATE_FORMAT(eta, '%Y-%m-%d') AS eta, fwd, s_type, status, remarks " +
               "FROM inbound WHERE (LOWER(bl_number) LIKE LOWER(?) OR LOWER(invoice) LIKE LOWER(?) OR LOWER(fwd) LIKE LOWER(?) OR LOWER(s_type) LIKE LOWER(?) OR LOWER(remarks) LIKE LOWER(?)) " +
-              "AND receive_date IS NOT NULL ORDER BY receive_date DESC LIMIT 200";
+              "ORDER BY receive_date IS NULL, receive_date DESC LIMIT 200";
             [rows] = await pool.query(sql, [kw, kw, kw, kw, kw]);
           }
           return res.status(200).json({ success: true, rows: rows });
