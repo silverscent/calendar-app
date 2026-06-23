@@ -1668,7 +1668,7 @@ function loadOcrSplitData() {
     ocrEditRows = parsed.map((r) => ({
       bl: r.bl || "",
       pal: r.pal != null ? String(r.pal) : "0",
-      eta: _normOcrDate(r.eta), // 1900 등 비정상 날짜 → 미정
+      eta: _normOcrDate(r.eta) || "미정", // 1900 등 비정상·빈값 → 미정 (입고일과 동일 표기)
       inDate: _normOcrDate(r.inDate) || "미정",
       fwd: r.fwd || "",
       sType: r.sType || "",
