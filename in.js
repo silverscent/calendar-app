@@ -2168,6 +2168,10 @@ function verifyOcrRows() {
     const k = norm(v);
     return k.length < 4 || rawNorm.includes(k); // 짧은 값(발행전 등)은 통과
   };
+  // 원본 OCR 텍스트에 비정상 날짜(1900-01-00 등)가 있었는지 → 미정으로 바뀐 날짜칸 표시 판단용
+  const rawAbnormalDateCount = (currentRawOcrString.match(/\d{4}-\d{1,2}-\d{1,2}/g) || []).filter(
+    (s) => !isReasonableDate(s),
+  ).length;
 
   const inner = document.getElementById("ocrTableInner");
   let warnRows = 0;
@@ -2190,12 +2194,16 @@ function verifyOcrRows() {
       } else if (r.etc && hasInvLike(r.etc)) {
         issues.etc = "인보이스가 비고에 섞인 듯";
       }
-      // 날짜: 빈값·미정은 정상. 비정상 날짜(1900 등)면 '미정 변경'(파랑), 정상인데 원본에 없으면 '확인필요'(빨강)
+      // 날짜: 비정상 날짜(1900 등)면 '미정 변경'(파랑) / 원본에 비정상날짜가 있었고 이 칸이 미정이면 그것도 파랑 / 정상인데 원본에 없으면 빨강
       ["eta", "inDate"].forEach((f) => {
         const v = String(r[f] || "").trim();
-        if (v && v !== "미정") {
-          if (!isReasonableDate(v)) dateFix[f] = true;
-          else if (!inRaw(v)) issues[f] = "원본에 없음";
+        if (!v) return;
+        if (v === "미정") {
+          if (rawAbnormalDateCount > 0) dateFix[f] = true; // 원본 비정상날짜 → 미정 처리된 칸
+        } else if (!isReasonableDate(v)) {
+          dateFix[f] = true;
+        } else if (!inRaw(v)) {
+          issues[f] = "원본에 없음";
         }
       });
       // PAL: 숫자 형식
@@ -2212,7 +2220,7 @@ function verifyOcrRows() {
     const dfKeys = Object.keys(dateFix);
     if (keys.length || dfKeys.length) {
       if (keys.length) warnRows++;
-      dateFixCount += dfKeys.length;
+      if (dfKeys.length) dateFixCount++; // 날짜 미정변경 '행' 수
       cells.forEach((td) => {
         const f = td.getAttribute("data-field");
         if (issues[f]) {
@@ -2256,13 +2264,14 @@ function verifyOcrRows() {
     : "";
 
   const problem = warnRows || countWarn;
-  const dateNote = dateFixCount ? ` · 📅 날짜 이상 → 미정 변경 ${dateFixCount}건` : "";
-  const head =
-    (warnRows
-      ? `🔍 ${ocrRowCount}건 중 ${warnRows}건 확인필요${countNote}`
-      : countWarn
-      ? `⚠️ 개별 오류 없음${countNote}`
-      : `✅ 검증 완료 — 이상 없음${countNote}`) + dateNote;
+  const head = warnRows
+    ? `🔍 ${ocrRowCount}건 중 ${warnRows}건 확인필요${countNote}`
+    : countWarn
+    ? `⚠️ 개별 오류 없음${countNote}`
+    : `✅ 검증 완료 — 이상 없음${countNote}`;
+  const dateNoteHtml = dateFixCount
+    ? `<span style="color:#0a84ff; font-weight:700;"> · 📅 날짜 이상 → 미정 변경 ${dateFixCount}건</span>`
+    : "";
   // 사유를 안내줄에 직접 표시(모바일 title 미지원) — 너무 많으면 앞 6건만
   let detailHtml = "";
   if (details.length) {
@@ -2274,8 +2283,8 @@ function verifyOcrRows() {
       `</div>`;
   }
   const hint = document.getElementById("ocrHint");
-  if (hint) hint.innerHTML = `<b style="color:${problem ? "#e74c3c" : "#27ae60"};">${head}</b>${detailHtml}`;
-  showToast(head, 4000);
+  if (hint) hint.innerHTML = `<b style="color:${problem ? "#e74c3c" : "#27ae60"};">${head}</b>${dateNoteHtml}${detailHtml}`;
+  showToast(head + (dateFixCount ? ` · 날짜이상 미정변경 ${dateFixCount}건` : ""), 4000);
 }
 
 // 줌/이동 원위치 (패널 크기가 바뀌었을 수 있으니 기준 크기 재계산)
