@@ -4716,9 +4716,18 @@ function renderCrossPicker() {
     let isSelected = tempSelectedMonthsForPicker.some((item) => item.y === crossPickerTempYear && item.m === i)
       ? "current"
       : "";
-    gridHtml += `<button class="month-btn ${isSelected}" onclick="toggleCompareMonth(${crossPickerTempYear}, ${i})">${i}월</button>`;
+    // onclick은 PC 폴백용, touchstart가 모바일에서 즉시 실행됨
+    gridHtml += `<button class="month-btn ${isSelected}" data-m="${i}" onclick="toggleCompareMonth(${crossPickerTempYear}, ${i})">${i}월</button>`;
   }
-  document.getElementById("crossPickerMonthGrid").innerHTML = gridHtml;
+  const grid = document.getElementById("crossPickerMonthGrid");
+  grid.innerHTML = gridHtml;
+  // touchstart 위임: 손가락 닿는 즉시 반응, 다중 터치도 각자 처리됨
+  grid.ontouchstart = function (e) {
+    const btn = e.target.closest(".month-btn");
+    if (!btn) return;
+    e.preventDefault(); // 이후 click 이벤트 차단 (이중 실행 방지)
+    toggleCompareMonth(crossPickerTempYear, parseInt(btn.dataset.m));
+  };
 }
 
 function toggleCompareMonth(y, m) {
@@ -4726,7 +4735,6 @@ function toggleCompareMonth(y, m) {
   const willBeSelected = existingIdx === -1;
   if (existingIdx !== -1) tempSelectedMonthsForPicker.splice(existingIdx, 1);
   else tempSelectedMonthsForPicker.push({ y: y, m: m });
-  // innerHTML 재생성 없이 해당 버튼 클래스만 토글 → 연속 터치 씹힘 방지
   const btns = document.querySelectorAll("#crossPickerMonthGrid .month-btn");
   if (btns[m - 1]) btns[m - 1].classList.toggle("current", willBeSelected);
 }
