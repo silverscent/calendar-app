@@ -35,6 +35,25 @@ async function sendTgPhoto(chatId, photo, caption = null) {
   }
 }
 
+// 📄 텔레그램 파일(문서) 전송 헬퍼 — 성공 여부 반환
+// 이미지를 파일로 보낸 경우 file_id 타입이 document이므로 sendPhoto가 실패함 → 이 함수로 폴백
+async function sendTgDocument(chatId, document, caption = null) {
+  try {
+    const payload = { chat_id: chatId, document: document };
+    if (caption) payload.caption = caption;
+    const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const rj = await r.json();
+    return rj.ok === true;
+  } catch (e) {
+    console.error("텔레그램 파일 전송 에러:", e);
+    return false;
+  }
+}
+
 // 🇰🇷 한국 시간 기준 날짜 포맷 함수
 function getKstDateStr(dateObj) {
   const kst = new Date(dateObj.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
@@ -685,7 +704,12 @@ module.exports = async function handler(req, res) {
           const imgData = safeGetJson(lastImgRows[0].store_value);
           const fid = imgData.fileId || imgData.id || null; // 구형 포맷(id 키) 호환
           if (fid) {
-            const ok = await sendTgPhoto(chatId, fid, "📁 가장 최근에 판독한 원본 이미지입니다.");
+            // 사진(photo)으로 전송 시도 → 실패하면 파일(document) 타입으로 재시도
+            // 이유: 사용자가 이미지를 파일로 보내면 file_id 타입이 달라서 sendPhoto가 ok:false 반환
+            let ok = await sendTgPhoto(chatId, fid, "📁 가장 최근에 판독한 원본 이미지입니다.");
+            if (!ok) {
+              ok = await sendTgDocument(chatId, fid, "📁 가장 최근에 판독한 원본 이미지입니다.");
+            }
             if (!ok) {
               await sendTgMsg(chatId, "⚠️ 이미지를 불러올 수 없습니다. 새 이미지를 보내고 /ocr 을 실행하면 정상 표시됩니다.");
             }
