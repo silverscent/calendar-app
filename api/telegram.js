@@ -1228,7 +1228,7 @@ module.exports = async function handler(req, res) {
                 // 수정 — MD5 해시만으로 비교
                 const idMatch = targetUniqueId && cacheData.uniqueId === targetUniqueId;
 
-                if (cacheData && idMatch) {
+                if (cacheData && idMatch && Array.isArray(cacheData.rows) && cacheData.rows.length > 0) {
                   finalRows = cacheData.rows;
                   useCachedData = true;
                   aiSuccess = true;
@@ -1250,9 +1250,25 @@ module.exports = async function handler(req, res) {
 
             const botToken = process.env.TELEGRAM_BOT_TOKEN;
             if (!isReparse && targetFileId) {
-              const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${targetFileId}`);
-              const fileData = await fileRes.json();
-              // getFile 실패(20MB 초과·만료) 시 result가 없어 크래시 → 선제 방어 (OCR 카운트 소진 전이라 안전)
+              // ⏱️ getFile 10초 타임아웃 — Telegram API 지연 시 무한 대기 방지
+              const gfCtrl = new AbortController();
+              const gfTimer = setTimeout(() => gfCtrl.abort(), 10000);
+              let fileData;
+              try {
+                const fileRes = await fetch(
+                  `https://api.telegram.org/bot${botToken}/getFile?file_id=${targetFileId}`,
+                  { signal: gfCtrl.signal },
+                );
+                fileData = await fileRes.json();
+              } catch (gfErr) {
+                skipLockReset = true;
+                await sendTgMsg(chatId, gfErr.name === "AbortError"
+                  ? "⚠️ 이미지 정보 조회 시간 초과(10초). 잠시 후 /ocr 을 다시 시도해주세요."
+                  : "⚠️ 이미지 정보 조회 실패. 잠시 후 다시 시도해주세요.");
+                return res.status(200).send("OK");
+              } finally {
+                clearTimeout(gfTimer);
+              }
               if (!fileData.ok || !fileData.result?.file_path) {
                 await sendTgMsg(chatId, `⚠️ 이미지를 가져올 수 없습니다. (20MB 초과 또는 만료된 이미지)`);
                 return res.status(200).send("OK");
