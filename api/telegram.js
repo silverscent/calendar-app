@@ -1256,8 +1256,22 @@ module.exports = async function handler(req, res) {
               fullUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
             }
 
-            const imgRes = await fetch(fullUrl);
-            const imgBuffer = await imgRes.arrayBuffer();
+            // ⏱️ 이미지 다운로드 25초 타임아웃 (느린 Telegram 서버·대용량 이미지 대응)
+            const imgController = new AbortController();
+            const imgTimer = setTimeout(() => imgController.abort(), 25000);
+            let imgBuffer;
+            try {
+              const imgRes = await fetch(fullUrl, { signal: imgController.signal });
+              imgBuffer = await imgRes.arrayBuffer();
+            } catch (imgErr) {
+              skipLockReset = true;
+              await sendTgMsg(chatId, imgErr.name === "AbortError"
+                ? "⚠️ 이미지 다운로드 시간 초과(25초). 잠시 후 /ocr 을 다시 시도해주세요."
+                : "⚠️ 이미지 다운로드 실패. 잠시 후 다시 시도해주세요.");
+              return res.status(200).send("OK");
+            } finally {
+              clearTimeout(imgTimer);
+            }
             const base64Image = Buffer.from(imgBuffer).toString("base64");
             // ⏱️ Vision OCR도 멈추면 함수가 죽지 않도록 15초 타임아웃
             const visionController = new AbortController();

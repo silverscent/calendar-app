@@ -1600,7 +1600,7 @@ module.exports = async function (req, res) {
               rawDataStr = JSON.parse(rawDataStr);
             } catch (e) {
               // 만약 일반 텍스트 상태로 들어가 있더라도 에러 없이 털어내도록 방어막을 칩니다.
-              rawDataStr = rawRows[0].setting_value;
+              rawDataStr = rawRows[0].store_value;
             }
           }
 
