@@ -1757,7 +1757,7 @@ module.exports = async function (req, res) {
             const dt = normDate(r.inDate);
             let result = null;
             if (inv) {
-              [result] = await pool.query(`DELETE FROM inbound WHERE invoice = ?`, [inv]);
+              [result] = await pool.query(`DELETE FROM inbound WHERE TRIM(invoice) = ?`, [inv]);
             } else if (bl && bl !== "발행전") {
               [result] = await pool.query(`DELETE FROM inbound WHERE TRIM(bl_number) = ? AND receive_date <=> ?`, [
                 bl,
@@ -2196,7 +2196,7 @@ ${JSON.stringify(rows, null, 2)}
                 data?.newEtc || "",
                 data?.newSType || "",
                 data?.newFwd || "",
-                data?.newInvoice || "",
+                (data?.newInvoice || "").trim(),
                 data.id,
               ],
             );
@@ -2210,7 +2210,7 @@ ${JSON.stringify(rows, null, 2)}
                 data?.newEtc || "",
                 data?.newSType || "",
                 data?.newFwd || "",
-                data?.newInvoice || "",
+                (data?.newInvoice || "").trim(),
                 data?.oldBL,
                 data?.oldDate === "미정" ? null : data?.oldDate,
               ],
@@ -2246,7 +2246,7 @@ ${JSON.stringify(rows, null, 2)}
 
           let exist = [];
           if (reqInvoice !== "") {
-            [exist] = await pool.query(`SELECT id FROM inbound WHERE invoice = ? AND receive_date <=> ?`, [
+            [exist] = await pool.query(`SELECT id FROM inbound WHERE TRIM(invoice) = ? AND receive_date <=> ?`, [
               reqInvoice,
               reqDate,
             ]);
