@@ -1782,9 +1782,9 @@ module.exports = async function (req, res) {
             const pal = Math.min(Math.max(parseInt(r.pal) || 0, 0), 99999);
             const inDate = normDate(r.inDate);
             const eta = normDate(r.eta);
-            const fwd = safeStr(r.fwd, 100);
-            const sType = safeStr(r.sType, 20).toUpperCase();
-            const invoice = safeStr(r.invoice, 100);
+            const fwd = safeStr(r.fwd, 100).replace(/[\t\n\r]+/g, " ").replace(/\s{2,}/g, " ");
+            const sType = safeStr(r.sType, 20).replace(/\s/g, "").toUpperCase();
+            const invoice = safeStr(r.invoice, 100).replace(/\s/g, ""); // 내부 공백 제거(매칭 일관성)
             const etc = safeStr(r.etc, 500);
 
             // 한 행이 실패해도 전체 확정이 죽지 않도록 행별 방어

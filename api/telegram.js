@@ -1456,13 +1456,13 @@ module.exports = async function handler(req, res) {
               .slice(0, max);
 
           for (const r of finalRows) {
-            let bl = safeStr(r.bl, 100).replace(/[\s•·\-\*]/g, ""); // BL 특수문자 추가 제거
+            let bl = safeStr(r.bl, 100).replace(/[\s•·\-\*]/g, ""); // BL: 공백·특수문자 전체 제거
             let pal = Math.min(Math.max(parseInt(r.pal) || 0, 0), 99999); // 음수·비정상 큰 수 방어
             let inDate = makeSafeDate(r.inDate);
             let eta = makeSafeDate(r.eta);
-            let fwd = safeStr(r.fwd, 100);
-            let sType = safeStr(r.sType, 20).toUpperCase();
-            let invoice = safeStr(r.invoice, 100);
+            let fwd = safeStr(r.fwd, 100).replace(/[\t\n\r]+/g, " ").replace(/\s{2,}/g, " "); // 내부 줄바꿈→공백
+            let sType = safeStr(r.sType, 20).replace(/\s/g, "").toUpperCase(); // 공백 전체 제거
+            let invoice = safeStr(r.invoice, 100).replace(/\s/g, ""); // 인보이스: 내부 공백도 전부 제거(매칭 일관성)
             let etc = safeStr(r.etc, 500);
 
             // 필터 적용
