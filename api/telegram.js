@@ -702,17 +702,19 @@ module.exports = async function handler(req, res) {
         await sendTgMsg(chatId, statusMsg);
         if (lastImgRows.length > 0) {
           const imgData = safeGetJson(lastImgRows[0].store_value);
-          const fid = imgData.fileId || imgData.id || null; // 구형 포맷(id 키) 호환
+          const fid = imgData.fileId || imgData.id || null;
+          const imgUrl = imgData.url || null;
+          console.log("[/status] fid=", fid, "url=", imgUrl ? imgUrl.slice(-30) : null);
           if (fid) {
-            // 사진(photo)으로 전송 시도 → 실패하면 파일(document) 타입으로 재시도
-            // 이유: 사용자가 이미지를 파일로 보내면 file_id 타입이 달라서 sendPhoto가 ok:false 반환
+            // photo 타입 먼저, 실패 시 document 타입(파일 전송된 이미지) 재시도
             let ok = await sendTgPhoto(chatId, fid, "📁 가장 최근에 판독한 원본 이미지입니다.");
-            if (!ok) {
-              ok = await sendTgDocument(chatId, fid, "📁 가장 최근에 판독한 원본 이미지입니다.");
-            }
+            if (!ok) ok = await sendTgDocument(chatId, fid, "📁 가장 최근에 판독한 원본 이미지입니다.");
             if (!ok) {
               await sendTgMsg(chatId, "⚠️ 이미지를 불러올 수 없습니다. 새 이미지를 보내고 /ocr 을 실행하면 정상 표시됩니다.");
             }
+          } else if (imgUrl) {
+            // fileId 없음(구형 저장 데이터) — 새 /ocr 실행을 안내
+            await sendTgMsg(chatId, "⚠️ 이미지 정보가 구형 형식입니다. 새 이미지를 보내고 /ocr 을 실행하면 정상 표시됩니다.");
           } else {
             await sendTgMsg(chatId, "⚠️ 저장된 OCR 이미지가 없습니다. 새 이미지를 보내고 /ocr 을 실행해주세요.");
           }
@@ -1273,7 +1275,9 @@ module.exports = async function handler(req, res) {
             );
 
             const botToken = process.env.TELEGRAM_BOT_TOKEN;
-            if (!isReparse && targetFileId) {
+            // fullUrl 없고 fileId 있으면 항상 getFile로 재구성
+            // (/reparse에서 URL이 만료됐거나 저장 안 된 경우 포함)
+            if (!fullUrl && targetFileId) {
               // ⏱️ getFile 10초 타임아웃 — Telegram API 지연 시 무한 대기 방지
               const gfCtrl = new AbortController();
               const gfTimer = setTimeout(() => gfCtrl.abort(), 10000);
@@ -1602,22 +1606,22 @@ module.exports = async function handler(req, res) {
           const timeStr = `${currentTime.getMonth() + 1}월${currentTime.getDate()}일 ${String(currentTime.getHours()).padStart(2, "0")}:${String(currentTime.getMinutes()).padStart(2, "0")}`;
           const jsonDataStr = JSON.stringify(finalRows);
 
-          // 🚨 [버그수정] 캐시(/test 후 /ocr) 사용 시에도 최근 OCR 이미지 갱신.
-          //    캐시 경로에선 fullUrl 이 비어있으므로 targetFileId 로 새로 생성.
-          if (!fullUrl && targetFileId) {
-            try {
-              const botToken2 = process.env.TELEGRAM_BOT_TOKEN;
-              const fRes = await fetch(`https://api.telegram.org/bot${botToken2}/getFile?file_id=${targetFileId}`);
-              const fData = await fRes.json();
-              if (fData.ok && fData.result && fData.result.file_path) {
-                fullUrl = `https://api.telegram.org/file/bot${botToken2}/${fData.result.file_path}`;
+          // last_ocr_image 갱신: fileId가 있으면 반드시 저장
+          // URL이 없어도 fileId로 /status에서 이미지 표시 가능
+          if (targetFileId || fullUrl) {
+            if (!fullUrl && targetFileId) {
+              try {
+                const botToken2 = process.env.TELEGRAM_BOT_TOKEN;
+                const fRes = await fetch(`https://api.telegram.org/bot${botToken2}/getFile?file_id=${targetFileId}`);
+                const fData = await fRes.json();
+                if (fData.ok && fData.result && fData.result.file_path) {
+                  fullUrl = `https://api.telegram.org/file/bot${botToken2}/${fData.result.file_path}`;
+                }
+              } catch (e) {
+                console.error("이미지 URL 생성 실패:", e);
               }
-            } catch (e) {
-              console.error("이미지 URL 생성 실패:", e);
             }
-          }
-          if (fullUrl) {
-            const jsonUrl = JSON.stringify({ url: fullUrl, fileId: targetFileId });
+            const jsonUrl = JSON.stringify({ url: fullUrl || "", fileId: targetFileId || null });
             await pool.query(
               `INSERT INTO ocr_store (store_key, store_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
               [jsonUrl, jsonUrl],
