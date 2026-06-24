@@ -4723,9 +4723,12 @@ function renderCrossPicker() {
 
 function toggleCompareMonth(y, m) {
   let existingIdx = tempSelectedMonthsForPicker.findIndex((item) => item.y === y && item.m === m);
+  const willBeSelected = existingIdx === -1;
   if (existingIdx !== -1) tempSelectedMonthsForPicker.splice(existingIdx, 1);
   else tempSelectedMonthsForPicker.push({ y: y, m: m });
-  renderCrossPicker();
+  // innerHTML 재생성 없이 해당 버튼 클래스만 토글 → 연속 터치 씹힘 방지
+  const btns = document.querySelectorAll("#crossPickerMonthGrid .month-btn");
+  if (btns[m - 1]) btns[m - 1].classList.toggle("current", willBeSelected);
 }
 
 function confirmCrossPicker() {
