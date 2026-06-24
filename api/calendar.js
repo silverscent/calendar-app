@@ -1778,14 +1778,14 @@ module.exports = async function (req, res) {
             const sType = String(r.sType || "")
               .toUpperCase()
               .slice(0, 20);
-            const invoice = String(r.invoice || "").slice(0, 100);
+            const invoice = String(r.invoice || "").trim().slice(0, 100);
             const etc = String(r.etc || "").slice(0, 500);
 
             // 한 행이 실패해도 전체 확정이 죽지 않도록 행별 방어
             try {
               let exist = [];
               if (invoice) {
-                [exist] = await pool.query(`SELECT id, status FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
+                [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(invoice) = ? LIMIT 1`, [invoice]);
               }
               if (exist.length === 0 && bl !== "발행전" && bl !== "") {
                 [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);

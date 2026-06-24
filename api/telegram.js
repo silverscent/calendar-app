@@ -1436,7 +1436,7 @@ module.exports = async function handler(req, res) {
             let eta = makeSafeDate(r.eta);
             let fwd = String(r.fwd || "").slice(0, 100);
             let sType = String(r.sType || "").toUpperCase().slice(0, 20);
-            let invoice = String(r.invoice || "").slice(0, 100);
+            let invoice = String(r.invoice || "").trim().slice(0, 100); // 공백 제거(인보이스 매칭 일관성)
             let etc = r.etc || "";
 
             // 필터 적용
@@ -1463,7 +1463,7 @@ module.exports = async function handler(req, res) {
             try {
               let exist = [];
               if (invoice) {
-                [exist] = await pool.query(`SELECT id, status FROM inbound WHERE invoice = ? LIMIT 1`, [invoice]);
+                [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(invoice) = ? LIMIT 1`, [invoice]);
               }
               if (exist.length === 0 && bl !== "발행전" && bl !== "") {
                 [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
