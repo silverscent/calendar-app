@@ -1446,16 +1446,24 @@ module.exports = async function handler(req, res) {
             console.error("필터 데이터 로드 실패:", e);
           }
 
+          // OCR 텍스트 전 필드 공통 정형화: null바이트(MySQL킬러)·제어문자 제거 후 trim+길이제한
+          // 이미지 내용을 통제할 수 없으므로 어떤 이상한 값이 와도 DB가 죽지 않도록 모든 필드에 적용
+          const safeStr = (v, max) =>
+            String(v == null ? "" : v)
+              .replace(/\x00/g, "")                              // null byte → MySQL Incorrect string value 차단
+              .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // 나머지 비인쇄 제어문자 제거
+              .trim()
+              .slice(0, max);
+
           for (const r of finalRows) {
-            // 컬럼 한도 초과("Data too long")로 OCR이 죽지 않도록 모든 값에 길이·범위 가드
-            let bl = String(r.bl || "").replace(/[\s•·\-\*]/g, "").slice(0, 100);
+            let bl = safeStr(r.bl, 100).replace(/[\s•·\-\*]/g, ""); // BL 특수문자 추가 제거
             let pal = Math.min(Math.max(parseInt(r.pal) || 0, 0), 99999); // 음수·비정상 큰 수 방어
             let inDate = makeSafeDate(r.inDate);
             let eta = makeSafeDate(r.eta);
-            let fwd = String(r.fwd || "").slice(0, 100);
-            let sType = String(r.sType || "").toUpperCase().slice(0, 20);
-            let invoice = String(r.invoice || "").trim().slice(0, 100); // 공백 제거(인보이스 매칭 일관성)
-            let etc = r.etc || "";
+            let fwd = safeStr(r.fwd, 100);
+            let sType = safeStr(r.sType, 20).toUpperCase();
+            let invoice = safeStr(r.invoice, 100);
+            let etc = safeStr(r.etc, 500);
 
             // 필터 적용
             customFilters.forEach((word) => {
