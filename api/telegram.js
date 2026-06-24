@@ -17,18 +17,21 @@ async function sendTgMsg(chatId, text, inlineKeyboard = null) {
   }
 }
 
-// 🖼️ 텔레그램 사진 전송 헬퍼
+// 🖼️ 텔레그램 사진 전송 헬퍼 — 성공 여부 반환
 async function sendTgPhoto(chatId, photo, caption = null) {
   try {
     const payload = { chat_id: chatId, photo: photo };
     if (caption) payload.caption = caption;
-    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+    const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    const rj = await r.json();
+    return rj.ok === true;
   } catch (e) {
     console.error("텔레그램 사진 전송 에러:", e);
+    return false;
   }
 }
 
@@ -680,13 +683,14 @@ module.exports = async function handler(req, res) {
         await sendTgMsg(chatId, statusMsg);
         if (lastImgRows.length > 0) {
           const imgData = safeGetJson(lastImgRows[0].store_value);
-          if (imgData.fileId) {
-            await sendTgPhoto(chatId, imgData.fileId, "📁 가장 최근에 판독한 원본 이미지입니다.");
-          } else if (imgData.url) {
-            await sendTgMsg(
-              chatId,
-              "⚠️ (이전 이미지는 URL 방식으로 저장되어 직접 표시할 수 없습니다. 새로 /ocr 을 실행하시면 정상 표시됩니다.)",
-            );
+          const fid = imgData.fileId || imgData.id || null; // 구형 포맷(id 키) 호환
+          if (fid) {
+            const ok = await sendTgPhoto(chatId, fid, "📁 가장 최근에 판독한 원본 이미지입니다.");
+            if (!ok) {
+              await sendTgMsg(chatId, "⚠️ 이미지를 불러올 수 없습니다. 새 이미지를 보내고 /ocr 을 실행하면 정상 표시됩니다.");
+            }
+          } else {
+            await sendTgMsg(chatId, "⚠️ 저장된 OCR 이미지가 없습니다. 새 이미지를 보내고 /ocr 을 실행해주세요.");
           }
         }
         return res.status(200).send("OK");
