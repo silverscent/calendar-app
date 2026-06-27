@@ -4703,8 +4703,8 @@
           padding-left: 232px;
         }
       }
-      /* 우측: 창 ≥1155(=819+336) 이면 도킹 */
-      @media (hover: hover) and (pointer: fine) and (min-width: 1155px) {
+      /* 우측: 열려 있으면 폭 무관 항상 도킹 — 겹침 구조적 불가능 */
+      @media (hover: hover) and (pointer: fine) {
         body.pc-dense:not(.pc-right-collapsed) {
           padding-right: 336px;
         }
@@ -4717,12 +4717,6 @@
         }
         body.pc-dense:not(.pc-left-collapsed) #pcOverlayDim {
           display: block;
-        }
-      }
-      /* 우측 도킹폭 미만(<1155): 오버레이 대신 즉시 숨김 — 달력 겹침 원천 차단 */
-      @media (hover: hover) and (pointer: fine) and (max-width: 1154px) {
-        body.pc-dense:not(.pc-right-collapsed) #pcSidePanel {
-          display: none;
         }
       }
     </style>
