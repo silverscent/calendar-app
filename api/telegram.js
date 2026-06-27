@@ -88,7 +88,7 @@ function safeGetJson(val) {
 
 const pool = mysql.createPool({
   uri: process.env.DATABASE_URL,
-  connectionLimit: 10,
+  connectionLimit: 3, // TiDB 무료 티어 연결 한도(25) 초과 방지 (telegram + calendar 각 3개)
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
 });
@@ -111,6 +111,11 @@ async function ensureTables() {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
   );
+  // 🗑️ DB 자동 정리 (콜드스타트 1회) — TiDB 무료 용량 관리
+  // processed_images: 180일 이상 된 항목 삭제 (재제출 가능성 없음)
+  pool.query(`DELETE FROM processed_images WHERE created_at < DATE_SUB(NOW(), INTERVAL 180 DAY)`).catch(() => {});
+  // admin_audit_logs: 90일 이상 된 로그 삭제
+  pool.query(`DELETE FROM admin_audit_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)`).catch(() => {});
   tablesEnsured = true;
 }
 
@@ -704,7 +709,6 @@ module.exports = async function handler(req, res) {
           const imgData = safeGetJson(lastImgRows[0].store_value);
           const fid = imgData.fileId || imgData.id || null;
           const imgUrl = imgData.url || null;
-          console.log("[/status] fid=", fid, "url=", imgUrl ? imgUrl.slice(-30) : null);
           if (fid) {
             // photo 타입 먼저, 실패 시 document 타입(파일 전송된 이미지) 재시도
             let ok = await sendTgPhoto(chatId, fid, "📁 가장 최근에 판독한 원본 이미지입니다.");

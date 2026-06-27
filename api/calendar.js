@@ -29,7 +29,7 @@ const crypto = require("crypto");
 
 const pool = mysql.createPool({
   uri: process.env.DATABASE_URL,
-  connectionLimit: 10,
+  connectionLimit: 3, // TiDB 무료 티어 연결 한도(25) 초과 방지
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
   waitForConnections: true,
@@ -378,7 +378,6 @@ module.exports = async function (req, res) {
           return res.status(200).json({ success: true });
         } catch (e) {
           console.error("접속 로그 기록 에러:", e);
-          console.error("API 처리 오류:", e);
           return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
@@ -400,7 +399,6 @@ module.exports = async function (req, res) {
           return res.status(200).json({ success: true });
         } catch (e) {
           console.error("로그아웃 기록 에러:", e);
-          console.error("API 처리 오류:", e);
           return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       }
