@@ -4134,8 +4134,8 @@
           padding-left: 232px;
         }
       }
-      /* 우측: 창 ≥1068(=232+336+500) 이면 도킹 — 달력 최소 500px 확보 */
-      @media (hover: hover) and (pointer: fine) and (min-width: 1068px) {
+      /* 우측: 창 ≥1119(=783+336) 이면 도킹 */
+      @media (hover: hover) and (pointer: fine) and (min-width: 1119px) {
         body.pc-dense:not(.pc-right-collapsed) {
           padding-right: 336px;
         }
@@ -4150,14 +4150,10 @@
           display: block;
         }
       }
-      /* 우측 도킹폭 미만(<1068)에서 우측 열리면 오버레이 */
-      @media (hover: hover) and (pointer: fine) and (max-width: 1067px) {
+      /* 우측 도킹폭 미만(<1119): 오버레이 대신 즉시 숨김 — 달력 겹침 원천 차단 */
+      @media (hover: hover) and (pointer: fine) and (max-width: 1118px) {
         body.pc-dense:not(.pc-right-collapsed) #pcSidePanel {
-          z-index: 1200;
-          box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
-        }
-        body.pc-dense:not(.pc-right-collapsed) #pcOverlayDim {
-          display: block;
+          display: none;
         }
       }
     </style>

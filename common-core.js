@@ -184,6 +184,8 @@ function togglePcLeft() {
 function togglePcRight() {
   const c = document.body.classList.toggle("pc-right-collapsed");
   try { localStorage.setItem("pc_right", c ? "collapsed" : "open"); } catch (e) {}
+  // 수동으로 열었을 때도 창이 좁으면 즉시 자동닫힘 (CSS display:none 보완)
+  if (!c && typeof applyPcAutoCollapse === "function") applyPcAutoCollapse();
 }
 function closePcOverlays() {
   document.body.classList.add("pc-left-collapsed", "pc-right-collapsed");
