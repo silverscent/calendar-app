@@ -100,10 +100,8 @@ async function ensureTables() {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`,
   );
-  // 기존 테이블이 VARCHAR(255)로 생성된 경우 TEXT로 업그레이드
-  await pool.query(`ALTER TABLE system_settings MODIFY COLUMN setting_value TEXT`).catch((e) => {
-    console.error("ALTER TABLE system_settings 실패 (무시):", e.message);
-  });
+  // 기존 테이블이 VARCHAR(255)로 생성된 경우 TEXT로 업그레이드 (이미 TEXT면 조용히 무시)
+  await pool.query(`ALTER TABLE system_settings MODIFY COLUMN setting_value TEXT`).catch(() => {});
   // OCR 원본/파싱 결과용 전용 테이블 — system_settings VARCHAR 한도 우회
   await pool.query(
     `CREATE TABLE IF NOT EXISTS ocr_store (store_key VARCHAR(100) PRIMARY KEY, store_value MEDIUMTEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`,
@@ -1684,7 +1682,9 @@ module.exports = async function handler(req, res) {
           );
 
           if (extractedText) {
-            const jsonRawStr = JSON.stringify(extractedText);
+            // Vision 원본 텍스트 20KB 상한 (MEDIUMTEXT지만 불필요한 대용량 저장 방지)
+            const rawCapped = extractedText.length > 20000 ? extractedText.slice(0, 20000) + "\n[TRUNCATED]" : extractedText;
+            const jsonRawStr = JSON.stringify(rawCapped);
             await pool.query(
               `INSERT INTO ocr_store (store_key, store_value) VALUES ('LAST_OCR_RAW', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
               [jsonRawStr, jsonRawStr],

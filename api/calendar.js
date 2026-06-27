@@ -1202,8 +1202,18 @@ module.exports = async function (req, res) {
             if (fileId) {
               try {
                 const botToken = process.env.TELEGRAM_BOT_TOKEN;
-                const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
-                const fileData = await fileRes.json();
+                const gfCtrl = new AbortController();
+                const gfTimer = setTimeout(() => gfCtrl.abort(), 8000);
+                let fileData;
+                try {
+                  const fileRes = await fetch(
+                    `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`,
+                    { signal: gfCtrl.signal },
+                  );
+                  fileData = await fileRes.json();
+                } finally {
+                  clearTimeout(gfTimer);
+                }
 
                 if (fileData.ok) {
                   finalUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
@@ -1258,9 +1268,11 @@ module.exports = async function (req, res) {
         await pool.query(
           `CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`,
         );
+        // telegram.js와 동일한 {url, fileId} JSON 포맷으로 저장 (plain URL 저장 시 /status 이미지 표시 안 됨)
+        const imgJson = JSON.stringify({ url: urlVal, fileId: null });
         await pool.query(
           `INSERT INTO ocr_store (store_key, store_value) VALUES ('last_ocr_image', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
-          [urlVal, urlVal],
+          [imgJson, imgJson],
         );
         await pool.query(
           `INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
@@ -1858,14 +1870,22 @@ module.exports = async function (req, res) {
             let wLoc = "";
             try {
               const locPrompt = `다음 문장에서 날씨를 궁금해하는 '지역/도시 이름'만 추출해. 시간표현(오늘/내일/모레/이번주/주말/지금 등)은 지역이 아님. 지역이 없으면 빈 문자열. JSON만 출력: {"location":"..."}\n문장: ${question}`;
-              const lr = await fetch(gUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  contents: [{ parts: [{ text: locPrompt }] }],
-                  generationConfig: { temperature: 0, responseMimeType: "application/json" },
-                }),
-              });
+              const locCtrl = new AbortController();
+              const locTimer = setTimeout(() => locCtrl.abort(), 8000);
+              let lr;
+              try {
+                lr = await fetch(gUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    contents: [{ parts: [{ text: locPrompt }] }],
+                    generationConfig: { temperature: 0, responseMimeType: "application/json" },
+                  }),
+                  signal: locCtrl.signal,
+                });
+              } finally {
+                clearTimeout(locTimer);
+              }
               const lj = await lr.json();
               const lt = (lj.candidates?.[0]?.content?.parts?.[0]?.text || "")
                 .replace(/```json/gi, "")
@@ -2012,18 +2032,31 @@ ${schema}${compGlossary}
 ${question}
         `.trim();
 
-          // Gemini 호출
-          const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY_AI || process.env.GEMINI_API_KEY}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.0, responseMimeType: "application/json" },
-              }),
-            },
-          );
+          // Gemini 호출 — 20초 타임아웃
+          const aiCtrl = new AbortController();
+          const aiTimer = setTimeout(() => aiCtrl.abort(), 20000);
+          let geminiRes;
+          try {
+            geminiRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY_AI || process.env.GEMINI_API_KEY}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: prompt }] }],
+                  generationConfig: { temperature: 0.0, responseMimeType: "application/json" },
+                }),
+                signal: aiCtrl.signal,
+              },
+            );
+          } catch (fetchErr) {
+            return res.status(200).json({
+              success: false,
+              msg: fetchErr.name === "AbortError" ? "AI 응답 시간 초과(20초). 잠시 후 다시 시도해주세요." : "AI 서버 오류. 잠시 후 다시 시도해주세요.",
+            });
+          } finally {
+            clearTimeout(aiTimer);
+          }
           const geminiJson = await geminiRes.json();
           const aiText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
           if (!aiText) {
@@ -2123,17 +2156,25 @@ ${JSON.stringify(rows, null, 2)}
             `.trim();
 
             try {
-              const summaryRes = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY_AI || process.env.GEMINI_API_KEY}`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    contents: [{ parts: [{ text: summaryPrompt }] }],
-                    generationConfig: { temperature: 0.8 },
-                  }),
-                },
-              );
+              const sumCtrl = new AbortController();
+              const sumTimer = setTimeout(() => sumCtrl.abort(), 12000);
+              let summaryRes;
+              try {
+                summaryRes = await fetch(
+                  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY_AI || process.env.GEMINI_API_KEY}`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      contents: [{ parts: [{ text: summaryPrompt }] }],
+                      generationConfig: { temperature: 0.8 },
+                    }),
+                    signal: sumCtrl.signal,
+                  },
+                );
+              } finally {
+                clearTimeout(sumTimer);
+              }
               const summaryJson = await summaryRes.json();
               summary = summaryJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
               // 요약 호출이 429 등으로 실패하면 표는 살리고 간단 요약으로 폴백
