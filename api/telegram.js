@@ -1098,8 +1098,24 @@ module.exports = async function handler(req, res) {
           if (blockDup) {
             // 👇 file_unique_id 대신 실제 이미지 해시로 비교
             const botToken = process.env.TELEGRAM_BOT_TOKEN;
-            const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`);
-            const fileData = await fileRes.json();
+            // ⏱️ getFile 10초 타임아웃
+            const dupGfCtrl = new AbortController();
+            const dupGfTimer = setTimeout(() => dupGfCtrl.abort(), 10000);
+            let fileData;
+            try {
+              const fileRes = await fetch(
+                `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`,
+                { signal: dupGfCtrl.signal },
+              );
+              fileData = await fileRes.json();
+            } catch (gfErr) {
+              await sendTgMsg(chatId, gfErr.name === "AbortError"
+                ? "⚠️ 이미지 정보 조회 시간 초과. 잠시 후 다시 보내주세요."
+                : "⚠️ 이미지 정보 조회 실패. 잠시 후 다시 보내주세요.");
+              return res.status(200).send("OK");
+            } finally {
+              clearTimeout(dupGfTimer);
+            }
             // getFile 실패(20MB 초과·만료) 시 result가 없어 크래시 → 선제 방어
             if (!fileData.ok || !fileData.result?.file_path) {
               await sendTgMsg(chatId, `⚠️ 이미지를 가져올 수 없습니다. (20MB 초과 또는 만료된 파일)`);
@@ -1107,8 +1123,21 @@ module.exports = async function handler(req, res) {
             }
             const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
 
-            const imgRes = await fetch(fileUrl);
-            const imgBuffer = await imgRes.arrayBuffer();
+            // ⏱️ 이미지 다운로드 25초 타임아웃
+            const dupImgCtrl = new AbortController();
+            const dupImgTimer = setTimeout(() => dupImgCtrl.abort(), 25000);
+            let imgBuffer;
+            try {
+              const imgRes = await fetch(fileUrl, { signal: dupImgCtrl.signal });
+              imgBuffer = await imgRes.arrayBuffer();
+            } catch (imgErr) {
+              await sendTgMsg(chatId, imgErr.name === "AbortError"
+                ? "⚠️ 이미지 다운로드 시간 초과. 잠시 후 다시 보내주세요."
+                : "⚠️ 이미지 다운로드 실패. 잠시 후 다시 보내주세요.");
+              return res.status(200).send("OK");
+            } finally {
+              clearTimeout(dupImgTimer);
+            }
 
             // 이미지 해시 계산
             const crypto = require("crypto");
@@ -1567,13 +1596,17 @@ module.exports = async function handler(req, res) {
             ? `✨ 최종 DB 반영 완료 (AI 스마트 교정)\n`
             : `✅ 최종 DB 반영 완료 (기본 파싱)\n`;
           let resultList = "";
-          finalRows.forEach((r) => {
-            resultList += `• ${r.bl} | ${r.pal}PAL | ${r.inDate || "미정"}\n`;
-          });
-          await sendTgMsg(
-            chatId,
-            resultHeader + resultList + `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건${skipCount > 0 ? ` / 완료처리 건너뜀 ${skipCount}건` : ""}) [🛡️V2 방어막 작동중]`,
-          );
+          const resultFooter = `\n(신규 ${insertCount}건 / 덮어쓰기 ${updateCount}건${skipCount > 0 ? ` / 완료처리 건너뜀 ${skipCount}건` : ""}) [🛡️V2 방어막 작동중]`;
+          const MAX_MSG = 4000; // Telegram 4096자 한도 — 여유 96자 확보
+          for (const r of finalRows) {
+            const line = `• ${r.bl} | ${r.pal}PAL | ${r.inDate || "미정"}\n`;
+            if ((resultHeader + resultList + line + resultFooter).length > MAX_MSG) {
+              resultList += `• ... (${finalRows.length}건 중 일부 생략)\n`;
+              break;
+            }
+            resultList += line;
+          }
+          await sendTgMsg(chatId, resultHeader + resultList + resultFooter);
 
           // 🛠️ 스케줄 누락 화물 감지
           try {
@@ -1610,15 +1643,23 @@ module.exports = async function handler(req, res) {
           // URL이 없어도 fileId로 /status에서 이미지 표시 가능
           if (targetFileId || fullUrl) {
             if (!fullUrl && targetFileId) {
+              // ⏱️ 5초 타임아웃 — 이미 결과는 저장됐으므로 실패해도 무관
+              const urlCtrl = new AbortController();
+              const urlTimer = setTimeout(() => urlCtrl.abort(), 5000);
               try {
                 const botToken2 = process.env.TELEGRAM_BOT_TOKEN;
-                const fRes = await fetch(`https://api.telegram.org/bot${botToken2}/getFile?file_id=${targetFileId}`);
+                const fRes = await fetch(
+                  `https://api.telegram.org/bot${botToken2}/getFile?file_id=${targetFileId}`,
+                  { signal: urlCtrl.signal },
+                );
                 const fData = await fRes.json();
                 if (fData.ok && fData.result && fData.result.file_path) {
                   fullUrl = `https://api.telegram.org/file/bot${botToken2}/${fData.result.file_path}`;
                 }
               } catch (e) {
-                console.error("이미지 URL 생성 실패:", e);
+                console.error("이미지 URL 생성 실패:", e.message);
+              } finally {
+                clearTimeout(urlTimer);
               }
             }
             const jsonUrl = JSON.stringify({ url: fullUrl || "", fileId: targetFileId || null });
