@@ -110,10 +110,14 @@ async function ensureTables() {
     `CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
   );
   // 🗑️ DB 자동 정리 (콜드스타트 1회) — TiDB 무료 용량 관리
-  // processed_images: 180일 이상 된 항목 삭제 (재제출 가능성 없음)
+  // processed_images: 180일 이상 항목 삭제
   pool.query(`DELETE FROM processed_images WHERE created_at < DATE_SUB(NOW(), INTERVAL 180 DAY)`).catch(() => {});
-  // admin_audit_logs: 90일 이상 된 로그 삭제
+  // admin_audit_logs: 90일 이상 로그 삭제
   pool.query(`DELETE FROM admin_audit_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)`).catch(() => {});
+  // inbound: 3년 이상 된 완료 건 삭제 — 달력/통계는 최근 연도만 사용, COUNT(*) 성능 유지
+  pool.query(`DELETE FROM inbound WHERE status = '완료' AND receive_date < DATE_SUB(NOW(), INTERVAL 3 YEAR)`).catch(() => {});
+  // outbound: 3년 이상 된 완료 건 삭제
+  pool.query(`DELETE FROM outbound WHERE isDone = 1 AND outbound_date < DATE_SUB(NOW(), INTERVAL 3 YEAR)`).catch(() => {});
   tablesEnsured = true;
 }
 
