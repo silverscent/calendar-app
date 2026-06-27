@@ -737,6 +737,7 @@ let _lastInsertPos = null; // 'top' | 'bottom' | 'cell'
 
 function startPress(e, type, day, idx = null) {
   if (!isAdmin || isMultiMode) return;
+  if (isDragging) return; // 멀티터치 중 재진입 방지 (out.js와 동일)
   cancelPress();
   isLongPress = false;
   hasMovedDuringDrag = false;
@@ -960,16 +961,21 @@ async function endDrag(e) {
     targetPending = dropElement ? dropElement.closest(".pending-container") : null;
   }
 
-  let item =
-    dragData.day === "pending"
-      ? serverData.pendingItems[dragData.idx]
-      : serverData.monthData[dragData.day][dragData.idx];
+  // 드래그 중 백그라운드 싱크로 serverData 교체 시 크래시 방지
+  const _dragDayArr = dragData.day === "pending" ? null : serverData.monthData[dragData.day];
+  if (dragData.day !== "pending" && (!_dragDayArr || _dragDayArr[dragData.idx] === undefined)) {
+    isDragging = false; dragData = {}; if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+    return;
+  }
+  let item = dragData.day === "pending" ? serverData.pendingItems[dragData.idx] : _dragDayArr[dragData.idx];
   let oldDateStr =
     dragData.day === "pending"
       ? "미정"
       : _ymd(serverData.year, serverData.month, dragData.day);
   if (targetCell && !targetCell.classList.contains("empty")) {
-    let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
+    const _dateNumEl = targetCell.querySelector(".date-num");
+    if (!_dateNumEl) return;
+    let newDay = parseInt(_dateNumEl.innerText.trim());
     // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
     // 💡 [순서 변경 로직] 파란선이 있었을 때만 끼워넣기 동작!
     if (newDay === dragData.day && dragData.day !== "pending") {
@@ -1390,7 +1396,8 @@ async function openEditForm(day, idx, bl, dateStr, pal, etc) {
   const card = document.getElementById(`modal-card-${day}-${idx}`);
   if (!card) return;
   let inputDateVal = dateStr === "미정" ? "" : dateStr;
-  let item = day === "pending" ? serverData.pendingItems[idx] : serverData.monthData[day][idx];
+  let item = day === "pending" ? serverData.pendingItems[idx] : (serverData.monthData[day] || [])[idx];
+  if (!item) return; // 백그라운드 싱크로 serverData 교체 후 stale 인덱스 방지
 
   let sType = item.sType || "";
   let fwd = item.fwd || "";

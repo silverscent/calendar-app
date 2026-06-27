@@ -645,9 +645,9 @@ function preserveCustomOrder(newData) {
 }
 // 💡 [최종 패치] 수량 0과 빈칸을 동일하게 취급하여 억울한 간트 찢어짐 완벽 방어!
 const getMatchKey = (item) => {
-  let clean = item.company.replace(/\[TASK\]/gi, "").trim();
+  let clean = String(item.company || "").replace(/\[TASK\]/gi, "").trim();
   let isTask =
-    item.company.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
+    String(item.company || "").toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
 
   // "0"이나 빈칸, null을 모두 완벽히 동일한 "" 으로 정규화
   let p = item.pal === "0" || !item.pal ? "" : String(item.pal).trim();
@@ -826,7 +826,7 @@ function renderPending() {
         : "";
       let etcTag = meaningfulEtc !== "" ? `<div class="pending-etc">${_esc(meaningfulEtc)}</div>` : "";
       let isItemDone = item.isDone === true || String(item.isDone) === "true";
-      let cleanComp = item.company.replace(/\[TASK\]/gi, "").trim();
+      let cleanComp = String(item.company || "").replace(/\[TASK\]/gi, "").trim();
       let bindPending = `onmousedown="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', 'pending', ${idx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="handleItemClick(event, 'pending', ${idx}, '${_argq(item.company)}', ${isItemDone})"`;
       let checkIcon = isItemDone ? '<span style="font-size:0.9em; margin-right:4px;">✅</span>' : "";
       let pCount = parseInt(item.pal) || 0;
@@ -2479,17 +2479,22 @@ async function endDrag(e) {
     !dropElement || (!dropElement.closest(".calendar-container") && !dropElement.closest(".overlay-modal"));
   let targetPending = dropElement ? dropElement.closest(".pending-container") : null;
 
-  let item =
-    dragData.day === "pending"
-      ? serverData.pendingItems[dragData.idx]
-      : serverData.monthData[dragData.day][dragData.idx];
+  // 드래그 중 백그라운드 싱크로 serverData 교체 시 크래시 방지
+  const _dragDayArr = dragData.day === "pending" ? null : serverData.monthData[dragData.day];
+  if (dragData.day !== "pending" && (!_dragDayArr || _dragDayArr[dragData.idx] === undefined)) {
+    isDragging = false; dragData = {}; if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+    return;
+  }
+  let item = dragData.day === "pending" ? serverData.pendingItems[dragData.idx] : _dragDayArr[dragData.idx];
   let oldDateStr =
     dragData.day === "pending"
       ? "미정"
       : _ymd(serverData.year, serverData.month, dragData.day);
 
   if (targetCell && !targetCell.classList.contains("empty")) {
-    let newDay = parseInt(targetCell.querySelector(".date-num").innerText.trim());
+    const _dateNumEl = targetCell.querySelector(".date-num");
+    if (!_dateNumEl) return;
+    let newDay = parseInt(_dateNumEl.innerText.trim());
 
     // 💡 [간트 & 하루일정 순서 변경 완벽 작동 로직]
     if (newDay === dragData.day && dragData.day !== "pending") {
@@ -3174,8 +3179,8 @@ function showModal(day, clickedIdx) {
   dayData.forEach((item, idx) => {
     let isItemDone = item.isDone === true || String(item.isDone) === "true";
     let isDoneClass = isItemDone ? "done-mark" : "";
-    let isExplicitTask = item.company.toUpperCase().startsWith("[TASK]");
-    let cleanComp = item.company.replace(/\[TASK\]/gi, "").trim();
+    let isExplicitTask = String(item.company || "").toUpperCase().startsWith("[TASK]");
+    let cleanComp = String(item.company || "").replace(/\[TASK\]/gi, "").trim();
     let isTaskMode = isExplicitTask || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(cleanComp));
 
     // 💡 showModal 함수 내 수정
