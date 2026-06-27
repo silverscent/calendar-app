@@ -4703,9 +4703,11 @@
           padding-left: 232px;
         }
       }
-      /* 우측: 열려 있으면 폭 무관 항상 도킹 — 겹침 구조적 불가능 */
+      /* 우측: 열려 있으면 폭 무관 항상 도킹 — 겹침 구조적 불가능
+         min-width:0 → body가 뷰포트 폭에 맞게 줄어들어 position:fixed 패널과 좌표 일치 */
       @media (hover: hover) and (pointer: fine) {
         body.pc-dense:not(.pc-right-collapsed) {
+          min-width: 0;
           padding-right: 336px;
         }
       }
