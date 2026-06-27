@@ -23,125 +23,165 @@ function _renderPager(pager, res, prevFn, nextFn, opts) {
     `<button onclick="${nextFn}(1)" ${res.page === res.totalPages ? "disabled" : ""} style="${btnStyle}">${opts.compact ? "▶" : "다음 ▶"}</button>`;
 }
 
+// 공통 스타일 상수
+const _DB_STYLE = `<style>
+  .db-input{width:100%;padding:6px;background:var(--bg-color);border:1px solid var(--border-color);color:var(--text-main);border-radius:4px;box-sizing:border-box;font-size:0.85em;}
+  .db-btn-save{background:rgba(52,199,89,0.1);border:1px solid #34c759;color:#34c759;border-radius:6px;padding:5px 10px;font-size:0.85em;font-weight:900;cursor:pointer;margin-right:4px;}
+  .db-btn-del{background:rgba(255,59,48,0.1);border:1px solid #ff3b30;color:#ff3b30;border-radius:6px;padding:5px 10px;font-size:0.85em;font-weight:900;cursor:pointer;}
+  .db-date-badge{display:inline-block;background:rgba(10,132,255,0.12);color:#0a84ff;border-radius:6px;padding:2px 7px;font-size:0.82em;font-weight:900;white-space:nowrap;}
+  .db-type-out{display:inline-block;background:rgba(255,149,0,0.12);color:#ff9500;border-radius:6px;padding:2px 7px;font-size:0.82em;font-weight:900;}
+  .db-type-in{display:inline-block;background:rgba(52,199,89,0.12);color:#34c759;border-radius:6px;padding:2px 7px;font-size:0.82em;font-weight:900;}
+</style>`;
+
+// 날짜 배지 — YYYY-MM-DD → MM/DD 축약 표기
+function _dbDateBadge(d) {
+  if (!d) return '<span style="color:var(--text-sub);font-size:0.8em;">미정</span>';
+  const s = String(d).substring(5, 10).replace("-", "/");
+  return `<span class="db-date-badge">📅 ${s}</span>`;
+}
+
+// 출고 테이블 HTML 빌더
+function _buildOutTable(rows, withTypeBadge) {
+  const th = (col, name) =>
+    `<th onclick="setDbSort('${col}')" style="cursor:pointer;user-select:none;white-space:nowrap;" title="클릭하여 정렬">${name} <span style="font-size:0.8em">${getSortIcon(col)}</span></th>`;
+  let h = `<table style='width:100%;border-collapse:collapse;font-size:0.85em;text-align:left;min-width:950px;table-layout:fixed;'>
+    <colgroup>${withTypeBadge ? "<col style='width:70px;'>" : ""}<col style='width:60px;'><col style='width:130px;'><col style='width:70px;'><col style='width:70px;'><col style='width:120px;'><col style='width:100px;'><col style='width:140px;'><col style='width:70px;'><col style='width:70px;'><col style='width:120px;'></colgroup>
+    <thead style='background:var(--bg-color);color:var(--text-sub);border-bottom:1px solid var(--border-color);'><tr>
+      ${withTypeBadge ? "<th>구분</th>" : ""}${th("id","ID")} ${th("company","업체명")} ${th("pal","팔레트")} ${th("box","박스")} ${th("outbound_date","📅 출고일")} ${th("etc","비고")} ${th("created_at","등록일")} ${th("sort_idx","정렬")} ${th("isDone","완료")} <th style='text-align:center;'>명령</th>
+    </tr></thead><tbody>`;
+  if (!withTypeBadge) {
+    h += `<tr style='background:rgba(52,199,89,0.08);border-bottom:2px solid #34c759;'>
+      <td style='color:#34c759;font-weight:900;text-align:center;'>NEW</td>
+      <td><input type="text" id="db-o-comp-new" placeholder="업체명 (필수)" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="number" id="db-o-pal-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="number" id="db-o-box-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="text" id="db-o-date-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="text" id="db-o-etc-new" placeholder="비고 입력" class="db-input" style="border:1px solid #34c759;"></td>
+      <td style="color:var(--text-sub);text-align:center;font-size:0.9em;">(자동 각인)</td>
+      <td><input type="number" id="db-o-sort-new" value="999" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="number" id="db-o-done-new" value="0" class="db-input" style="border:1px solid #34c759;"></td>
+      <td style='text-align:center;'><button onclick="addNewRowDirectDB('out')" style="background:#34c759;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-weight:900;cursor:pointer;width:100%;">➕ 신규등록</button></td>
+    </tr>`;
+  }
+  rows.forEach((r) => {
+    h += `<tr style='border-bottom:1px solid var(--border-color);'>
+      ${withTypeBadge ? "<td><span class='db-type-out'>📤출고</span></td>" : ""}
+      <td style='color:var(--text-sub);font-weight:bold;'>${r.id}</td>
+      <td><input type="text" id="db-o-comp-${r.id}" value="${_esc(r.company||"")}" class="db-input"></td>
+      <td><input type="number" id="db-o-pal-${r.id}" value="${r.pal||0}" class="db-input"></td>
+      <td><input type="number" id="db-o-box-${r.id}" value="${r.box||0}" class="db-input"></td>
+      <td style="vertical-align:middle;">${_dbDateBadge(r.outbound_date)}<br><input type="text" id="db-o-date-${r.id}" value="${r.outbound_date||""}" class="db-input" style="margin-top:3px;"></td>
+      <td><input type="text" id="db-o-etc-${r.id}" value="${_esc(r.etc||"")}" class="db-input"></td>
+      <td><input type="text" id="db-o-cre-${r.id}" value="${r.created_at||""}" class="db-input"></td>
+      <td><input type="number" id="db-o-sort-${r.id}" value="${r.sort_idx||0}" class="db-input"></td>
+      <td><input type="number" id="db-o-done-${r.id}" value="${r.isDone||0}" class="db-input"></td>
+      <td style='text-align:center;'><button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button><button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button></td>
+    </tr>`;
+  });
+  return h + `</tbody></table>`;
+}
+
+// 입고 테이블 HTML 빌더
+function _buildInTable(rows, withTypeBadge) {
+  const th = (col, name) =>
+    `<th onclick="setDbSort('${col}')" style="cursor:pointer;user-select:none;white-space:nowrap;" title="클릭하여 정렬">${name} <span style="font-size:0.8em">${getSortIcon(col)}</span></th>`;
+  let h = `<table style='width:100%;border-collapse:collapse;font-size:0.85em;text-align:left;min-width:1350px;table-layout:fixed;'>
+    <colgroup>${withTypeBadge ? "<col style='width:70px;'>" : ""}<col style='width:60px;'><col style='width:130px;'><col style='width:60px;'><col style='width:100px;'><col style='width:100px;'><col style='width:80px;'><col style='width:80px;'><col style='width:100px;'><col style='width:120px;'><col style='width:130px;'><col style='width:60px;'><col style='width:80px;'><col style='width:60px;'><col style='width:120px;'></colgroup>
+    <thead style='background:var(--bg-color);color:var(--text-sub);border-bottom:1px solid var(--border-color);'><tr>
+      ${withTypeBadge ? "<th>구분</th>" : ""}${th("id","ID")} ${th("bl_number","BL번호")} ${th("pallets","팔레트")} ${th("eta","📅 ETA")} ${th("receive_date","📅 입고일")} ${th("fwd","포워더")} ${th("s_type","타입")} ${th("invoice","인보이스")} ${th("remarks","비고")} ${th("last_updated","수정일")} ${th("sort_idx","정렬")} ${th("status","상태")} ${th("is_ai_modified","AI")} <th style='text-align:center;'>명령</th>
+    </tr></thead><tbody>`;
+  if (!withTypeBadge) {
+    h += `<tr style='background:rgba(52,199,89,0.08);border-bottom:2px solid #34c759;'>
+      <td style='color:#34c759;font-weight:900;text-align:center;'>NEW</td>
+      <td><input type="text" id="db-i-bl-new" placeholder="B/L번호 (필수)" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="number" id="db-i-pal-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="text" id="db-i-eta-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="text" id="db-i-date-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="text" id="db-i-fwd-new" placeholder="FWD" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="text" id="db-i-stype-new" placeholder="TYPE" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="text" id="db-i-inv-new" placeholder="INVOICE" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="text" id="db-i-rem-new" placeholder="비고 입력" class="db-input" style="border:1px solid #34c759;"></td>
+      <td style="color:var(--text-sub);text-align:center;font-size:0.9em;">(자동 각인)</td>
+      <td><input type="number" id="db-i-sort-new" value="999" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="text" id="db-i-stat-new" value="입고대기" class="db-input" style="border:1px solid #34c759;"></td>
+      <td><input type="number" id="db-i-ai-new" value="0" class="db-input" style="border:1px solid #34c759;"></td>
+      <td style='text-align:center;'><button onclick="addNewRowDirectDB('in')" style="background:#34c759;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-weight:900;cursor:pointer;width:100%;">➕ 신규등록</button></td>
+    </tr>`;
+  }
+  rows.forEach((r) => {
+    h += `<tr style='border-bottom:1px solid var(--border-color);'>
+      ${withTypeBadge ? "<td><span class='db-type-in'>📥입고</span></td>" : ""}
+      <td style='color:var(--text-sub);font-weight:bold;'>${r.id}</td>
+      <td><input type="text" id="db-i-bl-${r.id}" value="${_esc(r.bl_number||"")}" class="db-input"></td>
+      <td><input type="number" id="db-i-pal-${r.id}" value="${r.pallets||0}" class="db-input"></td>
+      <td style="vertical-align:middle;">${_dbDateBadge(r.eta)}<br><input type="text" id="db-i-eta-${r.id}" value="${r.eta||""}" class="db-input" style="margin-top:3px;"></td>
+      <td style="vertical-align:middle;">${_dbDateBadge(r.receive_date)}<br><input type="text" id="db-i-date-${r.id}" value="${r.receive_date||""}" class="db-input" style="margin-top:3px;"></td>
+      <td><input type="text" id="db-i-fwd-${r.id}" value="${_esc(r.fwd||"")}" class="db-input"></td>
+      <td><input type="text" id="db-i-stype-${r.id}" value="${_esc(r.s_type||"")}" class="db-input"></td>
+      <td><input type="text" id="db-i-inv-${r.id}" value="${_esc(r.invoice||"")}" class="db-input"></td>
+      <td><input type="text" id="db-i-rem-${r.id}" value="${_esc(r.remarks||"")}" class="db-input"></td>
+      <td><input type="text" id="db-i-upd-${r.id}" value="${r.last_updated||""}" class="db-input"></td>
+      <td><input type="number" id="db-i-sort-${r.id}" value="${r.sort_idx||0}" class="db-input"></td>
+      <td><input type="text" id="db-i-stat-${r.id}" value="${_esc(r.status||"")}" class="db-input"></td>
+      <td><input type="number" id="db-i-ai-${r.id}" value="${r.is_ai_modified||0}" class="db-input"></td>
+      <td style='text-align:center;'><button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button><button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button></td>
+    </tr>`;
+  });
+  return h + `</tbody></table>`;
+}
+
 function searchRawDatabaseRows() {
   const keyword = document.getElementById("dbMasterSearchKeyword").value.trim();
   const filterCol = document.getElementById("dbMasterFilterCol").value;
-  const limit = document.getElementById("dbMasterLimit").value; // 몇 줄씩 볼지
+  const limit = Number(document.getElementById("dbMasterLimit").value);
+  const typeFilter = (document.getElementById("dbMasterTypeFilter")?.value) || currentType;
   const container = document.getElementById("dbMasterRowsContainer");
   const pager = document.getElementById("dbMasterPaginationBar");
 
   if (!container) return;
-  container.innerHTML =
-    "<div style='color:var(--text-sub); text-align:center; padding:25px; font-weight:800;'>실시간 데이터 파싱 중...</div>";
+  container.innerHTML = "<div style='color:var(--text-sub);text-align:center;padding:25px;font-weight:800;'>실시간 데이터 파싱 중...</div>";
   if (pager) pager.innerHTML = "";
 
+  // 🔀 통합 모드: 출고+입고 동시 조회
+  if (typeFilter === "통합") {
+    Promise.all([
+      apiCall({ source: "vercel", action: "GET_RAW_DB_ROWS", keyword, filterCol, limit, page: 1, sortCol: dbSortCol, sortDir: dbSortDir, type: "out" }),
+      apiCall({ source: "vercel", action: "GET_RAW_DB_ROWS", keyword, filterCol, limit, page: 1, sortCol: dbSortCol, sortDir: dbSortDir, type: "in" }),
+    ]).then(([outRes, inRes]) => {
+      const outRows = (outRes && outRes.success && outRes.rows) ? outRes.rows : [];
+      const inRows  = (inRes  && inRes.success  && inRes.rows)  ? inRes.rows  : [];
+      if (outRows.length === 0 && inRows.length === 0) {
+        container.innerHTML = "<div style='color:var(--text-sub);text-align:center;padding:25px;'>데이터가 없습니다.</div>";
+        return;
+      }
+      let html = _DB_STYLE;
+      html += `<div style="font-weight:900;color:#ff9500;padding:10px 0 6px;font-size:0.95em;">📤 출고 (${outRows.length}건)</div>`;
+      html += outRows.length > 0 ? _buildOutTable(outRows, false) : "<div style='color:var(--text-sub);padding:8px 0;'>해당 없음</div>";
+      html += `<div style="font-weight:900;color:#34c759;padding:18px 0 6px;font-size:0.95em;">📥 입고 (${inRows.length}건)</div>`;
+      html += inRows.length > 0  ? _buildInTable(inRows, false) : "<div style='color:var(--text-sub);padding:8px 0;'>해당 없음</div>";
+      container.innerHTML = html;
+      if (pager) pager.innerHTML = "";
+    });
+    return;
+  }
+
+  // 📤/📥 단일 타입 모드
   apiCall({
     source: "vercel",
     action: "GET_RAW_DB_ROWS",
-    keyword: keyword,
-    filterCol: filterCol,
-    limit: Number(limit),
+    keyword, filterCol, limit,
     page: dbCurrentPage,
     sortCol: dbSortCol,
     sortDir: dbSortDir,
-    type: currentType,
+    type: typeFilter,
   }).then(function (res) {
     if (res === null || !res.success || !res.rows || res.rows.length === 0) {
-      container.innerHTML =
-        "<div style='color:var(--text-sub); text-align:center; padding:25px;'>데이터가 없습니다.</div>";
+      container.innerHTML = "<div style='color:var(--text-sub);text-align:center;padding:25px;'>데이터가 없습니다.</div>";
       return;
     }
-
-    let html = `<style>
-                  .db-input { width: 100%; padding: 6px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; box-sizing: border-box; font-size: 0.85em; }
-                  .db-btn-save { background: rgba(52,199,89,0.1); border: 1px solid #34c759; color: #34c759; border-radius: 6px; padding: 5px 10px; font-size: 0.85em; font-weight: 900; cursor: pointer; margin-right: 4px; }
-                  .db-btn-del { background: rgba(255,59,48,0.1); border: 1px solid #ff3b30; color: #ff3b30; border-radius: 6px; padding: 5px 10px; font-size: 0.85em; font-weight: 900; cursor: pointer; }
-              </style>`;
-
-    // 🚨 정렬 기능이 탑재된 헤더(th) 자동 생성기
-    const th = (col, name) =>
-      `<th onclick="setDbSort('${col}')" style="cursor:pointer; user-select:none; white-space:nowrap;" title="클릭하여 정렬">${name} <span style="font-size:0.8em">${getSortIcon(col)}</span></th>`;
-
-    if (currentType === "out") {
-      // 📤 출고 테이블 렌더링
-      html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 950px; table-layout: fixed;'>
-                      <colgroup><col style='width: 60px;'><col style='width: 130px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'><col style='width: 100px;'><col style='width: 150px;'><col style='width: 70px;'><col style='width: 70px;'><col style='width: 120px;'></colgroup>
-                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr>
-                          ${th("id", "ID")} ${th("company", "company")} ${th("pal", "pal")} ${th("box", "box")} ${th("outbound_date", "out_date")} ${th("etc", "etc")} ${th("created_at", "created_at")} ${th("sort_idx", "sort")} ${th("isDone", "isDone")} <th style='text-align:center;'>명령</th>
-                      </tr></thead><tbody>`;
-
-      // 항상 첫 줄에 뜨는 신규 데이터 주입 폼
-      html += `<tr style='background:rgba(52,199,89,0.08); border-bottom:2px solid #34c759;'>
-                      <td style='color:#34c759; font-weight:900; text-align:center;'>NEW</td>
-                      <td><input type="text" id="db-o-comp-new" placeholder="업체명 (필수)" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="number" id="db-o-pal-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="number" id="db-o-box-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="text" id="db-o-date-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="text" id="db-o-etc-new" placeholder="비고 입력" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td style="color:var(--text-sub); text-align:center; font-size:0.9em;">(자동 각인)</td>
-                      <td><input type="number" id="db-o-sort-new" value="999" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="number" id="db-o-done-new" value="0" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td style='text-align:center;'><button onclick="addNewRowDirectDB('out')" style="background:#34c759; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-weight:900; cursor:pointer; width:100%;">➕ 신규등록</button></td>
-                  </tr>`;
-
-      res.rows.forEach((r) => {
-        html += `<tr style='border-bottom:1px solid var(--border-color);'><td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
-                          <td><input type="text" id="db-o-comp-${r.id}" value="${_esc(r.company || "")}" class="db-input"></td>
-                          <td><input type="number" id="db-o-pal-${r.id}" value="${r.pal || 0}" class="db-input"></td>
-                          <td><input type="number" id="db-o-box-${r.id}" value="${r.box || 0}" class="db-input"></td>
-                          <td><input type="text" id="db-o-date-${r.id}" value="${r.outbound_date || ""}" class="db-input"></td>
-                          <td><input type="text" id="db-o-etc-${r.id}" value="${_esc(r.etc || "")}" class="db-input"></td>
-                          <td><input type="text" id="db-o-cre-${r.id}" value="${r.created_at || ""}" class="db-input"></td>
-                          <td><input type="number" id="db-o-sort-${r.id}" value="${r.sort_idx || 0}" class="db-input"></td>
-                          <td><input type="number" id="db-o-done-${r.id}" value="${r.isDone || 0}" class="db-input"></td>
-                          <td style='text-align:center;'><button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button><button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button></td></tr>`;
-      });
-    } else {
-      // 📥 입고 테이블 렌더링
-      html += `<table style='width:100%; border-collapse:collapse; font-size:0.85em; text-align:left; min-width: 1350px; table-layout: fixed;'>
-                      <colgroup><col style='width: 60px;'><col style='width: 130px;'><col style='width: 60px;'><col style='width: 100px;'><col style='width: 100px;'><col style='width: 80px;'><col style='width: 80px;'><col style='width: 100px;'><col style='width: 120px;'><col style='width: 140px;'><col style='width: 60px;'><col style='width: 80px;'><col style='width: 60px;'><col style='width: 120px;'></colgroup>
-                      <thead style='background:var(--bg-color); color:var(--text-sub); border-bottom:1px solid var(--border-color);'><tr>
-                          ${th("id", "ID")} ${th("bl_number", "bl_number")} ${th("pallets", "pallets")} ${th("eta", "eta")} ${th("receive_date", "receive_date")} ${th("fwd", "fwd")} ${th("s_type", "s_type")} ${th("invoice", "invoice")} ${th("remarks", "remarks")} ${th("last_updated", "last_updated")} ${th("sort_idx", "sort")} ${th("status", "status")} ${th("is_ai_modified", "AI")} <th style='text-align:center;'>명령</th>
-                      </tr></thead><tbody>`;
-
-      // 항상 첫 줄에 뜨는 신규 데이터 주입 폼
-      html += `<tr style='background:rgba(52,199,89,0.08); border-bottom:2px solid #34c759;'>
-                      <td style='color:#34c759; font-weight:900; text-align:center;'>NEW</td>
-                      <td><input type="text" id="db-i-bl-new" placeholder="B/L번호 (필수)" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="number" id="db-i-pal-new" placeholder="0" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="text" id="db-i-eta-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="text" id="db-i-date-new" placeholder="YYYY-MM-DD" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="text" id="db-i-fwd-new" placeholder="FWD" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="text" id="db-i-stype-new" placeholder="TYPE" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="text" id="db-i-inv-new" placeholder="INVOICE" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="text" id="db-i-rem-new" placeholder="비고 입력" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td style="color:var(--text-sub); text-align:center; font-size:0.9em;">(자동 각인)</td>
-                      <td><input type="number" id="db-i-sort-new" value="999" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="text" id="db-i-stat-new" value="입고대기" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td><input type="number" id="db-i-ai-new" value="0" class="db-input" style="border:1px solid #34c759;"></td>
-                      <td style='text-align:center;'><button onclick="addNewRowDirectDB('in')" style="background:#34c759; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-weight:900; cursor:pointer; width:100%;">➕ 신규등록</button></td>
-                  </tr>`;
-
-      res.rows.forEach((r) => {
-        html += `<tr style='border-bottom:1px solid var(--border-color);'><td style='color:var(--text-sub); font-weight:bold;'>${r.id}</td>
-                          <td><input type="text" id="db-i-bl-${r.id}" value="${_esc(r.bl_number || "")}" class="db-input"></td>
-                          <td><input type="number" id="db-i-pal-${r.id}" value="${r.pallets || 0}" class="db-input"></td>
-                          <td><input type="text" id="db-i-eta-${r.id}" value="${r.eta || ""}" class="db-input"></td>
-                          <td><input type="text" id="db-i-date-${r.id}" value="${r.receive_date || ""}" class="db-input"></td>
-                          <td><input type="text" id="db-i-fwd-${r.id}" value="${_esc(r.fwd || "")}" class="db-input"></td>
-                          <td><input type="text" id="db-i-stype-${r.id}" value="${_esc(r.s_type || "")}" class="db-input"></td>
-                          <td><input type="text" id="db-i-inv-${r.id}" value="${_esc(r.invoice || "")}" class="db-input"></td>
-                          <td><input type="text" id="db-i-rem-${r.id}" value="${_esc(r.remarks || "")}" class="db-input"></td>
-                          <td><input type="text" id="db-i-upd-${r.id}" value="${r.last_updated || ""}" class="db-input"></td>
-                          <td><input type="number" id="db-i-sort-${r.id}" value="${r.sort_idx || 0}" class="db-input"></td>
-                          <td><input type="text" id="db-i-stat-${r.id}" value="${_esc(r.status || "")}" class="db-input"></td>
-                          <td><input type="number" id="db-i-ai-${r.id}" value="${r.is_ai_modified || 0}" class="db-input"></td>
-                          <td style='text-align:center;'><button onclick="saveFullRowDB(${r.id})" class="db-btn-save">저장</button><button onclick="deleteRowDirectFromDB(${r.id})" class="db-btn-del">삭제</button></td></tr>`;
-      });
-    }
-    html += `</tbody></table>`;
+    let html = _DB_STYLE;
+    html += typeFilter === "out" ? _buildOutTable(res.rows, false) : _buildInTable(res.rows, false);
     container.innerHTML = html;
-
     _renderPager(pager, res, "changeDbPage", "changeDbPage");
   });
 }

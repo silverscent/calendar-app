@@ -5826,6 +5826,15 @@
           </div>
           <div style="display: flex; gap: 8px; margin-bottom: 15px; box-sizing: border-box; flex-wrap: wrap">
             <select
+              id="dbMasterTypeFilter"
+              onchange="dbPageResetAndSearch()"
+              style="padding: 14px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-main); font-weight: 900; outline: none;"
+            >
+              <option value="out">📤 출고</option>
+              <option value="in" selected>📥 입고</option>
+              <option value="통합">🔀 통합</option>
+            </select>
+            <select
               id="dbMasterFilterCol"
               style="
                 padding: 14px;
