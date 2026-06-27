@@ -690,6 +690,14 @@ module.exports = async function (req, res) {
             countQueryStr += ` AND action_type IN (${ph})`;
             params.push(...list);
           }
+          // 출고/입고 타입 필터 — description 접두어로 서버에서 필터링 (페이지네이션 정확도 보장)
+          if (payload.typeFilter === "out") {
+            queryStr += " AND description LIKE '[출고%'";
+            countQueryStr += " AND description LIKE '[출고%'";
+          } else if (payload.typeFilter === "in") {
+            queryStr += " AND description LIKE '[입고%'";
+            countQueryStr += " AND description LIKE '[입고%'";
+          }
           if (keyword) {
             // 🚨 [패치] admin_id, description 뿐만 아니라 action_type(액션)까지 검색 대상에 포함!
             const subClause =
@@ -1399,7 +1407,7 @@ module.exports = async function (req, res) {
           }
           await pool.query(
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_STATUS', ?)",
-            [currentAdmin, `[출고 상태] ${targetName} ➡️ ${statName} (PL:${targetPal || 0}, BOX:${targetBox || 0})`],
+            [currentAdmin, `[출고 상태] ${targetName} (${targetDate || "미정"}) ➡️ ${statName} (PL:${targetPal || 0}, BOX:${targetBox || 0})`],
           );
         } else if (action === "DELETE") {
           if (data?.id) {
@@ -1412,7 +1420,7 @@ module.exports = async function (req, res) {
           }
           await pool.query(
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_DELETE', ?)",
-            [currentAdmin, `[출고 삭제] ${targetName} (PL:${targetPal || 0}, BOX:${targetBox || 0}) 파기`],
+            [currentAdmin, `[출고 삭제] ${targetName} (${targetDate || "미정"}, PL:${targetPal || 0}, BOX:${targetBox || 0}) 파기`],
           );
         } else if (action === "EDIT") {
           if (data?.id) {
@@ -1519,7 +1527,7 @@ module.exports = async function (req, res) {
             ]);
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
-              [currentAdmin, `[출고 병합] ${reqComp} ➡️ 덮어쓰기 완료 (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`],
+              [currentAdmin, `[출고 병합] ${reqComp} (${reqDateOut || "미정"}) ➡️ 덮어쓰기 완료 (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`],
             );
           } else {
             await pool.query(
@@ -1528,7 +1536,7 @@ module.exports = async function (req, res) {
             );
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)",
-              [currentAdmin, `[출고 등록] ${reqComp} 신규 추가 (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`],
+              [currentAdmin, `[출고 등록] ${reqComp} (${reqDateOut || "미정"}) 신규 추가 (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`],
             );
           }
         } else if (action === "UPDATE_ORDER" && data?.dailyOrders) {
@@ -2217,7 +2225,7 @@ ${JSON.stringify(rows, null, 2)}
             ]);
           await pool.query(
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_STATUS', ?)",
-            [currentAdmin, `[입고 상태] ${targetBL} ➡️ ${statName}`],
+            [currentAdmin, `[입고 상태] ${targetBL} (${data?.oldDate || "미정"}) ➡️ ${statName}`],
           );
         } else if (action === "DELETE") {
           if (data?.id) await pool.query(`DELETE FROM inbound WHERE id = ?`, [data.id]);
@@ -2228,7 +2236,7 @@ ${JSON.stringify(rows, null, 2)}
             ]);
           await pool.query(
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_DELETE', ?)",
-            [currentAdmin, `[입고 삭제] ${targetBL} 파기`],
+            [currentAdmin, `[입고 삭제] ${targetBL} (${data?.oldDate || "미정"}) 파기`],
           );
         } else if (action === "EDIT") {
           if (data?.id) {
@@ -2310,7 +2318,7 @@ ${JSON.stringify(rows, null, 2)}
             );
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
-              [currentAdmin, `[입고 병합] ${reqBl} ➡️ 덮어쓰기 완료 (PL:${reqPal || 0})`],
+              [currentAdmin, `[입고 병합] ${reqBl} (${reqDate || "미정"}) ➡️ 덮어쓰기 완료 (PL:${reqPal || 0})`],
             );
           } else {
             await pool.query(
@@ -2319,7 +2327,7 @@ ${JSON.stringify(rows, null, 2)}
             );
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)",
-              [currentAdmin, `[입고 등록] ${reqBl} 신규 추가 (PL:${reqPal || 0})`],
+              [currentAdmin, `[입고 등록] ${reqBl} (${reqDate || "미정"}) 신규 추가 (PL:${reqPal || 0})`],
             );
           }
         } else if (action === "UPDATE_ORDER" && data?.dailyOrders) {

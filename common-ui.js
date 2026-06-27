@@ -528,6 +528,7 @@ function refreshAuditLogs() {
     endDate: endDate,
     keyword: keyword,
     actGroup: actGroup,
+    typeFilter: typeFilter, // 서버에서 필터링 → 페이지네이션 정확도 보장
     limit: Number(limit),
     page: logCurrentPage,
   }).then(function (res) {
@@ -537,31 +538,16 @@ function refreshAuditLogs() {
       return;
     }
 
-    // 출고/입고/통합 클라이언트 필터 — description에 [출고...]/[입고...] 접두어로 구분
-    let logs = res.logs;
-    if (typeFilter === "out") {
-      logs = logs.filter((l) => /^\[출고/.test(l.description || ""));
-    } else if (typeFilter === "in") {
-      logs = logs.filter((l) => /^\[입고/.test(l.description || ""));
-    }
-
     timeline.innerHTML = "";
-    if (logs.length === 0) {
-      timeline.innerHTML = "<div style='color:var(--text-sub); text-align:center; padding:20px;'>선택한 유형의 로그가 없습니다.</div>";
-      _renderPager(pager, res, "changeLogPage", "changeLogPage");
-      return;
-    }
-
-    // 결과 건수 요약
     const _s = (res.page - 1) * Number(limit) + 1;
     const _e = (res.page - 1) * Number(limit) + res.logs.length;
     const typeLabel = typeFilter === "out" ? " · 📤 출고" : typeFilter === "in" ? " · 📥 입고" : "";
     timeline.insertAdjacentHTML(
       "beforeend",
-      `<div style="font-size:0.8em; color:var(--text-sub); font-weight:700; margin-bottom:10px;">총 <b style="color:#0a84ff;">${res.totalCount}</b>건 중 ${_s}~${_e} 표시${typeLabel}${typeFilter !== "all" ? ` (이 페이지 필터 결과 ${logs.length}건)` : ""}</div>`,
+      `<div style="font-size:0.8em; color:var(--text-sub); font-weight:700; margin-bottom:10px;">총 <b style="color:#0a84ff;">${res.totalCount}</b>건 중 ${_s}~${_e} 표시${typeLabel}</div>`,
     );
 
-    logs.forEach((log) => {
+    res.logs.forEach((log) => {
       const item = document.createElement("div");
       item.className = "audit-log-item";
       item.style =
@@ -570,16 +556,19 @@ function refreshAuditLogs() {
       let rawDate = log.created_at || "";
       let dateStr = rawDate.length >= 16 ? rawDate.substring(5, 16).replace("-", ".") : rawDate;
 
-      // 설명에서 날짜 추출 — [출고 일정] 업체명 2026-06-27 형태에서 날짜 뱃지 표시
       const desc = log.description || "";
+      // 날짜 뱃지: description에서 YYYY-MM-DD 추출 (미정 제외)
       const dateMatch = desc.match(/(\d{4}-\d{2}-\d{2})/);
       const dateBadge = dateMatch
         ? `<span style="display:inline-block;background:rgba(10,132,255,0.12);color:#0a84ff;border-radius:5px;padding:1px 6px;font-size:0.82em;font-weight:900;margin-left:6px;">📅 ${dateMatch[1].substring(5).replace("-", "/")}</span>`
         : "";
-      const typeBadge = /^\[출고/.test(desc)
-        ? `<span style="display:inline-block;background:rgba(255,149,0,0.12);color:#ff9500;border-radius:5px;padding:1px 6px;font-size:0.82em;font-weight:900;margin-right:4px;">📤출고</span>`
-        : /^\[입고/.test(desc)
-        ? `<span style="display:inline-block;background:rgba(52,199,89,0.12);color:#34c759;border-radius:5px;padding:1px 6px;font-size:0.82em;font-weight:900;margin-right:4px;">📥입고</span>`
+      // 타입 뱃지: 통합(all)일 때만 표시
+      const typeBadge = typeFilter === "all"
+        ? (/^\[출고/.test(desc)
+            ? `<span style="display:inline-block;background:rgba(255,149,0,0.12);color:#ff9500;border-radius:5px;padding:1px 6px;font-size:0.82em;font-weight:900;margin-right:4px;">📤출고</span>`
+            : /^\[입고/.test(desc)
+            ? `<span style="display:inline-block;background:rgba(52,199,89,0.12);color:#34c759;border-radius:5px;padding:1px 6px;font-size:0.82em;font-weight:900;margin-right:4px;">📥입고</span>`
+            : "")
         : "";
 
       item.innerHTML = `
