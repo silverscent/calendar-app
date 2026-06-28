@@ -1831,21 +1831,12 @@ function locateOcrImage(idx, field) {
     y = Math.max(-lim, Math.min(y, lim));
   } else y = 0;
   ocrTransform.y = y;
-  // 가로: 탭한 열의 X로 중앙 정렬
-  // cx는 bl/invoice 앵커만 존재. pal·eta·inDate는 bl 기준, fwd·sType·etc는 invoice 기준 폴백
-  // pal은 bl보다 오른쪽에 있는 경우가 많으므로 약간 오른쪽으로 보정
+  // 가로: 탭한 열의 X로 중앙 정렬. 그 열 좌표 없으면 좌/우 영역 대표값으로 폴백
   const cx = r.cx || {};
   let ix = field && typeof cx[field] === "number" ? cx[field] : null;
   if (ix == null) {
-    if (field === "pal") {
-      // PAL 전용: BL 위치와 이미지 중앙의 중간값 (BL 오른쪽, ETA 왼쪽)
-      const blX = typeof cx.bl === "number" ? cx.bl : img.naturalWidth * 0.2;
-      ix = (blX + img.naturalWidth * 0.5) / 2;
-    } else if (field && OCR_LEFT_COLS.has(field)) {
-      ix = typeof cx.bl === "number" ? cx.bl : cx.invoice;
-    } else {
-      ix = typeof cx.invoice === "number" ? cx.invoice : cx.bl;
-    }
+    if (field && OCR_LEFT_COLS.has(field)) ix = typeof cx.bl === "number" ? cx.bl : cx.invoice;
+    else ix = typeof cx.invoice === "number" ? cx.invoice : cx.bl;
   }
   if (typeof ix === "number" && img.naturalWidth && dispW > paneW) {
     const fx = Math.max(0, Math.min(ix / img.naturalWidth, 1));
