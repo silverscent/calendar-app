@@ -6502,109 +6502,27 @@
               "
             >
               <option value="">전체 활동</option>
-              <option value="ACCOUNT">👤 계정(생성/삭제/복구)</option>
-              <option value="PASSWORD">🔑 비밀번호(변경/초기화)</option>
-              <option value="CALENDAR">📅 달력(추가/수정/삭제)</option>
-              <option value="DB">🗄️ DB 직접편집</option>
-              <option value="LOGIN">🔓 로그인(성공/실패)</option>
-              <option value="OCR">🔤 OCR(동기화·대조확정)</option>
-              <option value="SETTINGS">🏢 업체정보 변경</option>
+              <option value="ACCOUNT">👤 계정</option>
+              <option value="PASSWORD">🔑 비밀번호</option>
+              <option value="CALENDAR">📅 달력</option>
+              <option value="DB">🗄️ DB편집</option>
+              <option value="LOGIN">🔓 로그인</option>
+              <option value="OCR">🔤 OCR</option>
+              <option value="SETTINGS">🏢 업체정보</option>
             </select>
-
-            <select
-              id="logMasterLimit"
-              class="db-input"
-              style="
-                width: auto;
-                padding: 10px;
-                border-radius: 10px;
-                font-weight: bold;
-                background: var(--bg-color);
-                color: var(--text-main);
-                border: 1px solid var(--border-color);
-              "
-              onchange="
-                logCurrentPage = 1;
-                refreshAuditLogs();
-              "
-            >
-              <option value="20">20줄씩 보기</option>
-              <option value="50" selected>50줄씩 보기</option>
-              <option value="100">100줄씩 보기</option>
+            <select id="logMasterLimit" class="db-input" onchange="logCurrentPage=1;refreshAuditLogs();">
+              <option value="20">20줄</option>
+              <option value="50" selected>50줄</option>
+              <option value="100">100줄</option>
             </select>
-
-            <div style="display:flex;align-items:center;gap:4px;">
-              <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">시작일</label>
-              <input type="date" id="logStartDate" class="db-input" style="width:auto;padding:5px 8px;background:var(--bg-color);border:1px solid var(--border-color);border-radius:8px;color:var(--text-main);font-size:0.82em;box-sizing:border-box;" />
-            </div>
-            <span style="color:var(--text-sub);font-size:0.85em;">~</span>
-            <div style="display:flex;align-items:center;gap:4px;">
-              <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">종료일</label>
-              <input type="date" id="logEndDate" class="db-input" style="width:auto;padding:5px 8px;background:var(--bg-color);border:1px solid var(--border-color);border-radius:8px;color:var(--text-main);font-size:0.82em;box-sizing:border-box;" />
-            </div>
-
-            <input
-              type="text"
-              id="logKeyword"
-              placeholder="🔍 ID, 액션 또는 내용 검색..."
-              style="
-                flex: 1;
-                min-width: 150px;
-                padding: 10px 14px;
-                background: var(--bg-color);
-                border: 1px solid var(--border-color);
-                border-radius: 10px;
-                color: var(--text-main);
-                font-weight: 800;
-                font-size: 0.9em;
-                box-sizing: border-box;
-              "
-              onkeydown="
-                if (event.key === 'Enter') {
-                  logCurrentPage = 1;
-                  refreshAuditLogs();
-                }
-              "
-            />
-            <button
-              onclick="
-                logCurrentPage = 1;
-                refreshAuditLogs();
-              "
-              style="
-                background: #ff9f0a;
-                color: #fff;
-                border: none;
-                border-radius: 10px;
-                padding: 10px 16px;
-                font-weight: 900;
-                cursor: pointer;
-                white-space: nowrap;
-              "
-            >
-              검색
-            </button>
-            <button
-              onclick="
-                document.getElementById('logStartDate').value = '';
-                document.getElementById('logEndDate').value = '';
-                document.getElementById('logKeyword').value = '';
-                logCurrentPage = 1;
-                refreshAuditLogs();
-              "
-              style="
-                background: var(--card-bg);
-                color: var(--text-main);
-                border: 1px solid var(--border-color);
-                border-radius: 10px;
-                padding: 10px 16px;
-                font-weight: 900;
-                cursor: pointer;
-                white-space: nowrap;
-              "
-            >
-              초기화
-            </button>
+            <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">시작일</label>
+            <input type="date" id="logStartDate" class="db-input" />
+            <span style="color:var(--text-sub);">~</span>
+            <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">종료일</label>
+            <input type="date" id="logEndDate" class="db-input" />
+            <input type="text" id="logKeyword" placeholder="🔍 검색" class="db-input" style="flex:1;min-width:100px;" onkeydown="if(event.key==='Enter'){logCurrentPage=1;refreshAuditLogs();}" />
+            <button onclick="logCurrentPage=1;refreshAuditLogs();" style="background:#ff9f0a;color:#fff;border:none;border-radius:8px;padding:5px 12px;font-weight:900;cursor:pointer;white-space:nowrap;font-size:0.82em;">검색</button>
+            <button onclick="document.getElementById('logStartDate').value='';document.getElementById('logEndDate').value='';document.getElementById('logKeyword').value='';logCurrentPage=1;refreshAuditLogs();" style="background:var(--card-bg);color:var(--text-main);border:1px solid var(--border-color);border-radius:8px;padding:5px 10px;font-weight:900;cursor:pointer;white-space:nowrap;font-size:0.82em;">초기화</button>
           </div>
 
           <div
