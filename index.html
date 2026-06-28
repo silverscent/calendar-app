@@ -5952,25 +5952,25 @@
 
     <!-- 관리자 패널 필터 컨트롤 컴팩트 스타일 -->
     <style>
-      #masterDashboardModal select.db-input,
-      #masterDashboardModal input.db-input[type="date"],
-      #masterDashboardModal input.db-input[type="text"],
-      #masterDashboardModal .master-filter-select,
+      /* DB탭 로드 시 .db-input{width:100%} 주입이 필터 컨트롤에 적용되는 것 차단 */
       #masterDashboardModal select[id^="log"],
       #masterDashboardModal select[id^="db"],
       #masterDashboardModal input[id^="log"],
       #masterDashboardModal input[id^="db"] {
+        width: auto !important;
+        max-width: 100% !important;
         padding: 5px 8px !important;
         font-size: 0.82em !important;
         border-radius: 8px !important;
         height: auto !important;
+        flex-shrink: 0;
       }
-      #masterDashboardModal input[type="date"]:before {
-        content: attr(data-label);
-        color: var(--text-sub);
-        font-size: 0.78em;
-        display: block;
-        margin-bottom: 1px;
+      /* 검색 키워드 입력창만 flex:1로 늘어나게 */
+      #masterDashboardModal input#logKeyword,
+      #masterDashboardModal input#logConnKeyword,
+      #masterDashboardModal input#dbMasterSearchKeyword {
+        width: auto !important;
+        flex: 1 1 100px !important;
       }
     </style>
 
