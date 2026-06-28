@@ -703,9 +703,10 @@ function toggleAdmin() {
     // 모달 열 때마다 마스터 권한 버튼 재확인 (첫 로그인 직후 표시 누락 방지)
     if (typeof checkMasterAuthButtonVisibility === "function") checkMasterAuthButtonVisibility();
 
-    // 오너 전용: 달력 변경 알림 토글 표시 + 현재 상태 로드
+    // 오너 전용: 달력 변경 알림 토글 (서버 검증된 isOwner만 — 다른 관리자 불가)
+    const _isOwner = localStorage.getItem("isOwner") === "true" || sessionStorage.getItem("isOwner") === "true";
     const _calRow = document.getElementById("calNotifyRow");
-    if (_calRow && isMasterUser) {
+    if (_calRow && _isOwner) {
       _calRow.style.display = "flex";
       apiCall({ source: "vercel", action: "GET_CAL_NOTIFY" }).then((res) => {
         const tog = document.getElementById("toggleCalNotify");
@@ -863,7 +864,7 @@ function handleLogin() {
     if (res.success) {
       window.isAdmin = true;
       isAdmin = true;
-      saveAuthData(res.admin_id, res.role, true, res.session_token);
+      saveAuthData(res.admin_id, res.role, true, res.session_token, res.isOwner);
       if (res.session_token) window._sessionToken = res.session_token;
 
       const btn = document.getElementById("adminBtn");
@@ -1024,7 +1025,7 @@ async function createNewAdminAccount() {
   });
 }
 
-function saveAuthData(id, role, isSave, session_token) {
+function saveAuthData(id, role, isSave, session_token, isOwner) {
   const isAuto = localStorage.getItem("auto_login") !== "false";
   const targetStorage = isAuto ? localStorage : sessionStorage;
   const otherStorage = isAuto ? sessionStorage : localStorage;
@@ -1034,19 +1035,23 @@ function saveAuthData(id, role, isSave, session_token) {
     otherStorage.removeItem("admin_id");
     otherStorage.removeItem("admin_role");
     otherStorage.removeItem("session_token");
+    otherStorage.removeItem("isOwner");
     targetStorage.setItem("isAdmin", "true");
     targetStorage.setItem("admin_id", id);
     targetStorage.setItem("admin_role", role);
     if (session_token) targetStorage.setItem("session_token", session_token);
+    targetStorage.setItem("isOwner", isOwner ? "true" : "false");
   } else {
     localStorage.removeItem("isAdmin");
     localStorage.removeItem("admin_id");
     localStorage.removeItem("admin_role");
     localStorage.removeItem("session_token");
+    localStorage.removeItem("isOwner");
     sessionStorage.removeItem("isAdmin");
     sessionStorage.removeItem("admin_id");
     sessionStorage.removeItem("admin_role");
     sessionStorage.removeItem("session_token");
+    sessionStorage.removeItem("isOwner");
     // ⚠️ bio_registered/bio_id/bio_token 은 로그아웃해도 유지 (생체 재로그인용)
   }
 }
