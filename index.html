@@ -5997,10 +5997,15 @@
         user-select: none;
         -webkit-user-select: none;
       }
-      /* iOS: font-size 16px 미만 입력창 터치 시 자동 확대 방지 */
+      /* iOS: font-size 16px 미만 입력창 터치 시 자동 확대 방지
+         — ID 접두어 선택자보다 높은 특이도로 덮어씀 */
       #masterDashboardModal input,
       #masterDashboardModal select,
-      #masterDashboardModal textarea {
+      #masterDashboardModal textarea,
+      #masterDashboardModal select[id^="log"],
+      #masterDashboardModal select[id^="db"],
+      #masterDashboardModal input[id^="log"],
+      #masterDashboardModal input[id^="db"] {
         font-size: 16px !important;
       }
     </style>
