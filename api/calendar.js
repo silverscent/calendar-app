@@ -1487,8 +1487,9 @@ module.exports = async function (req, res) {
       // 📝 다중 날 TASK 일괄 수정 (날짜이동 포함)
       if (action === "EDIT_BLOCK" && domain === "out") {
         const reqComp   = data?.newComp || data?.oldComp || "";
-        const reqPalOut = data?.newPal  || data?.oldPal  || "";
-        const reqBoxOut = data?.newBox  || data?.oldBox  || "";
+        // newPal/newBox가 ""(빈값)이어도 oldPal/oldBox로 fallback 되지 않도록 명시적 체크
+        const reqPalOut = (data?.newPal !== undefined && data?.newPal !== null) ? data.newPal : (data?.oldPal || "");
+        const reqBoxOut = (data?.newBox !== undefined && data?.newBox !== null) ? data.newBox : (data?.oldBox || "");
         const reqEtcOut = data?.newEtc  || "";
         const oldStart  = data?.oldBlockStart;
         const oldEnd    = data?.oldBlockEnd   || oldStart;
@@ -1692,9 +1693,9 @@ module.exports = async function (req, res) {
             ]);
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
-              [currentAdmin, `[출고 수량추가] ${targetName} (+PL:${addPal}, +BOX:${addBox})`],
+              [currentAdmin, `[출고 수량추가] ${targetName} (${targetDate || "미정"}) +PL:${addPal}, +BOX:${addBox}`],
             );
-            notifyCalendarChange(`[출고 수량추가] ${targetName} (+PL:${addPal}, +BOX:${addBox})`, currentAdmin);
+            notifyCalendarChange(`[출고 수량추가] ${targetName} (${targetDate || "미정"}) +PL:${addPal}, +BOX:${addBox}`, currentAdmin);
           }
         } else if (action === "ADD") {
           let reqComp = (data?.newComp || data?.company || data?.comp || "").trim();
@@ -2476,15 +2477,16 @@ ${JSON.stringify(rows, null, 2)}
           if (oldD !== newD) changes.push(`날짜: ${oldD} ➡️ ${newD}`);
           if (targetBL !== newName) changes.push(`B/L: ${targetBL} ➡️ ${newName}`);
 
-          const newP = data?.newPal || 0;
-          changes.push(`최종수량: PL ${newP}`);
+          const oldP = data?.oldPal !== undefined ? String(data.oldPal) : "";
+          const newP = String(data?.newPal || 0);
+          if (oldP !== newP) changes.push(`PL: ${oldP||0} ➡️ ${newP}`);
 
           // 비고(etc) 변경 추적
           const _oldEtcIn = String(data?.oldEtc || "").trim();
           const _newEtcIn = String(data?.newEtc || "").trim();
           if (_oldEtcIn !== _newEtcIn) changes.push(`비고: "${_oldEtcIn||"없음"}"→"${_newEtcIn||"없음"}"`);
 
-          const inLogDesc = `[입고 수정] ${targetBL} (${oldD}) ${changes.join(", ")}`;
+          const inLogDesc = `[입고 수정] ${targetBL} (${oldD}) ${changes.length > 0 ? changes.join(", ") : "변경사항 없음"}`;
           await pool.query(
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
             [currentAdmin, inLogDesc],
