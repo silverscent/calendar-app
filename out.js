@@ -2914,25 +2914,11 @@ async function submitCMS(
     if (action === "ADD" && startDateStr !== "미정" && endDateStr && endDateStr >= startDateStr) {
       updateLocalState("ADD", { ...payload, newDate: startDateStr, newEndDate: endDateStr }, null);
       renderCalendar();
-      let sDate = new Date(startDateStr);
-      let eDate = new Date(endDateStr);
-      let datesToProcess = [];
-      while (sDate <= eDate) {
-        datesToProcess.push(
-          _dateToYmd(sDate),
-        );
-        sDate.setDate(sDate.getDate() + 1);
-      }
-      datesToProcess.forEach((dateStr) => {
-        let curPayload = { ...payload, newDate: dateStr };
-        apiCall({
-          source: "vercel",
-          domain: "out",
-          action: "ADD",
-          data: curPayload,
-          token: adminToken,
-          admin_id: localStorage.getItem("admin_id"),
-        });
+      // 단일 ADD_BLOCK 호출 — 서버에서 날짜 루프 + 로그/알림 1회
+      apiCall({
+        source: "vercel", domain: "out", action: "ADD_BLOCK",
+        data: { ...payload, blockStart: startDateStr, blockEnd: endDateStr },
+        token: adminToken, admin_id: localStorage.getItem("admin_id"),
       });
       return;
     }
@@ -2946,69 +2932,21 @@ async function submitCMS(
       };
       updateLocalState("EDIT", optimisticPayload, idx);
       renderCalendar();
-
-      let oldDates = [];
-      if (oldBlockStart !== "미정") {
-        let oldSDate = new Date(oldBlockStart);
-        let oldEDate =
-          oldBlockEnd && oldBlockEnd !== "null" && oldBlockEnd !== "" ? new Date(oldBlockEnd) : new Date(oldSDate);
-        let curr = new Date(oldSDate);
-        let _g1 = 0;
-        while (curr <= oldEDate && _g1++ < 400) {
-          // _g1: 날짜 범위가 비정상적으로 커도 루프 폭주(프리징) 방지 (최대 400일)
-          oldDates.push(
-            _dateToYmd(curr),
-          );
-          curr.setDate(curr.getDate() + 1);
+      // 단일 EDIT_BLOCK 호출 — 서버에서 날짜 이동/추가/삭제 + 로그/알림 1회
+      apiCall({
+        source: "vercel", domain: "out", action: "EDIT_BLOCK",
+        data: {
+          ...payload,
+          oldBlockStart, oldBlockEnd,
+          newBlockStart: startDateStr, newBlockEnd: endDateStr || startDateStr,
+        },
+        token: adminToken, admin_id: localStorage.getItem("admin_id"),
+      }).then((res) => {
+        if (res === null && !window._recoverScheduled) {
+          window._recoverScheduled = true;
+          setTimeout(() => (window._recoverScheduled = false), 1500);
+          goToAsync(serverData.year, serverData.month);
         }
-      } else {
-        oldDates.push("미정");
-      }
-
-      let newDates = [];
-      if (startDateStr !== "미정") {
-        let newSDate = new Date(startDateStr);
-        let newEDate = endDateStr ? new Date(endDateStr) : new Date(newSDate);
-        if (newEDate < newSDate) newEDate = new Date(newSDate);
-        let curr = new Date(newSDate);
-        let _g2 = 0;
-        while (curr <= newEDate && _g2++ < 400) {
-          // _g2: 루프 폭주(프리징) 방지 (최대 400일)
-          newDates.push(
-            _dateToYmd(curr),
-          );
-          curr.setDate(curr.getDate() + 1);
-        }
-      } else {
-        newDates.push("미정");
-      }
-
-      let actionsToRun = [];
-      oldDates.forEach((dStr) => {
-        if (newDates.includes(dStr))
-          actionsToRun.push({ action: "EDIT", payload: { ...payload, newDate: dStr, oldDate: dStr } });
-        else actionsToRun.push({ action: "DELETE", payload: { ...payload, oldDate: dStr, newDate: dStr } });
-      });
-      newDates.forEach((dStr) => {
-        if (!oldDates.includes(dStr)) actionsToRun.push({ action: "ADD", payload: { ...payload, newDate: dStr } });
-      });
-
-      actionsToRun.forEach((act) => {
-        apiCall({
-          source: "vercel",
-          domain: "out",
-          action: act.action,
-          data: act.payload,
-          token: adminToken,
-          admin_id: localStorage.getItem("admin_id"),
-        }).then((res) => {
-          // 블록(N일) 수정 시 실패가 여러 건이어도 전체 리로드는 1회만 → 렌더 폭주(프리징) 방지
-          if (res === null && !window._recoverScheduled) {
-            window._recoverScheduled = true;
-            setTimeout(() => (window._recoverScheduled = false), 1500);
-            goToAsync(serverData.year, serverData.month);
-          }
-        });
       });
       if (action === "EDIT") _reopenDetailAfter(payload.newDate);
       return;
