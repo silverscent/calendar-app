@@ -245,11 +245,18 @@ function renderCalendar() {
         let customStyle = `background-color: ${pastelBg} !important; color: ${textColor} !important; border: 1px solid rgba(0,0,0,0.1);`;
 
         // hover 툴팁 내용(PC모드): 1줄=제목, 이후 "라벨: 값"
-        let _tip = `${item.bl}`;
+        // INV 모드면 INV를 제목으로, BL을 서브로
+        let _tip;
+        if (blDisplayMode === "invoice" && item.invoice) {
+          _tip = `${item.invoice}`;
+          if (item.bl) _tip += `\nB/L: ${item.bl}`;
+        } else {
+          _tip = `${item.bl}`;
+          if (item.invoice) _tip += `\nINV: ${item.invoice}`;
+        }
         _tip += `\n수량: ${item.pal} PAL`;
         if (item.sType) _tip += `\n타입: ${item.sType}`;
         if (item.fwd) _tip += `\nFWD: ${item.fwd}`;
-        if (item.invoice) _tip += `\nINV: ${item.invoice}`;
         if (meaningfulEtc) _tip += `\n비고: ${meaningfulEtc}`;
         _tip += `\n상태: ${isItemDone ? "✅ 입고완료" : "입고대기"}`;
 
@@ -379,12 +386,18 @@ function renderPcSidePanel() {
       const meaningfulEtc = rawEtc.replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, "").trim();
       const blLabel = it.bl && it.bl.startsWith("발행전") ? "발행전" : (it.bl || "");
 
-      // 툴팁
-      let tip = blLabel || "(B/L 없음)";
+      // 툴팁 — INV 모드면 INV를 제목으로
+      let tip;
+      if (blDisplayMode === "invoice" && it.invoice) {
+        tip = `${it.invoice}`;
+        tip += `\nB/L: ${blLabel || "(B/L 없음)"}`;
+      } else {
+        tip = blLabel || "(B/L 없음)";
+        if (it.invoice) tip += `\nINV: ${it.invoice}`;
+      }
       tip += `\n수량: ${pal} PAL`;
       tip += `\n타입: ${it.sType || "-"}`;
       if (it.fwd) tip += `\nFWD: ${it.fwd}`;
-      if (it.invoice) tip += `\nINV: ${it.invoice}`;
       if (meaningfulEtc) tip += `\n비고: ${meaningfulEtc}`;
       tip += `\n상태: ${isItemDone ? "✅ 입고완료" : "⏳ 입고대기(미정)"}`;
 
