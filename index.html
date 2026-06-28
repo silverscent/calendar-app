@@ -6496,74 +6496,20 @@
               데이터베이스 테이블의 원본 데이터를 직접 검색하여 긴급 삭제할 수 있는 위험 영역 관리 화면입니다.
             </div>
           </div>
-          <div style="display: flex; gap: 8px; margin-bottom: 15px; box-sizing: border-box; flex-wrap: wrap">
-            <select
-              id="dbMasterFilterCol"
-              style="
-                padding: 14px;
-                background: var(--card-bg);
-                border: 1px solid var(--border-color);
-                border-radius: 12px;
-                color: var(--text-main);
-                font-weight: 800;
-                outline: none;
-              "
-            >
-              <option value="all">🔍 전체 검색</option>
-              <option value="name" id="filterOptName">업체명 검색</option>
-              <option value="etc">비고 검색</option>
-              <option value="date" id="filterOptDate">날짜 검색</option>
+          <div class="adm-filter-row" style="margin-bottom:15px;">
+            <select id="dbMasterFilterCol" class="db-input">
+              <option value="all">🔍 전체</option>
+              <option value="name" id="filterOptName">업체명</option>
+              <option value="etc">비고</option>
+              <option value="date" id="filterOptDate">날짜</option>
             </select>
-
-            <select
-              id="dbMasterLimit"
-              onchange="dbPageResetAndSearch()"
-              style="
-                padding: 14px;
-                background: var(--card-bg);
-                border: 1px solid var(--border-color);
-                border-radius: 12px;
-                color: var(--text-main);
-                font-weight: 800;
-                outline: none;
-              "
-            >
-              <option value="20">20줄씩 보기</option>
-              <option value="50">50줄씩 보기</option>
-              <option value="100">100줄씩 보기</option>
+            <select id="dbMasterLimit" class="db-input" onchange="dbPageResetAndSearch()">
+              <option value="20">20줄</option>
+              <option value="50">50줄</option>
+              <option value="100">100줄</option>
             </select>
-
-            <input
-              type="text"
-              id="dbMasterSearchKeyword"
-              placeholder="검색어 입력..."
-              style="
-                flex: 1;
-                min-width: 150px;
-                padding: 14px;
-                background: var(--card-bg);
-                border: 1px solid var(--border-color);
-                border-radius: 12px;
-                color: var(--text-main);
-                font-weight: 800;
-                box-sizing: border-box;
-              "
-            />
-            <button
-              onclick="dbPageResetAndSearch()"
-              style="
-                padding: 0 22px;
-                background: #0a84ff;
-                color: #fff;
-                border: none;
-                border-radius: 12px;
-                font-weight: 900;
-                cursor: pointer;
-                height: 48px;
-              "
-            >
-              조회
-            </button>
+            <input type="text" id="dbMasterSearchKeyword" placeholder="🔍 검색어 입력" class="db-input" style="flex:1;min-width:120px;" />
+            <button onclick="dbPageResetAndSearch()" class="adm-filter-btn" style="background:#0a84ff;color:#fff;">조회</button>
           </div>
           <div
             id="dbMasterRowsContainer"
