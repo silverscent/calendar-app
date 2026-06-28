@@ -1541,8 +1541,16 @@ module.exports = async function (req, res) {
         const oldLabel  = _blockLabel(oldStart, oldEnd);
         const newLabel  = _blockLabel(newStart, newEnd);
         const rangeStr  = oldLabel === newLabel ? oldLabel : `${oldLabel}→${newLabel}`;
-        // 변경 내용 상세: 비고·수량 변경 시 표시
+        // 변경 내용 상세: 유형·업체명·수량·비고 변경 시 표시
         const changeDetails = [];
+        // 유형(출고↔작업) 변경
+        const _wasTask = (data?.oldComp||"").toUpperCase().startsWith("[TASK]");
+        const _isTask  = (reqComp||"").toUpperCase().startsWith("[TASK]");
+        if (_wasTask !== _isTask) changeDetails.push(`유형: ${_wasTask?"작업":"출고"} ➡️ ${_isTask?"작업":"출고"}`);
+        // 업체명 변경 ([TASK] 제외 순수 이름)
+        const _oldName = (data?.oldComp||"").replace(/\[TASK\]/gi,"").trim();
+        const _newName = cleanComp;
+        if (_oldName !== _newName) changeDetails.push(`업체: ${_oldName} ➡️ ${_newName}`);
         if ((data?.oldPal||"0") !== (reqPalOut||"0")) changeDetails.push(`PL:${data?.oldPal||0}→${reqPalOut||0}`);
         if ((data?.oldBox||"0") !== (reqBoxOut||"0")) changeDetails.push(`BOX:${data?.oldBox||0}→${reqBoxOut||0}`);
         const oldEtcClean = (data?.oldEtc||"").replace(/\[.*?\]/g,"").trim();
