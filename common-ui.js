@@ -1319,15 +1319,21 @@ function _initToastSwipe() {
   const release = () => {
     if (!dragging) return;
     dragging = false;
-    toast.style.transition = ""; // transition 복원
     if (dy < -50) {
-      // 충분히 올림 → 즉시 닫기
-      toast.style.transform = "";
-      toast.style.opacity = "";
+      // 충분히 올림 → 현재 위치에서 위로 날려 닫기
       if (window.toastTimer) clearTimeout(window.toastTimer);
-      toast.className = toast.className.replace("show", "").trim();
+      toast.style.transition = "transform 0.25s ease, opacity 0.25s ease";
+      toast.style.transform = "translate3d(-50%, -200%, 0) scale(0.8)";
+      toast.style.opacity = "0";
+      setTimeout(() => {
+        toast.style.transition = "";
+        toast.style.transform = "";
+        toast.style.opacity = "";
+        toast.className = toast.className.replace("show", "").trim();
+      }, 260);
     } else {
-      // 덜 올림 → 제자리 복원
+      // 덜 올림 → CSS transition으로 제자리 복원
+      toast.style.transition = "";
       toast.style.transform = "";
       toast.style.opacity = "";
     }
