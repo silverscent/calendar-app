@@ -3114,14 +3114,7 @@ function showModal(day, clickedIdx) {
       if (isTaskMode && day !== "pending") {
         let startDay = parseInt(day);
         let endDay = parseInt(day);
-        const getMatchKey = (it) => {
-          let clean = it.company.replace(/\[TASK\]/gi, "").trim();
-          let isT =
-            it.company.toUpperCase().startsWith("[TASK]") ||
-            /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
-          let isD = it.isDone === true || String(it.isDone) === "true";
-          return `${isT ? "T" : "O"}_${getFullName(clean)}_${isD}_${it.pal || ""}_${it.box || ""}`;
-        };
+        // 전역 getMatchKey 재사용: TASK는 isDone·pal·box 제외 → 완료/대기 혼재해도 한 블록으로 인식
         let targetKey = getMatchKey(item);
 
         for (let d = startDay - 1; d >= 1; d--) {
