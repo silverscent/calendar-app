@@ -3474,7 +3474,15 @@ async function openEditForm(
       const _b1 = document.createElement("button");
       _b1.className = "save-btn"; _b1.style.flex = "1";
       _b1.textContent = "💾 이 날만";
-      _b1.onclick = () => submitCMS("EDIT", comp, dateStr, idx, isDone, "", "");
+      _b1.onclick = () => {
+        // 이 날만 저장: 폼 날짜가 blockStartDateStr(블록 시작일)로 초기화돼 있어
+        // 클릭한 날짜(dateStr)로 먼저 복원 → 날짜 이동 버그 방지
+        const _di = document.getElementById("edit-date-" + idx);
+        if (_di) _di.value = dateStr;
+        const _dei = document.getElementById("edit-" + idx + "-end-date");
+        if (_dei) _dei.value = "";
+        submitCMS("EDIT", comp, dateStr, idx, isDone, "", "");
+      };
       const _b2 = document.createElement("button");
       _b2.className = "save-btn"; _b2.style.flex = "1"; _b2.style.background = "#27ae60";
       _b2.textContent = "💾 전체 저장";

@@ -304,6 +304,9 @@ module.exports = async function (req, res) {
         "MULTI_DELETE",
         "MULTI_DONE",
         "MULTI_UNDO_DONE",
+        "ADD_BLOCK",
+        "EDIT_BLOCK",
+        "DELETE_BLOCK",
         "CREATE_ADMIN",
         "DELETE_ADMIN",
         "REACTIVATE_ADMIN",
@@ -1488,27 +1491,21 @@ module.exports = async function (req, res) {
         const newSet    = new Set(newDates);
         const oldSet    = new Set(oldDates);
         // 삭제: 이전엔 있었지만 새로운 범위에 없는 날짜
+        // data.id는 클릭한 단일 행 id라 블록 전체에 쓰면 안 됨 → company+date 기준으로만
         for (const d of oldDates) {
-          if (!newSet.has(d)) {
-            if (data?.id) await pool.query(`DELETE FROM outbound WHERE id=?`, [data.id]);
-            else await pool.query(
-              `DELETE FROM outbound WHERE company=? AND outbound_date=? AND COALESCE(NULLIF(pal,''),'0')=COALESCE(NULLIF(?,''),'0') AND COALESCE(NULLIF(box,''),'0')=COALESCE(NULLIF(?,''),'0')`,
-              [data?.oldComp || reqComp, d, data?.oldPal||"", data?.oldBox||""],
+          if (!newSet.has(d))
+            await pool.query(
+              `DELETE FROM outbound WHERE company=? AND outbound_date=?`,
+              [data?.oldComp || reqComp, d],
             );
-          }
         }
-        // 수정: 양쪽에 있는 날짜
+        // 수정: 양쪽에 있는 날짜 (pal/box 달라도 같은 작업이면 전체 업데이트)
         for (const d of newDates) {
-          if (oldSet.has(d)) {
-            if (data?.id) await pool.query(
-              `UPDATE outbound SET company=?,pal=?,box=?,etc=? WHERE id=?`,
-              [reqComp, reqPalOut, reqBoxOut, reqEtcOut, data.id],
-            );
-            else await pool.query(
+          if (oldSet.has(d))
+            await pool.query(
               `UPDATE outbound SET company=?,pal=?,box=?,outbound_date=?,etc=? WHERE company=? AND outbound_date=?`,
               [reqComp, reqPalOut, reqBoxOut, d, reqEtcOut, data?.oldComp||reqComp, d],
             );
-          }
         }
         // 추가: 새로운 범위에만 있는 날짜
         for (const d of newDates) {
