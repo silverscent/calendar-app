@@ -1611,7 +1611,14 @@ module.exports = async function (req, res) {
           const oldD = targetDate || "미정";
           const newD = newDate || "미정";
           if (oldD !== newD) changes.push(`날짜: ${oldD} ➡️ ${newD}`);
-          if (targetName !== newName) changes.push(`업체: ${targetName} ➡️ ${newName}`);
+          // 유형(출고↔작업) 변경 추적 — [TASK] 접두어 기준
+          const _wasTask = (targetName || "").toUpperCase().startsWith("[TASK]");
+          const _isTask  = (newName || "").toUpperCase().startsWith("[TASK]");
+          if (_wasTask !== _isTask) changes.push(`유형: ${_wasTask ? "작업" : "출고"} ➡️ ${_isTask ? "작업" : "출고"}`);
+          // 업체명 변경 (유형 관계없이 실제 이름이 다를 때만)
+          const _oldCleanName = (targetName || "").replace(/\[TASK\]/gi, "").trim();
+          const _newCleanName = (newName || "").replace(/\[TASK\]/gi, "").trim();
+          if (_oldCleanName !== _newCleanName) changes.push(`업체: ${_oldCleanName} ➡️ ${_newCleanName}`);
 
           const oldP = targetPal || 0;
           const newP = data?.newPal || 0;
