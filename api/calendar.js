@@ -1637,10 +1637,12 @@ module.exports = async function (req, res) {
           const newB = data?.newBox || 0;
           if (String(oldB) !== String(newB)) changes.push(`BOX: ${oldB} ➡️ ${newB}`);
 
-          // 비고(etc) 변경 추적
-          const _oldEtc = String(data?.oldEtc || "").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
-          const _newEtc = String(data?.newEtc || "").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
-          if (_oldEtc !== _newEtc) changes.push(`비고: "${_oldEtc||"없음"}"→"${_newEtc||"없음"}"`);
+          // 비고(etc) 변경 추적 — old 값 전송된 경우에만 비교 (executeMove 오탐 방지)
+          if (data?.oldEtc !== undefined) {
+            const _oldEtc = String(data.oldEtc || "").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
+            const _newEtc = String(data?.newEtc || "").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
+            if (_oldEtc !== _newEtc) changes.push(`비고: "${_oldEtc||"없음"}"→"${_newEtc||"없음"}"`);
+          }
 
           const detailStr = changes.length > 0 ? changes.join(", ") : "변경사항 없음";
           const logDesc = `[출고 수정] ${targetName} (${targetDate || "미정"}) ${detailStr}`;
@@ -2481,15 +2483,17 @@ ${JSON.stringify(rows, null, 2)}
           const newP = String(data?.newPal || 0);
           if (oldP !== newP) changes.push(`PL: ${oldP||0} ➡️ ${newP}`);
 
-          // s_type / fwd / invoice 변경 추적
-          if ((data?.oldSType||"") !== (data?.newSType||"")) changes.push(`타입: ${data?.oldSType||"없음"} ➡️ ${data?.newSType||"없음"}`);
-          if ((data?.oldFwd||"") !== (data?.newFwd||"")) changes.push(`포워더: ${data?.oldFwd||"없음"} ➡️ ${data?.newFwd||"없음"}`);
-          if (String(data?.oldInvoice||"").trim() !== String(data?.newInvoice||"").trim()) changes.push(`인보이스: ${data?.oldInvoice||"없음"} ➡️ ${data?.newInvoice||"없음"}`);
+          // s_type / fwd / invoice 변경 추적 — old 값이 전송된 경우에만 비교 (executeMove 오탐 방지)
+          if (data?.oldSType !== undefined && (data.oldSType||"") !== (data?.newSType||"")) changes.push(`타입: ${data.oldSType||"없음"} ➡️ ${data?.newSType||"없음"}`);
+          if (data?.oldFwd !== undefined && (data.oldFwd||"") !== (data?.newFwd||"")) changes.push(`포워더: ${data.oldFwd||"없음"} ➡️ ${data?.newFwd||"없음"}`);
+          if (data?.oldInvoice !== undefined && String(data.oldInvoice||"").trim() !== String(data?.newInvoice||"").trim()) changes.push(`인보이스: ${data.oldInvoice||"없음"} ➡️ ${data?.newInvoice||"없음"}`);
 
-          // 비고(etc) 변경 추적
-          const _oldEtcIn = String(data?.oldEtc || "").trim();
-          const _newEtcIn = String(data?.newEtc || "").trim();
-          if (_oldEtcIn !== _newEtcIn) changes.push(`비고: "${_oldEtcIn||"없음"}"→"${_newEtcIn||"없음"}"`);
+          // 비고(etc) 변경 추적 — old 값 전송된 경우에만 비교
+          if (data?.oldEtc !== undefined) {
+            const _oldEtcIn = String(data.oldEtc || "").trim();
+            const _newEtcIn = String(data?.newEtc || "").trim();
+            if (_oldEtcIn !== _newEtcIn) changes.push(`비고: "${_oldEtcIn||"없음"}"→"${_newEtcIn||"없음"}"`);
+          }
 
           const inLogDesc = `[입고 수정] ${targetBL} (${oldD}) ${changes.length > 0 ? changes.join(", ") : "변경사항 없음"}`;
           await pool.query(
