@@ -1838,8 +1838,9 @@ function locateOcrImage(idx, field) {
   let ix = field && typeof cx[field] === "number" ? cx[field] : null;
   if (ix == null) {
     if (field === "pal") {
-      // PAL 전용: BL에 치우치지 않도록 이미지 가로 중앙으로 고정
-      ix = img.naturalWidth * 0.5;
+      // PAL 전용: BL 위치와 이미지 중앙의 중간값 (BL 오른쪽, ETA 왼쪽)
+      const blX = typeof cx.bl === "number" ? cx.bl : img.naturalWidth * 0.2;
+      ix = (blX + img.naturalWidth * 0.5) / 2;
     } else if (field && OCR_LEFT_COLS.has(field)) {
       ix = typeof cx.bl === "number" ? cx.bl : cx.invoice;
     } else {
