@@ -1754,29 +1754,19 @@ async function showIpInfo(ip) {
 // MutationObserver로 overlay-modal display 변화 감지 → 자동 lock/unlock
 // ─────────────────────────────────────────────────────────────
 (function _initBodyScrollLock() {
-  let _lockScrollY = 0;
   let _locked = false;
 
   function _lockBody() {
     if (_locked) return;
     _locked = true;
-    _lockScrollY = window.pageYOffset || 0;
-    const b = document.body;
-    b.style.overflow  = "hidden";
-    b.style.position  = "fixed";
-    b.style.top       = `-${_lockScrollY}px`;
-    b.style.width     = "100%";
+    // position:fixed 대신 overflow:hidden만 사용 — 레이아웃 변화(달력 넓어짐) 방지
+    document.body.style.overflow = "hidden";
   }
 
   function _unlockBody() {
     if (!_locked) return;
     _locked = false;
-    const b = document.body;
-    b.style.overflow  = "";
-    b.style.position  = "";
-    b.style.top       = "";
-    b.style.width     = "";
-    window.scrollTo(0, _lockScrollY);
+    document.body.style.overflow = "";
   }
 
   function _check() {
