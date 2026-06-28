@@ -1989,6 +1989,8 @@ function updateLocalState(action, payload, idx) {
     }
   } else {
     // 1. 삭제 및 날짜 이동 시 (기존 지우기 로직)
+    const _oldDoneMap = {}; // 블록 각 날짜의 기존 isDone 캡처 (add 단계에서 복원용)
+    let _isTaskBlock = false;
     if (action === "EDIT" || action === "DELETE") {
       if (payload.oldBlockStart && payload.oldBlockStart !== "null" && payload.oldBlockStart !== "미정") {
         let sD = new Date(payload.oldBlockStart).getDate();
@@ -1997,14 +1999,14 @@ function updateLocalState(action, payload, idx) {
             ? new Date(payload.oldBlockEnd).getDate()
             : sD;
         // TASK 블록: pal/box/isDone 달라도 company명 기준으로 제거
-        // (ADD_QTY·완료 혼재 시 일부 날 유령 아이템 남는 버그 방지)
-        const _isTaskBlock = (payload.oldComp || "").toUpperCase().startsWith("[TASK]") ||
+        _isTaskBlock = (payload.oldComp || "").toUpperCase().startsWith("[TASK]") ||
           /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName((payload.oldComp || "").replace(/\[TASK\]/gi, "").trim()));
+        const _taskKey = _isTaskBlock ? getMatchKey({ company: payload.oldComp, pal: "", box: "" }) : null;
         for (let d = sD; d <= eD; d++) {
           let targetArr = serverData.monthData[d];
           if (targetArr) {
             let matchIdx = _isTaskBlock
-              ? targetArr.findIndex((it) => getMatchKey(it) === getMatchKey({ company: payload.oldComp, pal: "", box: "" }))
+              ? targetArr.findIndex((it) => getMatchKey(it) === _taskKey)
               : targetArr.findIndex(
                   (it) =>
                     it.company === payload.oldComp &&
@@ -2013,7 +2015,11 @@ function updateLocalState(action, payload, idx) {
                     (it.isDone === true || String(it.isDone) === "true") ===
                       (payload.oldDone === true || String(payload.oldDone) === "true"),
                 );
-            if (matchIdx !== -1) targetArr.splice(matchIdx, 1);
+            if (matchIdx !== -1) {
+              // 제거 전 isDone 캡처 — 추가 단계에서 기존 날짜 완료상태 복원용
+              _oldDoneMap[d] = targetArr[matchIdx].isDone === true || String(targetArr[matchIdx].isDone) === "true";
+              targetArr.splice(matchIdx, 1);
+            }
           }
         }
       } else {
@@ -2044,7 +2050,11 @@ function updateLocalState(action, payload, idx) {
         let actualEnd = endD === "hidden" || endD === "pending" ? startD : endD;
         for (let d = startD; d <= actualEnd; d++) {
           if (!serverData.monthData[d]) serverData.monthData[d] = [];
-          serverData.monthData[d].push({ ...newItem });
+          // TASK 블록: 기존 날짜는 캡처된 isDone 복원, 새로 추가된 날짜는 항상 false
+          const _dayIsDone = _isTaskBlock
+            ? (_oldDoneMap.hasOwnProperty(d) ? _oldDoneMap[d] : false)
+            : newItem.isDone;
+          serverData.monthData[d].push({ ...newItem, isDone: _dayIsDone });
         }
       }
     }
