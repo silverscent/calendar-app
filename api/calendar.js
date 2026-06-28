@@ -1621,12 +1621,18 @@ module.exports = async function (req, res) {
           const newB = data?.newBox || 0;
           if (String(oldB) !== String(newB)) changes.push(`BOX: ${oldB} ➡️ ${newB}`);
 
-          let detailStr = changes.length > 0 ? changes.join(", ") : "비고/텍스트 변경";
+          // 비고(etc) 변경 추적
+          const _oldEtc = String(data?.oldEtc || "").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
+          const _newEtc = String(data?.newEtc || "").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
+          if (_oldEtc !== _newEtc) changes.push(`비고: "${_oldEtc||"없음"}"→"${_newEtc||"없음"}"`);
+
+          const detailStr = changes.length > 0 ? changes.join(", ") : "변경사항 없음";
+          const logDesc = `[출고 수정] ${targetName} (${targetDate || "미정"}) ${detailStr}`;
           await pool.query(
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
-            [currentAdmin, `[출고 수정] ${targetName} (${detailStr})`],
+            [currentAdmin, logDesc],
           );
-          notifyCalendarChange(`[출고 수정] ${targetName} (${targetDate || "미정"}) ${detailStr}`, currentAdmin);
+          notifyCalendarChange(logDesc, currentAdmin);
         } else if (action === "ADD_QTY") {
           // 👈 🚨 여기에 이 블록을 통째로 추가하세요!
           // [출고 수량추가] 버튼 클릭 시 DB 원본에 합산 및 비고(etc) 업데이트
@@ -2456,13 +2462,19 @@ ${JSON.stringify(rows, null, 2)}
           if (targetBL !== newName) changes.push(`B/L: ${targetBL} ➡️ ${newName}`);
 
           const newP = data?.newPal || 0;
-          changes.push(`최종수량: PL ${newP}`); // 입고는 원본 수량을 항상 들고오지 않으므로 최종 저장된 수량 표기
+          changes.push(`최종수량: PL ${newP}`);
 
+          // 비고(etc) 변경 추적
+          const _oldEtcIn = String(data?.oldEtc || "").trim();
+          const _newEtcIn = String(data?.newEtc || "").trim();
+          if (_oldEtcIn !== _newEtcIn) changes.push(`비고: "${_oldEtcIn||"없음"}"→"${_newEtcIn||"없음"}"`);
+
+          const inLogDesc = `[입고 수정] ${targetBL} (${oldD}) ${changes.join(", ")}`;
           await pool.query(
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
-            [currentAdmin, `[입고 수정] ${targetBL} (${changes.join(", ")})`],
+            [currentAdmin, inLogDesc],
           );
-          notifyCalendarChange(`[입고 수정] ${targetBL} (${changes.join(", ")})`, currentAdmin);
+          notifyCalendarChange(inLogDesc, currentAdmin);
         } else if (action === "ADD") {
           let reqBl = (data?.newBL || data?.bl || data?.newComp || data?.company || data?.bl_number || "").trim();
           let reqDate =
