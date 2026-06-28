@@ -1832,11 +1832,24 @@ function attachRowYCoords(rows, visionData) {
     setc("inDate", findDigit(r.inDate)); // 그다음(오른쪽) 날짜
     setc("fwd", findText(r.fwd));
     setc("sType", findText(r.sType));
+    // PAL: 1-3자리 짧은 숫자라 findDigit(4자 이상 필터) 우회 — BL 오른쪽 & ETA 왼쪽 범위 내 매칭
+    const palStr = digits(String(r.pal || "0"));
+    if (palStr && palStr !== "0" && r.cx.pal == null) {
+      const blX  = typeof r.cx.bl  === "number" ? r.cx.bl  : 0;
+      const etaX = typeof r.cx.eta === "number" ? r.cx.eta : Infinity;
+      for (const w of near) {
+        if (!usedW.has(w) && w.d === palStr && w.cx > blX && w.cx < etaX) {
+          usedW.add(w);
+          setc("pal", w.cx);
+          break;
+        }
+      }
+    }
   });
 
   // 3차: 열 위치는 테이블이라 행마다 거의 동일 → 매칭된 X 중앙값을 '전역 열 X'로 만들어 빈 칸 보정
   //      (발행전 행의 B/L 열, 비어있는 ETC 열 등도 올바른 열 위치로 이동)
-  const colKeys = ["bl", "invoice", "eta", "inDate", "fwd", "sType"];
+  const colKeys = ["bl", "pal", "invoice", "eta", "inDate", "fwd", "sType"];
   const globalCx = {};
   colKeys.forEach((c) => {
     const xs = rows
