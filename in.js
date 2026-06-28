@@ -1177,6 +1177,7 @@ function openAddFormWithDate(day) {
 async function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDone = false) {
   if (action === "EDIT" || action === "DELETE") _editState = null; // 수정 세션 종료
   let oldPal = "";
+  let oldSType = "", oldFwd = "", oldInvoice = "";
   let itemId = null; // 🚨 ID 변수 추가
   const safeStr = (val) => (val === "" || val == null ? "" : String(val).trim());
   let currentIsDone = isDone === true || String(isDone) === "true";
@@ -1189,13 +1190,16 @@ async function submitCMS(action, oldBL = null, oldDate = null, idx = null, isDon
           ? serverData.monthData[day][idx]
           : null;
     if (item) {
-      oldPal = safeStr(item.pal);
+      oldPal     = safeStr(item.pal);
+      oldSType   = safeStr(item.sType);
+      oldFwd     = safeStr(item.fwd);
+      oldInvoice = safeStr(item.invoice);
       currentIsDone = item.isDone === true || String(item.isDone) === "true";
       itemId = item.id; // 🚨 ID 획득!
     }
   }
 
-  let payload = { action: action, id: itemId, oldBL: oldBL, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal };
+  let payload = { action: action, id: itemId, oldBL: oldBL, oldDate: oldDate, oldDone: currentIsDone, oldPal: oldPal, oldSType, oldFwd, oldInvoice };
   if (action === "DONE") {
     if (!(await uiConfirm(`✅ [${oldBL}] 입고를 완료 처리하시겠습니까?`))) return;
   } else if (action === "UNDO_DONE") {

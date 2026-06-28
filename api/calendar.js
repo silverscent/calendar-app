@@ -2481,6 +2481,11 @@ ${JSON.stringify(rows, null, 2)}
           const newP = String(data?.newPal || 0);
           if (oldP !== newP) changes.push(`PL: ${oldP||0} ➡️ ${newP}`);
 
+          // s_type / fwd / invoice 변경 추적
+          if ((data?.oldSType||"") !== (data?.newSType||"")) changes.push(`타입: ${data?.oldSType||"없음"} ➡️ ${data?.newSType||"없음"}`);
+          if ((data?.oldFwd||"") !== (data?.newFwd||"")) changes.push(`포워더: ${data?.oldFwd||"없음"} ➡️ ${data?.newFwd||"없음"}`);
+          if (String(data?.oldInvoice||"").trim() !== String(data?.newInvoice||"").trim()) changes.push(`인보이스: ${data?.oldInvoice||"없음"} ➡️ ${data?.newInvoice||"없음"}`);
+
           // 비고(etc) 변경 추적
           const _oldEtcIn = String(data?.oldEtc || "").trim();
           const _newEtcIn = String(data?.newEtc || "").trim();
