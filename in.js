@@ -2612,6 +2612,8 @@ function initOcrSplitGestures() {
 function closeModalOnBgClick(e) {
   if (isLongPress || isMultiMode) return;
   if (e.target === document.getElementById("modal")) {
+    // mousedown이 모달 내부에서 시작된 드래그라면 닫지 않음
+    if (window._modalMdTarget && window._modalMdTarget !== e.target) return;
     _editState = null;
     document.getElementById("modal").style.display = "none";
     clearClickedHighlight();

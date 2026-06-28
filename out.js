@@ -4534,6 +4534,9 @@ function updateStatsSummary() {
 function closeModalOnBgClick(e) {
   if (isLongPress || isMultiMode) return;
   if (e.target === document.getElementById("modal")) {
+    // mousedown이 모달 내부에서 시작된 드래그라면 닫지 않음
+    // (모달 안에서 텍스트 선택 후 바깥에서 손 떼는 경우 방지)
+    if (window._modalMdTarget && window._modalMdTarget !== e.target) return;
     document.getElementById("modal").style.display = "none";
     clearClickedHighlight();
   }
