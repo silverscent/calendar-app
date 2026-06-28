@@ -3495,14 +3495,8 @@ async function openEditForm(
             <div class="form-label">비고 (메모 입력)</div>
             <input type="text" id="edit-etc-${idx}" class="edit-input" value="${_esc(cleanEtc !== "undefined" ? cleanEtc : "")}">
             
-            <div class="btn-row">
-              ${blockEndDateStr && blockEndDateStr !== "null" && blockEndDateStr !== "" && blockEndDateStr !== blockStartDateStr
-                ? `<button class="save-btn" style="flex:1;" onclick="submitCMS('EDIT','${_argq(comp)}','${dateStr}',${idx},${isDone},'','')">💾 이 날만</button>
-                   <button class="save-btn" style="flex:1; background:#27ae60;" onclick="submitCMS('EDIT','${_argq(comp)}','${dateStr}',${idx},${isDone},'${blockStartDateStr}','${blockEndDateStr}')">💾 전체 저장</button>`
-                : `<button class="save-btn" onclick="submitCMS('EDIT','${_argq(comp)}','${dateStr}',${idx},${isDone},'${blockStartDateStr}','${blockEndDateStr}')">💾 저장</button>`
-              }
-              <button class="cancel-btn" onclick="closeEditForm('${day}', ${idx})">취소</button>
-            </div>
+            <div class="btn-row" id="edit-save-row-${idx}"></div>
+            <button class="cancel-btn" onclick="closeEditForm('${day}', ${idx})">취소</button>
             ${
               blockEndDateStr && blockEndDateStr !== "null" && blockEndDateStr !== "" && blockEndDateStr !== blockStartDateStr
                 ? `<div style="display:flex; gap:8px;">
@@ -3514,6 +3508,29 @@ async function openEditForm(
           </div>
         `;
   attachAutocomplete(`edit-comp-${idx}`);
+
+  // 저장 버튼 DOM으로 직접 삽입 (중첩 템플릿 리터럴 파싱 문제 회피)
+  const _saveRow = document.getElementById("edit-save-row-" + idx);
+  if (_saveRow) {
+    const _isBlock = blockEndDateStr && blockEndDateStr !== "null" && blockEndDateStr !== "" && blockEndDateStr !== blockStartDateStr;
+    if (_isBlock) {
+      const _b1 = document.createElement("button");
+      _b1.className = "save-btn"; _b1.style.flex = "1";
+      _b1.textContent = "💾 이 날만";
+      _b1.onclick = () => submitCMS("EDIT", comp, dateStr, idx, isDone, "", "");
+      const _b2 = document.createElement("button");
+      _b2.className = "save-btn"; _b2.style.flex = "1"; _b2.style.background = "#27ae60";
+      _b2.textContent = "💾 전체 저장";
+      _b2.onclick = () => submitCMS("EDIT", comp, dateStr, idx, isDone, blockStartDateStr, blockEndDateStr);
+      _saveRow.appendChild(_b1); _saveRow.appendChild(_b2);
+    } else {
+      const _b = document.createElement("button");
+      _b.className = "save-btn";
+      _b.textContent = "💾 저장";
+      _b.onclick = () => submitCMS("EDIT", comp, dateStr, idx, isDone, blockStartDateStr, blockEndDateStr);
+      _saveRow.appendChild(_b);
+    }
+  }
 
   // 수정 상태 기록 (변경 감지 + 전환 시 저장용)
   _editState = {
