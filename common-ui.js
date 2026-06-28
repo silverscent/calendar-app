@@ -1748,3 +1748,58 @@ async function showIpInfo(ip) {
   _ipInfoCache.set(ip, res.info);
   _showResult(res.info);
 }
+
+// ─────────────────────────────────────────────────────────────
+// 📱 모달 열릴 때 body 스크롤 고정 (iOS 배경 스크롤 누수 방지)
+// MutationObserver로 overlay-modal display 변화 감지 → 자동 lock/unlock
+// ─────────────────────────────────────────────────────────────
+(function _initBodyScrollLock() {
+  let _lockScrollY = 0;
+  let _locked = false;
+
+  function _lockBody() {
+    if (_locked) return;
+    _locked = true;
+    _lockScrollY = window.pageYOffset || 0;
+    const b = document.body;
+    b.style.overflow  = "hidden";
+    b.style.position  = "fixed";
+    b.style.top       = `-${_lockScrollY}px`;
+    b.style.width     = "100%";
+  }
+
+  function _unlockBody() {
+    if (!_locked) return;
+    _locked = false;
+    const b = document.body;
+    b.style.overflow  = "";
+    b.style.position  = "";
+    b.style.top       = "";
+    b.style.width     = "";
+    window.scrollTo(0, _lockScrollY);
+  }
+
+  function _check() {
+    // PC 모드(hover:hover)에서는 body lock 불필요 — 마우스 환경
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+    const modals = document.querySelectorAll(".overlay-modal");
+    const anyOpen = Array.from(modals).some(
+      (m) => m.style.display && m.style.display !== "none"
+    );
+    anyOpen ? _lockBody() : _unlockBody();
+  }
+
+  // DOM이 준비되면 모든 overlay-modal을 감시
+  const _setup = () => {
+    const obs = new MutationObserver(_check);
+    document.querySelectorAll(".overlay-modal").forEach((m) =>
+      obs.observe(m, { attributes: true, attributeFilter: ["style"] })
+    );
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", _setup);
+  } else {
+    _setup();
+  }
+}());
