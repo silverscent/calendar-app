@@ -1989,7 +1989,10 @@ function updateLocalState(action, payload, idx) {
     }
   } else {
     // 1. 삭제 및 날짜 이동 시 (기존 지우기 로직)
-    const _oldDoneMap = {}; // 블록 각 날짜의 기존 isDone 캡처 (add 단계에서 복원용)
+    const _oldDoneMap = {}; // 블록 각 날짜의 기존 isDone 캡처
+    const _oldEtcMap  = {}; // 블록 각 날짜의 기존 etc 캡처 (비고 미변경 시 복원)
+    const _oldPalMap  = {}; // 블록 각 날짜의 기존 pal 캡처 (수량 미변경 시 복원)
+    const _oldBoxMap  = {}; // 블록 각 날짜의 기존 box 캡처
     let _isTaskBlock = false;
     if (action === "EDIT" || action === "DELETE") {
       if (payload.oldBlockStart && payload.oldBlockStart !== "null" && payload.oldBlockStart !== "미정") {
@@ -2016,8 +2019,12 @@ function updateLocalState(action, payload, idx) {
                       (payload.oldDone === true || String(payload.oldDone) === "true"),
                 );
             if (matchIdx !== -1) {
-              // 제거 전 isDone 캡처 — 추가 단계에서 기존 날짜 완료상태 복원용
-              _oldDoneMap[d] = targetArr[matchIdx].isDone === true || String(targetArr[matchIdx].isDone) === "true";
+              // 제거 전 isDone/pal/box/etc 캡처 — 추가 단계에서 복원용
+              const _captured = targetArr[matchIdx];
+              _oldDoneMap[d] = _captured.isDone === true || String(_captured.isDone) === "true";
+              _oldEtcMap[d]  = _captured.etc || "";
+              _oldPalMap[d]  = _captured.pal || "0";
+              _oldBoxMap[d]  = _captured.box || "0";
               targetArr.splice(matchIdx, 1);
             }
           }
@@ -2050,11 +2057,20 @@ function updateLocalState(action, payload, idx) {
         let actualEnd = endD === "hidden" || endD === "pending" ? startD : endD;
         for (let d = startD; d <= actualEnd; d++) {
           if (!serverData.monthData[d]) serverData.monthData[d] = [];
-          // TASK 블록: 기존 날짜는 캡처된 isDone 복원, 새로 추가된 날짜는 항상 false
-          const _dayIsDone = _isTaskBlock
-            ? (_oldDoneMap.hasOwnProperty(d) ? _oldDoneMap[d] : false)
-            : newItem.isDone;
-          serverData.monthData[d].push({ ...newItem, isDone: _dayIsDone });
+          // TASK 블록: 기존 날짜는 캡처된 isDone/pal/box/etc 복원, 새 날짜는 기본값
+          const _isExisting = _oldDoneMap.hasOwnProperty(d);
+          const _palChanged = norm(payload.newPal) !== norm(payload.oldPal);
+          const _boxChanged = norm(payload.newBox) !== norm(payload.oldBox);
+          const _etcRaw     = (payload.newEtc||"").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
+          const _etcOldRaw  = (payload.oldEtc||"").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
+          const _etcChanged = _etcRaw !== _etcOldRaw;
+          serverData.monthData[d].push({
+            ...newItem,
+            isDone: _isTaskBlock ? (_isExisting ? _oldDoneMap[d] : false) : newItem.isDone,
+            pal:    (_isTaskBlock && _isExisting && !_palChanged) ? _oldPalMap[d] : newItem.pal,
+            box:    (_isTaskBlock && _isExisting && !_boxChanged) ? _oldBoxMap[d] : newItem.box,
+            etc:    (_isTaskBlock && _isExisting && !_etcChanged) ? _oldEtcMap[d] : (newItem.etc || ""),
+          });
         }
       }
     }

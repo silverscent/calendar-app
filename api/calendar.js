@@ -1507,20 +1507,34 @@ module.exports = async function (req, res) {
               [data?.oldComp || reqComp, d],
             );
         }
-        // 수정: 양쪽에 있는 날짜 (pal/box 달라도 같은 작업이면 전체 업데이트)
+        // 변경 여부 감지: 변경되지 않은 필드는 각 날짜의 기존 값 유지
+        const _palChanged = (reqPalOut||"0") !== (data?.oldPal||"0");
+        const _boxChanged = (reqBoxOut||"0") !== (data?.oldBox||"0");
+        const _newEtcClean = (reqEtcOut||"").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
+        const _oldEtcClean = (data?.oldEtc||"").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
+        const _etcChanged  = _newEtcClean !== _oldEtcClean;
+
+        // 수정: 양쪽에 있는 날짜 — 변경된 필드만 UPDATE (미변경 필드는 기존 값 유지)
         for (const d of newDates) {
-          if (oldSet.has(d))
+          if (oldSet.has(d)) {
+            const setClauses = ["company=?","outbound_date=?"];
+            const setVals    = [reqComp, d];
+            if (_palChanged) { setClauses.push("pal=?");   setVals.push(reqPalOut); }
+            if (_boxChanged) { setClauses.push("box=?");   setVals.push(reqBoxOut); }
+            if (_etcChanged) { setClauses.push("etc=?");   setVals.push(reqEtcOut); }
             await pool.query(
-              `UPDATE outbound SET company=?,pal=?,box=?,outbound_date=?,etc=? WHERE company=? AND outbound_date=?`,
-              [reqComp, reqPalOut, reqBoxOut, d, reqEtcOut, data?.oldComp||reqComp, d],
+              `UPDATE outbound SET ${setClauses.join(",")} WHERE company=? AND outbound_date=?`,
+              [...setVals, data?.oldComp||reqComp, d],
             );
+          }
         }
         // 추가: 새로운 범위에만 있는 날짜
+        // 수량·비고 변경 시에만 해당 값 적용, 미변경 시 기본값(0/빈값)
         for (const d of newDates) {
           if (!oldSet.has(d))
             await pool.query(
               `INSERT INTO outbound (company,pal,box,outbound_date,isDone,etc) VALUES (?,?,?,?,0,?)`,
-              [reqComp, reqPalOut, reqBoxOut, d, reqEtcOut],
+              [reqComp, _palChanged ? reqPalOut : "0", _boxChanged ? reqBoxOut : "0", d, _etcChanged ? reqEtcOut : ""],
             );
         }
         const cleanComp = reqComp.replace(/\[TASK\]/gi, "").trim();
