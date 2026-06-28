@@ -2500,9 +2500,10 @@ ${JSON.stringify(rows, null, 2)}
           if (oldD !== newD) changes.push(`날짜: ${oldD} ➡️ ${newD}`);
           if (targetBL !== newName) changes.push(`B/L: ${targetBL} ➡️ ${newName}`);
 
-          const oldP = data?.oldPal !== undefined ? String(data.oldPal) : "";
+          // "" 와 "0" 을 동일하게 취급 (null/empty → 0으로 정규화)
+          const oldP = data?.oldPal !== undefined ? String(data.oldPal || 0) : null;
           const newP = String(data?.newPal || 0);
-          if (oldP !== newP) changes.push(`PL: ${oldP||0} ➡️ ${newP}`);
+          if (oldP !== null && oldP !== newP) changes.push(`PL: ${oldP} ➡️ ${newP}`);
 
           // s_type / fwd / invoice 변경 추적 — old 값이 전송된 경우에만 비교 (executeMove 오탐 방지)
           if (data?.oldSType !== undefined && (data.oldSType||"") !== (data?.newSType||"")) changes.push(`타입: ${data.oldSType||"없음"} ➡️ ${data?.newSType||"없음"}`);

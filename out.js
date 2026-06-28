@@ -1982,8 +1982,9 @@ function updateLocalState(action, payload, idx) {
     let targetArr = oldDay === "pending" ? serverData.pendingItems : serverData.monthData[oldDay];
     if (targetArr && idx !== null && targetArr[idx]) {
       targetArr[idx].company = payload.newComp || payload.oldComp;
-      targetArr[idx].pal = payload.newPal || payload.oldPal;
-      targetArr[idx].box = payload.newBox || payload.oldBox;
+      // ?? (nullish coalescing) 사용: "0" 같은 falsy 값도 올바르게 반영
+      targetArr[idx].pal = payload.newPal ?? payload.oldPal;
+      targetArr[idx].box = payload.newBox ?? payload.oldBox;
       targetArr[idx].etc = payload.newEtc;
       // isDone 상태 및 기존 배열의 순서는 완벽히 유지됨
     }
