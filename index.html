@@ -864,6 +864,8 @@
         -webkit-backdrop-filter: blur(4px);
         animation: fadeIn 0.2s;
         padding: 0;
+        overscroll-behavior: contain; /* 모달 열릴 때 배경 스크롤 전파 차단 */
+        touch-action: pan-y; /* iOS: 모달 내부 스크롤은 허용, 배경 누수 방지 */
       }
       .modal-box {
         background: var(--bg-color);
