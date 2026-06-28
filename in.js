@@ -1552,6 +1552,7 @@ function showLastOcrImage() {
                 ? `<button id="ocrRawBtn" onclick="toggleRawOcrView()" style="flex:0 0 auto; padding:11px 10px; background:var(--border-color,#444); color:var(--text-main,#fff); border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px;">📄 Raw</button>
             <button id="ocrCompareBtn" onclick="toggleOcrCompare(this)" style="flex:1.3 1 auto; padding:11px 8px; background:#4a90e2; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📊 대조·수정 켜기</button>
             <button id="ocrAddRowBtn" onclick="addOcrBlankRow()" style="display:none; flex:0 0 auto; padding:11px 10px; background:#0a84ff; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">➕ 행</button>
+            <button id="ocrCopyBtn" onclick="copyOcrTable(this)" style="display:none; flex:0 0 auto; padding:11px 10px; background:#6c5ce7; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📋 복사</button>
             <button id="ocrVerifyBtn" onclick="verifyOcrRows(this)" style="display:none; flex:1 1 auto; padding:11px 8px; background:#f39c12; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">🔍 검증</button>
             <button id="ocrApplyBtn" onclick="applyOcrEdits(this)" style="display:none; flex:1 1 auto; padding:11px 8px; background:#27ae60; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📌 확정</button>`
                 : ``
@@ -1576,6 +1577,7 @@ function toggleOcrCompare(btn) {
   const applyBtn = document.getElementById("ocrApplyBtn");
   const verifyBtn = document.getElementById("ocrVerifyBtn");
   const addRowBtn = document.getElementById("ocrAddRowBtn");
+  const copyBtn  = document.getElementById("ocrCopyBtn");
   const rawBtn = document.getElementById("ocrRawBtn");
   const rawContainer = document.getElementById("raw-ocr-textarea-container");
   const divider = document.getElementById("ocrSplitDivider");
@@ -1591,6 +1593,7 @@ function toggleOcrCompare(btn) {
     if (applyBtn) applyBtn.style.display = "none";
     if (verifyBtn) verifyBtn.style.display = "none";
     if (addRowBtn) addRowBtn.style.display = "none";
+    if (copyBtn)  copyBtn.style.display  = "none";
     if (rawBtn) rawBtn.style.display = ""; // 이미지보기로 복귀 → Raw 버튼 다시 표시
     btn.innerHTML = "📊 대조·수정 켜기";
     btn.style.background = "#4a90e2";
@@ -1605,6 +1608,7 @@ function toggleOcrCompare(btn) {
     if (applyBtn) applyBtn.style.display = "block";
     if (verifyBtn) verifyBtn.style.display = "block";
     if (addRowBtn) addRowBtn.style.display = "block";
+    if (copyBtn)  copyBtn.style.display  = "block";
     if (rawBtn) rawBtn.style.display = "none"; // 대조·수정 모드에선 Raw 버튼 숨김
     if (rawContainer) rawContainer.style.display = "none"; // 열려있던 Raw 패널 닫기
     btn.innerHTML = "🖼️ 이미지만 보기";
@@ -1740,6 +1744,38 @@ function renderOcrTable() {
 }
 
 // ➕ 대조 표에 빈 행 추가 — OCR이 누락한 일정을 이미지 보면서 직접 입력 → '확정'으로 저장
+// 📋 대조표 전체를 탭 구분 텍스트로 클립보드 복사 (엑셀/메모장에 붙여넣기 친화)
+function copyOcrTable(btn) {
+  if (!ocrEditRows || ocrEditRows.length === 0) {
+    showToast("복사할 데이터가 없습니다.", 1800);
+    return;
+  }
+  const header = OCR_COLS.map((c) => c.label).join("\t");
+  const rows = ocrEditRows.map((r) =>
+    OCR_COLS.map((c) => {
+      const v = r[c.key] != null ? String(r[c.key]) : "";
+      return v.replace(/\t/g, " "); // 탭 문자는 공백으로
+    }).join("\t")
+  ).join("\n");
+  const text = header + "\n" + rows;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = "✅ 복사됨";
+    showToast(`📋 ${ocrEditRows.length}행 복사 완료! 메모장·엑셀에 붙여넣기하세요.`, 2500);
+    setTimeout(() => { btn.innerHTML = orig; }, 1800);
+  }).catch(() => {
+    // clipboard API 실패 시 textarea 방식 폴백
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;opacity:0;top:0;left:0;";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    showToast(`📋 ${ocrEditRows.length}행 복사 완료!`, 2500);
+  });
+}
+
 function addOcrBlankRow() {
   if (!isAdmin) {
     showToast("⚠️ 로그인한 관리자만 추가할 수 있습니다.", 2500);
