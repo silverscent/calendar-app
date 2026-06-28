@@ -1436,7 +1436,13 @@ function setDbSort(col) {
 }
 
 function _reopenDetailAfter(oldDate) {
-  let d = oldDate === "미정" || !oldDate ? "pending" : parseInt(String(oldDate).split("-")[2], 10);
+  if (!oldDate || oldDate === "미정") return;
+  const parts = String(oldDate).split("-");
+  // 다른 월/연도로 이동한 경우: 현재 달력에 없으므로 모달 열지 않음
+  // (6/30으로 이동 시 "30"만 추출 → 7/30 모달 잘못 열리는 버그 방지)
+  if (parts.length === 3 &&
+      (parseInt(parts[0], 10) !== serverData.year || parseInt(parts[1], 10) !== serverData.month)) return;
+  let d = parts.length >= 3 ? parseInt(parts[2], 10) : "pending";
   let data = d === "pending" ? serverData.pendingItems : serverData.monthData[d] || [];
   if (data && data.length > 0) showModal(d);
 }
