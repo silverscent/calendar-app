@@ -5124,6 +5124,20 @@
       </div>
     </div>
 
+    <!-- 관리자 패널 필터 컨트롤 컴팩트 스타일 -->
+    <style>
+      #masterDashboardModal select.db-input,
+      #masterDashboardModal select[id^="log"],
+      #masterDashboardModal select[id^="db"],
+      #masterDashboardModal input[id^="log"],
+      #masterDashboardModal input[id^="db"] {
+        padding: 5px 8px !important;
+        font-size: 0.82em !important;
+        border-radius: 8px !important;
+        height: auto !important;
+      }
+    </style>
+
     <div
       id="masterDashboardModal"
       style="
@@ -5491,40 +5505,14 @@
               <option value="GUEST">👤 손님</option>
               <option value="LOGOUT">🚪 로그아웃</option>
             </select>
-            <input
-              type="date"
-              id="logConnStart"
-              class="db-input"
-              title="시작일"
-              style="
-                width: auto;
-                padding: 9px;
-                border-radius: 10px;
-                background: var(--bg-color);
-                color: var(--text-main);
-                border: 1px solid var(--border-color);
-                font-weight: bold;
-              "
-              onchange="
-                connLogCurrentPage = 1;
-                refreshConnLogs();
-              "
-            />
-            <input
-              type="date"
-              id="logConnEnd"
-              class="db-input"
-              title="종료일"
-              style="
-                width: auto;
-                padding: 9px;
-                border-radius: 10px;
-                background: var(--bg-color);
-                color: var(--text-main);
-                border: 1px solid var(--border-color);
-                font-weight: bold;
-              "
-              onchange="
+            <div style="display:flex;align-items:center;gap:4px;">
+              <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">시작일</label>
+              <input type="date" id="logConnStart" class="db-input" style="width:auto;padding:5px 8px;border-radius:8px;background:var(--bg-color);color:var(--text-main);border:1px solid var(--border-color);font-size:0.82em;" onchange="connLogCurrentPage=1;refreshConnLogs();" />
+            </div>
+            <span style="color:var(--text-sub);font-size:0.85em;">~</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">종료일</label>
+              <input type="date" id="logConnEnd" class="db-input" style="width:auto;padding:5px 8px;border-radius:8px;background:var(--bg-color);color:var(--text-main);border:1px solid var(--border-color);font-size:0.82em;" onchange="
                 connLogCurrentPage = 1;
                 refreshConnLogs();
               "
@@ -5711,37 +5699,15 @@
               <option value="100">100줄씩 보기</option>
             </select>
 
-            <input
-              type="date"
-              id="logStartDate"
-              class="db-input"
-              style="
-                width: auto;
-                padding: 10px 14px;
-                background: var(--bg-color);
-                border: 1px solid var(--border-color);
-                border-radius: 10px;
-                color: var(--text-main);
-                font-weight: bold;
-                box-sizing: border-box;
-              "
-            />
-            <span style="color: var(--text-main); font-weight: 900">~</span>
-            <input
-              type="date"
-              id="logEndDate"
-              class="db-input"
-              style="
-                width: auto;
-                padding: 10px 14px;
-                background: var(--bg-color);
-                border: 1px solid var(--border-color);
-                border-radius: 10px;
-                color: var(--text-main);
-                font-weight: bold;
-                box-sizing: border-box;
-              "
-            />
+            <div style="display:flex;align-items:center;gap:4px;">
+              <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">시작일</label>
+              <input type="date" id="logStartDate" class="db-input" style="width:auto;padding:5px 8px;background:var(--bg-color);border:1px solid var(--border-color);border-radius:8px;color:var(--text-main);font-size:0.82em;box-sizing:border-box;" />
+            </div>
+            <span style="color:var(--text-sub);font-size:0.85em;">~</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">종료일</label>
+              <input type="date" id="logEndDate" class="db-input" style="width:auto;padding:5px 8px;background:var(--bg-color);border:1px solid var(--border-color);border-radius:8px;color:var(--text-main);font-size:0.82em;box-sizing:border-box;" />
+            </div>
 
             <input
               type="text"
