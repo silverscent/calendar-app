@@ -720,14 +720,15 @@ function toggleMultiMode() {
   document.querySelectorAll(".item-tag, .pending-item").forEach((el) => el.classList.remove("multi-selected"));
   const btn = document.getElementById("multiBtn");
   const bar = document.getElementById("multiActionBar");
+  const pcBtn = document.getElementById("pcMultiBtn");
   if (isMultiMode) {
-    btn.innerText = "❌ 취소";
-    btn.classList.add("active");
+    if (btn) { btn.innerText = "❌ 취소"; btn.classList.add("active"); }
+    if (pcBtn) { pcBtn.innerText = "❌ 다중선택 취소"; pcBtn.style.color = "#ff3b30"; pcBtn.style.fontWeight = "900"; }
     bar.style.display = "flex";
     document.getElementById("selCount").innerText = "0";
   } else {
-    btn.innerText = "☑️ 다중 선택";
-    btn.classList.remove("active");
+    if (btn) { btn.innerText = "☑️ 다중 선택"; btn.classList.remove("active"); }
+    if (pcBtn) { pcBtn.innerText = "☑️ 다중 선택"; pcBtn.style.color = ""; pcBtn.style.fontWeight = ""; }
     bar.style.display = "none";
   }
 }
@@ -4541,7 +4542,7 @@ function renderPcLeftbar() {
     ${admin ? `<button class="pclb-item pclb-ai-btn" onclick="openAiQuery()">🤖 AI 질의</button>` : ""}
     <button class="pclb-item" onclick="openDashboard()">📊 통계 대시보드</button>
     <button class="pclb-item" onclick="showLastOcrImage()">🖼️ OCR</button>
-    <button class="pclb-item" onclick="toggleMultiMode()">☑️ 다중 선택</button>
+    <button class="pclb-item" id="pcMultiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
     <button class="pclb-item" onclick="navMonth(0)">🔄 새로고침</button>
 
     <div class="pclb-sec">계정 / 설정</div>
@@ -4568,6 +4569,13 @@ function renderPcLeftbar() {
       inp.focus();
       if (_selS !== null) try { inp.setSelectionRange(_selS, _selE); } catch (_) {}
     }
+  }
+  // 재빌드 후 다중선택 버튼 상태 복원
+  const _pcMultiBtn = document.getElementById("pcMultiBtn");
+  if (_pcMultiBtn && isMultiMode) {
+    _pcMultiBtn.innerText = "❌ 다중선택 취소";
+    _pcMultiBtn.style.color = "#ff3b30";
+    _pcMultiBtn.style.fontWeight = "900";
   }
 }
 
