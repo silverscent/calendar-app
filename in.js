@@ -1831,20 +1831,19 @@ function locateOcrImage(idx, field) {
     y = Math.max(-lim, Math.min(y, lim));
   } else y = 0;
   ocrTransform.y = y;
-  // 가로: 탭한 열의 X로 중앙 정렬. 그 열 좌표 없으면 좌/우 영역 대표값으로 폴백
+  // 가로: bl/invoice 필드만 해당 앵커로 팬. 나머지(pal, eta, inDate 등)는 X 유지
+  // — cx.pal이 없어서 pal 클릭 시 B/L 위치로 점프하던 버그 수정
   const cx = r.cx || {};
-  let ix = field && typeof cx[field] === "number" ? cx[field] : null;
-  if (ix == null) {
-    if (field && OCR_LEFT_COLS.has(field)) ix = typeof cx.bl === "number" ? cx.bl : cx.invoice;
-    else ix = typeof cx.invoice === "number" ? cx.invoice : cx.bl;
-  }
+  let ix = null;
+  if (field === "bl")      ix = typeof cx.bl      === "number" ? cx.bl      : (typeof cx.invoice === "number" ? cx.invoice : null);
+  else if (field === "invoice") ix = typeof cx.invoice === "number" ? cx.invoice : (typeof cx.bl === "number" ? cx.bl : null);
+  // 그 외 필드(pal, eta, inDate, fwd, sType, etc): ix = null → X 이동 없음
   if (typeof ix === "number" && img.naturalWidth && dispW > paneW) {
     const fx = Math.max(0, Math.min(ix / img.naturalWidth, 1));
     const lim = (dispW - paneW) / 2;
     ocrTransform.x = Math.max(-lim, Math.min(dispW * (0.5 - fx), lim));
-  } else {
-    ocrTransform.x = dispW > paneW ? (dispW - paneW) / 2 : 0; // 좌표 없으면 좌측 정렬(기존)
   }
+  // ix 없으면 현재 X 위치 유지 (기존 좌측 정렬 강제 제거)
   img.style.transition = "transform 0.3s ease";
   applyOcrTransform();
   if (_ocrBakeTimer) clearTimeout(_ocrBakeTimer);
