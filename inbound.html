@@ -5497,11 +5497,13 @@
               <option value="GUEST">👤 손님</option>
               <option value="LOGOUT">🚪 로그아웃</option>
             </select>
-            <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">시작일</label>
-            <input type="date" id="logConnStart" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();" />
-            <span style="color:var(--text-sub);">~</span>
-            <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">종료일</label>
-            <input type="date" id="logConnEnd" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();" />
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;flex-wrap:nowrap;">
+              <span style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">시작일</span>
+              <input type="date" id="logConnStart" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();" />
+              <span style="color:var(--text-sub);">~</span>
+              <span style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">종료일</span>
+              <input type="date" id="logConnEnd" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();" />
+            </div>
             <select id="logConnLimit" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();">
               <option value="50">50줄</option>
               <option value="100" selected>100줄</option>
@@ -5608,11 +5610,13 @@
               <option value="50" selected>50줄</option>
               <option value="100">100줄</option>
             </select>
-            <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">시작일</label>
-            <input type="date" id="logStartDate" class="db-input" />
-            <span style="color:var(--text-sub);">~</span>
-            <label style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">종료일</label>
-            <input type="date" id="logEndDate" class="db-input" />
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;flex-wrap:nowrap;">
+              <span style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">시작일</span>
+              <input type="date" id="logStartDate" class="db-input" />
+              <span style="color:var(--text-sub);">~</span>
+              <span style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">종료일</span>
+              <input type="date" id="logEndDate" class="db-input" />
+            </div>
             <input type="text" id="logKeyword" placeholder="🔍 검색" class="db-input" style="flex:1;min-width:100px;" onkeydown="if(event.key==='Enter'){logCurrentPage=1;refreshAuditLogs();}" />
             <button onclick="logCurrentPage=1;refreshAuditLogs();" style="background:#ff9f0a;color:#fff;border:none;border-radius:8px;padding:5px 12px;font-weight:900;cursor:pointer;white-space:nowrap;font-size:0.82em;">검색</button>
             <button onclick="document.getElementById('logStartDate').value='';document.getElementById('logEndDate').value='';document.getElementById('logKeyword').value='';logCurrentPage=1;refreshAuditLogs();" style="background:var(--card-bg);color:var(--text-main);border:1px solid var(--border-color);border-radius:8px;padding:5px 10px;font-weight:900;cursor:pointer;white-space:nowrap;font-size:0.82em;">초기화</button>
