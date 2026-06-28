@@ -501,6 +501,14 @@
       .today-cell .date-num {
         font-weight: 900;
       }
+      /* 달력 컨테이너 border-radius:16px + overflow:hidden이 마지막 행 모서리 셀의
+         today 테두리를 잘라내는 문제 수정 — 해당 모서리 radius를 컨테이너와 맞춤 */
+      #calendarGrid > .grid-row:last-child > .day-cell:first-child.today-cell {
+        border-bottom-left-radius: 15px;
+      }
+      #calendarGrid > .grid-row:last-child > .day-cell:last-child.today-cell {
+        border-bottom-right-radius: 15px;
+      }
 
       .item-tag {
         display: flex;
