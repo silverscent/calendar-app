@@ -27,6 +27,25 @@ const mysql = require("mysql2/promise");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 
+// 📲 달력 변경 텔레그램 알림 — fire-and-forget (응답 블로킹 없음)
+// 본인이 직접 한 변경은 알림 제외: TELEGRAM_OWNER_ID 환경변수에 본인 admin_id 설정
+function notifyCalendarChange(description, byAdmin) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId   = process.env.TELEGRAM_CHAT_ID;
+  if (!botToken || !chatId) return;
+  // 본인 변경 제외 (TELEGRAM_OWNER_ID 미설정 시 전체 알림)
+  const ownerId = process.env.TELEGRAM_OWNER_ID || "";
+  if (ownerId && String(byAdmin || "").toLowerCase() === ownerId.toLowerCase()) return;
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  const ts = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+  const text = `📅 [달력 변경] ${ts}\n👤 ${byAdmin || "알수없음"}\n${description}`;
+  fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  }).catch(() => {}); // 실패해도 무시
+}
+
 const pool = mysql.createPool({
   uri: process.env.DATABASE_URL,
   connectionLimit: 3, // TiDB 무료 티어 연결 한도(25) 초과 방지
@@ -1409,6 +1428,7 @@ module.exports = async function (req, res) {
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_STATUS', ?)",
             [currentAdmin, `[출고 상태] ${targetName} (${targetDate || "미정"}) ➡️ ${statName} (PL:${targetPal || 0}, BOX:${targetBox || 0})`],
           );
+          notifyCalendarChange(`[출고 상태] ${targetName} (${targetDate || "미정"}) ➡️ ${statName}`, currentAdmin);
         } else if (action === "DELETE") {
           if (data?.id) {
             await pool.query(`DELETE FROM outbound WHERE id = ?`, [data.id]);
@@ -1422,6 +1442,7 @@ module.exports = async function (req, res) {
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_DELETE', ?)",
             [currentAdmin, `[출고 삭제] ${targetName} (${targetDate || "미정"}, PL:${targetPal || 0}, BOX:${targetBox || 0}) 파기`],
           );
+          notifyCalendarChange(`[출고 삭제] ${targetName} (${targetDate || "미정"}) 파기`, currentAdmin);
         } else if (action === "EDIT") {
           if (data?.id) {
             await pool.query(
@@ -1456,6 +1477,7 @@ module.exports = async function (req, res) {
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
             [currentAdmin, `[출고 수정] ${targetName} (${detailStr})`],
           );
+          notifyCalendarChange(`[출고 수정] ${targetName} (${detailStr})`, currentAdmin);
         } else if (action === "ADD_QTY") {
           // 👈 🚨 여기에 이 블록을 통째로 추가하세요!
           // [출고 수량추가] 버튼 클릭 시 DB 원본에 합산 및 비고(etc) 업데이트
@@ -1502,6 +1524,7 @@ module.exports = async function (req, res) {
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
               [currentAdmin, `[출고 수량추가] ${targetName} (+PL:${addPal}, +BOX:${addBox})`],
             );
+            notifyCalendarChange(`[출고 수량추가] ${targetName} (+PL:${addPal}, +BOX:${addBox})`, currentAdmin);
           }
         } else if (action === "ADD") {
           let reqComp = (data?.newComp || data?.company || data?.comp || "").trim();
@@ -1529,6 +1552,7 @@ module.exports = async function (req, res) {
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
               [currentAdmin, `[출고 병합] ${reqComp} (${reqDateOut || "미정"}) ➡️ 덮어쓰기 완료 (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`],
             );
+            notifyCalendarChange(`[출고 병합] ${reqComp} (${reqDateOut || "미정"})`, currentAdmin);
           } else {
             await pool.query(
               `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`,
@@ -1538,6 +1562,7 @@ module.exports = async function (req, res) {
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)",
               [currentAdmin, `[출고 등록] ${reqComp} (${reqDateOut || "미정"}) 신규 추가 (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`],
             );
+            notifyCalendarChange(`[출고 등록] ${reqComp} (${reqDateOut || "미정"}) PL:${reqPalOut || 0}`, currentAdmin);
           }
         } else if (action === "UPDATE_ORDER" && data?.dailyOrders) {
           let moveCount = 0;
@@ -1575,6 +1600,7 @@ module.exports = async function (req, res) {
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_DEL', ?)",
             [currentAdmin, `[출고 다중삭제] ${data.items.length}건 일괄 파기`],
           );
+          notifyCalendarChange(`[출고 다중삭제] ${data.items.length}건 일괄 파기`, currentAdmin);
         } else if ((action === "MULTI_DONE" || action === "MULTI_UNDO_DONE") && data?.items) {
           const isDoneVal = action === "MULTI_DONE" ? 1 : 0;
           const statName = action === "MULTI_DONE" ? "✅ 완료" : "⏳ 대기(취소)";
@@ -1593,6 +1619,7 @@ module.exports = async function (req, res) {
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_STAT', ?)",
             [currentAdmin, `[출고 다중상태] ${data.items.length}건 ➡️ ${statName} 처리`],
           );
+          notifyCalendarChange(`[출고 다중상태] ${data.items.length}건 ➡️ ${statName}`, currentAdmin);
         }
         return res.status(200).json({ success: true, msg: "작업 완료" });
       }
@@ -2227,6 +2254,7 @@ ${JSON.stringify(rows, null, 2)}
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_STATUS', ?)",
             [currentAdmin, `[입고 상태] ${targetBL} (${data?.oldDate || "미정"}) ➡️ ${statName}`],
           );
+          notifyCalendarChange(`[입고 상태] ${targetBL} (${data?.oldDate || "미정"}) ➡️ ${statName}`, currentAdmin);
         } else if (action === "DELETE") {
           if (data?.id) await pool.query(`DELETE FROM inbound WHERE id = ?`, [data.id]);
           else
@@ -2238,6 +2266,7 @@ ${JSON.stringify(rows, null, 2)}
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_DELETE', ?)",
             [currentAdmin, `[입고 삭제] ${targetBL} (${data?.oldDate || "미정"}) 파기`],
           );
+          notifyCalendarChange(`[입고 삭제] ${targetBL} (${data?.oldDate || "미정"}) 파기`, currentAdmin);
         } else if (action === "EDIT") {
           if (data?.id) {
             await pool.query(
@@ -2284,6 +2313,7 @@ ${JSON.stringify(rows, null, 2)}
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
             [currentAdmin, `[입고 수정] ${targetBL} (${changes.join(", ")})`],
           );
+          notifyCalendarChange(`[입고 수정] ${targetBL} (${changes.join(", ")})`, currentAdmin);
         } else if (action === "ADD") {
           let reqBl = (data?.newBL || data?.bl || data?.newComp || data?.company || data?.bl_number || "").trim();
           let reqDate =
@@ -2320,6 +2350,7 @@ ${JSON.stringify(rows, null, 2)}
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
               [currentAdmin, `[입고 병합] ${reqBl} (${reqDate || "미정"}) ➡️ 덮어쓰기 완료 (PL:${reqPal || 0})`],
             );
+            notifyCalendarChange(`[입고 병합] ${reqBl} (${reqDate || "미정"})`, currentAdmin);
           } else {
             await pool.query(
               `INSERT INTO inbound (bl_number, pallets, receive_date, status, remarks, s_type, fwd, invoice, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, 1)`,
@@ -2329,6 +2360,7 @@ ${JSON.stringify(rows, null, 2)}
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)",
               [currentAdmin, `[입고 등록] ${reqBl} (${reqDate || "미정"}) 신규 추가 (PL:${reqPal || 0})`],
             );
+            notifyCalendarChange(`[입고 등록] ${reqBl} (${reqDate || "미정"}) PL:${reqPal || 0}`, currentAdmin);
           }
         } else if (action === "UPDATE_ORDER" && data?.dailyOrders) {
           let moveCount = 0;
@@ -2361,6 +2393,7 @@ ${JSON.stringify(rows, null, 2)}
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_DEL', ?)",
             [currentAdmin, `[입고 다중삭제] ${data.items.length}건 일괄 파기`],
           );
+          notifyCalendarChange(`[입고 다중삭제] ${data.items.length}건 일괄 파기`, currentAdmin);
         } else if ((action === "MULTI_DONE" || action === "MULTI_UNDO_DONE") && data?.items) {
           const statusVal = action === "MULTI_DONE" ? "완료" : "입고대기";
           const statName = action === "MULTI_DONE" ? "✅ 완료" : "⏳ 대기(취소)";
@@ -2377,6 +2410,7 @@ ${JSON.stringify(rows, null, 2)}
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_MULTI_STAT', ?)",
             [currentAdmin, `[입고 다중상태] ${data.items.length}건 ➡️ ${statName} 처리`],
           );
+          notifyCalendarChange(`[입고 다중상태] ${data.items.length}건 ➡️ ${statName}`, currentAdmin);
         }
         return res.status(200).json({ success: true, msg: "작업 완료" });
       }
