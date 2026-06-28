@@ -290,7 +290,7 @@ module.exports = async function (req, res) {
 
       // 🚨 변수 구조 분해
       const { domain, action, data, keyword, type, rowId, year, month, id, admin_id } = payload;
-      const currentAdmin = admin_id || "system";
+      let currentAdmin = admin_id || "system"; // secureActions 토큰 검증 후 실제 admin_id로 갱신
 
       // 관리자 인증 필요 액션 (Set → O(1) 조회)
       const secureActions = new Set([
@@ -349,6 +349,7 @@ module.exports = async function (req, res) {
               .json({ success: false, forceLogout: true, msg: "세션이 만료되었습니다. 다시 로그인하세요." });
           }
           effectiveAdminId = tokenAdmin;
+          currentAdmin = tokenAdmin; // 세션 토큰에서 검증된 실제 admin_id로 덮어씀
         } else {
           return res
             .status(200)
