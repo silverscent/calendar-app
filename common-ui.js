@@ -70,7 +70,7 @@ function _buildOutTable(rows, withTypeBadge) {
       <td><input type="text" id="db-o-comp-${r.id}" value="${_esc(r.company||"")}" class="db-input"></td>
       <td><input type="number" id="db-o-pal-${r.id}" value="${r.pal||0}" class="db-input"></td>
       <td><input type="number" id="db-o-box-${r.id}" value="${r.box||0}" class="db-input"></td>
-      <td style="vertical-align:middle;">${_dbDateBadge(r.outbound_date)}<br><input type="text" id="db-o-date-${r.id}" value="${r.outbound_date||""}" class="db-input" style="margin-top:3px;"></td>
+      <td><input type="text" id="db-o-date-${r.id}" value="${r.outbound_date||""}" class="db-input"></td>
       <td><input type="text" id="db-o-etc-${r.id}" value="${_esc(r.etc||"")}" class="db-input"></td>
       <td><input type="text" id="db-o-cre-${r.id}" value="${r.created_at||""}" class="db-input"></td>
       <td><input type="number" id="db-o-sort-${r.id}" value="${r.sort_idx||0}" class="db-input"></td>
@@ -114,8 +114,8 @@ function _buildInTable(rows, withTypeBadge) {
       <td style='color:var(--text-sub);font-weight:bold;'>${r.id}</td>
       <td><input type="text" id="db-i-bl-${r.id}" value="${_esc(r.bl_number||"")}" class="db-input"></td>
       <td><input type="number" id="db-i-pal-${r.id}" value="${r.pallets||0}" class="db-input"></td>
-      <td style="vertical-align:middle;">${_dbDateBadge(r.eta)}<br><input type="text" id="db-i-eta-${r.id}" value="${r.eta||""}" class="db-input" style="margin-top:3px;"></td>
-      <td style="vertical-align:middle;">${_dbDateBadge(r.receive_date)}<br><input type="text" id="db-i-date-${r.id}" value="${r.receive_date||""}" class="db-input" style="margin-top:3px;"></td>
+      <td><input type="text" id="db-i-eta-${r.id}" value="${r.eta||""}" class="db-input"></td>
+      <td><input type="text" id="db-i-date-${r.id}" value="${r.receive_date||""}" class="db-input"></td>
       <td><input type="text" id="db-i-fwd-${r.id}" value="${_esc(r.fwd||"")}" class="db-input"></td>
       <td><input type="text" id="db-i-stype-${r.id}" value="${_esc(r.s_type||"")}" class="db-input"></td>
       <td><input type="text" id="db-i-inv-${r.id}" value="${_esc(r.invoice||"")}" class="db-input"></td>
