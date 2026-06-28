@@ -1989,17 +1989,23 @@ function updateLocalState(action, payload, idx) {
           payload.oldBlockEnd && payload.oldBlockEnd !== "null" && payload.oldBlockEnd !== ""
             ? new Date(payload.oldBlockEnd).getDate()
             : sD;
+        // TASK 블록: pal/box/isDone 달라도 company명 기준으로 제거
+        // (ADD_QTY·완료 혼재 시 일부 날 유령 아이템 남는 버그 방지)
+        const _isTaskBlock = (payload.oldComp || "").toUpperCase().startsWith("[TASK]") ||
+          /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName((payload.oldComp || "").replace(/\[TASK\]/gi, "").trim()));
         for (let d = sD; d <= eD; d++) {
           let targetArr = serverData.monthData[d];
           if (targetArr) {
-            let matchIdx = targetArr.findIndex(
-              (it) =>
-                it.company === payload.oldComp &&
-                norm(it.pal) === norm(payload.oldPal) &&
-                norm(it.box) === norm(payload.oldBox) &&
-                (it.isDone === true || String(it.isDone) === "true") ===
-                  (payload.oldDone === true || String(payload.oldDone) === "true"),
-            );
+            let matchIdx = _isTaskBlock
+              ? targetArr.findIndex((it) => getMatchKey(it) === getMatchKey({ company: payload.oldComp, pal: "", box: "" }))
+              : targetArr.findIndex(
+                  (it) =>
+                    it.company === payload.oldComp &&
+                    norm(it.pal) === norm(payload.oldPal) &&
+                    norm(it.box) === norm(payload.oldBox) &&
+                    (it.isDone === true || String(it.isDone) === "true") ===
+                      (payload.oldDone === true || String(payload.oldDone) === "true"),
+                );
             if (matchIdx !== -1) targetArr.splice(matchIdx, 1);
           }
         }

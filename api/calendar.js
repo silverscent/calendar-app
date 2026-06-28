@@ -1463,11 +1463,19 @@ module.exports = async function (req, res) {
         const dates     = _dateRange(bStart, bEnd);
         if (!reqComp || dates.length === 0)
           return res.status(200).json({ success: false, msg: "잘못된 블록 범위" });
-        for (const d of dates)
-          await pool.query(
-            `INSERT INTO outbound (company,pal,box,outbound_date,isDone,etc) VALUES (?,?,?,?,0,?)`,
-            [reqComp, reqPalOut, reqBoxOut, d, reqEtcOut],
+        for (const d of dates) {
+          const [ex] = await pool.query(
+            `SELECT id FROM outbound WHERE company=? AND outbound_date=? LIMIT 1`,
+            [reqComp, d],
           );
+          if (ex.length > 0)
+            await pool.query(`UPDATE outbound SET pal=?,box=?,etc=? WHERE id=?`, [reqPalOut, reqBoxOut, reqEtcOut, ex[0].id]);
+          else
+            await pool.query(
+              `INSERT INTO outbound (company,pal,box,outbound_date,isDone,etc) VALUES (?,?,?,?,0,?)`,
+              [reqComp, reqPalOut, reqBoxOut, d, reqEtcOut],
+            );
+        }
         const label = _blockLabel(bStart, bEnd);
         const cleanComp = reqComp.replace(/\[TASK\]/gi, "").trim();
         const desc = `[출고 등록] ${cleanComp} (${label}) ${dates.length}일 신규 추가 (PL:${reqPalOut||0}, BOX:${reqBoxOut||0})`;
