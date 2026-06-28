@@ -30,7 +30,7 @@ const crypto = require("crypto");
 // 📲 달력 변경 텔레그램 알림 — fire-and-forget (응답 블로킹 없음)
 // 1:1 DM 전송: ADMIN_TELEGRAM_USER_ID = 봇과 1:1 대화 chat_id (사용자 개인 ID)
 // 본인이 직접 한 변경은 알림 제외: TELEGRAM_OWNER_ID 환경변수에 본인 admin_id 설정
-function notifyCalendarChange(description, byAdmin) {
+async function notifyCalendarChange(description, byAdmin) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   // 1:1 DM: ADMIN_TELEGRAM_USER_ID (그룹챗인 TELEGRAM_CHAT_ID 사용 안 함)
   const chatId   = process.env.ADMIN_TELEGRAM_USER_ID;
@@ -38,6 +38,11 @@ function notifyCalendarChange(description, byAdmin) {
   // 본인 변경 제외 (TELEGRAM_OWNER_ID 미설정 시 전체 알림)
   const ownerId = process.env.TELEGRAM_OWNER_ID || "";
   if (ownerId && String(byAdmin || "").toLowerCase() === ownerId.toLowerCase()) return;
+  // CALENDAR_NOTIFY 설정 확인 (OFF면 알림 차단)
+  try {
+    const [nRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'CALENDAR_NOTIFY'`);
+    if (nRows.length > 0 && nRows[0].setting_value === "OFF") return;
+  } catch (_) {}
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
   const ts = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
   const text = `📅 [달력 변경] ${ts}\n👤 ${byAdmin || "알수없음"}\n${description}`;
@@ -324,6 +329,8 @@ module.exports = async function (req, res) {
         "GET_ADMIN_CONN_LOGS",
         "SEARCH_SCHEDULES",
         "SAVE_COMP_INFO_DB",
+        "GET_CAL_NOTIFY",
+        "SET_CAL_NOTIFY",
         "SAVE_GLOBAL_COLOR",
         "SAVE_OCR_INFO",
         "SAVE_OCR_FILTERS",
@@ -1160,9 +1167,11 @@ module.exports = async function (req, res) {
               [ip, user.admin_id, connInfo],
             );
             const session_token = generateToken(user.admin_id);
+            const isOwner = !!(process.env.TELEGRAM_OWNER_ID &&
+              user.admin_id.toLowerCase() === process.env.TELEGRAM_OWNER_ID.toLowerCase());
             return res
               .status(200)
-              .json({ success: true, admin_id: user.admin_id, name: user.admin_name, role: user.role, session_token });
+              .json({ success: true, admin_id: user.admin_id, name: user.admin_name, role: user.role, session_token, isOwner });
           } else {
             const connInfo = `[비밀번호 틀림] IP: ${ip} | ${connInfoBase}`;
             await pool.query(
@@ -1361,6 +1370,14 @@ module.exports = async function (req, res) {
           [currentAdmin, `[업체정보 변경] ${compDesc}`],
         );
         notifyCalendarChange(`[업체정보 변경] ${compDesc}`, currentAdmin);
+        return res.status(200).json({ success: true });
+      } else if (action === "GET_CAL_NOTIFY") {
+        const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'CALENDAR_NOTIFY'`);
+        const enabled = rows.length === 0 || rows[0].setting_value !== "OFF";
+        return res.status(200).json({ success: true, enabled });
+      } else if (action === "SET_CAL_NOTIFY") {
+        const val = data?.enabled === false ? "OFF" : "ON";
+        await pool.query(`INSERT INTO system_settings (setting_key,setting_value) VALUES ('CALENDAR_NOTIFY',?) ON DUPLICATE KEY UPDATE setting_value=?`, [val, val]);
         return res.status(200).json({ success: true });
       } else if (action === "GET_OCR_FILTERS") {
         const [rows] = await pool.query(

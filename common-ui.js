@@ -703,6 +703,16 @@ function toggleAdmin() {
     // 모달 열 때마다 마스터 권한 버튼 재확인 (첫 로그인 직후 표시 누락 방지)
     if (typeof checkMasterAuthButtonVisibility === "function") checkMasterAuthButtonVisibility();
 
+    // 오너 전용: 달력 변경 알림 토글 표시 + 현재 상태 로드
+    const _calRow = document.getElementById("calNotifyRow");
+    if (_calRow && isMasterUser) {
+      _calRow.style.display = "flex";
+      apiCall({ source: "vercel", action: "GET_CAL_NOTIFY" }).then((res) => {
+        const tog = document.getElementById("toggleCalNotify");
+        if (tog) tog.checked = res && res.enabled !== false; // 기본 ON
+      });
+    }
+
     document.getElementById("myInfoModal").style.display = "flex";
     return;
   }
@@ -1445,6 +1455,19 @@ function _reopenDetailAfter(oldDate) {
   let d = parts.length >= 3 ? parseInt(parts[2], 10) : "pending";
   let data = d === "pending" ? serverData.pendingItems : serverData.monthData[d] || [];
   if (data && data.length > 0) showModal(d);
+}
+
+// 📲 달력 변경 알림 ON/OFF 토글 (오너 전용)
+function handleCalNotifyToggle(checkbox) {
+  const enabled = checkbox.checked;
+  apiCall({ source: "vercel", action: "SET_CAL_NOTIFY", data: { enabled } }).then((res) => {
+    if (res && res.success) {
+      showToast(enabled ? "📲 달력 변경 알림 켜짐" : "🔕 달력 변경 알림 꺼짐", 2000);
+    } else {
+      checkbox.checked = !enabled; // 실패 시 롤백
+      showToast("⚠️ 설정 저장 실패", 2000);
+    }
+  });
 }
 
 function saveOcrFilterWordsToServer() {

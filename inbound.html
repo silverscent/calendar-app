@@ -4934,6 +4934,18 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
+
+          <!-- 오너 전용: 달력 변경 알림 ON/OFF -->
+          <div id="calNotifyRow" style="display:none; justify-content:space-between; align-items:center; padding:14px 16px; border-top:1px solid var(--border-color);">
+            <div>
+              <div style="font-size:1.05em; font-weight:800; color:var(--text-main)">📲 달력 변경 알림</div>
+              <div style="font-size:0.82em; color:var(--text-sub); margin-top:2px;">다른 관리자가 수정 시 텔레그램 1:1 알림</div>
+            </div>
+            <label class="ios-toggle">
+              <input type="checkbox" id="toggleCalNotify" onchange="handleCalNotifyToggle(this)" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
         </div>
 
         <div
