@@ -703,14 +703,15 @@ function toggleAdmin() {
     // 모달 열 때마다 마스터 권한 버튼 재확인 (첫 로그인 직후 표시 누락 방지)
     if (typeof checkMasterAuthButtonVisibility === "function") checkMasterAuthButtonVisibility();
 
-    // 오너 전용: 달력 변경 알림 토글 (서버 검증된 isOwner만 — 다른 관리자 불가)
-    const _isOwner = localStorage.getItem("isOwner") === "true" || sessionStorage.getItem("isOwner") === "true";
+    // 오너 전용: GET_CAL_NOTIFY가 isOwner:true 반환 시에만 토글 표시
     const _calRow = document.getElementById("calNotifyRow");
-    if (_calRow && _isOwner) {
-      _calRow.style.display = "flex";
+    if (_calRow) {
       apiCall({ source: "vercel", action: "GET_CAL_NOTIFY" }).then((res) => {
-        const tog = document.getElementById("toggleCalNotify");
-        if (tog) tog.checked = res && res.enabled !== false; // 기본 ON
+        if (res && res.isOwner) {
+          _calRow.style.display = "flex";
+          const tog = document.getElementById("toggleCalNotify");
+          if (tog) tog.checked = res.enabled !== false;
+        }
       });
     }
 

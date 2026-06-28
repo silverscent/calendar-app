@@ -1374,7 +1374,9 @@ module.exports = async function (req, res) {
       } else if (action === "GET_CAL_NOTIFY") {
         const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'CALENDAR_NOTIFY'`);
         const enabled = rows.length === 0 || rows[0].setting_value !== "OFF";
-        return res.status(200).json({ success: true, enabled });
+        const isOwner = !!(process.env.TELEGRAM_OWNER_ID &&
+          currentAdmin.toLowerCase() === process.env.TELEGRAM_OWNER_ID.toLowerCase());
+        return res.status(200).json({ success: true, enabled, isOwner });
       } else if (action === "SET_CAL_NOTIFY") {
         const val = data?.enabled === false ? "OFF" : "ON";
         await pool.query(`INSERT INTO system_settings (setting_key,setting_value) VALUES ('CALENDAR_NOTIFY',?) ON DUPLICATE KEY UPDATE setting_value=?`, [val, val]);
