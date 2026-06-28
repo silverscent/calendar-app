@@ -2855,6 +2855,7 @@ async function submitCMS(
     });
     let histStr = histArr.join(" ");
     payload.newEtc = histStr !== "" ? (cleanEtc !== "" ? cleanEtc + " " + histStr : histStr) : cleanEtc;
+    payload.oldEtc = etc || ""; // 비고 변경 전 값 — EDIT_BLOCK 로그에서 변경 내용 표시용
 
     if (tempEditColorObj && tempEditColorIdx !== null && !isTask) {
       let stdName = getFullName(rawComp);
@@ -3494,7 +3495,11 @@ async function openEditForm(
             <input type="text" id="edit-etc-${idx}" class="edit-input" value="${_esc(cleanEtc !== "undefined" ? cleanEtc : "")}">
             
             <div class="btn-row">
-              <button class="save-btn" onclick="submitCMS('EDIT', '${_argq(comp)}', '${dateStr}', ${idx}, ${isDone}, '${blockStartDateStr}', '${blockEndDateStr}')">💾 저장</button>
+              ${blockEndDateStr && blockEndDateStr !== "null" && blockEndDateStr !== "" && blockEndDateStr !== blockStartDateStr
+                ? `<button class="save-btn" style="flex:1;" onclick="submitCMS('EDIT','${_argq(comp)}','${dateStr}',${idx},${isDone},'','')">💾 이 날만</button>
+                   <button class="save-btn" style="flex:1; background:#27ae60;" onclick="submitCMS('EDIT','${_argq(comp)}','${dateStr}',${idx},${isDone},'${blockStartDateStr}','${blockEndDateStr}')">💾 전체 저장</button>`
+                : `<button class="save-btn" onclick="submitCMS('EDIT','${_argq(comp)}','${dateStr}',${idx},${isDone},'${blockStartDateStr}','${blockEndDateStr}')">💾 저장</button>`
+              }
               <button class="cancel-btn" onclick="closeEditForm('${day}', ${idx})">취소</button>
             </div>
             ${

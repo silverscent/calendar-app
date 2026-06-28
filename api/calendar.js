@@ -1502,7 +1502,15 @@ module.exports = async function (req, res) {
         const oldLabel  = _blockLabel(oldStart, oldEnd);
         const newLabel  = _blockLabel(newStart, newEnd);
         const rangeStr  = oldLabel === newLabel ? oldLabel : `${oldLabel}→${newLabel}`;
-        const desc = `[출고 수정] ${cleanComp} (${rangeStr}) (PL:${reqPalOut||0}, BOX:${reqBoxOut||0})`;
+        // 변경 내용 상세: 비고·수량 변경 시 표시
+        const changeDetails = [];
+        if ((data?.oldPal||"0") !== (reqPalOut||"0")) changeDetails.push(`PL:${data?.oldPal||0}→${reqPalOut||0}`);
+        if ((data?.oldBox||"0") !== (reqBoxOut||"0")) changeDetails.push(`BOX:${data?.oldBox||0}→${reqBoxOut||0}`);
+        const oldEtcClean = (data?.oldEtc||"").replace(/\[.*?\]/g,"").trim();
+        const newEtcClean = (reqEtcOut||"").replace(/\[.*?\]/g,"").trim();
+        if (oldEtcClean !== newEtcClean) changeDetails.push(`비고: "${oldEtcClean||"없음"}"→"${newEtcClean||"없음"}"`);
+        const changeStr = changeDetails.length > 0 ? ` (${changeDetails.join(", ")})` : "";
+        const desc = `[출고 수정] ${cleanComp} (${rangeStr})${changeStr}`;
         await pool.query("INSERT INTO admin_audit_logs (admin_id,action_type,description) VALUES (?,'CAL_EDIT',?)", [currentAdmin, desc]);
         notifyCalendarChange(desc, currentAdmin);
         return res.status(200).json({ success: true });
