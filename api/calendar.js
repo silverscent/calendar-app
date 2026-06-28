@@ -718,11 +718,15 @@ module.exports = async function (req, res) {
           }
           // 출고/입고 타입 필터 — description 접두어로 서버에서 필터링 (페이지네이션 정확도 보장)
           if (payload.typeFilter === "out") {
-            queryStr += " AND description LIKE '[출고%'";
-            countQueryStr += " AND description LIKE '[출고%'";
+            // 출고: 출고 관련 로그 + 업체정보(SYS_COMP) 포함
+            const _outCond = "(description LIKE '[출고%' OR action_type = 'SYS_COMP')";
+            queryStr += ` AND ${_outCond}`;
+            countQueryStr += ` AND ${_outCond}`;
           } else if (payload.typeFilter === "in") {
-            queryStr += " AND description LIKE '[입고%'";
-            countQueryStr += " AND description LIKE '[입고%'";
+            // 입고: 입고 관련 로그 + OCR 대조 확정(OCR_APPLY) 포함
+            const _inCond = "(description LIKE '[입고%' OR action_type = 'OCR_APPLY')";
+            queryStr += ` AND ${_inCond}`;
+            countQueryStr += ` AND ${_inCond}`;
           }
           if (keyword) {
             // 🚨 [패치] admin_id, description 뿐만 아니라 action_type(액션)까지 검색 대상에 포함!
