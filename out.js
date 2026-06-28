@@ -653,7 +653,8 @@ const getMatchKey = (item) => {
   let p = item.pal === "0" || !item.pal ? "" : String(item.pal).trim();
   let b = item.box === "0" || !item.box ? "" : String(item.box).trim();
 
-  if (isTask) return `T_${getFullName(clean)}_${p}_${b}`;
+  // TASK 바: 수량이 날짜별로 달라져도 같은 작업이면 연결 유지 (pal/box 제외)
+  if (isTask) return `T_${getFullName(clean)}`;
   return `O_${getFullName(clean)}_${p}_${b}`;
 };
 
