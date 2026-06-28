@@ -1292,12 +1292,58 @@ async function reactivateAdminAccount(id, name) {
   });
 }
 
+// 토스트 위로 쓸어올려 빠르게 닫기 — 1회만 바인딩
+function _initToastSwipe() {
+  const toast = document.getElementById("toast");
+  if (!toast || toast._swipeInit) return;
+  toast._swipeInit = true;
+  let startY = 0, dy = 0, dragging = false;
+
+  toast.addEventListener("touchstart", (e) => {
+    if (!toast.classList.contains("show")) return;
+    startY = e.touches[0].clientY;
+    dy = 0;
+    dragging = true;
+    toast.style.transition = "none"; // 손가락 추적 중 transition 비활성
+  }, { passive: true });
+
+  toast.addEventListener("touchmove", (e) => {
+    if (!dragging) return;
+    dy = e.touches[0].clientY - startY;
+    if (dy < 0) { // 위로만 추적
+      toast.style.transform = `translate3d(-50%, calc(20px + ${dy}px), 0) scale(1)`;
+      toast.style.opacity = String(Math.max(0, 1 + dy / 80));
+    }
+  }, { passive: true });
+
+  const release = () => {
+    if (!dragging) return;
+    dragging = false;
+    toast.style.transition = ""; // transition 복원
+    if (dy < -50) {
+      // 충분히 올림 → 즉시 닫기
+      toast.style.transform = "";
+      toast.style.opacity = "";
+      if (window.toastTimer) clearTimeout(window.toastTimer);
+      toast.className = toast.className.replace("show", "").trim();
+    } else {
+      // 덜 올림 → 제자리 복원
+      toast.style.transform = "";
+      toast.style.opacity = "";
+    }
+    dy = 0;
+  };
+  toast.addEventListener("touchend", release, { passive: true });
+  toast.addEventListener("touchcancel", release, { passive: true });
+}
+
 function showToast(msg, duration = 2500) {
   // 로딩성 지속 토스트("...중...", duration:0)는 동기화 글로우/로딩바로 대체되므로 생략.
   // "완료" 성공 결과 토스트는 표시(이전엔 함께 차단되어 저장/삭제 성공 피드백이 사라졌었음).
   if (msg.includes("중...")) return;
 
   const toast = document.getElementById("toast");
+  _initToastSwipe(); // swipe-up 제스처 1회 바인딩
   toast.innerText = msg;
   toast.className = "show";
   if (window.toastTimer) clearTimeout(window.toastTimer);
