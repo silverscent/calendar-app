@@ -5972,6 +5972,31 @@
         width: auto !important;
         flex: 1 1 100px !important;
       }
+      /* 필터 행 공통 스타일 */
+      .adm-filter-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .adm-filter-row:last-child { margin-bottom: 0; }
+      .adm-filter-btn {
+        padding: 5px 12px;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.82em;
+        font-weight: 900;
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      /* 시스템관리 모달 확대 방지 */
+      #masterDashboardModal {
+        touch-action: manipulation;
+        user-select: none;
+        -webkit-user-select: none;
+      }
     </style>
 
     <div
@@ -6309,85 +6334,32 @@
               검색창에 <b>ID나 GUEST/AUTO</b>를 넣어 거를 수 있습니다.
             </div>
           </div>
-          <div
-            style="
-              display: flex;
-              gap: 8px;
-              margin-bottom: 15px;
-              flex-wrap: wrap;
-              align-items: center;
-              box-sizing: border-box;
-            "
-          >
-            <select
-              id="logConnType"
-              class="db-input"
-              style="
-                width: auto;
-                padding: 10px;
-                border-radius: 10px;
-                font-weight: bold;
-                background: var(--bg-color);
-                color: var(--text-main);
-                border: 1px solid var(--border-color);
-              "
-              onchange="
-                connLogCurrentPage = 1;
-                refreshConnLogs();
-              "
-            >
-              <option value="">전체 타입</option>
-              <option value="LOGIN">🔑 로그인</option>
-              <option value="AUTO_LOGIN">⚡ 자동로그인</option>
-              <option value="GUEST">👤 손님</option>
-              <option value="LOGOUT">🚪 로그아웃</option>
-            </select>
-            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;flex-wrap:nowrap;">
-              <span style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">시작일</span>
-              <input type="date" id="logConnStart" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();" />
-              <span style="color:var(--text-sub);">~</span>
-              <span style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">종료일</span>
-              <input type="date" id="logConnEnd" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();" />
+          <div style="margin-bottom:15px;">
+            <div class="adm-filter-row">
+              <select id="logConnType" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();">
+                <option value="">전체 타입</option>
+                <option value="LOGIN">🔑 로그인</option>
+                <option value="AUTO_LOGIN">⚡ 자동로그인</option>
+                <option value="GUEST">👤 손님</option>
+                <option value="LOGOUT">🚪 로그아웃</option>
+              </select>
+              <select id="logConnLimit" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();">
+                <option value="50">50줄</option>
+                <option value="100" selected>100줄</option>
+                <option value="300">300줄</option>
+              </select>
+              <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;flex-wrap:nowrap;">
+                <span style="font-size:0.75em;color:var(--text-sub);">시작일</span>
+                <input type="date" id="logConnStart" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();" />
+                <span style="color:var(--text-sub);">~</span>
+                <span style="font-size:0.75em;color:var(--text-sub);">종료일</span>
+                <input type="date" id="logConnEnd" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();" />
+              </div>
             </div>
-            <select id="logConnLimit" class="db-input" onchange="connLogCurrentPage=1;refreshConnLogs();">
-              <option value="50">50줄</option>
-              <option value="100" selected>100줄</option>
-              <option value="300">300줄</option>
-            </select>
-            <input
-              type="text"
-              id="logConnKeyword"
-              placeholder="🔍 검색"
-              style="
-                flex: 1;
-                min-width: 80px;
-                box-sizing: border-box;
-              "
-              onkeydown="
-                if (event.key === 'Enter') {
-                  connLogCurrentPage = 1;
-                  refreshConnLogs();
-                }
-              "
-            />
-            <button
-              onclick="
-                connLogCurrentPage = 1;
-                refreshConnLogs();
-              "
-              style="
-                background: #0a84ff;
-                color: #fff;
-                border: none;
-                border-radius: 10px;
-                padding: 10px 16px;
-                font-weight: 900;
-                cursor: pointer;
-                white-space: nowrap;
-              "
-            >
-              조회
-            </button>
+            <div class="adm-filter-row">
+              <input type="text" id="logConnKeyword" placeholder="🔍 ID · IP · GUEST 검색" class="db-input" style="flex:1;min-width:120px;" onkeydown="if(event.key==='Enter'){connLogCurrentPage=1;refreshConnLogs();}" />
+              <button onclick="connLogCurrentPage=1;refreshConnLogs();" class="adm-filter-btn" style="background:#0a84ff;color:#fff;">조회</button>
+            </div>
           </div>
 
           <div
@@ -6439,47 +6411,41 @@
               <b>기간·키워드</b>로 검색해 "누가 무엇을 바꿨는지" 추적할 때 씁니다.
             </div>
           </div>
-          <div
-            style="
-              display: flex;
-              gap: 8px;
-              margin-bottom: 15px;
-              flex-wrap: wrap;
-              align-items: center;
-              box-sizing: border-box;
-            "
-          >
-            <select id="logTypeFilter" class="db-input" onchange="logCurrentPage=1;refreshAuditLogs();">
-              <option value="all">🔀 통합</option>
-              <option value="out" selected>📤 출고</option>
-              <option value="in">📥 입고</option>
-            </select>
-            <select id="logActGroup" class="db-input" onchange="logCurrentPage=1;refreshAuditLogs();">
-              <option value="">전체 활동</option>
-              <option value="ACCOUNT">👤 계정</option>
-              <option value="PASSWORD">🔑 비밀번호</option>
-              <option value="CALENDAR">📅 달력</option>
-              <option value="DB">🗄️ DB편집</option>
-              <option value="LOGIN">🔓 로그인</option>
-              <option value="OCR">🔤 OCR</option>
-              <option value="SETTINGS">🏢 업체정보</option>
-            </select>
-            <select id="logMasterLimit" class="db-input" onchange="logCurrentPage=1;refreshAuditLogs();">
-              <option value="20">20줄</option>
-              <option value="50" selected>50줄</option>
-              <option value="100">100줄</option>
-            </select>
-            <!-- 날짜 범위: nowrap 컨테이너로 시작일~종료일 항상 한줄 -->
-            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;flex-wrap:nowrap;">
-              <span style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">시작일</span>
-              <input type="date" id="logStartDate" class="db-input" />
-              <span style="color:var(--text-sub);">~</span>
-              <span style="font-size:0.75em;color:var(--text-sub);white-space:nowrap;">종료일</span>
-              <input type="date" id="logEndDate" class="db-input" />
+          <div style="margin-bottom:15px;">
+            <div class="adm-filter-row">
+              <select id="logTypeFilter" class="db-input" onchange="logCurrentPage=1;refreshAuditLogs();">
+                <option value="all">🔀 통합</option>
+                <option value="out" selected>📤 출고</option>
+                <option value="in">📥 입고</option>
+              </select>
+              <select id="logActGroup" class="db-input" onchange="logCurrentPage=1;refreshAuditLogs();">
+                <option value="">전체 활동</option>
+                <option value="ACCOUNT">👤 계정</option>
+                <option value="PASSWORD">🔑 비밀번호</option>
+                <option value="CALENDAR">📅 달력</option>
+                <option value="DB">🗄️ DB편집</option>
+                <option value="LOGIN">🔓 로그인</option>
+                <option value="OCR">🔤 OCR</option>
+                <option value="SETTINGS">🏢 업체정보</option>
+              </select>
+              <select id="logMasterLimit" class="db-input" onchange="logCurrentPage=1;refreshAuditLogs();">
+                <option value="20">20줄</option>
+                <option value="50" selected>50줄</option>
+                <option value="100">100줄</option>
+              </select>
+              <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;flex-wrap:nowrap;">
+                <span style="font-size:0.75em;color:var(--text-sub);">시작일</span>
+                <input type="date" id="logStartDate" class="db-input" />
+                <span style="color:var(--text-sub);">~</span>
+                <span style="font-size:0.75em;color:var(--text-sub);">종료일</span>
+                <input type="date" id="logEndDate" class="db-input" />
+              </div>
             </div>
-            <input type="text" id="logKeyword" placeholder="🔍 검색" class="db-input" style="flex:1;min-width:80px;" onkeydown="if(event.key==='Enter'){logCurrentPage=1;refreshAuditLogs();}" />
-            <button onclick="logCurrentPage=1;refreshAuditLogs();" style="background:#ff9f0a;color:#fff;border:none;border-radius:8px;padding:5px 12px;font-weight:900;cursor:pointer;white-space:nowrap;font-size:0.82em;">검색</button>
-            <button onclick="document.getElementById('logStartDate').value='';document.getElementById('logEndDate').value='';document.getElementById('logKeyword').value='';logCurrentPage=1;refreshAuditLogs();" style="background:var(--card-bg);color:var(--text-main);border:1px solid var(--border-color);border-radius:8px;padding:5px 10px;font-weight:900;cursor:pointer;white-space:nowrap;font-size:0.82em;">초기화</button>
+            <div class="adm-filter-row">
+              <input type="text" id="logKeyword" placeholder="🔍 ID · 액션 · 내용 검색" class="db-input" style="flex:1;min-width:120px;" onkeydown="if(event.key==='Enter'){logCurrentPage=1;refreshAuditLogs();}" />
+              <button onclick="logCurrentPage=1;refreshAuditLogs();" class="adm-filter-btn" style="background:#ff9f0a;color:#fff;">검색</button>
+              <button onclick="document.getElementById('logStartDate').value='';document.getElementById('logEndDate').value='';document.getElementById('logKeyword').value='';logCurrentPage=1;refreshAuditLogs();" class="adm-filter-btn" style="background:var(--card-bg);color:var(--text-main);border:1px solid var(--border-color);">초기화</button>
+            </div>
           </div>
 
           <div
