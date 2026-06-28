@@ -1803,3 +1803,53 @@ async function showIpInfo(ip) {
     _setup();
   }
 }());
+
+// ─────────────────────────────────────────────────────────────
+// 🔒 시스템관리 모달 pinch-to-zoom + 입력창 자동확대 완전 차단
+// ─────────────────────────────────────────────────────────────
+(function _initAdminModalZoomLock() {
+  const _vpMeta = () => document.querySelector('meta[name="viewport"]');
+
+  // viewport user-scalable=no 설정 (입력창 자동확대 + 핀치줌 차단)
+  function _lockVP() {
+    const m = _vpMeta();
+    if (!m) return;
+    if (!m._orig) m._orig = m.content;
+    let c = m.content
+      .replace(/,?\s*user-scalable=[^,]*/gi, '')
+      .replace(/,?\s*maximum-scale=[^,]*/gi, '');
+    m.content = c + ', user-scalable=no, maximum-scale=1.0';
+  }
+
+  function _unlockVP() {
+    const m = _vpMeta();
+    if (m && m._orig) m.content = m._orig;
+  }
+
+  function _blockPinch(e) {
+    if (e.touches && e.touches.length > 1) e.preventDefault();
+  }
+
+  const _setup = () => {
+    const modal = document.getElementById('masterDashboardModal');
+    if (!modal) return;
+
+    // MutationObserver로 modal transform 변화 감지 (열기/닫기)
+    new MutationObserver(() => {
+      const isOpen = modal.style.transform === 'translateX(-100%)';
+      if (isOpen) {
+        _lockVP();
+        modal.addEventListener('touchstart', _blockPinch, { passive: false });
+      } else {
+        _unlockVP();
+        modal.removeEventListener('touchstart', _blockPinch);
+      }
+    }).observe(modal, { attributes: true, attributeFilter: ['style'] });
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _setup);
+  } else {
+    _setup();
+  }
+}());
