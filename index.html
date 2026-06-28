@@ -6359,6 +6359,7 @@
             <div class="adm-filter-row">
               <input type="text" id="logConnKeyword" placeholder="🔍 ID · IP · GUEST 검색" class="db-input" style="flex:1;min-width:120px;" onkeydown="if(event.key==='Enter'){connLogCurrentPage=1;refreshConnLogs();}" />
               <button onclick="connLogCurrentPage=1;refreshConnLogs();" class="adm-filter-btn" style="background:#0a84ff;color:#fff;">조회</button>
+              <button onclick="document.getElementById('logConnType').value='';document.getElementById('logConnLimit').value='100';document.getElementById('logConnStart').value='';document.getElementById('logConnEnd').value='';document.getElementById('logConnKeyword').value='';connLogCurrentPage=1;refreshConnLogs();" class="adm-filter-btn" style="background:var(--card-bg);color:var(--text-main);border:1px solid var(--border-color);">초기화</button>
             </div>
           </div>
 
