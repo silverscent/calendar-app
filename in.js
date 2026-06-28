@@ -4419,6 +4419,11 @@ function renderPcLeftbar() {
   ensurePcLeftbar();
   const bar = document.getElementById("pcLeftbar");
   if (!bar) return;
+  // 재빌드 전 검색 입력창 상태 보존
+  const _prevKw  = document.getElementById("pcSearchKw")?.value ?? "";
+  const _focused = document.activeElement?.id === "pcSearchKw";
+  const _selS    = _focused ? (document.getElementById("pcSearchKw")?.selectionStart ?? null) : null;
+  const _selE    = _focused ? (document.getElementById("pcSearchKw")?.selectionEnd   ?? null) : null;
   const ym = `${serverData.year}.${String(serverData.month).padStart(2, "0")}`;
   const mn = document.getElementById("pcMiniNavLabel");
   if (mn) mn.textContent = ym; // 접힘 미니네비 라벨
@@ -4501,13 +4506,18 @@ function renderPcLeftbar() {
     <button class="pclb-off" onclick="togglePcDense()">🖥️ PC모드 끄기</button>
   `;
   // 사이드바 재렌더 시 진행 중인 검색어/결과 복원 (월 점프해도 목록 유지)
-  if (window._pcSearchKw) {
+  if (window._pcSearchKw || _prevKw) {
     const inp = document.getElementById("pcSearchKw");
     const box = document.getElementById("pcSearchResults");
-    if (inp) inp.value = window._pcSearchKw;
+    if (inp) inp.value = _prevKw || window._pcSearchKw || "";
     if (box && window._pcSearchHtml) {
       box.innerHTML = window._pcSearchHtml;
-      box.scrollTop = window._pcSearchScroll || 0; // 결과 스크롤 위치 복원
+      box.scrollTop = window._pcSearchScroll || 0;
+    }
+    // 포커스·커서 위치 복원 — 재빌드로 인한 포커스 소실 방지
+    if (_focused && inp) {
+      inp.focus();
+      if (_selS !== null) try { inp.setSelectionRange(_selS, _selE); } catch (_) {}
     }
   }
 }

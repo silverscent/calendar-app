@@ -1663,6 +1663,11 @@ function renderPcLeftbar() {
   ensurePcLeftbar();
   const bar = document.getElementById("pcLeftbar");
   if (!bar) return;
+  // 재빌드 전 검색 입력창 상태 보존 — innerHTML 교체로 포커스가 날아가는 문제 방지
+  const _prevKw  = document.getElementById("pcSearchKw")?.value ?? "";
+  const _focused = document.activeElement?.id === "pcSearchKw";
+  const _selS    = _focused ? (document.getElementById("pcSearchKw")?.selectionStart ?? null) : null;
+  const _selE    = _focused ? (document.getElementById("pcSearchKw")?.selectionEnd   ?? null) : null;
   const ym = `${serverData.year}.${String(serverData.month).padStart(2, "0")}`;
   const mn = document.getElementById("pcMiniNavLabel");
   if (mn) mn.textContent = ym;
@@ -1734,17 +1739,23 @@ function renderPcLeftbar() {
     <button class="pclb-off" onclick="togglePcDense()">🖥️ PC모드 끄기</button>
   `;
   // 사이드바 재렌더 시 진행 중인 검색어/기간/결과 복원 (월 점프해도 목록 유지)
-  if (window._pcSearchKw || window._pcSearchSd || window._pcSearchEd) {
+  if (window._pcSearchKw || window._pcSearchSd || window._pcSearchEd || _prevKw) {
     const inp = document.getElementById("pcSearchKw");
     const si = document.getElementById("pcSearchStart");
     const ei = document.getElementById("pcSearchEnd");
     const box = document.getElementById("pcSearchResults");
-    if (inp && window._pcSearchKw) inp.value = window._pcSearchKw;
+    // _prevKw 우선: innerHTML 교체 직전에 직접 캡처한 값 (아직 window._pcSearchKw에 반영 안 된 경우 포함)
+    if (inp) inp.value = _prevKw || window._pcSearchKw || "";
     if (si && window._pcSearchSd) si.value = window._pcSearchSd;
     if (ei && window._pcSearchEd) ei.value = window._pcSearchEd;
     if (box && window._pcSearchHtml) {
       box.innerHTML = window._pcSearchHtml;
       box.scrollTop = window._pcSearchScroll || 0; // 결과 스크롤 위치 복원
+    }
+    // 포커스·커서 위치 복원 — 재빌드로 인한 포커스 소실 방지
+    if (_focused && inp) {
+      inp.focus();
+      if (_selS !== null) try { inp.setSelectionRange(_selS, _selE); } catch (_) {}
     }
   }
   syncPcDateCaps(); // 작업기간 달력버튼 라벨 동기화
