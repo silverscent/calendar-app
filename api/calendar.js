@@ -1378,6 +1378,10 @@ module.exports = async function (req, res) {
           currentAdmin.toLowerCase() === process.env.TELEGRAM_OWNER_ID.toLowerCase());
         return res.status(200).json({ success: true, enabled, isOwner });
       } else if (action === "SET_CAL_NOTIFY") {
+        // 오너만 변경 가능 — currentAdmin vs TELEGRAM_OWNER_ID 서버 검증
+        const _ownerId = process.env.TELEGRAM_OWNER_ID || "";
+        if (!_ownerId || currentAdmin.toLowerCase() !== _ownerId.toLowerCase())
+          return res.status(200).json({ success: false, msg: "권한이 없습니다." });
         const val = data?.enabled === false ? "OFF" : "ON";
         await pool.query(`INSERT INTO system_settings (setting_key,setting_value) VALUES ('CALENDAR_NOTIFY',?) ON DUPLICATE KEY UPDATE setting_value=?`, [val, val]);
         return res.status(200).json({ success: true });
