@@ -2775,6 +2775,7 @@ async function submitCMS(
   let currentIsDone = isDone === true || String(isDone) === "true";
 
   let _itemId = null;
+  let _itemOrigEtc = ""; // 원본 비고 — EDIT_BLOCK 변경 전 값 비교용
   if (idx !== null) {
     let day = oldDate === "미정" ? "pending" : parseInt(oldDate.split("-")[2], 10);
     let item =
@@ -2788,6 +2789,7 @@ async function submitCMS(
       oldBox = safeStr(item.box);
       currentIsDone = item.isDone === true || String(item.isDone) === "true";
       _itemId = item.id || null;
+      _itemOrigEtc = String(item.etc || "").replace(/\[[\d/]+[^)]*추가\]/g, "").trim();
     }
   }
 
@@ -2856,7 +2858,7 @@ async function submitCMS(
     });
     let histStr = histArr.join(" ");
     payload.newEtc = histStr !== "" ? (cleanEtc !== "" ? cleanEtc + " " + histStr : histStr) : cleanEtc;
-    payload.oldEtc = etc || ""; // 비고 변경 전 값 — EDIT_BLOCK 로그에서 변경 내용 표시용
+    payload.oldEtc = _itemOrigEtc; // 비고 변경 전 값 — EDIT_BLOCK 로그에서 변경 내용 표시용
 
     if (tempEditColorObj && tempEditColorIdx !== null && !isTask) {
       let stdName = getFullName(rawComp);
@@ -2990,75 +2992,37 @@ async function submitDeleteBlock(comp, dateStr, idx, isDone, blockStart, blockEn
   document.getElementById("addModal").style.display = "none";
 
   setTimeout(() => {
-    // 블록 매칭 키 — showModal의 블록 감지와 동일 규칙(타입/이름/완료/수량)
-    const matchKey = (it) => {
-      let clean = it.company.replace(/\[TASK\]/gi, "").trim();
-      let isT =
-        it.company.toUpperCase().startsWith("[TASK]") || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(clean));
-      let isD = it.isDone === true || String(it.isDone) === "true";
-      return `${isT ? "T" : "O"}_${getFullName(clean)}_${isD}_${it.pal || ""}_${it.box || ""}`;
-    };
-
-    let day = dateStr === "미정" ? "pending" : parseInt(dateStr.split("-")[2], 10);
-    let refArr = day === "pending" ? serverData.pendingItems : serverData.monthData[day];
-    let refItem = refArr && refArr[idx];
-    if (!refItem) {
-      goToAsync(serverData.year, serverData.month);
-      return;
-    }
-    const key = matchKey(refItem);
-    const oldPal = String(refItem.pal || "");
-    const oldBox = String(refItem.box || "");
-
-    // 블록 날짜 펼치기 (현재 월 범위, 폭주 방지 가드)
+    // 로컬에서 회사명 기준으로 블록 날짜 항목 모두 제거 (수량 달라도 같은 작업이면 제거)
+    const compKey = `T_${getFullName(comp.replace(/\[TASK\]/gi, "").trim())}`;
     let dates = [];
     let cur = new Date(blockStart);
-    let end = new Date(blockEnd);
+    const endD = new Date(blockEnd);
     let guard = 0;
-    while (cur <= end && guard++ < 400) {
-      dates.push(
-        _dateToYmd(cur),
-      );
-      cur.setDate(cur.getDate() + 1);
-    }
-
-    // 0) 로컬 제거 전에 날짜별 id 먼저 수집
-    const dateIdMap = {};
-    dates.forEach((dStr) => {
+    while (cur <= endD && guard++ < 400) {
+      const dStr = _dateToYmd(cur);
+      dates.push(dStr);
       const dd = parseInt(dStr.split("-")[2], 10);
       const arr = serverData.monthData[dd];
-      const found = arr && arr.find((it) => matchKey(it) === key);
-      dateIdMap[dStr] = found?.id || null;
-    });
-
-    // 1) 로컬에서 같은 키 항목 모두 제거 → 즉시 화면 반영
-    dates.forEach((dStr) => {
-      let dd = parseInt(dStr.split("-")[2], 10);
-      let arr = serverData.monthData[dd];
       if (arr) {
         for (let i = arr.length - 1; i >= 0; i--) {
-          if (matchKey(arr[i]) === key) arr.splice(i, 1);
+          if (getMatchKey(arr[i]) === compKey) arr.splice(i, 1);
         }
       }
-    });
+      cur.setDate(cur.getDate() + 1);
+    }
     renderCalendar();
 
-    // 2) 서버에 날짜별 DELETE (실패 시 전체 1회만 복구 → 렌더 폭주 방지)
-    dates.forEach((dStr) => {
-      apiCall({
-        source: "vercel",
-        domain: "out",
-        action: "DELETE",
-        data: { action: "DELETE", id: dateIdMap[dStr], oldComp: comp, oldDate: dStr, oldDone: isDone, oldPal: oldPal, oldBox: oldBox },
-        token: adminToken,
-        admin_id: localStorage.getItem("admin_id"),
-      }).then((res) => {
-        if ((res === null || !res.success) && !window._recoverScheduled) {
-          window._recoverScheduled = true;
-          setTimeout(() => (window._recoverScheduled = false), 1500);
-          goToAsync(serverData.year, serverData.month);
-        }
-      });
+    // 단일 DELETE_BLOCK 호출 → 로그·알림 1건
+    apiCall({
+      source: "vercel", domain: "out", action: "DELETE_BLOCK",
+      data: { oldComp: comp, blockStart, blockEnd },
+      token: adminToken, admin_id: localStorage.getItem("admin_id"),
+    }).then((res) => {
+      if ((res === null || !res.success) && !window._recoverScheduled) {
+        window._recoverScheduled = true;
+        setTimeout(() => (window._recoverScheduled = false), 1500);
+        goToAsync(serverData.year, serverData.month);
+      }
     });
   }, 50);
 }

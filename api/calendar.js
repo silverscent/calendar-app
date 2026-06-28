@@ -1429,6 +1429,26 @@ module.exports = async function (req, res) {
         return `${s}~${end.slice(5).replace("-", "/")}`;
       }
 
+      // 🗑️ 다중 날 TASK 일괄 삭제 — 수량 달라도 회사명 기준으로 전체 삭제
+      if (action === "DELETE_BLOCK" && domain === "out") {
+        const delComp  = data?.oldComp || "";
+        const delStart = data?.blockStart;
+        const delEnd   = data?.blockEnd;
+        if (!delComp || !delStart)
+          return res.status(200).json({ success: false, msg: "잘못된 블록 범위" });
+        // 날짜 범위 내 해당 회사명 모든 행 삭제 (pal/box 무관)
+        await pool.query(
+          `DELETE FROM outbound WHERE company = ? AND outbound_date BETWEEN ? AND ?`,
+          [delComp, delStart, delEnd || delStart],
+        );
+        const cleanComp = delComp.replace(/\[TASK\]/gi, "").trim();
+        const label = _blockLabel(delStart, delEnd);
+        const desc  = `[출고 삭제] ${cleanComp} (${label}) 전체 파기`;
+        await pool.query("INSERT INTO admin_audit_logs (admin_id,action_type,description) VALUES (?,'CAL_DELETE',?)", [currentAdmin, desc]);
+        notifyCalendarChange(desc, currentAdmin);
+        return res.status(200).json({ success: true });
+      }
+
       // 📦 다중 날 TASK 일괄 등록
       if (action === "ADD_BLOCK" && domain === "out") {
         const reqComp   = data?.newComp || "";
