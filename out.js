@@ -1728,7 +1728,7 @@ function renderPcLeftbar() {
     ${admin ? `<button class="pclb-item pclb-ai-btn" onclick="openAiQuery()">🤖 AI 질의</button>` : ""}
     <button class="pclb-item" onclick="openDashboard()">📊 통계 대시보드</button>
     <button class="pclb-item" onclick="openCompListModal()">🏢 거래처 정보</button>
-    <button class="pclb-item" onclick="toggleMultiMode()">☑️ 다중 선택</button>
+    <button class="pclb-item" id="pcMultiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
     <button class="pclb-item" onclick="navMonth(0)">🔄 새로고침</button>
 
     <div class="pclb-sec">계정 / 설정</div>
@@ -1760,6 +1760,13 @@ function renderPcLeftbar() {
     }
   }
   syncPcDateCaps(); // 작업기간 달력버튼 라벨 동기화
+  // 좌측바 재빌드 후 다중선택 버튼 상태 복원
+  const _pcMultiBtn = document.getElementById("pcMultiBtn");
+  if (_pcMultiBtn && isMultiMode) {
+    _pcMultiBtn.innerText = "❌ 다중선택 취소";
+    _pcMultiBtn.style.color = "#ff3b30";
+    _pcMultiBtn.style.fontWeight = "900";
+  }
 }
 // 저장된 PC모드 선호 복원 (기본 OFF — 기존 사용자 영향 없음)
 window.addEventListener("DOMContentLoaded", function () {
@@ -2237,17 +2244,18 @@ function toggleMultiMode() {
   const btn = document.getElementById("multiBtn");
   const bar = document.getElementById("multiActionBar");
   const fab = document.getElementById("fabBtn");
+  const pcBtn = document.getElementById("pcMultiBtn");
   if (isMultiMode) {
-    btn.innerText = "❌ 취소";
-    btn.classList.add("active");
+    if (btn) { btn.innerText = "❌ 취소"; btn.classList.add("active"); }
+    if (pcBtn) { pcBtn.innerText = "❌ 다중선택 취소"; pcBtn.style.color = "#ff3b30"; pcBtn.style.fontWeight = "900"; }
     bar.style.display = "flex";
     document.getElementById("selCount").innerText = "0";
-    fab.style.display = "none";
+    if (fab) fab.style.display = "none";
   } else {
-    btn.innerText = "☑️ 다중 선택";
-    btn.classList.remove("active");
+    if (btn) { btn.innerText = "☑️ 다중 선택"; btn.classList.remove("active"); }
+    if (pcBtn) { pcBtn.innerText = "☑️ 다중 선택"; pcBtn.style.color = ""; pcBtn.style.fontWeight = ""; }
     bar.style.display = "none";
-    if (isAdmin) fab.style.display = "flex";
+    if (isAdmin && fab) fab.style.display = "flex";
   }
 }
 
