@@ -705,7 +705,8 @@ module.exports = async function (req, res) {
             ],
             DB: ["DB_RAW_ADD", "DB_RAW_UPDATE", "DB_RAW_DELETE"],
             LOGIN: ["LOGIN_SUCCESS", "LOGIN_FAILED"],
-            OCR: ["SYS_OCR_SAVE"],
+            OCR: ["SYS_OCR_SAVE", "OCR_APPLY"],
+            SETTINGS: ["SYS_COMP"],
           };
           if (payload.actGroup && ACT_GROUPS[payload.actGroup]) {
             const list = ACT_GROUPS[payload.actGroup];
@@ -1332,11 +1333,29 @@ module.exports = async function (req, res) {
         }
         return res.status(200).json(db);
       } else if (action === "SAVE_COMP_INFO_DB") {
-        const jsonStr = JSON.stringify(data);
+        // 변경 전 데이터 로드 → 추가/삭제/수정 감지
+        const [oldRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`);
+        let oldData = {};
+        try { oldData = oldRows.length > 0 ? (typeof oldRows[0].setting_value === "object" ? oldRows[0].setting_value : JSON.parse(oldRows[0].setting_value)) : {}; } catch (_) {}
+        const newData = data || {};
+        const added   = Object.keys(newData).filter((k) => !oldData[k]);
+        const removed = Object.keys(oldData).filter((k) => !newData[k]);
+        const changed = Object.keys(newData).filter((k) => oldData[k] && JSON.stringify(oldData[k]) !== JSON.stringify(newData[k]));
+        const parts = [];
+        if (added.length)   parts.push(`추가: ${added.join(", ")}`);
+        if (removed.length) parts.push(`삭제: ${removed.join(", ")}`);
+        if (changed.length) parts.push(`수정: ${changed.join(", ")}`);
+        const compDesc = parts.length > 0 ? parts.join(" / ") : "변경사항 없음";
+        const jsonStr = JSON.stringify(newData);
         await pool.query(
           `INSERT INTO system_settings (setting_key, setting_value) VALUES ('COMP_INFO_DB', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
           [jsonStr, jsonStr],
         );
+        await pool.query(
+          "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'SYS_COMP', ?)",
+          [currentAdmin, `[업체정보 변경] ${compDesc}`],
+        );
+        notifyCalendarChange(`[업체정보 변경] ${compDesc}`, currentAdmin);
         return res.status(200).json({ success: true });
       } else if (action === "GET_OCR_FILTERS") {
         const [rows] = await pool.query(
@@ -2039,18 +2058,20 @@ module.exports = async function (req, res) {
           }
           // ⚠️ LAST_OCR_DATA(좌표 캐시)는 덮어쓰지 않음 — 좌표 보존 + 대조창은 GET 때 현재 inbound 값을 합쳐서 보여줌
 
-          // 감사 로그
+          // 감사 로그 + 텔레그램 알림
           try {
             let ip = req.headers["x-forwarded-for"] || req.connection?.remoteAddress || "IP 알수없음";
             if (ip.includes(",")) ip = ip.split(",")[0];
+            // 처리된 BL 목록 (최대 5개 + 나머지 N건)
+            const blList = rows.slice(0, 5).map((r) => String(r.bl || r.invoice || "").slice(-8)).filter(Boolean);
+            const blSuffix = rows.length > 5 ? ` 외 ${rows.length - 5}건` : "";
+            const blStr = blList.length > 0 ? ` [${blList.join(", ")}${blSuffix}]` : "";
+            const ocrDesc = `[OCR 확정] 신규 ${insertCount}건 / 수정 ${updateCount}건 / 삭제 ${deleteCount}건${blStr}`;
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, 'OCR_APPLY', ?, ?)",
-              [
-                currentAdmin,
-                `OCR 대조 수정 확정 (신규 ${insertCount}건 / 수정 ${updateCount}건 / 삭제 ${deleteCount}건 / 완료건너뜀 ${skipCount}건)`,
-                ip,
-              ],
+              [currentAdmin, ocrDesc, ip],
             );
+            notifyCalendarChange(ocrDesc, currentAdmin);
           } catch (e) {}
 
           return res.status(200).json({ success: true, insertCount, updateCount, skipCount, deleteCount, total: rows.length });
