@@ -28,10 +28,12 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 
 // 📲 달력 변경 텔레그램 알림 — fire-and-forget (응답 블로킹 없음)
+// 1:1 DM 전송: ADMIN_TELEGRAM_USER_ID = 봇과 1:1 대화 chat_id (사용자 개인 ID)
 // 본인이 직접 한 변경은 알림 제외: TELEGRAM_OWNER_ID 환경변수에 본인 admin_id 설정
 function notifyCalendarChange(description, byAdmin) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId   = process.env.TELEGRAM_CHAT_ID;
+  // 1:1 DM: ADMIN_TELEGRAM_USER_ID (그룹챗인 TELEGRAM_CHAT_ID 사용 안 함)
+  const chatId   = process.env.ADMIN_TELEGRAM_USER_ID;
   if (!botToken || !chatId) return;
   // 본인 변경 제외 (TELEGRAM_OWNER_ID 미설정 시 전체 알림)
   const ownerId = process.env.TELEGRAM_OWNER_ID || "";
