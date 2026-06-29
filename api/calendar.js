@@ -383,9 +383,11 @@ module.exports = async function (req, res) {
         ]);
         if (rows.length === 0 || rows[0].status === "LOCKED")
           return res.status(200).json({ success: false, msg: "계정이 비활성화되었습니다." });
+        const isOwner = !!(process.env.TELEGRAM_OWNER_ID &&
+          rows[0].admin_id.toLowerCase() === process.env.TELEGRAM_OWNER_ID.toLowerCase());
         return res
           .status(200)
-          .json({ success: true, admin_id: rows[0].admin_id, name: rows[0].admin_name, role: rows[0].role });
+          .json({ success: true, admin_id: rows[0].admin_id, name: rows[0].admin_name, role: rows[0].role, isOwner });
       }
 
       if (action === "LOG_SITE_ACCESS") {

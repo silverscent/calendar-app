@@ -3917,7 +3917,7 @@ async function handleBioLogin() {
           }
           window.isAdmin = true;
           isAdmin = true;
-          saveAuthData(res.admin_id, res.role, true, savedToken);
+          saveAuthData(res.admin_id, res.role, true, savedToken, res.isOwner);
 
           const btn = document.getElementById("adminBtn");
           if (btn) {

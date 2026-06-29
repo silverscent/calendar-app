@@ -1044,7 +1044,13 @@ function saveAuthData(id, role, isSave, session_token, isOwner) {
     targetStorage.setItem("admin_id", id);
     targetStorage.setItem("admin_role", role);
     if (session_token) targetStorage.setItem("session_token", session_token);
-    targetStorage.setItem("isOwner", isOwner ? "true" : "false");
+    if (isOwner !== undefined) {
+      targetStorage.setItem("isOwner", isOwner ? "true" : "false");
+    } else {
+      // isOwner 미전달 시(스토리지 이사 등) 기존 값 보존
+      const _existing = localStorage.getItem("isOwner") || sessionStorage.getItem("isOwner");
+      if (_existing !== null) targetStorage.setItem("isOwner", _existing);
+    }
   } else {
     localStorage.removeItem("isAdmin");
     localStorage.removeItem("admin_id");
