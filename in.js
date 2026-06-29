@@ -1550,16 +1550,16 @@ function showLastOcrImage() {
               <div id="ocrTableInner" style="padding:2px; min-width:max-content; transform-origin:0 0;"></div>
             </div>
           </div>
-          <div style="flex:0 0 auto; padding:8px 4px 2px; display:flex; gap:5px;">
-            <button onclick="resetOcrTransform()" style="flex:0 0 auto; padding:11px 12px; background:var(--border-color,#444); color:var(--text-main,#fff); border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px;">↺</button>
+          <div style="flex:0 0 auto; padding:8px 4px 2px; display:flex; gap:4px; flex-wrap:nowrap; overflow-x:auto;">
+            <button onclick="resetOcrTransform()" style="flex:0 0 auto; padding:9px 10px; background:var(--border-color,#444); color:var(--text-main,#fff); border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px;">↺</button>
             ${
               isAdmin
-                ? `<button id="ocrRawBtn" onclick="toggleRawOcrView()" style="flex:0 0 auto; padding:11px 10px; background:var(--border-color,#444); color:var(--text-main,#fff); border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px;">📄 Raw</button>
-            <button id="ocrCompareBtn" onclick="toggleOcrCompare(this)" style="flex:1.3 1 auto; padding:11px 8px; background:#4a90e2; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📊 대조·수정 켜기</button>
-            <button id="ocrAddRowBtn" onclick="addOcrBlankRow()" style="display:none; flex:0 0 auto; padding:11px 10px; background:#0a84ff; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">➕ 행</button>
-            <button id="ocrCopyBtn" onclick="copyOcrTable(this)" style="display:none; flex:0 0 auto; padding:11px 10px; background:#6c5ce7; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📋 복사</button>
-            <button id="ocrVerifyBtn" onclick="verifyOcrRows(this)" style="display:none; flex:1 1 auto; padding:11px 8px; background:#f39c12; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">🔍 검증</button>
-            <button id="ocrApplyBtn" onclick="applyOcrEdits(this)" style="display:none; flex:1 1 auto; padding:11px 8px; background:#27ae60; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📌 확정</button>`
+                ? `<button id="ocrRawBtn" onclick="toggleRawOcrView()" style="flex:0 0 auto; padding:9px 8px; background:var(--border-color,#444); color:var(--text-main,#fff); border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px;">📄 Raw</button>
+            <button id="ocrCompareBtn" onclick="toggleOcrCompare(this)" style="flex:1 1 auto; min-width:0; padding:9px 6px; background:#4a90e2; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px; white-space:nowrap;">📊 대조·수정 켜기</button>
+            <button id="ocrAddRowBtn" onclick="addOcrBlankRow()" style="display:none; flex:0 0 auto; padding:9px 8px; background:#0a84ff; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px;">➕ 행</button>
+            <button id="ocrCopyBtn" onclick="copyOcrTable(this)" style="display:none; flex:0 0 auto; padding:9px 8px; background:#6c5ce7; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px;">복사</button>
+            <button id="ocrVerifyBtn" onclick="verifyOcrRows(this)" style="display:none; flex:1 1 auto; min-width:0; padding:9px 6px; background:#f39c12; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px; white-space:nowrap;">🔍 검증</button>
+            <button id="ocrApplyBtn" onclick="applyOcrEdits(this)" style="display:none; flex:1 1 auto; min-width:0; padding:9px 6px; background:#27ae60; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px; white-space:nowrap;">📌 확정</button>`
                 : ``
             }
           </div>
