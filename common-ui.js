@@ -703,16 +703,19 @@ function toggleAdmin() {
     // 모달 열 때마다 마스터 권한 버튼 재확인 (첫 로그인 직후 표시 누락 방지)
     if (typeof checkMasterAuthButtonVisibility === "function") checkMasterAuthButtonVisibility();
 
-    // 오너 전용: GET_CAL_NOTIFY가 isOwner:true 반환 시에만 토글 표시
+    // 오너 전용: isOwner는 로그인 시 localStorage에 저장됨 → 즉시 표시, API는 ON/OFF 상태만 조회
     const _calRow = document.getElementById("calNotifyRow");
     if (_calRow) {
-      apiCall({ source: "vercel", action: "GET_CAL_NOTIFY" }).then((res) => {
-        if (res && res.isOwner) {
-          _calRow.style.display = "flex";
-          const tog = document.getElementById("toggleCalNotify");
-          if (tog) tog.checked = res.enabled !== false;
-        }
-      });
+      const isOwner = localStorage.getItem("isOwner") === "true" || sessionStorage.getItem("isOwner") === "true";
+      if (isOwner) {
+        _calRow.style.display = "flex"; // 네트워크 대기 없이 즉시 표시
+        apiCall({ source: "vercel", action: "GET_CAL_NOTIFY" }).then((res) => {
+          if (res) {
+            const tog = document.getElementById("toggleCalNotify");
+            if (tog) tog.checked = res.enabled !== false;
+          }
+        });
+      }
     }
 
     document.getElementById("myInfoModal").style.display = "flex";
