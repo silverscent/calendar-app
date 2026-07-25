@@ -2969,7 +2969,7 @@ async function submitCMS(
       return;
     }
 
-    if (action === "EDIT" && oldBlockStart && oldBlockStart !== "null") {
+    if (action === "EDIT" && oldBlockStart && oldBlockStart !== "null" && oldBlockStart !== "미정") {
       const optimisticPayload = {
         ...payload,
         newEndDate: endDateStr,
