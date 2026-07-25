@@ -1560,18 +1560,21 @@ module.exports = async function (req, res) {
         // 변경 여부 감지: 변경되지 않은 필드는 각 날짜의 기존 값 유지
         const _palChanged = (reqPalOut||"0") !== (data?.oldPal||"0");
         const _boxChanged = (reqBoxOut||"0") !== (data?.oldBox||"0");
+        // 블록 확장 시 새로 추가되는 날짜에 비고를 이어붙일지 판단하는 용도(기존 로직 유지)
         const _newEtcClean = (reqEtcOut||"").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
         const _oldEtcClean = (data?.oldEtc||"").replace(/\[[\d/]+[^)]*추가\]/g,"").trim();
-        const _etcChanged  = _newEtcClean !== _oldEtcClean;
+        const _etcChangedForNewDates = _newEtcClean !== _oldEtcClean;
 
-        // 수정: 양쪽에 있는 날짜 — 변경된 필드만 UPDATE (미변경 필드는 기존 값 유지)
+        // 수정: 양쪽에 있는 날짜 — pal/box는 변경된 경우만, etc는 항상 반영
+        // 🚨 [버그 수정] oldEtc는 클라이언트에서 이미 수량추가 이력(hist)이 제거된 값으로 전달되므로,
+        // clean 비교로 "변경 없음"을 판단하면 hist 항목만 삭제/변경된 경우를 놓쳐 etc 업데이트가 누락됨
+        // (삭제된 수량추가 줄이 DB에 남아 새로고침 시 되살아나는 원인이었음)
         for (const d of newDates) {
           if (oldSet.has(d)) {
-            const setClauses = ["company=?","outbound_date=?"];
-            const setVals    = [reqComp, d];
+            const setClauses = ["company=?","outbound_date=?","etc=?"];
+            const setVals    = [reqComp, d, reqEtcOut];
             if (_palChanged) { setClauses.push("pal=?");   setVals.push(reqPalOut); }
             if (_boxChanged) { setClauses.push("box=?");   setVals.push(reqBoxOut); }
-            if (_etcChanged) { setClauses.push("etc=?");   setVals.push(reqEtcOut); }
             await pool.query(
               `UPDATE outbound SET ${setClauses.join(",")} WHERE company=? AND outbound_date=?`,
               [...setVals, data?.oldComp||reqComp, d],
@@ -1584,7 +1587,7 @@ module.exports = async function (req, res) {
           if (!oldSet.has(d))
             await pool.query(
               `INSERT INTO outbound (company,pal,box,outbound_date,isDone,etc) VALUES (?,?,?,?,0,?)`,
-              [reqComp, _palChanged ? reqPalOut : "0", _boxChanged ? reqBoxOut : "0", d, _etcChanged ? reqEtcOut : ""],
+              [reqComp, _palChanged ? reqPalOut : "0", _boxChanged ? reqBoxOut : "0", d, _etcChangedForNewDates ? reqEtcOut : ""],
             );
         }
         const cleanComp = reqComp.replace(/\[TASK\]/gi, "").trim();
