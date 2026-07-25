@@ -1987,10 +1987,7 @@ function updateLocalState(action, payload, idx) {
       targetArr[idx].box = payload.newBox ?? payload.oldBox;
       targetArr[idx].etc = payload.newEtc;
       // isDone 상태 및 기존 배열의 순서는 완벽히 유지됨
-      localStorage.setItem(
-            `cal_cache_${currentType}_${serverData.year}_${serverData.month}`,
-            JSON.stringify(serverData)
-        );
+      
     }
   } else {
     // 1. 삭제 및 날짜 이동 시 (기존 지우기 로직)
