@@ -297,6 +297,14 @@ module.exports = async function (req, res) {
       const { domain, action, data, keyword, type, rowId, year, month, id, admin_id } = payload;
       let currentAdmin = admin_id || "system"; // secureActions 토큰 검증 후 실제 admin_id로 갱신
 
+      // 🚨🚨 [임시 진단 로그 - 미정/대기 롤백 버그 추적용, 확인 후 제거] 🚨🚨
+      if (domain === "out" && (action === "EDIT" || action === "EDIT_BLOCK" || action === "ADD_QTY")) {
+        pool.query(
+          "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DEBUG_TMP', ?)",
+          [currentAdmin, `[DEBUG] action=${action} data=${JSON.stringify(data)}`],
+        ).catch(() => {});
+      }
+
       // 관리자 인증 필요 액션 (Set → O(1) 조회)
       const secureActions = new Set([
         "ADD",
