@@ -1587,7 +1587,9 @@ module.exports = async function (req, res) {
           if (!oldSet.has(d))
             await pool.query(
               `INSERT INTO outbound (company,pal,box,outbound_date,isDone,etc) VALUES (?,?,?,?,0,?)`,
-              [reqComp, _palChanged ? reqPalOut : "0", _boxChanged ? reqBoxOut : "0", d, _etcChangedForNewDates ? reqEtcOut : ""],
+              //[reqComp, _palChanged ? reqPalOut : "0", _boxChanged ? reqBoxOut : "0", d, _etcChangedForNewDates ? reqEtcOut : ""],
+              // 수정 후
+              [reqComp, reqPalOut, reqBoxOut, d, _etcChangedForNewDates ? reqEtcOut : ""],
             );
         }
         const cleanComp = reqComp.replace(/\[TASK\]/gi, "").trim();
