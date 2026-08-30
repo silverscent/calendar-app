@@ -372,7 +372,7 @@ module.exports = async function (req, res) {
       }
 
       // ── 생체인증 재로그인용 세션 토큰 검증
-      if (action === "VERIFY_SESSION") {
+      /*if (action === "VERIFY_SESSION") {
         const token = payload.session_token;
         if (!token) return res.status(200).json({ success: false, msg: "토큰이 없습니다." });
         const tokenAdmin = verifyToken(token);
@@ -389,6 +389,58 @@ module.exports = async function (req, res) {
           .status(200)
           .json({ success: true, admin_id: rows[0].admin_id, name: rows[0].admin_name, role: rows[0].role, isOwner });
       }
+          */
+
+      // 수정 후
+if (action === "VERIFY_SESSION") {
+    const token = payload.session_token;
+    if (!token) return res.status(200).json({ success: false, msg: "토큰이 없습니다." });
+    
+    // 서명 검증 (만료 여부와 무관하게 위조 여부 먼저 확인)
+    let tokenAdmin = verifyToken(token);
+    let isExpired = false;
+    
+    if (!tokenAdmin) {
+        // 만료된 건지, 위조된 건지 구분
+        try {
+            const decoded = Buffer.from(token, "base64url").toString("utf8");
+            const lastColon = decoded.lastIndexOf(":");
+            const pl = decoded.slice(0, lastColon);
+            const sig = decoded.slice(lastColon + 1);
+            const expected = crypto.createHmac("sha256", TOKEN_SECRET).update(pl).digest("hex");
+            if (sig === expected) {
+                // 서명은 맞음 → 만료된 토큰
+                const colonIdx = pl.indexOf(":");
+                tokenAdmin = pl.slice(0, colonIdx);
+                isExpired = true;
+            }
+        } catch {}
+    }
+    
+    if (!tokenAdmin)
+        return res.status(200).json({ success: false, msg: "세션이 만료되었습니다. 다시 로그인하세요." });
+    
+    const [rows] = await pool.query("SELECT admin_id, admin_name, role, status FROM admins WHERE admin_id = ?", [
+        tokenAdmin,
+    ]);
+    if (rows.length === 0 || rows[0].status === "LOCKED")
+        return res.status(200).json({ success: false, msg: "계정이 비활성화되었습니다." });
+    
+    const isOwner = !!(process.env.TELEGRAM_OWNER_ID &&
+        rows[0].admin_id.toLowerCase() === process.env.TELEGRAM_OWNER_ID.toLowerCase());
+    
+    // 만료된 토큰이면 새 토큰 발급해서 반환
+    const newToken = isExpired ? generateToken(rows[0].admin_id) : token;
+    return res.status(200).json({ 
+        success: true, 
+        admin_id: rows[0].admin_id, 
+        name: rows[0].admin_name, 
+        role: rows[0].role, 
+        isOwner,
+        session_token: newToken,  // 만료 시 새 토큰, 유효 시 기존 토큰
+        renewed: isExpired        // 클라이언트에서 저장 여부 판단용
+    });
+}
 
       if (action === "LOG_SITE_ACCESS") {
         try {

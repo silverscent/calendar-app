@@ -5692,7 +5692,8 @@ async function handleBioLogin() {
         document.getElementById("adminLoginModal").style.display = "none";
         showToast("🔒 생체 인증 성공! 서버 확인 중...", 0);
 
-        apiCall({ source: "vercel", action: "VERIFY_SESSION", session_token: savedToken }).then(function (res) {
+        //수정전
+        /*apiCall({ source: "vercel", action: "VERIFY_SESSION", session_token: savedToken }).then(function (res) {
           if (res === null || !res.success) {
             showToast("❌ 세션이 만료되었습니다. 다시 로그인하세요.", 2500);
             localStorage.removeItem("bio_registered");
@@ -5704,6 +5705,24 @@ async function handleBioLogin() {
           window.isAdmin = true;
           isAdmin = true;
           saveAuthData(res.admin_id, res.role, true, savedToken, res.isOwner);
+*/
+          // 수정 후
+apiCall({ source: "vercel", action: "VERIFY_SESSION", session_token: savedToken }).then(function (res) {
+    if (res === null || !res.success) {
+        showToast("❌ 세션이 만료되었습니다. 다시 로그인하세요.", 2500);
+        localStorage.removeItem("bio_token");  // bio_registered·bio_id 유지
+        openLoginModal();
+        return;
+    }
+    // 만료된 토큰이 갱신됐으면 새 토큰 저장
+    const activeToken = (res.renewed && res.session_token) ? res.session_token : savedToken;
+    if (res.renewed && res.session_token) {
+        localStorage.setItem("bio_token", res.session_token);
+    }
+    window.isAdmin = true;
+    isAdmin = true;
+    saveAuthData(res.admin_id, res.role, true, activeToken, res.isOwner);
+    window._sessionToken = activeToken;
 
           const btn = document.getElementById("adminBtn");
           if (btn) {

@@ -865,11 +865,24 @@ function handleLogin() {
       return;
     }
 
+    //수정 전
+    /*
     if (res.success) {
       window.isAdmin = true;
       isAdmin = true;
       saveAuthData(res.admin_id, res.role, true, res.session_token, res.isOwner);
       if (res.session_token) window._sessionToken = res.session_token;
+*/
+      // 수정 후
+if (res.success) {
+    window.isAdmin = true;
+    isAdmin = true;
+    saveAuthData(res.admin_id, res.role, true, res.session_token, res.isOwner);
+    if (res.session_token) window._sessionToken = res.session_token;
+    // 생체인증 등록된 기기면 새 토큰으로 bio_token 갱신 (세션 만료 후 재로그인 시 생체인증 유지)
+    if (res.session_token && localStorage.getItem("bio_registered") === "true") {
+        localStorage.setItem("bio_token", res.session_token);
+    }
 
       const btn = document.getElementById("adminBtn");
       if (btn) {
