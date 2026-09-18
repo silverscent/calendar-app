@@ -1882,7 +1882,9 @@ function parseOcrLinesLocal(text) {
   const isBL = (v) => {
     const cleaned = String(v).trim().replace(/[\s•·*]/g, "");
     if (cleaned === "발행전") return true;
-    return /^[A-Za-z]{2,5}\d{5,9}$/.test(cleaned);
+    //return /^[A-Za-z]{2,5}\d{5,9}$/.test(cleaned);
+    //2026-09-18: SCAC 1글자도 허용 (예: D12345678) → {1,5}로 변경
+    return /^[A-Za-z]{1,5}\d{5,9}$/.test(cleaned);
   };
   const isPal = (v) => /^\d{1,3}$/.test(v);
   const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);

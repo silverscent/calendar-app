@@ -2210,6 +2210,8 @@ function verifyOcrRows() {
   const cleanBL = (v) => String(v || "").replace(/[\s•·\-\*]/g, "");
   const isBLok = (v) => {
     const c = cleanBL(v);
+    //return /^[A-Za-z]{2,5}\d{5,9}$/.test(c) || c === "발행전";
+    //2026-09-18: B/L 형식이 2~5자리 영문 + 5~9자리 숫자 외에도, 2~5자리 영문 + 4자리 숫자 + 1~2자리 영문 형식도 있음. (예: ABCD1234EF)
     return /^[A-Za-z]{2,5}\d{5,9}$/.test(c) || c === "발행전";
   };
   const isInvOk = (v) => /^\d{7,8}$/.test(String(v).trim()) || /^PI-?\d{4}-?\d{3,4}$/i.test(String(v).trim());
