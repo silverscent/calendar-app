@@ -2212,7 +2212,7 @@ function verifyOcrRows() {
     const c = cleanBL(v);
     //return /^[A-Za-z]{2,5}\d{5,9}$/.test(c) || c === "발행전";
     //2026-09-18: B/L 형식이 2~5자리 영문 + 5~9자리 숫자 외에도, 2~5자리 영문 + 4자리 숫자 + 1~2자리 영문 형식도 있음. (예: ABCD1234EF)
-    return /^[A-Za-z]{2,5}\d{5,9}$/.test(c) || c === "발행전";
+    return /^[A-Za-z]{1,5}\d{5,9}$/.test(c) || c === "발행전";
   };
   const isInvOk = (v) => /^\d{7,8}$/.test(String(v).trim()) || /^PI-?\d{4}-?\d{3,4}$/i.test(String(v).trim());
   const hasInvLike = (v) => /\d{7,8}/.test(String(v)) || /PI-?\d{4}-?\d{3,4}/i.test(String(v));
@@ -2308,6 +2308,8 @@ function verifyOcrRows() {
 
   // 행 개수 대조 — 공백 기준 토큰 분리 후 완전 매칭(SEA+인보이스 연결 오매칭 방지)
   const rawTokens = currentRawOcrString.toUpperCase().split(/[\s\n\r•·*/().,\-]+/).filter(Boolean);
+  //const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{2,5}\d{5,9}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
+  //2026-09-20: B/L 형식이 2~5자리 영문 + 5~9자리 숫자 외에도, 2~5자리 영문 + 4자리 숫자 + 1~2자리 영문 형식도 있음. (예: ABCD1234EF)
   const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{2,5}\d{5,9}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
   // 행수 비교: OCR 파싱 행 + 이미 완료처리된 _fromDb 행 중 원본에 실제 있는 것
   const nonDbCount = ocrEditRows.filter((r) => !r._fromDb).length;
