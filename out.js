@@ -2199,20 +2199,7 @@ function attachAutocomplete(inputId) {
 // 🚨 1. 인증 데이터 통합 저장/삭제 헬퍼 (localStorage vs sessionStorage 자동 분배)
 
 // 🚨 2. 자동 로그인 토글 스위치
-function handleAutoLoginToggle(checkbox) {
-  const id = localStorage.getItem("admin_id") || sessionStorage.getItem("admin_id");
-  const role = localStorage.getItem("admin_role") || sessionStorage.getItem("admin_role");
-
-  if (checkbox.checked) {
-    localStorage.setItem("auto_login", "true");
-    if (id) saveAuthData(id, role, true);
-    showToast("자동 로그인 기능이 켜졌습니다.", 1500);
-  } else {
-    localStorage.setItem("auto_login", "false");
-    if (id) saveAuthData(id, role, true); // 세션스토리지로 이사
-    showToast("앱 종료 시 자동으로 로그아웃됩니다.", 1500);
-  }
-}
+// (handleAutoLoginToggle → common-ui.js 로 통합됨)
 
 // 🚨 3. 앱 종료 시 자동로그인 OFF 상태면 권한 파기
 window.addEventListener("beforeunload", () => {
@@ -5663,92 +5650,7 @@ let swipeModalVars = {
 // 🚀 페이지가 로드되면 독립적으로 네이티브 스와이프 엔진 즉시 가동!
 window.addEventListener("DOMContentLoaded", initNativeBottomSheet);
 
-// 💡 [개선] Face ID 실패/취소 시 수동 로그인 창으로 자연스럽게 안내 (Fallback)
-async function handleBioLogin() {
-  if (!window.PublicKeyCredential) {
-    openLoginModal();
-    return;
-  }
-
-  try {
-    // 🚨 [핵심 패치] 로그인할 때도 똑같이 랜덤 챌린지를 생성해야 비트워든이 의심하지 않음
-    const randomChallenge = new Uint8Array(32);
-    window.crypto.getRandomValues(randomChallenge);
-
-    const publicKey = {
-      challenge: randomChallenge,
-      rpId: window.location.hostname,
-      userVerification: "required",
-      timeout: 60000,
-    };
-
-    const assertion = await navigator.credentials.get({ publicKey });
-
-    if (assertion) {
-      const savedId = localStorage.getItem("bio_id");
-      const savedToken = localStorage.getItem("bio_token");
-
-      if (savedId && savedToken) {
-        document.getElementById("adminLoginModal").style.display = "none";
-        showToast("🔒 생체 인증 성공! 서버 확인 중...", 0);
-
-        //수정전
-        /*apiCall({ source: "vercel", action: "VERIFY_SESSION", session_token: savedToken }).then(function (res) {
-          if (res === null || !res.success) {
-            showToast("❌ 세션이 만료되었습니다. 다시 로그인하세요.", 2500);
-            localStorage.removeItem("bio_registered");
-            localStorage.removeItem("bio_id");
-            localStorage.removeItem("bio_token");
-            openLoginModal();
-            return;
-          }
-          window.isAdmin = true;
-          isAdmin = true;
-          saveAuthData(res.admin_id, res.role, true, savedToken, res.isOwner);
-*/
-          // 수정 후
-apiCall({ source: "vercel", action: "VERIFY_SESSION", session_token: savedToken }).then(function (res) {
-    if (res === null || !res.success) {
-        showToast("❌ 세션이 만료되었습니다. 다시 로그인하세요.", 2500);
-        localStorage.removeItem("bio_token");  // bio_registered·bio_id 유지
-        openLoginModal();
-        return;
-    }
-    // 만료된 토큰이 갱신됐으면 새 토큰 저장
-    const activeToken = (res.renewed && res.session_token) ? res.session_token : savedToken;
-    if (res.renewed && res.session_token) {
-        localStorage.setItem("bio_token", res.session_token);
-    }
-    window.isAdmin = true;
-    isAdmin = true;
-    saveAuthData(res.admin_id, res.role, true, activeToken, res.isOwner);
-    window._sessionToken = activeToken;
-
-          const btn = document.getElementById("adminBtn");
-          if (btn) {
-            btn.innerHTML = "🔓 관리자";
-            btn.className = "admin-btn unlocked";
-            btn.removeAttribute("style");
-          }
-
-          const actions = document.getElementById("adminActions");
-          if (actions) actions.style.display = "flex";
-          const fab = document.getElementById("fabBtn");
-          if (fab) fab.style.display = "flex";
-
-          showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
-          if (typeof renderCalendar === "function") renderCalendar();
-          if (typeof updateFooterUI === "function") updateFooterUI();
-          if (typeof checkMasterAuthButtonVisibility === "function") checkMasterAuthButtonVisibility();
-          if (typeof showAiFabIfAdmin === "function") showAiFabIfAdmin();
-          if (typeof syncCrmDataBackground === "function") syncCrmDataBackground();
-        });
-      }
-    }
-  } catch (err) {
-    openLoginModal();
-  }
-}
+// (handleBioLogin → common-ui.js 로 통합됨)
 
 // 📡 특정 관리자 접속 정보 팝업 엔진
 function showAdminConnInfo(adminId, adminName) {

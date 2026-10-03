@@ -833,6 +833,103 @@ async function addNewRowDirectDB(type) {
   });
 }
 
+// ============================================================
+// 생체인증(패스키) 로그인 — 출고/입고 공통 (out.js / in.js 에서 통합)
+//  · 만료된 토큰이면 서버(VERIFY_SESSION)가 새 토큰을 내려주므로(renewed),
+//    반드시 그 토큰을 저장해야 함 (안 그러면 화면은 로그인인데 요청은 전부 세션만료)
+//  · 실패 시에도 bio_registered / bio_id 는 유지 → 재로그인하면 생체인증 그대로 사용 가능
+// ============================================================
+async function handleBioLogin() {
+  if (!window.PublicKeyCredential) {
+    openLoginModal();
+    return;
+  }
+
+  try {
+    // 로그인할 때도 똑같이 랜덤 챌린지를 생성해야 비트워든이 의심하지 않음
+    const randomChallenge = new Uint8Array(32);
+    window.crypto.getRandomValues(randomChallenge);
+
+    const publicKey = {
+      challenge: randomChallenge,
+      rpId: window.location.hostname,
+      userVerification: "required",
+      timeout: 60000,
+    };
+
+    const assertion = await navigator.credentials.get({ publicKey });
+
+    if (assertion) {
+      const savedId = localStorage.getItem("bio_id");
+      const savedToken = localStorage.getItem("bio_token");
+
+      if (savedId && savedToken) {
+        document.getElementById("adminLoginModal").style.display = "none";
+        showToast("🔒 생체 인증 성공! 서버 확인 중...", 0);
+
+        apiCall({ source: "vercel", action: "VERIFY_SESSION", session_token: savedToken }).then(function (res) {
+          if (res === null || !res.success) {
+            showToast("❌ 세션이 만료되었습니다. 다시 로그인하세요.", 2500);
+            localStorage.removeItem("bio_token"); // bio_registered·bio_id 는 유지
+            openLoginModal();
+            return;
+          }
+
+          // 만료된 토큰이 갱신됐으면 새 토큰 사용 + 저장
+          const activeToken = res.renewed && res.session_token ? res.session_token : savedToken;
+          if (res.renewed && res.session_token) {
+            localStorage.setItem("bio_token", res.session_token);
+          }
+          window.isAdmin = true;
+          isAdmin = true;
+          saveAuthData(res.admin_id, res.role, true, activeToken, res.isOwner);
+          window._sessionToken = activeToken;
+
+          const btn = document.getElementById("adminBtn");
+          if (btn) {
+            btn.innerHTML = "🔓 관리자";
+            btn.className = "admin-btn unlocked";
+            btn.removeAttribute("style");
+          }
+
+          const actions = document.getElementById("adminActions");
+          if (actions) actions.style.display = "flex";
+          const fab = document.getElementById("fabBtn");
+          if (fab) fab.style.display = "flex";
+
+          showToast(`✅ ${res.name} 관리자님 환영합니다!`, 2000);
+          // 페이지마다 있을 수도/없을 수도 있는 함수들은 존재할 때만 호출
+          if (typeof renderCalendar === "function") renderCalendar();
+          if (typeof updateFooterUI === "function") updateFooterUI();
+          if (typeof checkMasterAuthButtonVisibility === "function") checkMasterAuthButtonVisibility();
+          if (typeof showAiFabIfAdmin === "function") showAiFabIfAdmin();
+          if (typeof syncCrmDataBackground === "function") syncCrmDataBackground();
+        });
+      } else {
+        // 생체인증은 통과했지만 저장된 토큰이 없는 경우(세션 만료 후 재로그인 전)
+        showToast("🔑 아이디/비밀번호로 한 번 로그인하면 생체 인증이 다시 활성화됩니다.", 3000);
+      }
+    }
+  } catch (err) {
+    openLoginModal();
+  }
+}
+
+function handleAutoLoginToggle(checkbox) {
+  const id = localStorage.getItem("admin_id") || sessionStorage.getItem("admin_id");
+  const role = localStorage.getItem("admin_role") || sessionStorage.getItem("admin_role");
+
+  if (checkbox.checked) {
+    localStorage.setItem("auto_login", "true");
+    if (id) saveAuthData(id, role, true);
+    showToast("자동 로그인 기능이 켜졌습니다.", 1500);
+  } else {
+    localStorage.setItem("auto_login", "false");
+    if (id) saveAuthData(id, role, true); // 세션스토리지로 이사
+    showToast("앱 종료 시 자동으로 로그아웃됩니다.", 1500);
+  }
+}
+
 function handleLogin() {
   const idElem = document.getElementById("adminIdInput");
   const pwElem = document.getElementById("adminPwInput");
