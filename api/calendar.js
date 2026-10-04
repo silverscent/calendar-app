@@ -1968,6 +1968,7 @@ if (action === "VERIFY_SESSION") {
                 if (d.status === "완료") continue; // 입고 완료 → 대조창에서 제외
                 merged.push({
                   ...r, // iy/ih/cx 등 좌표 유지
+                  _ocr: { bl: r.bl || "", eta: r.eta || "", inDate: r.inDate || "", invoice: r.invoice || "" }, // OCR 당시 파싱값 (대조창에서 '이후 사람이 고친 값' 구분용)
                   bl: d.bl_number || r.bl,
                   pal: d.pallets != null ? String(d.pallets) : r.pal,
                   eta: d.eta || "",

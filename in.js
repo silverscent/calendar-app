@@ -1694,6 +1694,7 @@ function loadOcrSplitData() {
       ih: typeof r.ih === "number" ? r.ih : null,
       cx: r.cx && typeof r.cx === "object" ? r.cx : null, // 열별 X(px) 맵
       _fromDb: !!r._fromDb, // 마지막 OCR 이후 달력에서 추가/수정된 행(좌표 없음) — 검증 제외 + 파란 음영
+      _ocr: r._ocr && typeof r._ocr === "object" ? r._ocr : null, // OCR 당시 파싱값 (이후 고친 값 구분용)
     }));
     ocrOrigRows = JSON.parse(JSON.stringify(ocrEditRows)); // 변경 비교 기준
 
@@ -2236,6 +2237,25 @@ async function verifyOcrRows(_btn, _skipFixPrompt) {
     }
     return { fix: null };
   };
+  // ── 확정/달력 수정으로 DB 값이 OCR 당시 파싱값과 달라진 칸 = 사람이 이미 고친 값 → '원본에 없음' 대상 아님
+  //    (이번 화면에서 방금 손댄 칸은 기존처럼 검사 유지 / 서버가 _ocr 을 안 내려주면 기존 동작 그대로)
+  const _padYmd = (v) => {
+    const m = String(v).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : String(v).trim();
+  };
+  const _cmpVal = (f, v) =>
+    f === "eta" || f === "inDate"
+      ? _padYmd(_normOcrDate(v) || "미정")
+      : f === "bl"
+      ? cleanBL(v).toUpperCase()
+      : String(v == null ? "" : v).trim();
+  const editedAfterOcr = (idx, r, f) => {
+    const snap = r._ocr;
+    const o = ocrOrigRows && ocrOrigRows[idx];
+    if (!snap || !o || snap[f] === undefined) return false;
+    if (_cmpVal(f, r[f]) !== _cmpVal(f, o[f])) return false; // 이번 화면에서 수정 중인 값 → 기존대로 검사
+    return _cmpVal(f, snap[f]) !== _cmpVal(f, o[f]); // 불러온 값이 OCR 당시 값과 다름 → 이전에 고쳐서 저장된 값
+  };
   const isPalOk = (v) => /^\d{1,3}$/.test(String(v).trim());
   const inRaw = (v) => {
     const k = norm(v);
@@ -2259,12 +2279,12 @@ async function verifyOcrRows(_btn, _skipFixPrompt) {
       // B/L: 형식 + 원본존재
       if (r.bl) {
         if (!isBLok(r.bl)) issues.bl = "B/L 형식 아님";
-        else if (!inRaw(r.bl)) issues.bl = "원본에 없음";
+        else if (!inRaw(r.bl) && !editedAfterOcr(idx, r, "bl")) issues.bl = "원본에 없음";
       }
       // 인보이스: 있으면 형식·존재 / 없는데 비고에 인보이스 형식이 있으면 '비고로 샘'
       if (r.invoice) {
         if (!isInvOk(r.invoice)) issues.invoice = "인보이스 형식 아님";
-        else if (!inRaw(r.invoice)) issues.invoice = "원본에 없음";
+        else if (!inRaw(r.invoice) && !editedAfterOcr(idx, r, "invoice")) issues.invoice = "원본에 없음";
       } else if (r.etc && hasInvLike(r.etc)) {
         issues.etc = "인보이스가 비고에 섞인 듯";
       }
@@ -2276,7 +2296,7 @@ async function verifyOcrRows(_btn, _skipFixPrompt) {
           if (rawAbnormalDateCount > 0) dateFix[f] = true; // 원본 비정상날짜 → 미정 처리된 칸
         } else if (!isReasonableDate(v)) {
           dateFix[f] = true;
-        } else if (!inRaw(v) && !(r._autoFix && r._autoFix[f] && r._autoFix[f].to === v)) {
+        } else if (!inRaw(v) && !(r._autoFix && r._autoFix[f] && r._autoFix[f].to === v) && !editedAfterOcr(idx, r, f)) {
           issues[f] = "원본에 없음";
         }
       });
