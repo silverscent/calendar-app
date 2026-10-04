@@ -2179,7 +2179,8 @@ function startEditOcrCell(td, idx, field, initial) {
 
 // 🔍 검증 — 저장된 원본 OCR 텍스트와 파싱 데이터를 대조 (API 사용 0)
 //   각 행의 B/L·인보이스·ETA·입고일 값이 원본 텍스트에 실제로 있는지 확인 → 없으면 빨강(확인필요)
-function verifyOcrRows() {
+// _btn: onclick="verifyOcrRows(this)" 로 넘어오는 버튼(미사용) / _skipFixPrompt: 자동수정 후 재검증 때 안내창 생략
+async function verifyOcrRows(_btn, _skipFixPrompt) {
   if (!ocrEditRows || ocrEditRows.length === 0) {
     showToast("검증할 데이터가 없습니다.", 2000);
     return;
@@ -2213,6 +2214,28 @@ function verifyOcrRows() {
     const dt = new Date(y, mo - 1, d);
     return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
   };
+  // ── 입고일은 항상 ETA 이후 → 입고일이 ETA 보다 이르면 오타(주로 연도) 의심
+  const _toDate = (v) => {
+    const m = String(v).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  };
+  const _fmtYmd = (dt) =>
+    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const FIX_MAX_DAYS = 90; // 수정 제안일이 ETA 로부터 이 일수 이내일 때만 자동수정 제안(그 이상은 확신 못 하므로 빨강 표시만)
+  // 입고일이 ETA 보다 이전이면 { fix: 'YYYY-MM-DD' | null }, 정상이면 null
+  const checkInDateOrder = (eta, inDate) => {
+    if (!isReasonableDate(eta) || !isReasonableDate(inDate)) return null; // 미정/비정상 날짜는 기존 로직이 처리
+    const e = _toDate(eta);
+    const d = _toDate(inDate);
+    if (!e || !d || d >= e) return null; // 같은 날 이상이면 정상
+    for (const yr of [e.getFullYear(), e.getFullYear() + 1]) {
+      const c = new Date(yr, d.getMonth(), d.getDate()); // 월·일은 유지, 연도만 교체
+      if (c.getMonth() !== d.getMonth()) continue; // 2/29 처럼 그 해에 없는 날짜 제외
+      const diffDays = Math.round((c - e) / 86400000);
+      if (diffDays >= 0 && diffDays <= FIX_MAX_DAYS) return { fix: _fmtYmd(c) };
+    }
+    return { fix: null };
+  };
   const isPalOk = (v) => /^\d{1,3}$/.test(String(v).trim());
   const inRaw = (v) => {
     const k = norm(v);
@@ -2227,6 +2250,7 @@ function verifyOcrRows() {
   let warnRows = 0;
   let dateFixCount = 0; // 날짜 이상 → 미정 변경 건수
   const details = []; // 사유 상세 목록
+  const fixes = []; // 입고일 < ETA 자동수정 후보
   ocrEditRows.forEach((r, idx) => {
     const issues = {}; // field -> 사유 (빨강=확인필요)
     const dateFix = {}; // field -> true (파랑=날짜이상 미정변경)
@@ -2252,10 +2276,20 @@ function verifyOcrRows() {
           if (rawAbnormalDateCount > 0) dateFix[f] = true; // 원본 비정상날짜 → 미정 처리된 칸
         } else if (!isReasonableDate(v)) {
           dateFix[f] = true;
-        } else if (!inRaw(v)) {
+        } else if (!inRaw(v) && !(r._autoFix && r._autoFix[f] && r._autoFix[f].to === v)) {
           issues[f] = "원본에 없음";
         }
       });
+      // 입고일 < ETA (연도 오타 등) → 빨강 + 자동수정 후보 수집
+      const ord = checkInDateOrder(String(r.eta || "").trim(), String(r.inDate || "").trim());
+      if (ord) {
+        if (ord.fix) {
+          issues.inDate = `입고일이 ETA보다 이전 → ${ord.fix} 로 수정 제안`;
+          fixes.push({ idx, bl: r.bl || "발행전", from: String(r.inDate).trim(), to: ord.fix, eta: String(r.eta).trim() });
+        } else {
+          issues.inDate = "입고일이 ETA보다 이전";
+        }
+      }
       // PAL: 숫자 형식
       if (r.pal && !isPalOk(r.pal)) issues.pal = "PAL 형식 아님";
     }
@@ -2289,6 +2323,17 @@ function verifyOcrRows() {
       dfKeys.forEach((f) => {
         const colLabel = (OCR_COLS.find((c) => c.key === f) || {}).label || f;
         details.push(`${idx + 1}행(${blLabel}) ${colLabel}: 날짜 이상 → 미정 변경`);
+      });
+    }
+    // 자동수정된 칸은 노랑(수정 표시) 유지 + 원래 값 안내
+    if (r._autoFix) {
+      cells.forEach((td) => {
+        const f = td.getAttribute("data-field");
+        const af = r._autoFix[f];
+        if (af && af.to === r[f] && !td.querySelector("input")) {
+          td.style.background = "#fff8d6";
+          td.title = `자동 수정: ${af.from} → ${af.to}`;
+        }
       });
     }
   });
@@ -2337,6 +2382,28 @@ function verifyOcrRows() {
   const hint = document.getElementById("ocrHint");
   if (hint) hint.innerHTML = `<b style="color:${problem ? "#e74c3c" : "#27ae60"};">${head}</b>${dateNoteHtml}${detailHtml}`;
   showToast(head + (dateFixCount ? ` · 날짜이상 미정변경 ${dateFixCount}건` : ""), 4000);
+
+  // ── 입고일 < ETA 자동수정 제안 (확인한 경우에만 수정. 수정 후에도 '확정'을 눌러야 DB 반영)
+  if (fixes.length && !_skipFixPrompt) {
+    const lines = fixes.slice(0, 8).map((f) => `${f.idx + 1}행(${f.bl}): ${f.from} → ${f.to}  (ETA ${f.eta})`);
+    const more = fixes.length > 8 ? `\n…외 ${fixes.length - 8}건` : "";
+    const ok = await uiConfirm(
+      `입고일이 ETA보다 이른 행이 ${fixes.length}건 있어요 (연도 오타로 보임).\n\n${lines.join("\n")}${more}\n\n입고일을 수정할까요?\n(수정 후 '확정'을 눌러야 DB에 반영돼요)`,
+      { okText: "수정", cancelText: "그대로" },
+    );
+    if (ok) {
+      let applied = 0;
+      fixes.forEach((f) => {
+        const row = ocrEditRows[f.idx];
+        if (!row || String(row.inDate).trim() !== f.from) return; // 그 사이 값이 바뀌었으면 건드리지 않음
+        row._autoFix = Object.assign({}, row._autoFix, { inDate: { from: f.from, to: f.to } });
+        setOcrCellValue(f.idx, "inDate", f.to);
+        applied++;
+      });
+      verifyOcrRows(null, true); // 수정된 상태로 결과 다시 계산 (안내창은 생략)
+      if (applied) showToast(`📅 입고일 ${applied}건 수정됨 — '확정'을 눌러 반영하세요`, 3500);
+    }
+  }
 }
 
 // 줌/이동 원위치 (패널 크기가 바뀌었을 수 있으니 기준 크기 재계산)
