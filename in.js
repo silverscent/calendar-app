@@ -2362,7 +2362,7 @@ async function verifyOcrRows(_btn, _skipFixPrompt) {
   const rawTokens = currentRawOcrString.toUpperCase().split(/[\s\n\r•·*/().,\-]+/).filter(Boolean);
   //const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{2,5}\d{5,9}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
   //2026-09-20: B/L 형식이 2~5자리 영문 + 5~9자리 숫자 외에도, 2~5자리 영문 + 4자리 숫자 + 1~2자리 영문 형식도 있음. (예: ABCD1234EF)
-  const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{2,5}\d{5,9}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
+  const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{1,5}\d{5,9}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
   // 행수 비교: OCR 파싱 행 + 이미 완료처리된 _fromDb 행 중 원본에 실제 있는 것
   const nonDbCount = ocrEditRows.filter((r) => !r._fromDb).length;
   const doneInRaw = ocrEditRows.filter((r) => r._fromDb && norm(r.bl || "") && (rawNorm.includes(norm(r.bl || "")) || rawTokens.includes(norm(r.bl || "")))).length;
