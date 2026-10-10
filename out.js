@@ -4555,12 +4555,6 @@ function toggleTheme() {
 let tempEditColorObj = null;
 let tempEditColorIdx = null;
 
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("서비스 워커 등록 실패:", err));
-  });
-}
-
 // =====================================================
 // 📈 [V3.4] 크로스 연도 정밀 비교 그리드 (글로벌 Max, 스르륵 삭제, 독립옵션 적용)
 // =====================================================

@@ -3934,12 +3934,6 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("서비스 워커 등록 실패:", err));
-  });
-}
-
 // =====================================================
 // 🚀 [네이티브 앱 감성 V3] 모달 스와이프(내려 닫기) 통합 엔진
 // =====================================================

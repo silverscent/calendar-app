@@ -1188,6 +1188,8 @@ module.exports = async function handler(req, res) {
 
       const isTest = text.startsWith("/test");
       const isReparse = text.startsWith("/reparse");
+      // ⏱️ 요청 시작 시각 (Vercel 60초 한도 안에서 AI 호출 시간을 남은 예산으로 제한)
+      const _reqStart = Date.now();
       if (text.startsWith("/ocr") || isTest || isReparse) {
         // 🚨 [방어막 1] 타임아웃 중복 요청 원천 차단 (40초 자동 해제 락)
         const [lockRows] = await pool.query(
@@ -1416,9 +1418,9 @@ module.exports = async function handler(req, res) {
             finalRows = parsedResult;
             try {
               const prompt = `너는 물류 데이터베이스 전문 AI 관리자야.\n[원본 텍스트]\n${extractedText}\n[기존 파싱 결과]\n${JSON.stringify(parsedResult)}\n\n[임무 및 규칙]\n1. 빠진 B/L 채워 넣어.\n2. 오타 수정해.\n3. '발행전'은 B/L번호에 넣어.\n4. [bl, pal, eta, inDate, fwd, sType, invoice, etc] 키를 가진 JSON 배열만 출력.`;
-              // ⏱️ Gemini가 느리거나 멈춰도 함수 전체가 죽지 않도록 타임아웃(14초) 후 기본 파싱으로 진행
+              // ⏱️ Gemini가 느리거나 멈춰도 함수 전체가 죽지 않도록 남은 시간 예산(최대 25초) 안에서 응답이 없으면 기본 파싱으로 진행
               const aiController = new AbortController();
-              const aiTimer = setTimeout(() => aiController.abort(), 14000);
+              const aiTimer = setTimeout(() => aiController.abort(), Math.max(5000, Math.min(25000, 52000 - (Date.now() - _reqStart))));
               let geminiRes;
               try {
                 geminiRes = await fetch(
@@ -1428,13 +1430,13 @@ module.exports = async function handler(req, res) {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       contents: [{ parts: [{ text: prompt }] }],
-                      generationConfig: { temperature: 0.0, responseMimeType: "application/json" },
+                      generationConfig: { temperature: 0.0, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } },
                     }),
                     signal: aiController.signal,
                   },
                 );
               } finally {
-                clearTimeout(aiTimer);
+                clearTimeout(aiTimer); console.log("[OCR AI] 요청 시작 후 경과(ms):", Date.now() - _reqStart);
               }
               const geminiJson = await geminiRes.json();
               if (geminiJson.candidates && geminiJson.candidates.length > 0) {

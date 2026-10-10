@@ -189,3 +189,117 @@ function closePcOverlays() {
   document.body.classList.add("pc-left-collapsed", "pc-right-collapsed");
   try { localStorage.setItem("pc_left", "collapsed"); localStorage.setItem("pc_right", "collapsed"); } catch (e) {}
 }
+
+// ============================================================
+// 서비스워커 등록 + 새 버전 알림 (출고/입고 공통 — out.js / in.js 에서 이동)
+//  · 새 배포가 올라가면 앱에 돌아왔을 때 "새 버전이 있어요 [새로고침]" 안내
+//    (sw.js 가 코드 파일 내용이 바뀐 걸 감지해서 알려줌 → 코드만 고칠 때는 sw.js 의 CACHE 버전을 안 올려도 됨)
+//  · '새로고침'을 눌러야만 바뀜 (작업 중인 화면이 갑자기 사라지지 않음)
+// ============================================================
+(function () {
+  if (!("serviceWorker" in navigator)) return;
+
+  const hadController = !!navigator.serviceWorker.controller; // 첫 설치(컨트롤러 없음)에는 안내하지 않음
+  let dismissed = false; // '나중에'를 누르면 이 화면에서는 다시 안 물음
+  let reloading = false;
+  let lastCheck = 0;
+
+  function postToSW(msg) {
+    const c = navigator.serviceWorker.controller;
+    if (c) c.postMessage(msg);
+    return !!c;
+  }
+
+  // 저장/조회 요청이 진행 중이면 끝날 때까지 잠깐(최대 5초) 기다렸다가 새로고침 — 저장 직후에 눌러도 요청이 끊기지 않게
+  function reloadWhenIdle(deadline) {
+    let busy = false;
+    try {
+      busy = typeof activeRequests !== "undefined" && activeRequests > 0;
+    } catch (e) {}
+    if (!busy || Date.now() > deadline) return location.reload();
+    setTimeout(() => reloadWhenIdle(deadline), 200);
+  }
+
+  function reloadWithFreshShell() {
+    if (reloading) return;
+    reloading = true;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      reloadWhenIdle(Date.now() + 5000);
+    };
+    navigator.serviceWorker.addEventListener("message", (e) => {
+      if (e.data && e.data.type === "SHELL_REFRESHED") finish();
+    });
+    if (!postToSW({ type: "REFRESH_SHELL" })) return finish();
+    setTimeout(finish, 4000); // 서비스워커 응답이 없어도 4초 뒤엔 새로고침
+  }
+
+  function showUpdateBanner() {
+    if (dismissed || !document.body || document.getElementById("appUpdateBanner")) return;
+    const bar = document.createElement("div");
+    bar.id = "appUpdateBanner";
+    bar.setAttribute("role", "status");
+    bar.style.cssText =
+      "position:fixed; left:12px; right:12px; top:calc(env(safe-area-inset-top,0px) + 10px); z-index:99998; max-width:460px; margin:0 auto; display:flex; align-items:center; gap:8px; padding:10px 10px 10px 14px; border-radius:14px; background:var(--card-bg,#26282c); color:var(--text-main,#fff); border:1px solid var(--border-color,#3a3d42); box-shadow:0 8px 28px rgba(0,0,0,0.4); font-size:0.9em; font-weight:700; box-sizing:border-box;";
+    const msg = document.createElement("span");
+    msg.style.cssText = "flex:1; min-width:0; word-break:keep-all;";
+    msg.textContent = "🔄 새 버전이 있어요";
+    const later = document.createElement("button");
+    later.textContent = "나중에";
+    later.style.cssText =
+      "border:none; background:transparent; color:var(--text-sub,#9a9da3); font-weight:700; padding:8px 6px; cursor:pointer; font-size:1em;";
+    const now = document.createElement("button");
+    now.textContent = "새로고침";
+    now.style.cssText =
+      "border:none; border-radius:10px; background:#0a84ff; color:#fff; font-weight:800; padding:8px 14px; cursor:pointer; font-size:1em;";
+    later.addEventListener("click", () => {
+      dismissed = true;
+      bar.remove();
+    });
+    now.addEventListener("click", () => {
+      now.disabled = true;
+      now.textContent = "적용 중…";
+      reloadWithFreshShell();
+    });
+    bar.appendChild(msg);
+    bar.appendChild(later);
+    bar.appendChild(now);
+    document.body.appendChild(bar);
+  }
+
+  // 서비스워커가 "코드 파일이 서버와 달라졌다"고 알려옴
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    if (e.data && e.data.type === "SHELL_UPDATED") showUpdateBanner();
+  });
+  // sw.js 자체가 새로 설치돼 제어권을 넘겨받음 (첫 설치는 제외)
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController && !reloading) showUpdateBanner();
+  });
+
+  // 앱으로 돌아올 때 서버에 새 배포가 있는지 확인 (1분에 한 번만)
+  function checkForUpdate() {
+    if (!navigator.onLine) return;
+    const now = Date.now();
+    if (now - lastCheck < 60000) return;
+    lastCheck = now;
+    postToSW({ type: "CHECK_UPDATE" });
+    navigator.serviceWorker
+      .getRegistration()
+      .then((r) => r && r.update())
+      .catch(() => {});
+  }
+
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("서비스 워커 등록 실패:", err));
+    setTimeout(() => postToSW({ type: "HELLO" }), 1500); // 로딩 중 놓친 '새 버전' 알림 다시 받기
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      postToSW({ type: "HELLO" });
+      checkForUpdate();
+    }
+  });
+  window.addEventListener("online", checkForUpdate);
+})();
