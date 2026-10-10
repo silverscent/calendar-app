@@ -1517,6 +1517,7 @@ function showLastOcrImage() {
   document.getElementById("ocrImageModal").style.display = "flex";
   document.getElementById("ocrImageContent").innerHTML = "불러오는 중... ⏳";
   ocrTransform = { scale: 1, x: 0, y: 0 };
+  ocrHiliteIdx = null; // 지난번에 선택했던 줄 표시(노란 밴드)가 다시 열 때 남지 않게
   // Raw 파싱 텍스트 보기 — 로그인 관리자만
   const rawWrap = document.getElementById("rawOcrToggleWrap");
   if (rawWrap) rawWrap.style.display = "none"; // 옛 위치(상단) 버튼 숨김 — 하단 버튼줄로 이동
@@ -1624,7 +1625,9 @@ function toggleOcrCompare(btn) {
     btn.innerHTML = "📊 대조·수정 켜기";
     btn.style.background = "#4a90e2";
     if (hint) hint.innerHTML = "두 손가락=확대 · 한 손가락=이동";
+    ocrHiliteIdx = null; // 이미지만 보기로 돌아가면 선택했던 줄 표시도 지움
     resetOcrTransform();
+    positionOcrHilite(); // 선택 줄이 없으니 밴드 숨김
   } else {
     // 켜기 → 좌우 분할 + 데이터 로드
     pane.style.display = "block";
