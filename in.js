@@ -2652,10 +2652,16 @@ function initOcrSplitGestures() {
       } else if (e.touches.length === 2) {
         e.preventDefault();
         const cd = dist(e.touches);
+        const prevScale = ocrTransform.scale;
         ocrTransform.scale = Math.max(1, Math.min(_ocrG.startScale * (cd / _ocrG.pinchDist), 8));
+        const ratio = ocrTransform.scale / prevScale;
         const m = mid(e.touches);
-        ocrTransform.x += m.x - _ocrG.lastX;
-        ocrTransform.y += m.y - _ocrG.lastY;
+        // 두 손가락 중간점이 가리키던 이미지 지점이 계속 손가락 아래에 머물도록 확대(+이동 반영) — 이미지 중심 기준 확대 아님
+        const rc = imgPane.getBoundingClientRect();
+        const pcx = rc.left + rc.width / 2;
+        const pcy = rc.top + rc.height / 2;
+        ocrTransform.x = m.x - pcx - (_ocrG.lastX - pcx - ocrTransform.x) * ratio;
+        ocrTransform.y = m.y - pcy - (_ocrG.lastY - pcy - ocrTransform.y) * ratio;
         _ocrG.lastX = m.x;
         _ocrG.lastY = m.y;
         requestAnimationFrame(applyOcrTransform);
@@ -2707,7 +2713,15 @@ function initOcrSplitGestures() {
     (e) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? -0.15 : 0.15;
+      const prevScale = ocrTransform.scale;
       ocrTransform.scale = Math.max(1, Math.min(ocrTransform.scale + delta, 8));
+      // 마우스 커서가 가리키는 지점 기준으로 확대/축소
+      const rc = imgPane.getBoundingClientRect();
+      const px = e.clientX - (rc.left + rc.width / 2);
+      const py = e.clientY - (rc.top + rc.height / 2);
+      const ratio = ocrTransform.scale / prevScale;
+      ocrTransform.x = px - (px - ocrTransform.x) * ratio;
+      ocrTransform.y = py - (py - ocrTransform.y) * ratio;
       if (ocrTransform.scale <= 1) {
         ocrTransform.x = 0;
         ocrTransform.y = 0;
