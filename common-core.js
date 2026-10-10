@@ -236,6 +236,8 @@ function closePcOverlays() {
     setTimeout(finish, 4000); // 서비스워커 응답이 없어도 4초 뒤엔 새로고침
   }
 
+  window.applyShellUpdate = reloadWithFreshShell; // 당겨서 새로고침(common-ui.js)에서 사용
+
   function showUpdateBanner() {
     if (dismissed || !document.body || document.getElementById("appUpdateBanner")) return;
     const bar = document.createElement("div");
@@ -271,11 +273,17 @@ function closePcOverlays() {
 
   // 서비스워커가 "코드 파일이 서버와 달라졌다"고 알려옴
   navigator.serviceWorker.addEventListener("message", (e) => {
-    if (e.data && e.data.type === "SHELL_UPDATED") showUpdateBanner();
+    if (e.data && e.data.type === "SHELL_UPDATED") {
+      window._shellUpdatePending = true; // '나중에'를 눌러도 기억 → 당겨서 새로고침 때 통째로 새로고침
+      showUpdateBanner();
+    }
   });
   // sw.js 자체가 새로 설치돼 제어권을 넘겨받음 (첫 설치는 제외)
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (hadController && !reloading) showUpdateBanner();
+    if (hadController && !reloading) {
+      window._shellUpdatePending = true;
+      showUpdateBanner();
+    }
   });
 
   // 앱으로 돌아올 때 서버에 새 배포가 있는지 확인 (1분에 한 번만)

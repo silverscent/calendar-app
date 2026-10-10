@@ -1771,9 +1771,13 @@ function changeConnLogPage(dir) {
         ic.style.transform = "";
         ic.style.animation = "spin 0.7s linear infinite";
         box.style.transform = "translate(-50%, 14px)";
-        try {
-          navMonth(0);
-        } catch (err) {}
+        if (window._shellUpdatePending && typeof window.applyShellUpdate === "function") {
+          window.applyShellUpdate(); // 새 버전이 대기 중이면 통째로 새로고침 (저장 중인 요청은 끝난 뒤)
+        } else {
+          try {
+            navMonth(0);
+          } catch (err) {}
+        }
         setTimeout(() => {
           box.style.transform = "translate(-50%,-70px)";
           ic.style.animation = "";
