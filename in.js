@@ -1504,6 +1504,15 @@ const OCR_COLS = [
   { key: "etc", label: "비고", w: 120, align: "left" },
 ];
 
+// OCR 이미지 주소 캐시 — 같은 화면에서 여러 번 열 때마다 서버(텔레그램 주소 재발급)를 다시 부르지 않게
+//  · 텔레그램 파일 주소는 최소 1시간 유효 → 50분 안에서만 재사용
+//  · 열 때마다 '최근 OCR 시각'만 가볍게 확인해서, 그 사이 새 OCR이 있었으면 이미지를 다시 받음
+let _ocrImgCache = null; // { url, time, ts }
+const OCR_IMG_CACHE_MS = 50 * 60 * 1000;
+function _ocrTimeOf(r) {
+  return r && r.time ? r.time : typeof r === "string" ? r : "";
+}
+
 function showLastOcrImage() {
   document.getElementById("ocrImageModal").style.display = "flex";
   document.getElementById("ocrImageContent").innerHTML = "불러오는 중... ⏳";
@@ -1514,7 +1523,7 @@ function showLastOcrImage() {
   const rawArea = document.getElementById("raw-ocr-textarea-container");
   if (rawArea) rawArea.style.display = "none"; // 열려있던 raw 패널 닫기
 
-  apiCall({ source: "vercel", domain: "system", action: "GET_LAST_OCR_IMAGE" }).then(function (res) {
+  const _renderOcrImageRes = function (res) {
     if (res === null) {
       document.getElementById("ocrImageContent").innerHTML = "이미지 로딩 에러";
       return;
@@ -1558,6 +1567,31 @@ function showLastOcrImage() {
       document.getElementById("ocrImageContent").innerHTML =
         '<div style="color:var(--text-sub); font-weight:800;">현재 서버에 등록된 최신 이미지가 없습니다.</div>';
     }
+  };
+
+  // 캐시가 신선하면 바로 표시 + 최신 여부만 확인
+  if (_ocrImgCache && Date.now() - _ocrImgCache.ts < OCR_IMG_CACHE_MS) {
+    _renderOcrImageRes({ url: _ocrImgCache.url });
+    apiCall({ source: "vercel", domain: "system", action: "GET_OCR_LAST_TIME" }).then(function (tr) {
+      if (tr === null || !_ocrImgCache) return;
+      if (_ocrTimeOf(tr) !== _ocrImgCache.time) {
+        _ocrImgCache = null; // 그 사이 새 OCR 처리됨 → 이미지 다시 받기
+        const m = document.getElementById("ocrImageModal");
+        const pt = document.getElementById("ocrPaneTable");
+        const compareOn = !!pt && pt.style.display !== "none"; // 대조·수정 중이면 작업 내용이 날아가지 않게 그대로 둠(다음에 열 때 갱신)
+        if (m && m.style.display !== "none" && !compareOn) showLastOcrImage();
+      }
+    });
+    return;
+  }
+  Promise.all([
+    apiCall({ source: "vercel", domain: "system", action: "GET_LAST_OCR_IMAGE" }),
+    apiCall({ source: "vercel", domain: "system", action: "GET_OCR_LAST_TIME" }),
+  ]).then(function (r) {
+    const res = r[0];
+    const u = res && res.url ? res.url : "";
+    if (u.startsWith("http") && r[1] !== null) _ocrImgCache = { url: u, time: _ocrTimeOf(r[1]), ts: Date.now() };
+    _renderOcrImageRes(res);
   });
 }
 
@@ -4661,4 +4695,4 @@ document.addEventListener("click", function (event) {
 let globalOcrFilters = [];
 
 // 👆 ----------------------------------------------------
-//새버전 테스트용2
+//새버전 테스트용
