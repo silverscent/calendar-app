@@ -2074,6 +2074,7 @@ if (action === "VERIFY_SESSION") {
           let updateCount = 0;
           let skipCount = 0;
           let deleteCount = 0;
+          const skipNames = [];
 
           // 🗑️ 대조표에서 행 데이터를 전부 지운 건 → 해당 입고 일정 삭제
           for (const r of delRows) {
@@ -2102,6 +2103,15 @@ if (action === "VERIFY_SESSION") {
               .trim()
               .slice(0, max);
 
+          // 🔑 1단계: 모든 행의 '대상 DB 행(id)'을 수정 전 상태로 먼저 확정 (인보이스를 서로 맞바꿔도 꼬이지 않게)
+          //   - 우선순위: 대조표에 원래 있던 값(_o: 원래 인보이스 → 원래 BL+입고일) → 새 인보이스 → 새 BL
+          //   - 한 DB 행은 한 행만 차지(claimed) → 같은 행을 두 번 덮어쓰는 일 방지
+          const claimed = new Set();
+          const findFree = async (sql, params) => {
+            const [found] = await pool.query(sql, params);
+            return found.find((x) => !claimed.has(x.id)) || null;
+          };
+          const plan = [];
           for (const r of rows) {
             const bl = safeStr(r.bl, 100).replace(/[\s•·\-\*]/g, "");
             const pal = Math.min(Math.max(parseInt(r.pal) || 0, 0), 99999);
@@ -2111,37 +2121,65 @@ if (action === "VERIFY_SESSION") {
             const sType = safeStr(r.sType, 20).replace(/\s/g, "").toUpperCase();
             const invoice = safeStr(r.invoice, 100).replace(/\s/g, ""); // 내부 공백 제거(매칭 일관성)
             const etc = safeStr(r.etc, 500);
-
-            // 한 행이 실패해도 전체 확정이 죽지 않도록 행별 방어
+            const o = r._o && typeof r._o === "object" ? r._o : null;
+            let target = null;
             try {
-              let exist = [];
-              if (invoice) {
-                [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(invoice) = ? LIMIT 1`, [invoice]);
+              if (o) {
+                const oInv = safeStr(o.invoice, 100).replace(/\s/g, "");
+                const oBl = safeStr(o.bl, 100).replace(/[\s•·\-\*]/g, "");
+                const oDt = normDate(o.inDate);
+                if (oInv) {
+                  target = await findFree(`SELECT id, status FROM inbound WHERE TRIM(invoice) = ?`, [oInv]);
+                }
+                if (!target && oBl && oBl !== "발행전") {
+                  target = await findFree(`SELECT id, status FROM inbound WHERE TRIM(bl_number) = ? ORDER BY (receive_date <=> ?) DESC, id ASC`, [oBl, oDt]);
+                }
+                if (!target && !oInv && (oBl === "발행전" || oBl === "")) {
+                  // 인보이스·BL 이 없던 행(발행전) → 입고일 + 비어있는 인보이스로 특정
+                  target = await findFree(
+                    `SELECT id, status FROM inbound WHERE (TRIM(bl_number) = ? OR bl_number IS NULL) AND receive_date <=> ? AND (invoice IS NULL OR TRIM(invoice) = '') ORDER BY id ASC`,
+                    [oBl, oDt],
+                  );
+                }
               }
-              if (exist.length === 0 && bl !== "발행전" && bl !== "") {
-                [exist] = await pool.query(`SELECT id, status FROM inbound WHERE TRIM(bl_number) = ? LIMIT 1`, [bl]);
+              if (!target && invoice) {
+                target = await findFree(`SELECT id, status FROM inbound WHERE TRIM(invoice) = ?`, [invoice]);
               }
+              if (!target && bl !== "발행전" && bl !== "") {
+                target = await findFree(`SELECT id, status FROM inbound WHERE TRIM(bl_number) = ?`, [bl]);
+              }
+            } catch (findErr) {
+              console.error(`[APPLY_OCR] 대상 조회 실패 (${bl || invoice}):`, findErr.sqlMessage || findErr.message);
+            }
+            if (target) claimed.add(target.id);
+            plan.push({ r, bl, pal, inDate, eta, fwd, sType, invoice, etc, target });
+          }
 
-              if (exist.length > 0) {
-                if (exist[0].status === "완료") {
+          // 2단계: 확정된 id 로 반영 (한 행이 실패해도 전체 확정이 죽지 않도록 행별 방어)
+          for (const p of plan) {
+            try {
+              if (p.target) {
+                if (p.target.status === "완료") {
                   skipCount++;
+                  skipNames.push(p.bl || p.invoice);
                   continue;
                 }
                 await pool.query(
                   `UPDATE inbound SET bl_number=?, pallets=?, receive_date=?, remarks=?, s_type=?, fwd=?, invoice=?, eta=?, is_ai_modified=1 WHERE id=?`,
-                  [bl, pal, inDate, etc, sType, fwd, invoice, eta, exist[0].id],
+                  [p.bl, p.pal, p.inDate, p.etc, p.sType, p.fwd, p.invoice, p.eta, p.target.id],
                 );
                 updateCount++;
               } else {
                 await pool.query(
                   `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, 1)`,
-                  [bl, pal, inDate, sType, fwd, invoice, eta, etc],
+                  [p.bl, p.pal, p.inDate, p.sType, p.fwd, p.invoice, p.eta, p.etc],
                 );
                 insertCount++;
               }
             } catch (rowErr) {
               skipCount++;
-              console.error(`[APPLY_OCR] 행 반영 실패 (${bl || invoice}):`, rowErr.sqlMessage || rowErr.message);
+              skipNames.push(p.bl || p.invoice);
+              console.error(`[APPLY_OCR] 행 반영 실패 (${p.bl || p.invoice}):`, rowErr.sqlMessage || rowErr.message);
             }
           }
           // ⚠️ LAST_OCR_DATA(좌표 캐시)는 덮어쓰지 않음 — 좌표 보존 + 대조창은 GET 때 현재 inbound 값을 합쳐서 보여줌
@@ -2162,7 +2200,7 @@ if (action === "VERIFY_SESSION") {
             notifyCalendarChange(ocrDesc, currentAdmin);
           } catch (e) {}
 
-          return res.status(200).json({ success: true, insertCount, updateCount, skipCount, deleteCount, total: rows.length });
+          return res.status(200).json({ success: true, insertCount, updateCount, skipCount, skipNames: skipNames.slice(0, 10), deleteCount, total: rows.length });
         } catch (err) {
           console.error("OCR 적용 에러:", err);
           return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });

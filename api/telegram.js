@@ -1462,6 +1462,12 @@ module.exports = async function handler(req, res) {
             } catch (e) {
               console.error("행 좌표 매핑 실패:", e);
             }
+            // 🧷 Vision 이 표 열을 뒤섞어 읽은 경우(인보이스·비고가 엉뚱한 행에 붙음) → 단어 좌표로 행에 다시 배정
+            try {
+              realignInvoiceEtcByPosition(finalRows, visionData);
+            } catch (e) {
+              console.error("좌표 기반 재배정 실패:", e);
+            }
           }
 
           // 🧪 [분기 1] 테스트 시 캐시 저장 후 종료
@@ -1762,6 +1768,7 @@ function attachRowYCoords(rows, visionData) {
     if (m) {
       r.iy = m.cy;
       r.ih = m.h;
+      r._anc = true; // 실제 단어 위치로 잡힌 행(보간 아님) — realignInvoiceEtcByPosition 에서 사용 후 삭제
     }
     r.cx = {};
     if (mb) r.cx.bl = mb.cx;
@@ -1868,6 +1875,104 @@ function attachRowYCoords(rows, visionData) {
       if (typeof r.cx[c] !== "number") r.cx[c] = globalCx[c];
     });
   });
+}
+
+// =================================================================
+// 🧷 좌표 기반 인보이스/비고 재배정
+//    Vision 은 표를 읽을 때 열 순서가 뒤섞여, 마지막 몇 행의 인보이스·비고가 엉뚱한 행에 붙는 경우가 있음.
+//    (텍스트 순서는 틀려도 단어 박스의 Y좌표는 정확하므로, 같은 높이의 행에 다시 붙인다)
+//    안전장치: 앵커 행 부족·단어 대부분이 행에 안 붙음·열 위치 불명 → 아무것도 바꾸지 않음
+// =================================================================
+function realignInvoiceEtcByPosition(rows, visionData) {
+  const cleanup = () => rows.forEach((r) => { if (r) delete r._anc; });
+  try {
+    if (!Array.isArray(rows) || rows.length < 2 || !visionData) return;
+    const anns = visionData.responses && visionData.responses[0] && visionData.responses[0].textAnnotations;
+    if (!Array.isArray(anns) || anns.length < 2) return;
+    const median = (arr) => {
+      const a = arr.filter((v) => typeof v === "number").sort((x, y) => x - y);
+      return a.length ? a[Math.floor(a.length / 2)] : null;
+    };
+    // 1) 행 높이: 실제 단어로 앵커된 행이 80% 이상일 때만 신뢰
+    const ancCnt = rows.filter((r) => r._anc && typeof r.iy === "number").length;
+    if (ancCnt < Math.max(2, Math.ceil(rows.length * 0.8))) return;
+    const iys = rows.map((r) => r.iy).filter((v) => typeof v === "number").sort((a, b) => a - b);
+    const diffs = [];
+    for (let i = 1; i < iys.length; i++) if (iys[i] - iys[i - 1] > 4) diffs.push(iys[i] - iys[i - 1]);
+    const pitch = median(diffs);
+    if (!pitch || pitch < 8 || pitch > 200) return;
+    const tol = pitch * 0.6;
+    // 2) 열 위치(X): 인보이스·S.Type 열은 attachRowYCoords 가 구해 둔 값, ETC 는 헤더 단어
+    const invX = median(rows.map((r) => r.cx && r.cx.invoice));
+    const typeX = median(rows.map((r) => r.cx && r.cx.sType));
+    if (invX == null) return;
+    const words = anns.slice(1).map((a) => {
+      const vs = (a.boundingPoly && a.boundingPoly.vertices) || [];
+      const ys = vs.map((v) => v.y || 0);
+      const xs = vs.map((v) => v.x || 0);
+      return {
+        t: String(a.description || "").trim(),
+        cy: (Math.min(...ys) + Math.max(...ys)) / 2,
+        cx: (Math.min(...xs) + Math.max(...xs)) / 2,
+        lft: Math.min(...xs),
+        rgt: Math.max(...xs),
+      };
+    });
+    const etcHdr = words.find((w) => w.t.toUpperCase() === "ETC");
+    const etcX = etcHdr ? etcHdr.cx : null;
+    const invLeft = typeX != null ? (typeX + invX) / 2 : invX - (etcX != null ? (etcX - invX) : 60);
+    const invSym = invX + (invX - invLeft); // 인보이스 열 오른쪽 한계(왼쪽과 대칭으로 추정)
+    const invRight = etcX != null ? Math.min((invX + etcX) / 2, invSym) : invSym;
+    // 3) 단어 → 가장 가까운 행 (허용 범위 밖이면 표 밖 글자라 무시)
+    const rowOf = (w) => {
+      let best = -1;
+      let bd = Infinity;
+      rows.forEach((r, i) => {
+        if (typeof r.iy !== "number") return;
+        const d = Math.abs(w.cy - r.iy);
+        if (d < bd) { bd = d; best = i; }
+      });
+      return bd <= tol ? best : -1;
+    };
+    // 3-1) 인보이스(7~8자리 숫자) — 인보이스 열 영역
+    const invWords = words.filter((w) => /^\d{7,8}$/.test(w.t) && w.cx >= invLeft && w.cx <= invRight);
+    const posInv = rows.map(() => []);
+    let assignedInv = 0;
+    invWords
+      .slice()
+      .sort((a, b) => a.cy - b.cy || a.cx - b.cx)
+      .forEach((w) => {
+        const i = rowOf(w);
+        if (i >= 0) { posInv[i].push(w.t); assignedInv++; }
+      });
+    if (invWords.length === 0 || assignedInv < invWords.length * 0.7) return; // 위치가 어긋난 이미지 → 건드리지 않음
+    const invEdge = Math.max(...invWords.map((w) => w.rgt)); // 인보이스 숫자의 오른쪽 끝 — 이보다 오른쪽 글자만 비고
+    // 3-2) 비고 — ETC 헤더가 있을 때만(열 경계를 알 수 있을 때). 비고는 왼쪽 정렬이라 중심이 아니라 왼쪽 끝으로 판정
+    let posEtc = null;
+    if (etcX != null) {
+      posEtc = rows.map(() => []);
+      words
+        .filter((w) => w.lft > invEdge + 2 && w.t.toUpperCase() !== "ETC")
+        .sort((a, b) => a.cy - b.cy || a.cx - b.cx)
+        .forEach((w) => {
+          const i = rowOf(w);
+          if (i >= 0) posEtc[i].push(w);
+        });
+    }
+    // 4) 반영
+    rows.forEach((r, i) => {
+      if (typeof r.iy !== "number") return;
+      const exist = String(r.invoice || "").split(/[,\s]+/).filter(Boolean);
+      const keep = exist.filter((v) => !/^\d{7,8}$/.test(v)); // PI-형식 등 숫자 아닌 인보이스는 유지
+      r.invoice = [...keep, ...posInv[i]].join(", ");
+      if (posEtc) {
+        // 같은 줄(Y 차이 작음)끼리 이어 붙이고 줄 사이는 공백
+        r.etc = posEtc[i].map((w) => w.t).join(" ");
+      }
+    });
+  } finally {
+    cleanup();
+  }
 }
 
 // =================================================================

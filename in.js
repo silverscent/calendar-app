@@ -2182,6 +2182,7 @@ function startEditOcrCell(td, idx, field, initial) {
   const commit = (move) => {
     if (done) return;
     done = true;
+    _ocrUnwatch();
     ocrEditRows[idx][field] = input.value;
     td.innerHTML = _esc(input.value);
     td.style.background = "#fff8d6"; // 수정 표시(노랑)
@@ -2194,10 +2195,38 @@ function startEditOcrCell(td, idx, field, initial) {
   const cancel = () => {
     if (done) return;
     done = true;
+    _ocrUnwatch();
     td.innerHTML = _esc(cur);
     selectOcrCell(idx, field);
   };
-  input.addEventListener("blur", () => commit("stay"));
+  // 📱 iOS '붙여넣기 허용' 같은 시스템 UI 가 뜨면 input 이 blur 되는데, 이때 편집을 끝내면 안 됨.
+  //    → '사용자가 화면(입력칸 밖)을 직접 탭'했을 때만 편집 종료. 그 외 blur 는 편집 상태 유지 + 재포커스.
+  let _lastOutsidePtr = 0;
+  const _onPtr = (e) => {
+    if (done || e.target === input) return;
+    _lastOutsidePtr = Date.now();
+    if (document.activeElement !== input) commit("stay"); // 이미 포커스를 잃은 채 남아있던 칸 → 값 보존하고 종료
+  };
+  const _ocrUnwatch = () => {
+    document.removeEventListener("pointerdown", _onPtr, true);
+    document.removeEventListener("touchstart", _onPtr, true);
+  };
+  document.addEventListener("pointerdown", _onPtr, true);
+  document.addEventListener("touchstart", _onPtr, true);
+  input.addEventListener("blur", () => {
+    if (done) return;
+    if (Date.now() - _lastOutsidePtr < 700) {
+      commit("stay"); // 사용자가 다른 곳을 탭해서 빠져나감
+      return;
+    }
+    // 시스템 UI(붙여넣기 허용 팝업 등)로 인한 포커스 상실 → 잠시 뒤 편집 칸으로 포커스 복귀
+    setTimeout(() => {
+      if (done || !input.isConnected || document.activeElement === input) return;
+      try {
+        input.focus({ preventScroll: true });
+      } catch (e) {}
+    }, 250);
+  });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -2481,6 +2510,10 @@ async function applyOcrEdits(btn) {
     showToast("⚠️ 적용할 데이터가 없습니다.", 2500);
     return;
   }
+  // 편집 중인 칸이 남아있으면 값부터 확정(아이폰에서 포커스를 잃은 채 남은 입력값 보존)
+  try {
+    document.querySelectorAll("#ocrTableInner td input").forEach((i) => i.blur());
+  } catch (e) {}
   // 행에 의미있는 데이터가 하나라도 있는지 (pal 0 / 미정 / 빈값은 '없음'으로 취급)
   const meaningful = (r) => {
     if (!r) return false;
@@ -2508,7 +2541,8 @@ async function applyOcrEdits(btn) {
       if (meaningful(o)) deletes.push({ bl: o.bl || "", invoice: o.invoice || "", inDate: o.inDate || "" });
       return;
     }
-    if (FLD.some((f) => String(r[f] == null ? "" : r[f]) !== String(o[f] == null ? "" : o[f]))) changed.push(r);
+    if (FLD.some((f) => String(r[f] == null ? "" : r[f]) !== String(o[f] == null ? "" : o[f])))
+      changed.push(Object.assign({}, r, { _o: { bl: o.bl || "", invoice: o.invoice || "", inDate: o.inDate || "" } })); // _o: 수정 전 값 → 서버가 정확히 그 DB 행을 찾도록
   });
 
   if (changed.length === 0 && deletes.length === 0) {
@@ -2540,7 +2574,7 @@ async function applyOcrEdits(btn) {
     }
     if (res && res.success) {
       const delPart = res.deleteCount > 0 ? ` / 삭제 ${res.deleteCount}` : "";
-      const skipPart = res.skipCount > 0 ? ` / 완료건 건너뜀 ${res.skipCount}` : "";
+      const skipPart = res.skipCount > 0 ? ` / 건너뜀 ${res.skipCount}${res.skipNames && res.skipNames.length ? " (" + res.skipNames.join(", ") + ")" : ""}` : "";
       showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount}${delPart}${skipPart})`, 3000);
       if (typeof navMonth === "function") navMonth(0);
       loadOcrSplitData(); // 대조표 새로고침(삭제된 빈 행 제거 + 최신값 반영 + 기준 갱신)
