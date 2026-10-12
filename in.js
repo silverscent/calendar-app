@@ -2573,9 +2573,10 @@ async function applyOcrEdits(btn) {
       btn.innerHTML = orig;
     }
     if (res && res.success) {
-      const delPart = res.deleteCount > 0 ? ` / 삭제 ${res.deleteCount}` : "";
+      const delPart = res.deleteCount > 0 ? ` / 삭제 ${res.deleteCount}` : ""
+      const dupPart = res.dupCount > 0 ? ` / 중복정리 ${res.dupCount}` : "";
       const skipPart = res.skipCount > 0 ? ` / 건너뜀 ${res.skipCount}${res.skipNames && res.skipNames.length ? " (" + res.skipNames.join(", ") + ")" : ""}` : "";
-      showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount}${delPart}${skipPart})`, 3000);
+      showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount}${delPart}${dupPart}${skipPart})`, 3000);
       if (typeof navMonth === "function") navMonth(0);
       loadOcrSplitData(); // 대조표 새로고침(삭제된 빈 행 제거 + 최신값 반영 + 기준 갱신)
     } else {
@@ -4337,6 +4338,144 @@ function reapplyPcHl() {
 }
 
 // 🔍 FAB 일정 검색 (모바일 등 상단바 포화 → FAB 메뉴에서 검색). 결과 탭 시 기존 pcJumpTo 재사용.
+// =====================================================
+// 🧹 중복검사 (오너 전용) — 같은 인보이스 / 같은 B/L 을 가진 입고 행을 모아 보여주고, 고른 것만 삭제
+//   · 서버(FIND_INBOUND_DUPES / DELETE_INBOUND_DUPES)가 TELEGRAM_OWNER_ID 로 한 번 더 검증 → 화면 버튼은 편의용
+//   · 자동 삭제 없음 / 기본 선택 없음 / 삭제 전 확인창 / 감사 로그(DUPE_DELETE) 기록
+// =====================================================
+function _isOwnerUser() {
+  try {
+    return localStorage.getItem("isOwner") === "true" || sessionStorage.getItem("isOwner") === "true";
+  } catch (e) {
+    return false;
+  }
+}
+function syncDupFabVisibility() {
+  const w = document.getElementById("fab-sub-dupe-wrap");
+  if (w) w.style.display = _isOwnerUser() ? "flex" : "none";
+}
+// FAB 메뉴를 열 때마다 오너 여부를 다시 반영 (로그인/로그아웃 직후에도 정확하게)
+(function _watchFabForDup() {
+  const bind = () => {
+    const fab = document.getElementById("fabBtn");
+    if (!fab || fab._dupWatch) return !!fab;
+    fab._dupWatch = true;
+    new MutationObserver(syncDupFabVisibility).observe(fab, { attributes: true, attributeFilter: ["class", "style"] });
+    syncDupFabVisibility();
+    return true;
+  };
+  if (!bind()) document.addEventListener("DOMContentLoaded", bind);
+})();
+
+function openDupCheck() {
+  if (!_isOwnerUser()) {
+    showToast("⚠️ 오너 전용 기능입니다.", 2200);
+    return;
+  }
+  const m = document.getElementById("dupModal");
+  if (!m) return;
+  m.style.display = "flex";
+  runDupCheck();
+}
+function closeDupCheck() {
+  const m = document.getElementById("dupModal");
+  if (m) m.style.display = "none";
+}
+function _dupUpdateBtn() {
+  const btn = document.getElementById("dupDelBtn");
+  if (!btn) return;
+  const n = new Set(Array.from(document.querySelectorAll("#dupResults input.dup-chk:checked")).map((i) => i.value)).size;
+  btn.disabled = n === 0;
+  btn.textContent = n ? `선택 삭제 (${n})` : "선택 삭제";
+}
+function _dupSync(el) {
+  // 같은 행이 인보이스 묶음·B/L 묶음에 둘 다 나오면 체크 상태를 맞춤
+  document.querySelectorAll(`#dupResults input.dup-chk[value="${el.value}"]`).forEach((o) => (o.checked = el.checked));
+  _dupUpdateBtn();
+}
+async function runDupCheck() {
+  const box = document.getElementById("dupResults");
+  const sum = document.getElementById("dupSummary");
+  if (!box || !sum) return;
+  sum.textContent = "검사 중... ⏳";
+  box.innerHTML = "";
+  _dupUpdateBtn();
+  const res = await apiCall({
+    source: "vercel",
+    domain: "system",
+    action: "FIND_INBOUND_DUPES",
+    admin_id: localStorage.getItem("admin_id"),
+  });
+  if (!res || !res.success) {
+    sum.textContent = "⚠️ " + ((res && res.msg) || "검사에 실패했습니다.");
+    return;
+  }
+  if (!res.groups || res.groups.length === 0) {
+    sum.textContent = `✅ 전체 ${res.total}건 검사 — 중복된 인보이스/B/L 이 없습니다.`;
+    return;
+  }
+  sum.innerHTML =
+    `전체 ${res.total}건 중 중복 묶음 <b>${res.groups.length}</b>개` +
+    (res.groupCount > res.groups.length ? ` (상위 ${res.groups.length}개만 표시)` : "") +
+    `<br>지울 행만 체크하세요. (기본은 아무것도 선택되지 않습니다)`;
+  box.innerHTML = res.groups
+    .map((g) => {
+      const head = `<div class="dup-ghead"><span>${g.type === "invoice" ? "인보이스" : "B/L"}</span>${_esc(g.key)} · ${g.rows.length}건</div>`;
+      const rows = g.rows
+        .map((r) => {
+          const done = r.status === "완료" ? `<span class="dup-tag done">완료</span>` : "";
+          const ai = r.ai ? `<span class="dup-tag ai">AI수정</span>` : "";
+          return `<label class="dup-row">
+            <input type="checkbox" class="dup-chk" value="${r.id}" onchange="_dupSync(this)">
+            <div class="dup-info">
+              <b>${_esc(r.bl || "-")}</b>${done}${ai}<br>
+              <span class="dup-sub">인보이스 ${_esc(r.invoice || "-")} · 입고 ${_esc(r.rd || "미정")} · ETA ${_esc(r.eta || "-")}</span><br>
+              <span class="dup-sub">${_esc(String(r.pal == null ? 0 : r.pal))}P · ${_esc(r.sType || "-")} · ${_esc(r.fwd || "-")} · #${r.id}${r.etc ? " · " + _esc(r.etc) : ""}</span>
+            </div>
+          </label>`;
+        })
+        .join("");
+      return `<div class="dup-group">${head}${rows}</div>`;
+    })
+    .join("");
+}
+async function deleteSelectedDupes(btn) {
+  const ids = Array.from(new Set(Array.from(document.querySelectorAll("#dupResults input.dup-chk:checked")).map((i) => parseInt(i.value, 10))));
+  if (ids.length === 0) return;
+  // 묶음 안의 행을 전부 골랐다면(= 해당 일정이 통째로 사라짐) 한 번 더 경고
+  let wipeWarn = false;
+  document.querySelectorAll("#dupResults .dup-group").forEach((g) => {
+    const all = g.querySelectorAll("input.dup-chk");
+    if (all.length && Array.from(all).every((i) => i.checked)) wipeWarn = true;
+  });
+  const doneCnt = document.querySelectorAll("#dupResults input.dup-chk:checked").length
+    ? Array.from(document.querySelectorAll("#dupResults input.dup-chk:checked")).filter((i) => i.closest("label").querySelector(".dup-tag.done")).length
+    : 0;
+  let msg = `선택한 ${ids.length}건을 DB에서 삭제할까요?\n(되돌릴 수 없습니다)`;
+  if (wipeWarn) msg += "\n\n⚠️ 한 묶음의 행을 전부 선택했습니다 — 그 일정이 통째로 사라집니다.";
+  if (doneCnt) msg += "\n⚠️ 완료 처리된 건이 포함되어 있습니다.";
+  if (!(await uiConfirm(msg, { danger: true, okText: "삭제" }))) return;
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "삭제 중... ⏳";
+  const res = await apiCall({
+    source: "vercel",
+    domain: "system",
+    action: "DELETE_INBOUND_DUPES",
+    admin_id: localStorage.getItem("admin_id"),
+    data: { ids },
+  });
+  btn.textContent = orig;
+  if (res && res.success) {
+    showToast(`🗑️ ${res.deleted}건 삭제 완료`, 2500);
+    if (typeof navMonth === "function") navMonth(0);
+    runDupCheck();
+  } else {
+    showToast("⚠️ " + ((res && res.msg) || "삭제에 실패했습니다."), 3000);
+    _dupUpdateBtn();
+  }
+}
+
 function openFabSearch() {
   const m = document.getElementById("fabSearchModal");
   if (!m) return;

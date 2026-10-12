@@ -335,6 +335,8 @@ module.exports = async function (req, res) {
         "SAVE_OCR_INFO",
         "SAVE_OCR_FILTERS",
         "APPLY_OCR_DATA",
+        "FIND_INBOUND_DUPES",
+        "DELETE_INBOUND_DUPES",
         "AI_QUERY",
       ]);
 
@@ -2203,6 +2205,95 @@ if (action === "VERIFY_SESSION") {
           return res.status(200).json({ success: true, insertCount, updateCount, skipCount, skipNames: skipNames.slice(0, 10), deleteCount, total: rows.length });
         } catch (err) {
           console.error("OCR 적용 에러:", err);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+        }
+      } else if (action === "FIND_INBOUND_DUPES") {
+        // 🔎 오너 전용 — 입고 DB 에서 같은 인보이스 / 같은 B/L 을 가진 행 묶음을 찾아 보여줌 (조회만, 삭제 X)
+        try {
+          const _ownerId = process.env.TELEGRAM_OWNER_ID || "";
+          if (!_ownerId || currentAdmin.toLowerCase() !== _ownerId.toLowerCase())
+            return res.status(200).json({ success: false, msg: "권한이 없습니다." });
+          const [all] = await pool.query(
+            `SELECT id, bl_number, invoice, pallets, DATE_FORMAT(receive_date,'%Y-%m-%d') AS rd, DATE_FORMAT(eta,'%Y-%m-%d') AS eta, status, fwd, s_type, remarks, is_ai_modified FROM inbound ORDER BY receive_date ASC, id ASC LIMIT 20000`,
+          );
+          const slim = (r) => ({
+            id: r.id,
+            bl: r.bl_number || "",
+            invoice: r.invoice || "",
+            pal: r.pallets,
+            rd: r.rd || "",
+            eta: r.eta || "",
+            status: r.status || "",
+            fwd: r.fwd || "",
+            sType: r.s_type || "",
+            etc: r.remarks || "",
+            ai: !!r.is_ai_modified,
+          });
+          const byInv = new Map();
+          const byBl = new Map();
+          for (const r of all) {
+            // 인보이스: '25088471, 25089491' 처럼 여러 개가 들어간 칸은 개별 번호로 쪼개서 비교
+            const toks = new Set(
+              String(r.invoice || "")
+                .split(/[\s,;/]+/)
+                .map((t) => t.trim().toUpperCase())
+                .filter((t) => t.length >= 5),
+            );
+            toks.forEach((t) => {
+              if (!byInv.has(t)) byInv.set(t, []);
+              byInv.get(t).push(r);
+            });
+            const bl = String(r.bl_number || "").replace(/[\s•·\-\*]/g, "").toUpperCase();
+            if (bl && bl !== "발행전") {
+              if (!byBl.has(bl)) byBl.set(bl, []);
+              byBl.get(bl).push(r);
+            }
+          }
+          const groups = [];
+          byInv.forEach((rs, k) => {
+            if (rs.length > 1) groups.push({ type: "invoice", key: k, rows: rs.map(slim) });
+          });
+          byBl.forEach((rs, k) => {
+            if (rs.length > 1) groups.push({ type: "bl", key: k, rows: rs.map(slim) });
+          });
+          return res.status(200).json({ success: true, total: all.length, groupCount: groups.length, groups: groups.slice(0, 200) });
+        } catch (e) {
+          console.error("중복검사 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+        }
+      } else if (action === "DELETE_INBOUND_DUPES") {
+        // 🗑️ 오너 전용 — 중복검사 창에서 사용자가 직접 고른 행(id)만 삭제
+        try {
+          const _ownerId = process.env.TELEGRAM_OWNER_ID || "";
+          if (!_ownerId || currentAdmin.toLowerCase() !== _ownerId.toLowerCase())
+            return res.status(200).json({ success: false, msg: "권한이 없습니다." });
+          const ids = (data && Array.isArray(data.ids) ? data.ids : [])
+            .map((v) => parseInt(v, 10))
+            .filter((v) => Number.isInteger(v) && v > 0);
+          const uniq = Array.from(new Set(ids));
+          if (uniq.length === 0) return res.status(200).json({ success: false, msg: "삭제할 항목이 없습니다." });
+          if (uniq.length > 100) return res.status(200).json({ success: false, msg: "한 번에 최대 100건까지 삭제할 수 있습니다." });
+          const [before] = await pool.query(
+            `SELECT id, bl_number, invoice, DATE_FORMAT(receive_date,'%Y-%m-%d') AS rd FROM inbound WHERE id IN (${uniq.map(() => "?").join(",")})`,
+            uniq,
+          );
+          const [delRes] = await pool.query(`DELETE FROM inbound WHERE id IN (${uniq.map(() => "?").join(",")})`, uniq);
+          const deleted = delRes && delRes.affectedRows ? delRes.affectedRows : 0;
+          try {
+            let ip = req.headers["x-forwarded-for"] || req.connection?.remoteAddress || "IP 알수없음";
+            if (ip.includes(",")) ip = ip.split(",")[0];
+            const detail = before
+              .slice(0, 10)
+              .map((r) => `#${r.id} ${r.bl_number || "-"}|${r.invoice || "-"}|${r.rd || "미정"}`)
+              .join(", ");
+            await pool.query(
+              "INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, 'DUPE_DELETE', ?, ?)",
+              [currentAdmin, `[중복검사 삭제] ${deleted}건 (${detail}${before.length > 10 ? " 외" : ""})`.slice(0, 1000), ip],
+            );
+          } catch (e) {}
+          return res.status(200).json({ success: true, deleted });
+        } catch (e) {
+          console.error("중복 삭제 오류:", e);
           return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
         }
       } else if (action === "AI_QUERY") {

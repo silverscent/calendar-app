@@ -2050,6 +2050,9 @@
       .fab-wrapper.open.snap-bottom .fab-sub-item:nth-last-child(3) {
         animation-delay: 0.18s;
       }
+      .fab-wrapper.open.snap-bottom .fab-sub-item:nth-last-child(4) {
+        animation-delay: 0.26s;
+      }
       .fab-wrapper.open.snap-top .fab-sub-item {
         animation: fabItemPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
       }
@@ -2061,6 +2064,9 @@
       }
       .fab-wrapper.open.snap-top .fab-sub-item:nth-child(3) {
         animation-delay: 0.18s;
+      }
+      .fab-wrapper.open.snap-top .fab-sub-item:nth-child(4) {
+        animation-delay: 0.26s;
       }
       @keyframes fabItemPop {
         from {
@@ -2130,6 +2136,29 @@
         background: linear-gradient(135deg, #0a84ff, #0056b3);
         color: white;
       }
+      .fab-sub-btn.dupe {
+        background: linear-gradient(135deg, #ff9f0a, #ff6a00);
+        color: white;
+      }
+      /* 🧹 중복검사 모달 (오너 전용) — #id 스코프 */
+      #dupModal .dup-sum { font-size: 0.85em; color: var(--text-sub); margin: 0 0 12px; line-height: 1.5; }
+      #dupModal .dup-group { border: 1px solid var(--border-color); border-radius: 14px; padding: 10px; margin-bottom: 12px; background: var(--card-bg); }
+      #dupModal .dup-ghead { font-weight: 900; font-size: 0.9em; margin-bottom: 8px; color: var(--text-main); word-break: break-all; }
+      #dupModal .dup-ghead span { display: inline-block; font-size: 0.78em; padding: 2px 7px; border-radius: 8px; margin-right: 6px; background: rgba(255,159,10,0.18); color: #ff9f0a; }
+      #dupModal .dup-row { display: flex; gap: 10px; align-items: flex-start; padding: 9px 6px; border-top: 1px solid var(--border-color); cursor: pointer; }
+      #dupModal .dup-row:first-of-type { border-top: none; }
+      #dupModal .dup-row input { width: 22px; height: 22px; flex: 0 0 22px; margin-top: 2px; accent-color: #ff453a; }
+      #dupModal .dup-info { flex: 1; min-width: 0; font-size: 0.82em; line-height: 1.55; color: var(--text-main); }
+      #dupModal .dup-info b { font-weight: 900; }
+      #dupModal .dup-sub { color: var(--text-sub); font-size: 0.92em; word-break: break-all; }
+      #dupModal .dup-tag { display: inline-block; font-size: 0.8em; font-weight: 800; padding: 1px 6px; border-radius: 6px; margin-left: 4px; }
+      #dupModal .dup-tag.done { background: rgba(52,199,89,0.18); color: #34c759; }
+      #dupModal .dup-tag.ai { background: rgba(94,92,230,0.18); color: #7d7aff; }
+      #dupModal .dup-bar { position: sticky; bottom: -1px; display: flex; gap: 8px; padding-top: 10px; background: var(--bg-color); }
+      #dupModal .dup-bar button { flex: 1; padding: 14px; border: none; border-radius: 12px; font-weight: 900; font-size: 0.95em; cursor: pointer; }
+      #dupModal .dup-del { background: #ff453a; color: #fff; }
+      #dupModal .dup-del:disabled { opacity: 0.35; cursor: default; }
+      #dupModal .dup-re { background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color) !important; flex: 0 0 38% !important; }
       /* 🔍 FAB 일정 검색 모달 결과 (#id 스코프 → 다른 화면 영향 없음, 모바일·PC 공통) */
       #fabSearchModal .fsr-results {
         display: flex;
@@ -5952,6 +5981,18 @@
             🔍
           </button>
         </div>
+        <div class="fab-sub-item" id="fab-sub-dupe-wrap" style="display: none">
+          <div class="fab-label">중복검사</div>
+          <button
+            class="fab-sub-btn dupe"
+            onclick="
+              toggleFabMenu();
+              openDupCheck();
+            "
+          >
+            🧹
+          </button>
+        </div>
       </div>
       <button class="fab-main" onclick="toggleFabMenu()">+</button>
     </div>
@@ -5976,6 +6017,23 @@
           style="margin-bottom: 14px"
         />
         <div id="fabSearchResults" class="fsr-results"></div>
+      </div>
+    </div>
+
+    <!-- 🧹 중복검사 모달 (오너 전용) -->
+    <div id="dupModal" class="overlay-modal" onclick="if (event.target === this) closeDupCheck();">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title">🧹 중복검사</div>
+          <button class="close-btn" onclick="closeDupCheck()">✕</button>
+        </div>
+        <div id="dupSummary" class="dup-sum"></div>
+        <div id="dupResults"></div>
+        <div class="dup-bar">
+          <button class="dup-re" onclick="runDupCheck()">🔄 다시 검사</button>
+          <button id="dupDelBtn" class="dup-del" disabled onclick="deleteSelectedDupes(this)">선택 삭제</button>
+        </div>
       </div>
     </div>
 
