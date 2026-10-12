@@ -311,3 +311,40 @@ function closePcOverlays() {
   });
   window.addEventListener("online", checkForUpdate);
 })();
+
+// =====================================================
+// 🖱️ 모달 배경 오클릭 방지 (PC 마우스)
+//   모달 '안'에서 마우스를 눌러 드래그한 뒤 모달 '밖(배경)'에서 놓으면 브라우저가 배경에 click 을 발생시켜
+//   모달이 닫히던 문제 → 눌렀던 위치(mousedown/touchstart)와 click 대상이 다른 '배경 클릭'은 무시한다.
+//   · 배경을 눌렀다 그 자리에서 놓은 정상 클릭은 그대로 닫힘
+//   · capture 단계에서 막으므로 인라인 onclick / window·document 클릭 핸들러 모두 한 번에 적용
+// =====================================================
+(function () {
+  let downTarget = null;
+  const rec = (e) => {
+    downTarget = e.target;
+  };
+  document.addEventListener("mousedown", rec, true);
+  document.addEventListener("touchstart", rec, true);
+  document.addEventListener("pointerdown", rec, true);
+  const BACKDROP_IDS = ["modal", "ocrImageModal", "dashboardModal", "uiConfirmOverlay"];
+  const isBackdrop = (el) => {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.classList && el.classList.contains("overlay-modal")) return true;
+    if (el.id && BACKDROP_IDS.indexOf(el.id) !== -1) return true;
+    const oc = el.getAttribute && el.getAttribute("onclick");
+    return !!oc && /target\s*===\s*this/.test(oc);
+  };
+  document.addEventListener(
+    "click",
+    (e) => {
+      const dt = downTarget;
+      downTarget = null; // 프로그램이 일으킨 click(.click())은 영향 없도록 1회용
+      if (dt && dt !== e.target && isBackdrop(e.target)) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    },
+    true,
+  );
+})();
