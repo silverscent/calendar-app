@@ -2744,6 +2744,15 @@ function clearClickedHighlight() {
 
 function openAddFormWithDate(day) {
   openAddForm();
+  // 길게 눌러 모달이 뜬 직후 손가락 밑 글자가 선택되는 것 방지 (CSS user-select + 혹시 선택됐다면 즉시 해제)
+  const _clearSel = () => {
+    try {
+      const sel = window.getSelection && window.getSelection();
+      if (sel && sel.removeAllRanges) sel.removeAllRanges();
+    } catch (e) {}
+  };
+  _clearSel();
+  setTimeout(_clearSel, 350);
   let dateStr = _ymd(serverData.year, serverData.month, day);
 
   document.getElementById("add-date").value = dateStr;

@@ -892,6 +892,19 @@
         font-weight: 900;
         letter-spacing: -0.5px;
       }
+      /* 📱 신규 등록 모달: 길게 눌러 열 때 손가락 밑 글자(제목 등)가 자동 선택되는 현상 방지 — 입력칸은 그대로 선택/편집 가능 */
+      #addModal {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      #addModal input,
+      #addModal textarea,
+      #addModal select {
+        -webkit-user-select: text;
+        user-select: text;
+        -webkit-touch-callout: default;
+      }
       .close-btn {
         background: var(--btn-bg);
         border: none;

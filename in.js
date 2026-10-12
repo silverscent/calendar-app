@@ -1156,6 +1156,15 @@ function openAddForm() {
 // 달력 날짜 롱프레스 → 그 날짜로 신규 등록 폼 열기
 function openAddFormWithDate(day) {
   openAddForm();
+  // 길게 눌러 모달이 뜬 직후 손가락 밑 글자가 선택되는 것 방지 (CSS user-select + 혹시 선택됐다면 즉시 해제)
+  const _clearSel = () => {
+    try {
+      const sel = window.getSelection && window.getSelection();
+      if (sel && sel.removeAllRanges) sel.removeAllRanges();
+    } catch (e) {}
+  };
+  _clearSel();
+  setTimeout(_clearSel, 350);
   let dateStr = _ymd(serverData.year, serverData.month, day);
   document.getElementById("add-date").value = dateStr;
   setTimeout(() => document.getElementById("add-bl").focus(), 200);
@@ -4418,24 +4427,59 @@ async function runDupCheck() {
     `전체 ${res.total}건 중 중복 묶음 <b>${res.groups.length}</b>개` +
     (res.groupCount > res.groups.length ? ` (상위 ${res.groups.length}개만 표시)` : "") +
     `<br>지울 행만 체크하세요. (기본은 아무것도 선택되지 않습니다)`;
+  // 묶음 안에서 '모두 같은 칸'은 흐리게, '서로 다른 칸'은 주황으로 강조 → 무엇이 다른지 한눈에 구분
+  const FIELDS = [
+    ["bl", "B/L", (r) => String(r.bl || "").replace(/[\s•·\-\*]/g, "").toUpperCase()],
+    ["invoice", "인보이스", (r) => String(r.invoice || "").replace(/\s/g, "").toUpperCase()],
+    ["rd", "입고일", (r) => String(r.rd || "")],
+    ["eta", "ETA", (r) => String(r.eta || "")],
+    ["pal", "팔레트", (r) => (r.pal == null || r.pal === "" ? "" : String(r.pal))],
+    ["sType", "구분", (r) => String(r.sType || "").toUpperCase()],
+    ["fwd", "포워더", (r) => String(r.fwd || "").trim().toUpperCase()],
+    ["etc", "비고", (r) => String(r.etc || "").trim()],
+  ];
+  const show = (f, r) => {
+    if (f === "pal") return r.pal == null || r.pal === "" ? "-" : `${r.pal}P`;
+    const v = String(r[f] == null ? "" : r[f]).trim();
+    return v === "" ? (f === "rd" ? "미정" : "-") : v;
+  };
   box.innerHTML = res.groups
     .map((g) => {
-      const head = `<div class="dup-ghead"><span>${g.type === "invoice" ? "인보이스" : "B/L"}</span>${_esc(g.key)} · ${g.rows.length}건</div>`;
+      const head = `<div class="dup-ghead"><span>${g.type === "invoice" ? "인보이스" : "B/L"}</span>${_esc(g.key)} · ${g.rows.length}건 중복</div>`;
+      const ids = g.rows.map((r) => r.id);
+      const minId = Math.min(...ids);
+      const maxId = Math.max(...ids);
+      const diff = {};
+      FIELDS.forEach(([f, , norm]) => {
+        diff[f] = new Set(g.rows.map(norm)).size > 1;
+      });
       const rows = g.rows
         .map((r) => {
           const done = r.status === "완료" ? `<span class="dup-tag done">완료</span>` : "";
-          const ai = r.ai ? `<span class="dup-tag ai">AI수정</span>` : "";
+          const order =
+            r.id === minId
+              ? `<span class="dup-tag" style="background:rgba(120,120,128,0.2);color:var(--text-sub)">먼저 등록</span>`
+              : r.id === maxId
+              ? `<span class="dup-tag" style="background:rgba(10,132,255,0.18);color:#0a84ff">나중 등록</span>`
+              : "";
+          const cells = FIELDS.map(([f, label]) => {
+            const d = diff[f];
+            const st = d
+              ? "background:rgba(255,159,10,0.2);color:var(--text-main);font-weight:900;"
+              : "background:transparent;color:var(--text-sub);font-weight:500;";
+            return `<div style="${st}border-radius:7px;padding:3px 6px;min-width:0;word-break:break-all;${f === "etc" ? "grid-column:1 / -1;" : ""}"><span style="font-size:0.78em;opacity:0.75;margin-right:5px">${label}</span>${_esc(show(f, r))}</div>`;
+          }).join("");
           return `<label class="dup-row">
             <input type="checkbox" class="dup-chk" value="${r.id}" onchange="_dupSync(this)">
             <div class="dup-info">
-              <b>${_esc(r.bl || "-")}</b>${done}${ai}<br>
-              <span class="dup-sub">인보이스 ${_esc(r.invoice || "-")} · 입고 ${_esc(r.rd || "미정")} · ETA ${_esc(r.eta || "-")}</span><br>
-              <span class="dup-sub">${_esc(String(r.pal == null ? 0 : r.pal))}P · ${_esc(r.sType || "-")} · ${_esc(r.fwd || "-")} · #${r.id}${r.etc ? " · " + _esc(r.etc) : ""}</span>
+              <div style="margin-bottom:5px"><span class="dup-sub">#${r.id}</span>${order}${done}</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 6px;">${cells}</div>
             </div>
           </label>`;
         })
         .join("");
-      return `<div class="dup-group">${head}${rows}</div>`;
+      const legend = `<div class="dup-sub" style="font-size:0.75em;margin-bottom:6px"><span style="background:rgba(255,159,10,0.2);padding:1px 6px;border-radius:6px;color:var(--text-main);font-weight:800">주황</span> = 서로 다른 칸 · 흐린 글씨 = 같은 칸</div>`;
+      return `<div class="dup-group">${head}${legend}${rows}</div>`;
     })
     .join("");
 }
