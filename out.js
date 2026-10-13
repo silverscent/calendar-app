@@ -968,6 +968,14 @@ window.addEventListener("resize", () => {
 
 function renderCalendar() {
   companyColors = {}; // 렌더마다 초기화 → 삭제된 업체 색 즉시 해제
+  // 📂 접기 대상이 아니게 된 날(3건 이하로 줄어듦)의 '펼침' 기록은 지움 → 나중에 다시 4건 이상이 되면 정상적으로 접힘
+  //    (다중선택·PC 펼침ON 중에는 일시적으로 접기가 꺼진 것이므로 기록 유지)
+  if (!_multiOn() && !_pcFoldOpenAll()) {
+    for (let d = 1; d <= serverData.daysInMonth; d++) {
+      const k = _foldKey(d);
+      if (window._foldOpen[k] && _foldFat(serverData.monthData[d], d).length < FOLD_MIN) delete window._foldOpen[k];
+    }
+  }
   const { weekSlotHeights, weekHeights, foldedDays } = computeGanttSlots();
 
   // 🎨 색 사전 배정: 접기/펼치기와 무관하게 같은 순서로 색을 확정(미등록 업체 색이 접을 때마다 바뀌는 것 방지)
@@ -2146,7 +2154,15 @@ function updateLocalState(action, payload, idx) {
   let newDay = parseDay(payload.newDate);
 
   // 📂 새 일정이 들어가거나 다른 날로 옮겨진 날은 접혀 있어도 펼쳐서 결과가 바로 보이게
-  if (action !== "DELETE" && typeof newDay === "number" && (action !== "EDIT" || oldDay !== newDay)) {
+  const _nc = String(payload.newComp || payload.oldComp || "");
+  const _newIsTask =
+    /^\[TASK\]/i.test(_nc) || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(_nc.replace(/\[TASK\]/gi, "").trim()));
+  if (
+    (action === "ADD" || action === "EDIT") &&
+    !_newIsTask && // 간트 막대(작업)는 접기 개수에 안 들어가므로 펼치지 않음
+    typeof newDay === "number" &&
+    (action !== "EDIT" || oldDay !== newDay)
+  ) {
     window._foldOpen[_foldKey(newDay)] = true;
   }
 

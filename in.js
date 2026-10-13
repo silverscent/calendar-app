@@ -230,6 +230,14 @@ function _foldRingHtml(dayData, day) {
 }
 
 function renderCalendar() {
+  // 📂 접기 대상이 아니게 된 날(3건 이하로 줄어듦)의 '펼침' 기록은 지움 → 나중에 다시 4건 이상이 되면 정상적으로 접힘
+  //    (다중선택 중에는 일시적으로 접기가 꺼진 것이므로 기록 유지)
+  if (!_multiOn() && !_pcFoldOpenAll()) {
+    for (let d = 1; d <= serverData.daysInMonth; d++) {
+      const k = _foldKey(d);
+      if (window._foldOpen[k] && !_foldable(serverData.monthData[d])) delete window._foldOpen[k];
+    }
+  }
   for (let d = 1; d <= serverData.daysInMonth; d++) {
     if (serverData.monthData[d]) {
       serverData.monthData[d].forEach((item, idx) => {
@@ -669,7 +677,7 @@ function updateLocalState(action, payload, idx) {
   if (!arr) return;
 
   // 📂 새 일정이 들어가거나 다른 날로 옮겨진 날은 접혀 있어도 펼쳐서 결과가 바로 보이게
-  if (action !== "DELETE" && typeof newDay === "number" && (action !== "EDIT" || oldDay !== newDay)) {
+  if ((action === "ADD" || action === "EDIT") && typeof newDay === "number" && (action !== "EDIT" || oldDay !== newDay)) {
     const _p = String(payload.newDate).split("-");
     if (parseInt(_p[0], 10) === serverData.year && parseInt(_p[1], 10) === serverData.month)
       window._foldOpen[_foldKey(newDay)] = true;
