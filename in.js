@@ -147,6 +147,78 @@ function renderPending() {
   }
 }
 
+// =====================================================================
+// 📂 칩 많은 날 접기(폴딩) — 하루 FOLD_MIN 건 이상이면 한 덩어리로 요약, 누르면 칸 안에서 펼침
+//   · 펼침 상태는 window._foldOpen["년-월-일"] 에 보관(재렌더/동기화에도 유지) · 다중선택 중에는 항상 펼침
+// =====================================================================
+const FOLD_MIN = 4;
+window._foldOpen = window._foldOpen || {};
+function _foldKey(day) {
+  return `${serverData.year}-${serverData.month}-${day}`;
+}
+function toggleFold(day, ev) {
+  if (ev) ev.stopPropagation(); // 날짜 칸 클릭(상세 모달)로 번지지 않게
+  if (isLongPress) {
+    setTimeout(() => { isLongPress = false; }, 100); // handleCellClick과 동일: 플래그가 남아 다음 탭이 먹히는 것 방지
+    return;
+  }
+  const k = _foldKey(day);
+  window._foldOpen[k] = !window._foldOpen[k];
+  renderCalendar();
+}
+function _multiOn() {
+  try { return !!isMultiMode; } catch (e) { return false; } // isMultiMode는 파일 뒤쪽 let 선언 → 초기 TDZ 방어
+}
+function _foldable(dayData) {
+  return !!dayData && dayData.length >= FOLD_MIN && !_multiOn();
+}
+function _foldEligibleDays() {
+  const r = [];
+  for (let d = 1; d <= serverData.daysInMonth; d++) if (_foldable(serverData.monthData[d])) r.push(d);
+  return r;
+}
+function foldAnyFolded() {
+  return _foldEligibleDays().some((d) => !window._foldOpen[_foldKey(d)]);
+}
+function toggleFoldAll() {
+  const days = _foldEligibleDays();
+  if (!days.length) return;
+  const open = foldAnyFolded(); // 하나라도 접혀 있으면 전부 펼치고, 전부 펼쳐져 있으면 전부 접음
+  days.forEach((d) => (window._foldOpen[_foldKey(d)] = open));
+  renderCalendar();
+}
+function updateFoldAllBtn() {
+  const b = document.getElementById("foldAllBtn");
+  if (!b) return;
+  const days = _foldEligibleDays();
+  if (!days.length) { b.style.display = "none"; return; }
+  b.style.display = "flex";
+  const anyFolded = foldAnyFolded();
+  b.textContent = anyFolded ? "📂" : "📁";
+  const t = anyFolded ? "접힌 날짜 모두 펼치기" : "모두 접기";
+  b.title = t;
+  b.setAttribute("aria-label", t);
+}
+function _foldRingHtml(dayData, day) {
+  const isDoneIt = (it) => it.isDone === true || String(it.isDone) === "true";
+  const n = dayData.length;
+  const doneN = dayData.filter(isDoneIt).length;
+  const R = 15,
+    C = 2 * Math.PI * R,
+    gap = n > 1 ? 2.4 : 0,
+    seg = C / n - gap;
+  let arcs = "";
+  let tip = `${serverData.month}/${day} · ${n}건`;
+  dayData.forEach((it, i) => {
+    const air = it.sType === "AIR";
+    const done = isDoneIt(it);
+    const c = done ? (air ? "#ff7eff" : "#26e2fd") : air ? "#ff91ff" : "#47e6fd";
+    arcs += `<circle cx="19" cy="19" r="${R}" fill="none" stroke="${c}" stroke-width="6" stroke-dasharray="${seg} ${C - seg}" stroke-dashoffset="${-(i * (seg + gap))}" transform="rotate(-90 19 19)" opacity="${done ? 1 : 0.32}"/>`;
+    tip += `\n${it.bl || it.invoice || "-"}: ${it.pal || 0}P ${air ? "AIR" : "SEA"} ${done ? "✅" : "대기"}`;
+  });
+  return `<div class="fold-box fold-ring" data-tip="${_esc(tip)}" onclick="toggleFold(${day}, event)"><svg width="38" height="38" viewBox="0 0 38 38">${arcs}<text x="19" y="24.5" text-anchor="middle" font-size="15" font-weight="900" fill="currentColor">${n}</text></svg><span class="fold-prog"><b>✓${doneN}</b>/${n}</span></div>`;
+}
+
 function renderCalendar() {
   for (let d = 1; d <= serverData.daysInMonth; d++) {
     if (serverData.monthData[d]) {
@@ -218,7 +290,11 @@ function renderCalendar() {
 
     // ... (이후 item-tag 렌더링 및 미정건 로직은 기존과 동일) ...
 
-    if (dayData && dayData.length > 0) {
+    const _foldOn = _foldable(dayData);
+    const _foldIsOpen = _foldOn && !!window._foldOpen[_foldKey(day)];
+    if (_foldOn && !_foldIsOpen) {
+      cellHtml += _foldRingHtml(dayData, day);
+    } else if (dayData && dayData.length > 0) {
       dayData.forEach((item, idx) => {
         let isItemDone = item.isDone === true || String(item.isDone) === "true";
         let isAir = item.sType === "AIR";
@@ -262,6 +338,7 @@ function renderCalendar() {
 
         cellHtml += `<div class="${tagClass}" style="${customStyle}" data-raw-idx="${originalIdx}" data-fwd="${_esc(item.fwd || "")}" data-tip="${_esc(_tip)}" ${bindItem}>${innerHtml}</div>`;
       });
+      if (_foldIsOpen) cellHtml += `<div class="fold-collapse" onclick="toggleFold(${day}, event)">접기 ▴</div>`;
     }
     cellHtml += `</div>`;
     rowHtml += cellHtml;
@@ -277,6 +354,7 @@ function renderCalendar() {
   renderPending();
 
   updateStatsSummary();
+  updateFoldAllBtn();
   renderPcSidePanel(); // PC 밀집 모드일 때만 내부에서 동작
   renderPcLeftbar(); // PC 밀집 좌측 사이드바
   updateSyncTime();
@@ -580,6 +658,13 @@ function updateLocalState(action, payload, idx) {
   let arr = oldDay === "pending" ? serverData.pendingItems : serverData.monthData[oldDay];
   if (!arr) return;
 
+  // 📂 새 일정이 들어가거나 다른 날로 옮겨진 날은 접혀 있어도 펼쳐서 결과가 바로 보이게
+  if (action !== "DELETE" && typeof newDay === "number" && (action !== "EDIT" || oldDay !== newDay)) {
+    const _p = String(payload.newDate).split("-");
+    if (parseInt(_p[0], 10) === serverData.year && parseInt(_p[1], 10) === serverData.month)
+      window._foldOpen[_foldKey(newDay)] = true;
+  }
+
   if (action === "ADD") {
     // 신규 등록 → 해당 날짜(또는 대기)에 즉시 한 건 추가 (id는 다음 동기화 때 서버값으로 채워짐)
     let newItem = {
@@ -718,6 +803,7 @@ function toggleMultiMode() {
     if (pcBtn) { pcBtn.innerText = "☑️ 다중 선택"; pcBtn.style.color = ""; pcBtn.style.fontWeight = ""; }
     bar.style.display = "none";
   }
+  renderCalendar(); // 다중선택 켜고 끌 때 접힌 날짜를 펼치거나 다시 접기
 }
 
 // 🚀 [초정밀 통합 드래그 엔진] (입고/출고 공통)
@@ -4308,6 +4394,8 @@ function pcJumpTo(dateStr, key, inv) {
   const [y, m, day] = dateStr.split("-").map((v) => parseInt(v, 10));
   // 재렌더(캐시→서버 응답)에도 하이라이트가 유지되도록 일정 시간 동안 반복 적용
   window._pcHl = { y: y, m: m, day: day, key: key || "", expire: Date.now() + 4500, scrolled: false };
+  window._foldOpen = window._foldOpen || {};
+  window._foldOpen[`${y}-${m}-${day}`] = true; // 검색 결과 날짜는 접혀 있어도 펼쳐서 강조
   goToAsync(y, m);
   if (window._pcHlTimer) clearInterval(window._pcHlTimer);
   window._pcHlTimer = setInterval(reapplyPcHl, 200);
@@ -4667,7 +4755,7 @@ function ensurePcTip() {
   document.body.appendChild(t);
   document.addEventListener("mouseover", (e) => {
     if (!document.body.classList.contains("pc-dense")) return;
-    const tag = e.target.closest && e.target.closest(".item-tag[data-tip], .pcp-pend-item[data-tip]");
+    const tag = e.target.closest && e.target.closest(".item-tag[data-tip], .fold-box[data-tip], .pcp-pend-item[data-tip]");
     if (!tag) return;
     t.innerHTML = _pcTipHtml(tag.getAttribute("data-tip") || "");
     t.style.display = "block";
@@ -4693,7 +4781,7 @@ function ensurePcTip() {
     t.style.top = y + "px";
   });
   document.addEventListener("mouseout", (e) => {
-    if (e.target.closest && e.target.closest(".item-tag[data-tip], .pcp-pend-item[data-tip]")) t.style.display = "none";
+    if (e.target.closest && e.target.closest(".item-tag[data-tip], .fold-box[data-tip], .pcp-pend-item[data-tip]")) t.style.display = "none";
   });
 }
 // data-tip(여러 줄) → 제목 + 라벨/값 정렬 HTML

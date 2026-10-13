@@ -591,6 +591,46 @@
         border-bottom-right-radius: 15px;
       }
 
+      /* ▼▼ 칩 많은 날 접기(폴딩) — 4건 이상일 때 한 덩어리로 요약, 누르면 칸 안에서 펼침 ▼▼ */
+      .fold-box {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 10px;
+        background: rgba(120, 126, 140, 0.16);
+        padding: 5px 2px 5px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        min-width: 0;
+        overflow: hidden;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .fold-box:active { transform: scale(0.97); }
+      .fold-prog { font-size: 10px; font-weight: 700; color: var(--text-sub); white-space: nowrap; letter-spacing: -0.3px; }
+      .fold-prog b { color: #1fa64a; font-weight: 900; }
+      body:not(.light-mode) .fold-prog b { color: #4cd964; }
+      .fold-collapse {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 800;
+        padding: 5px 2px;
+        background: rgba(120, 126, 140, 0.16);
+        color: var(--text-sub);
+        text-align: center;
+        cursor: pointer;
+        white-space: nowrap;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      /* 입고: 링 */
+      .fold-ring { gap: 1px; padding: 5px 1px 4px; color: var(--text-main); }
+      .fold-ring svg { display: block; overflow: visible; }
       .item-tag {
         display: flex;
         flex-direction: column;
@@ -4325,6 +4365,16 @@
             style="display: flex; align-items: center; justify-content: center; padding: 6px 12px"
           >
             📅
+          </button>
+          <button
+            class="nav-arrow"
+            id="foldAllBtn"
+            onclick="toggleFoldAll()"
+            aria-label="접힌 날짜 모두 펼치기"
+            title="접힌 날짜 모두 펼치기"
+            style="display: none; align-items: center; justify-content: center; padding: 6px 12px"
+          >
+            📂
           </button>
         </div>
 

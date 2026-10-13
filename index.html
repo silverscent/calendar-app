@@ -528,6 +528,69 @@
         margin-bottom: 1px;
         min-height: 36px;
       }
+
+      /* ▼▼ 칩 많은 날 접기(폴딩) — 4건 이상일 때 한 덩어리로 요약, 누르면 칸 안에서 펼침 ▼▼ */
+      .fold-box {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 10px;
+        background: rgba(120, 126, 140, 0.16);
+        padding: 5px 2px 5px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        min-width: 0;
+        overflow: hidden;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .fold-box:active { transform: scale(0.97); }
+      .fold-prog { font-size: 10px; font-weight: 700; color: var(--text-sub); white-space: nowrap; letter-spacing: -0.3px; }
+      .fold-prog b { color: #1fa64a; font-weight: 900; }
+      body:not(.light-mode) .fold-prog b { color: #4cd964; }
+      .fold-slot { position: relative; width: 100%; flex-shrink: 0; box-sizing: border-box; }
+      .fold-slot > .fold-box { position: absolute; left: 0; top: 0; }
+      .fold-collapse {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 800;
+        padding: 5px 2px;
+        background: rgba(120, 126, 140, 0.16);
+        color: var(--text-sub);
+        text-align: center;
+        cursor: pointer;
+        white-space: nowrap;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      /* 출고: 이름 알약 */
+      .fold-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 100%; padding: 0 1px; box-sizing: border-box; }
+      .fold-pl {
+        display: block;
+        font-style: normal;
+        font-size: 9.8px;
+        font-weight: 900;
+        border-radius: 5px;
+        padding: 2px 0;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        letter-spacing: -0.7px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        line-height: 1.25;
+      }
+      .fold-pl.off { background: var(--card-bg); color: var(--text-main) !important; text-shadow: none !important; }
+      .fold-pl.more { background: var(--text-main); color: var(--card-bg) !important; box-shadow: none; text-shadow: none !important; }
+      .fold-stat { font-size: 10.5px; font-weight: 900; border-radius: 7px; padding: 2px 6px; white-space: nowrap; letter-spacing: -0.4px; }
+      .fold-stat.warn { background: rgba(255, 159, 10, 0.2); color: #d87c00; }
+      body:not(.light-mode) .fold-stat.warn { color: #ffb340; }
+      .fold-stat.ok { background: #34c759; color: #fff; }
+      @media (max-width: 380px) { .fold-pl { font-size: 8.6px; letter-spacing: -0.8px; } }
       .item-tag-slim {
         flex-direction: row !important;
         min-height: 22px !important;
@@ -4865,6 +4928,16 @@
             style="display: flex; align-items: center; justify-content: center; padding: 6px 12px"
           >
             📅
+          </button>
+          <button
+            class="nav-arrow"
+            id="foldAllBtn"
+            onclick="toggleFoldAll()"
+            aria-label="접힌 날짜 모두 펼치기"
+            title="접힌 날짜 모두 펼치기"
+            style="display: none; align-items: center; justify-content: center; padding: 6px 12px"
+          >
+            📂
           </button>
         </div>
 

@@ -683,6 +683,12 @@ function computeGanttSlots() {
   let globalItems = [];
   let gIdCounter = 1;
 
+  // 📂 접힌 날: 일반 칩은 슬롯을 차지하지 않음(간트 막대만 슬롯 배정) → 막대는 이웃 칸과 같은 높이에 정렬
+  const foldedDays = {};
+  for (let d = 1; d <= serverData.daysInMonth; d++) {
+    foldedDays[d] = _foldable(serverData.monthData[d], d) && !window._foldOpen[_foldKey(d)];
+  }
+
   // 🚨 [핵심 패치 3] 이전 렌더링 때 발급된 번호표 찌꺼기 완벽 초기화! (이것 때문에 순서 이동이 안 먹혔음)
   for (let d = 1; d <= serverData.daysInMonth; d++) {
     if (serverData.monthData[d]) {
@@ -715,6 +721,7 @@ function computeGanttSlots() {
         }
       } else {
         item._ganttId = gIdCounter++;
+        if (foldedDays[d]) return; // 접힌 날의 일반 칩: 슬롯 없음(_visualSlot 미지정)
         globalItems.push({ isGantt: false, id: item._ganttId, start: d, end: d, refItem: item });
       }
     });
@@ -759,10 +766,12 @@ function computeGanttSlots() {
   // ④ 최종 화면 동기화
   for (let d = 1; d <= serverData.daysInMonth; d++) {
     if (!serverData.monthData[d]) continue;
-    serverData.monthData[d].sort((a, b) => {
-      if (a._visualSlot !== undefined && b._visualSlot !== undefined) return a._visualSlot - b._visualSlot;
-      return 0;
-    });
+    // 접힌 날은 슬롯 없는 칩이 섞여 있어 비교가 일관되지 않으므로 배열 순서를 건드리지 않음
+    if (!foldedDays[d])
+      serverData.monthData[d].sort((a, b) => {
+        if (a._visualSlot !== undefined && b._visualSlot !== undefined) return a._visualSlot - b._visualSlot;
+        return 0;
+      });
     serverData.monthData[d].forEach((item, idx) => {
       item._rawIdx = idx;
     });
@@ -808,7 +817,7 @@ function computeGanttSlots() {
     }
   }
 
-  return { weekSlotHeights, weekHeights };
+  return { weekSlotHeights, weekHeights, foldedDays };
 }
 
 function renderPending() {
@@ -846,9 +855,108 @@ function renderPending() {
   }
 }
 
+// =====================================================================
+// 📂 칩 많은 날 접기(폴딩) — 하루 FOLD_MIN 건 이상이면 한 덩어리로 요약, 누르면 칸 안에서 펼침
+//   · 펼침 상태는 window._foldOpen["년-월-일"] 에 보관(재렌더/동기화에도 유지) · 다중선택 중에는 항상 펼침
+// =====================================================================
+const FOLD_MIN = 4;
+window._foldOpen = window._foldOpen || {};
+function _foldKey(day) {
+  return `${serverData.year}-${serverData.month}-${day}`;
+}
+function toggleFold(day, ev) {
+  if (ev) ev.stopPropagation(); // 날짜 칸 클릭(상세 모달)로 번지지 않게
+  if (isLongPress) {
+    setTimeout(() => { isLongPress = false; }, 100); // handleCellClick과 동일: 플래그가 남아 다음 탭이 먹히는 것 방지
+    return;
+  }
+  const k = _foldKey(day);
+  window._foldOpen[k] = !window._foldOpen[k];
+  renderCalendar();
+}
+function _multiOn() {
+  try { return !!isMultiMode; } catch (e) { return false; } // isMultiMode는 파일 뒤쪽 let 선언 → 초기 TDZ 방어
+}
+// 접기 대상(간트 막대가 아닌 일반 칩) 개수가 FOLD_MIN 이상인 날 = 접기 가능한 날
+function _foldFat(dayData, day) {
+  return (dayData || []).filter((it) => !checkIsSlim(it, day));
+}
+function _foldable(dayData, day) {
+  return !!dayData && !_multiOn() && _foldFat(dayData, day).length >= FOLD_MIN;
+}
+function _foldEligibleDays() {
+  const r = [];
+  for (let d = 1; d <= serverData.daysInMonth; d++) if (_foldable(serverData.monthData[d], d)) r.push(d);
+  return r;
+}
+function foldAnyFolded() {
+  return _foldEligibleDays().some((d) => !window._foldOpen[_foldKey(d)]);
+}
+function toggleFoldAll() {
+  const days = _foldEligibleDays();
+  if (!days.length) return;
+  const open = foldAnyFolded(); // 하나라도 접혀 있으면 전부 펼치고, 전부 펼쳐져 있으면 전부 접음
+  days.forEach((d) => (window._foldOpen[_foldKey(d)] = open));
+  renderCalendar();
+}
+function updateFoldAllBtn() {
+  const b = document.getElementById("foldAllBtn");
+  if (!b) return;
+  const days = _foldEligibleDays();
+  if (!days.length) { b.style.display = "none"; return; }
+  b.style.display = "flex";
+  const anyFolded = foldAnyFolded();
+  b.textContent = anyFolded ? "📂" : "📁";
+  const t = anyFolded ? "접힌 날짜 모두 펼치기" : "모두 접기";
+  b.title = t;
+  b.setAttribute("aria-label", t);
+}
+function _foldPillsHtml(dayData, day) {
+  // dayData = 접힌 일반 칩들(간트 막대 제외)
+  const MAX = 8;
+  const isDoneIt = (it) => it.isDone === true || String(it.isDone) === "true";
+  const total = dayData.length;
+  const doneN = dayData.filter(isDoneIt).length;
+  const show = total > MAX ? dayData.slice(0, MAX - 1) : dayData;
+  const more = total - show.length;
+  let tip = `${serverData.month}/${day} · ${total}건`;
+  const pills = show
+    .map((it) => {
+      const clean = String(it.company || "").replace(/\[TASK\]/gi, "").trim();
+      const c = getCompanyColor(clean);
+      const nm = _esc(getShortName(clean));
+      return isDoneIt(it)
+        ? `<i class="fold-pl" style="background:${c.bg}; color:${c.cMain}; text-shadow:${c.txtShadow};">${nm}</i>`
+        : `<i class="fold-pl off" style="box-shadow: inset 0 0 0 1.8px ${c.bg}, 0 1px 2px rgba(0,0,0,0.2);">${nm}</i>`;
+    })
+    .join("");
+  dayData.forEach((it) => {
+    const clean = String(it.company || "").replace(/\[TASK\]/gi, "").trim();
+    const p = parseInt(it.pal) || 0;
+    const b = parseInt(it.box) || 0;
+    tip += `\n${getShortName(clean)}: ${p > 0 ? p + "P" : b > 0 ? b + "B" : "-"} ${isDoneIt(it) ? "✅" : "대기"}`;
+  });
+  const left = total - doneN;
+  const stat = left
+    ? `<span class="fold-stat warn">남음 ${left}</span>`
+    : `<span class="fold-stat ok">완료 ✓</span>`;
+  return `<div class="fold-box" data-tip="${_esc(tip)}" onclick="toggleFold(${day}, event)"><div class="fold-pills">${pills}${more > 0 ? `<i class="fold-pl more">+${more}</i>` : ""}</div>${stat}</div>`;
+}
+
 function renderCalendar() {
   companyColors = {}; // 렌더마다 초기화 → 삭제된 업체 색 즉시 해제
-  const { weekSlotHeights, weekHeights } = computeGanttSlots();
+  const { weekSlotHeights, weekHeights, foldedDays } = computeGanttSlots();
+
+  // 🎨 색 사전 배정: 접기/펼치기와 무관하게 같은 순서로 색을 확정(미등록 업체 색이 접을 때마다 바뀌는 것 방지)
+  for (let d = 1; d <= serverData.daysInMonth; d++) {
+    const arr = serverData.monthData[d];
+    if (!arr || !arr.length) continue;
+    arr
+      .map((it) => String(it.company || "").replace(/\[TASK\]/gi, "").trim())
+      .filter(Boolean)
+      .sort()
+      .forEach((nm) => getCompanyColor(nm));
+  }
 
   document.getElementById("calTitle").innerText =
     `${String(serverData.year).slice(2)}.${String(serverData.month).padStart(2, "0")}`;
@@ -909,6 +1017,9 @@ function renderCalendar() {
 
     // (💡 참고: 기존에 여기에 있던 let w = Math.floor... 줄은 위로 올렸으므로 삭제하시면 됩니다!)
 
+    const _foldOn = _foldable(dayData, day);
+    const _foldIsOpen = _foldOn && !!window._foldOpen[_foldKey(day)];
+    const _foldIsClosed = !!foldedDays[day];
     if (dayData && dayData.length > 0) {
       let maxSlot = -1;
       dayData.forEach((item) => {
@@ -920,13 +1031,43 @@ function renderCalendar() {
         if (item._visualSlot !== undefined) renderArray[item._visualSlot] = item;
       });
 
+      const _slotH = (s) => {
+        let h = weekSlotHeights[w] && weekSlotHeights[w][s] ? weekSlotHeights[w][s] : 46;
+        // 🖥️ PC모드: 슬롯 높이 슬림(주 전체 균일 축소 → 간트 정렬 유지). 최소 30 보장
+        if (document.body.classList.contains("pc-dense")) h = Math.max(30, Math.round(h * 0.66));
+        return h;
+      };
+      // 📂 접힌 날: 막대 사이의 '빈 슬롯 구간' 중 가장 큰 곳에 접힘 덩어리를 끼워 넣음(없거나 작으면 막대 아래)
+      let _foldRun = null; // {start, end, h}
+      if (_foldIsClosed) {
+        let cur = null;
+        for (let s = 0; s <= maxSlot; s++) {
+          if (!renderArray[s]) {
+            if (!cur) cur = { start: s, end: s, h: 0 };
+            cur.end = s;
+            cur.h += _slotH(s) + 1;
+          } else if (cur) {
+            if (!_foldRun || cur.h > _foldRun.h) _foldRun = cur;
+            cur = null;
+          }
+        }
+        if (cur && (!_foldRun || cur.h > _foldRun.h)) _foldRun = cur;
+        if (_foldRun && _foldRun.h < 30) _foldRun = null;
+      }
+      let _foldPlaced = false;
+
       for (let s = 0; s <= maxSlot; s++) {
         let item = renderArray[s];
-        let sHeight = weekSlotHeights[w] && weekSlotHeights[w][s] ? weekSlotHeights[w][s] : 46;
-        // 🖥️ PC모드: 슬롯 높이 슬림(주 전체 균일 축소 → 간트 정렬 유지). 최소 30 보장
-        if (document.body.classList.contains("pc-dense")) sHeight = Math.max(30, Math.round(sHeight * 0.66));
+        let sHeight = _slotH(s);
 
         if (!item) {
+          if (_foldRun && s >= _foldRun.start && s <= _foldRun.end) {
+            if (s === _foldRun.start) {
+              cellHtml += `<div class="fold-slot" style="height:${_foldRun.h}px;">${_foldPillsHtml(_foldFat(dayData, day), day)}</div>`;
+              _foldPlaced = true;
+            }
+            continue;
+          }
           cellHtml += `<div class="item-tag" style="opacity:0; pointer-events:none; border:none; background:transparent; box-shadow:none; height:${sHeight}px; min-height:${sHeight}px; margin-bottom:1px; padding:0;"></div>`;
           continue;
         }
@@ -1045,6 +1186,9 @@ function renderCalendar() {
         // 🚨 핵심: 드래그가 먹히도록 data-raw-idx 강제 추가!
         cellHtml += `<div class="${tagClass}" data-raw-idx="${originalIdx}" data-tip="${_esc(_tip)}" style="${bgStyle}" ${bindItem}>${innerHtml}</div>`;
       }
+      // 접힌 날: 간트 막대(위 루프에서 제 슬롯 높이대로 그려짐) 아래에 일반 칩 요약 덩어리
+      if (_foldIsClosed && !_foldPlaced) cellHtml += _foldPillsHtml(_foldFat(dayData, day), day);
+      if (_foldIsOpen) cellHtml += `<div class="fold-collapse" onclick="toggleFold(${day}, event)">접기 ▴</div>`;
     }
     cellHtml += `</div>`;
     rowHtml += cellHtml;
@@ -1056,6 +1200,11 @@ function renderCalendar() {
   }
   rowHtml += "</div>";
   grid.innerHTML = rowHtml;
+  // 📂 빈 슬롯 구간에 끼워 넣은 접힘 덩어리가 구간보다 크면(막대 정렬을 밀어버리므로) 막대 아래로 옮김
+  grid.querySelectorAll(".fold-slot").forEach((sl) => {
+    const bx = sl.firstElementChild;
+    if (bx && bx.offsetHeight > sl.offsetHeight + 0.5) sl.parentElement.appendChild(bx);
+  });
 
   // ... (나머지 대기열 그리는 부분은 기존과 완벽히 동일합니다!)
   renderPending();
@@ -1063,6 +1212,7 @@ function renderCalendar() {
     if (!isMultiMode) document.getElementById("fabBtn").style.display = "flex";
   }
   updateSyncTime();
+  updateFoldAllBtn();
   // 🚨 [추가] 달력을 다 그리고 나면, 하단 통계 수치도 실시간으로 업데이트!
   updateStatsSummary();
   renderPcSidePanel(); // PC모드 우측 패널
@@ -1254,6 +1404,8 @@ function pcJumpTo(dateStr, key) {
   const [y, m, day] = dateStr.split("-").map((v) => parseInt(v, 10));
   // 재렌더(캐시→서버 응답)에도 하이라이트가 유지되도록 일정 시간 동안 반복 적용
   window._pcHl = { y: y, m: m, day: day, key: key || "", expire: Date.now() + 4500, scrolled: false };
+  window._foldOpen = window._foldOpen || {};
+  window._foldOpen[`${y}-${m}-${day}`] = true; // 검색 결과 날짜는 접혀 있어도 펼쳐서 강조
   goToAsync(y, m);
   if (window._pcHlTimer) clearInterval(window._pcHlTimer);
   window._pcHlTimer = setInterval(reapplyPcHl, 200);
@@ -1444,7 +1596,7 @@ function ensurePcTip() {
   document.body.appendChild(t);
   document.addEventListener("mouseover", (e) => {
     if (!document.body.classList.contains("pc-dense")) return;
-    const tag = e.target.closest && e.target.closest(".item-tag[data-tip], .pcp-pend-item[data-tip]");
+    const tag = e.target.closest && e.target.closest(".item-tag[data-tip], .fold-box[data-tip], .pcp-pend-item[data-tip]");
     if (!tag) return;
     t.innerHTML = _pcTipHtml(tag.getAttribute("data-tip") || "");
     t.style.display = "block";
@@ -1470,7 +1622,7 @@ function ensurePcTip() {
     t.style.top = y + "px";
   });
   document.addEventListener("mouseout", (e) => {
-    if (e.target.closest && e.target.closest(".item-tag[data-tip], .pcp-pend-item[data-tip]")) t.style.display = "none";
+    if (e.target.closest && e.target.closest(".item-tag[data-tip], .fold-box[data-tip], .pcp-pend-item[data-tip]")) t.style.display = "none";
   });
 }
 // data-tip(여러 줄) → 제목 + 라벨/값 정렬 HTML
@@ -1967,6 +2119,11 @@ function updateLocalState(action, payload, idx) {
   let oldDay = parseDay(payload.oldDate);
   let newDay = parseDay(payload.newDate);
 
+  // 📂 새 일정이 들어가거나 다른 날로 옮겨진 날은 접혀 있어도 펼쳐서 결과가 바로 보이게
+  if (action !== "DELETE" && typeof newDay === "number" && (action !== "EDIT" || oldDay !== newDay)) {
+    window._foldOpen[_foldKey(newDay)] = true;
+  }
+
   // 🚨 [핵심 픽스] 날짜를 바꾸지 않은 단순 수정(색상, 메모 등)은 제자리에서 수정! (밑으로 떨어지지 않음)
   let isSimpleEdit =
     action === "EDIT" &&
@@ -2272,6 +2429,7 @@ function toggleMultiMode() {
     bar.style.display = "none";
     if (isAdmin && fab) fab.style.display = "flex";
   }
+  renderCalendar(); // 다중선택 켜고 끌 때 접힌 날짜를 펼치거나 다시 접기
 }
 
 // 🚀 [초정밀 통합 드래그 엔진] (입고/출고 공통)
