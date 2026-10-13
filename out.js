@@ -881,8 +881,18 @@ function _multiOn() {
 function _foldFat(dayData, day) {
   return (dayData || []).filter((it) => !checkIsSlim(it, day));
 }
+function _pcFoldOpenAll() {
+  // PC모드 전용 전역 설정: 펼침 ON이면 모든 달/날짜를 항상 펼침(접기 기능 비활성), OFF면 접기 대상은 모두 접힘
+  return document.body.classList.contains("pc-dense") && localStorage.getItem("cal_pc_fold_open") === "on";
+}
+function togglePcFold() {
+  const on = !_pcFoldOpenAll();
+  try { localStorage.setItem("cal_pc_fold_open", on ? "on" : "off"); } catch (e) {}
+  window._foldOpen = {}; // 개별로 펼쳐둔 날짜 상태 초기화 → 설정이 그대로 모든 날짜에 적용
+  renderCalendar();
+}
 function _foldable(dayData, day) {
-  return !!dayData && !_multiOn() && _foldFat(dayData, day).length >= FOLD_MIN;
+  return !!dayData && !_multiOn() && !_pcFoldOpenAll() && _foldFat(dayData, day).length >= FOLD_MIN;
 }
 function _foldEligibleDays() {
   const r = [];
@@ -1829,6 +1839,7 @@ function renderPcLeftbar() {
     return e && e.classList.contains("active") ? "pclb-on" : "";
   };
   const holidayOn = typeof isShowHoliday !== "undefined" && isShowHoliday;
+  const pcFoldOpen = _pcFoldOpenAll();
   const admin = typeof isAdmin !== "undefined" && isAdmin;
   const dark = typeof isDarkMode !== "undefined" && isDarkMode;
   bar.innerHTML = `
@@ -1874,6 +1885,8 @@ function renderPcLeftbar() {
         <span class="pclb-r2-txt">${dark ? "Dark" : "Light"}</span>
       </button>
     </div>
+
+    <button class="pclb-item ${pcFoldOpen ? "pclb-on" : ""}" onclick="togglePcFold()" title="ON: 모든 달 항상 펼침 / OFF: 모두 접힘">${pcFoldOpen ? "📂" : "📁"} 일정 펼침 ${pcFoldOpen ? "ON" : "OFF"}</button>
 
     <div class="pclb-sec">기능</div>
     ${admin ? `<button class="pclb-item pclb-add-btn" onclick="openAddForm()">✏️ 신규 등록</button>` : ""}
