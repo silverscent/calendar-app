@@ -953,6 +953,19 @@ function _foldPillsHtml(dayData, day) {
   return `<div class="fold-box" data-tip="${_esc(tip)}" onclick="toggleFold(${day}, event)"><div class="fold-pills">${pills}${more > 0 ? `<i class="fold-pl more">+${more}</i>` : ""}</div>${stat}</div>`;
 }
 
+// 📂 창 너비가 바뀌면(PC 창 조절·기기 회전) 접힘 덩어리의 줄바꿈 높이가 달라지므로, 간트 사이에 끼운 덩어리가 있을 때만 다시 그림
+// (키보드 등 높이만 바뀌는 resize는 무시 → 입력 중 재렌더 없음)
+let _foldRsT = null,
+  _foldRsW = window.innerWidth;
+window.addEventListener("resize", () => {
+  if (window.innerWidth === _foldRsW) return;
+  _foldRsW = window.innerWidth;
+  clearTimeout(_foldRsT);
+  _foldRsT = setTimeout(() => {
+    if (document.querySelector(".fold-slot")) renderCalendar();
+  }, 250);
+});
+
 function renderCalendar() {
   companyColors = {}; // 렌더마다 초기화 → 삭제된 업체 색 즉시 해제
   const { weekSlotHeights, weekHeights, foldedDays } = computeGanttSlots();
@@ -1055,7 +1068,7 @@ function renderCalendar() {
           if (!renderArray[s]) {
             if (!cur) cur = { start: s, end: s, h: 0 };
             cur.end = s;
-            cur.h += _slotH(s) + 1;
+            cur.h += _slotH(s) + 1 + (cur.h > 0 ? 3 : 0); // 칸 flex gap(3px)까지 합산: 슬롯 k개를 한 덩어리로 바꿔도 아래 막대 위치가 그대로
           } else if (cur) {
             if (!_foldRun || cur.h > _foldRun.h) _foldRun = cur;
             cur = null;
