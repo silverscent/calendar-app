@@ -209,6 +209,104 @@ function updateFoldAllBtn() {
   b.title = t;
   b.setAttribute("aria-label", t);
 }
+// =====================================================================
+// 📂 드래그 중 접힌 날 위에 0.22초 머물면 임시로 펼치고, 벗어나면(0.15초) 다시 접음
+//   · window._foldDrag = 임시 펼침 날짜 키(저장 안 됨, 접기 버튼 없음) · 드롭/취소/오류 시 endDrag 래퍼가 반드시 해제
+//   · 재렌더로 DOM이 바뀌어도 '들고 있는 원본 칩' 노드는 새 DOM 자리에 되돌려 놓음(터치 이벤트가 끊기지 않게)
+// =====================================================================
+window._foldDrag = null;
+let _foldDragT = null,
+  _foldDragWant = undefined;
+function _foldDragCellKey(cell) {
+  if (!cell) return null;
+  const el = cell.querySelector(".date-num");
+  const d = el ? parseInt(el.textContent, 10) : NaN;
+  return isNaN(d) ? null : _foldKey(d);
+}
+function _foldDragHover(cell) {
+  const curKey = _foldDragCellKey(cell);
+  const foldedHere = !!(cell && cell.querySelector(".fold-box"));
+  // 임시로 펼쳐 둔 칸 안에 있는 동안은 유지, 접힌 칸 위면 그 칸이 목표, 그 외(다른 칸·빈 곳)는 접기
+  const want = window._foldDrag && curKey === window._foldDrag ? window._foldDrag : foldedHere ? curKey : null;
+  if (want === _foldDragWant) return;
+  _foldDragWant = want;
+  clearTimeout(_foldDragT);
+  if (want === window._foldDrag) return;
+  _foldDragT = setTimeout(() => _foldDragApply(want), want ? 220 : 150);
+}
+function _foldDragApply(want) {
+  if (!isDragging || !dragData) return;
+  const day = dragData.day;
+  const arr = day === "pending" ? serverData.pendingItems : serverData.monthData[day];
+  if (!arr) return;
+  if (!dragData._item) dragData._item = arr[dragData.idx];
+  const item = dragData._item;
+  if (!item) return;
+  const keep = pressTarget && pressTarget.isConnected ? pressTarget : null;
+  window._foldDrag = want;
+  renderCalendar();
+  lastDropTarget = null;
+  _lastInsertPos = null;
+  const arr2 = day === "pending" ? serverData.pendingItems : serverData.monthData[day];
+  const ni = arr2 ? arr2.indexOf(item) : -1;
+  if (ni === -1) {
+    // 재렌더 중 데이터가 바뀌어 원본을 못 찾음 → 안전하게 드래그 취소
+    window._foldDrag = null;
+    isDragging = false;
+    if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+    document.querySelectorAll(".ghost-clone-element").forEach((el) => el.remove());
+    return;
+  }
+  dragData.idx = ni;
+  let fresh = null;
+  if (day === "pending") fresh = document.getElementById("main-pending-" + ni);
+  else {
+    const c = [...document.querySelectorAll(".day-cell:not(.empty)")].find(
+      (x) => parseInt((x.querySelector(".date-num") || {}).textContent, 10) === day,
+    );
+    fresh = c && c.querySelector(`.item-tag[data-raw-idx="${ni}"]`);
+  }
+  if (keep && fresh && fresh !== keep) {
+    fresh.replaceWith(keep);
+    pressTarget = keep;
+  } else if (fresh) pressTarget = fresh;
+  if (pressTarget) pressTarget.style.opacity = "0.3";
+  _foldDragWant = want;
+  if (typeof window._dragLX === "number") updateGhostPosition(window._dragLX, window._dragLY); // 새 배치 기준으로 다시 판정
+}
+
+// 📂 접힌 날이 펼쳐지는 순간 칩들이 촤라락 팝업 (프리뷰7과 동일: 0.26초, 칩당 35ms 간격)
+//   · renderCalendar가 grid 전체를 다시 그리므로, 이전 렌더와 비교해 '새로 펼쳐진 날'에만 .fold-pop 부여 (월 이동·다중선택·일반 재렌더는 무모션)
+let _foldPrevExp = null,
+  _foldPrevYM = "";
+function _foldAnimate(grid) {
+  const ym = `${serverData.year}-${serverData.month}`;
+  if (_multiOn() || _pcFoldOpenAll()) {
+    _foldPrevExp = null; // 접기가 꺼진 동안은 기준 초기화(끝난 뒤 한꺼번에 튀어나오는 모션 방지)
+    return;
+  }
+  const now = new Set();
+  for (let d = 1; d <= serverData.daysInMonth; d++) {
+    const k = _foldKey(d);
+    if (_foldable(serverData.monthData[d]) && (window._foldOpen[k] || k === window._foldDrag)) now.add(d);
+  }
+  const prev = _foldPrevYM === ym ? _foldPrevExp : null;
+  _foldPrevExp = now;
+  _foldPrevYM = ym;
+  if (!prev) return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const cells = grid.querySelectorAll(".day-cell:not(.empty)");
+  now.forEach((d) => {
+    if (prev.has(d) || !cells[d - 1]) return;
+    let i = 0;
+    cells[d - 1].querySelectorAll(".item-tag:not(.item-tag-slim), .fold-collapse").forEach((el) => {
+      if (el.style.opacity === "0" || el.classList.contains("ghost-clone-element")) return;
+      el.classList.add("fold-pop");
+      el.style.animationDelay = Math.min(i++, 12) * 35 + "ms";
+    });
+  });
+}
+
 function _foldRingHtml(dayData, day) {
   const isDoneIt = (it) => it.isDone === true || String(it.isDone) === "true";
   const n = dayData.length;
@@ -310,7 +408,8 @@ function renderCalendar() {
 
     const _foldOn = _foldable(dayData);
     const _foldIsOpen = _foldOn && !!window._foldOpen[_foldKey(day)];
-    if (_foldOn && !_foldIsOpen) {
+    const _foldIsTemp = _foldOn && _foldKey(day) === window._foldDrag; // 드래그 중 임시 펼침
+    if (_foldOn && !_foldIsOpen && !_foldIsTemp) {
       cellHtml += _foldRingHtml(dayData, day);
     } else if (dayData && dayData.length > 0) {
       dayData.forEach((item, idx) => {
@@ -368,6 +467,7 @@ function renderCalendar() {
   }
   rowHtml += "</div>";
   grid.innerHTML = rowHtml;
+  _foldAnimate(grid);
 
   renderPending();
 
@@ -929,6 +1029,8 @@ function startPress(e, type, day, idx = null) {
 
 function updateGhostPosition(x, y) {
   if (!dragGhost) return;
+  window._dragLX = x;
+  window._dragLY = y;
   // 🚨 픽셀 단위 직접 주입으로 입고 달력 먹통 현상 완벽 해결!
   dragGhost.style.left = x - dragOffsetX + "px";
   dragGhost.style.top = y - dragOffsetY + "px";
@@ -938,6 +1040,7 @@ function updateGhostPosition(x, y) {
     dragReq = requestAnimationFrame(() => {
       let dropElement = document.elementFromPoint(x, y);
       let targetCell = dropElement ? dropElement.closest(".day-cell:not(.empty)") : null;
+      _foldDragHover(targetCell); // 접힌 날 위에 머물면 임시 펼침
       let targetItem = dropElement ? dropElement.closest(".item-tag") : null;
       if (targetItem === pressTarget) targetItem = null; // 자기 자신 제외
 
@@ -1026,7 +1129,22 @@ document.addEventListener("touchend", endDrag);
 document.addEventListener("mouseup", endDrag);
 document.addEventListener("touchcancel", endDrag); // 터치 취소 시 드래그 얼어붙음 방지
 
+// 📂 드래그 종료 래퍼: 임시 펼침을 항상 해제(드롭 위치 판정은 펼쳐진 상태 기준으로 먼저 끝난 뒤 접음)
 async function endDrag(e) {
+  const hadTemp = !!window._foldDrag;
+  clearTimeout(_foldDragT);
+  _foldDragWant = undefined;
+  try {
+    return await _endDragCore(e);
+  } finally {
+    if (hadTemp || window._foldDrag) {
+      window._foldDrag = null;
+      renderCalendar();
+    }
+  }
+}
+
+async function _endDragCore(e) {
   if (!isDragging) return;
   isDragging = false;
   if (dragReq) {
