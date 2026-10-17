@@ -104,7 +104,13 @@ async function _notifyCore(description, byAdmin) {
 }
 
 // 호출부는 기존과 동일하게 notifyCalendarChange(desc, admin) 만 부르면 됨 (await 불필요)
+const _notifyRecent = new Map(); // 같은 사람·같은 내용 알림 10초 내 중복 차단
 function notifyCalendarChange(description, byAdmin) {
+  const _k = `${String(byAdmin || "").toLowerCase()}|${description}`;
+  const _nowMs = Date.now();
+  if (_notifyRecent.size > 200) for (const [k, t] of _notifyRecent) if (_nowMs - t > 10000) _notifyRecent.delete(k);
+  if (_nowMs - (_notifyRecent.get(_k) || 0) < 10000) return Promise.resolve();
+  _notifyRecent.set(_k, _nowMs);
   const p = _notifyCore(description, byAdmin)
     .catch((e) => console.error("[calendar-notify] 오류:", e && e.message))
     .finally(() => _notifyPending.delete(p));
@@ -1489,6 +1495,8 @@ if (action === "VERIFY_SESSION") {
         if (added.length)   parts.push(`추가: ${added.join(", ")}`);
         if (removed.length) parts.push(`삭제: ${removed.join(", ")}`);
         if (changed.length) parts.push(`수정: ${changed.join(", ")}`);
+        // 업체 색상을 함께 바꿨으면 같은 알림 1건에 포함 (SAVE_GLOBAL_COLOR는 별도 알림 없음)
+        if (payload.colorNote) parts.push(`색상 변경: ${String(payload.colorNote).replace(/\[TASK\]/gi, "").trim().slice(0, 50)}`);
         const compDesc = parts.length > 0 ? parts.join(" / ") : "변경사항 없음";
         const jsonStr = JSON.stringify(newData);
         await pool.query(
@@ -1499,7 +1507,7 @@ if (action === "VERIFY_SESSION") {
           "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'SYS_COMP', ?)",
           [currentAdmin, `[업체정보 변경] ${compDesc}`],
         );
-        notifyCalendarChange(`[업체정보 변경] ${compDesc}`, currentAdmin);
+        if (parts.length > 0) notifyCalendarChange(`[업체정보 변경] ${compDesc}`, currentAdmin);
         return res.status(200).json({ success: true });
       } else if (action === "GET_CAL_NOTIFY") {
         const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'CALENDAR_NOTIFY'`);
@@ -1548,9 +1556,7 @@ if (action === "VERIFY_SESSION") {
           `INSERT INTO system_settings (setting_key, setting_value) VALUES ('GLOBAL_COMPANY_COLORS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
           [jsonStr, jsonStr],
         );
-        // 사용자가 직접 바꾼 단일 업체 색상만 알림 (화면 로딩 시 자동 정리/자동 배정 저장은 제외)
-        if (compName && !data?.saveAll && !Array.isArray(deleteNames))
-          notifyCalendarChange(`[업체 색상] ${String(compName).replace(/\[TASK\]/gi, "").trim()} 색상 변경`, currentAdmin);
+        // 색상 저장은 알림 없음 (일정/업체정보 저장과 함께 호출돼 알림이 중복되므로)
         return res.status(200).json({ success: true });
       } else if (action === "GET_YEARLY_HOLIDAYS") {
         const y = year || new Date().getFullYear();
@@ -1742,10 +1748,11 @@ if (action === "VERIFY_SESSION") {
         const oldEtcClean = (data?.oldEtc||"").replace(/\[.*?\]/g,"").trim();
         const newEtcClean = (reqEtcOut||"").replace(/\[.*?\]/g,"").trim();
         if (oldEtcClean !== newEtcClean) changeDetails.push(`비고: "${oldEtcClean||"없음"}"→"${newEtcClean||"없음"}"`);
+        if (data?.colorNote) changeDetails.push(`색상 변경`);
         const changeStr = changeDetails.length > 0 ? ` (${changeDetails.join(", ")})` : "";
         const desc = `[출고 수정] ${cleanComp} (${rangeStr})${changeStr}`;
         await pool.query("INSERT INTO admin_audit_logs (admin_id,action_type,description) VALUES (?,'CAL_EDIT',?)", [currentAdmin, desc]);
-        notifyCalendarChange(desc, currentAdmin);
+        if (changeDetails.length > 0 || oldLabel !== newLabel) notifyCalendarChange(desc, currentAdmin); // 날짜범위 이동은 포함. 색상만 바꾼 저장 등 실제 변경 없으면 알림 생략
         return res.status(200).json({ success: true });
       }
 
@@ -1829,6 +1836,7 @@ if (action === "VERIFY_SESSION") {
             if (_oldEtc !== _newEtc) changes.push(`비고: "${_oldEtc||"없음"}"→"${_newEtc||"없음"}"`);
           }
 
+          if (data?.colorNote) changes.push(`색상 변경`);
           const detailStr = changes.length > 0 ? changes.join(", ") : "변경사항 없음";
           const logDesc = `[출고 수정] ${targetName} (${targetDate || "미정"}) ${detailStr}`;
           await pool.query(

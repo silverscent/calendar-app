@@ -3219,6 +3219,7 @@ async function submitCMS(
       let stdName = getFullName(rawComp);
       companyColors[stdName] = tempEditColorObj;
       customColors[stdName] = tempEditColorIdx;
+      payload.colorNote = stdName; // 서버가 이 수정 알림 1건에 "색상 변경"을 함께 표기
       localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
       apiCall({ source: "vercel", action: "SAVE_GLOBAL_COLOR", compName: stdName, colorIdx: tempEditColorIdx });
       tempEditColorObj = null;
@@ -5703,7 +5704,9 @@ async function saveCompEdit(oldCompName) {
   selectedCrmComp = newCompName;
 
   // 🚨 [핵심 버그 수정!] 피커에서 색상을 골랐다면 실제 글로벌 컬러 DB에 강제 세이브!!
+  let _crmColorNote = "";
   if (tempEditColorObj && tempEditColorIdx !== null) {
+    _crmColorNote = newCompName; // 업체정보 저장 알림 1건에 색상 변경 함께 표기
     companyColors[newCompName] = tempEditColorObj; // 메모리 갱신
     customColors[newCompName] = tempEditColorIdx; // 로컬 캐시 갱신
     localStorage.setItem("GLOBAL_COMPANY_COLORS", JSON.stringify(customColors));
@@ -5725,7 +5728,7 @@ async function saveCompEdit(oldCompName) {
   }
 
   localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB));
-  apiCall({ source: "vercel", action: "SAVE_COMP_INFO_DB", data: compInfoDB });
+  apiCall({ source: "vercel", action: "SAVE_COMP_INFO_DB", data: compInfoDB, colorNote: _crmColorNote });
 
   showToast("💾 업체 정보 및 색상이 저장되었습니다.", 1500);
   renderCompList();
