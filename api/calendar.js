@@ -27,17 +27,69 @@ const mysql = require("mysql2/promise");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 
-// 📲 달력 변경 텔레그램 알림 — fire-and-forget (응답 블로킹 없음)
+// 📲 달력 변경 텔레그램 알림
 // 1:1 DM 전송: ADMIN_TELEGRAM_USER_ID = 봇과 1:1 대화 chat_id (사용자 개인 ID)
 // 본인이 직접 한 변경은 알림 제외: TELEGRAM_OWNER_ID 환경변수에 본인 admin_id 설정
-async function notifyCalendarChange(description, byAdmin) {
+//
+// ⚠️ Vercel 서버리스는 응답(res.end)이 나가는 순간 함수가 동결/종료될 수 있어서,
+//    예전처럼 fetch를 기다리지 않고 버리면 "어쩔땐 오고 어쩔땐 안 오는" 현상이 생김.
+//    → 알림 Promise를 _notifyPending에 모아두고, 핸들러가 응답을 끝내기 직전(res.end 훅)에
+//      최대 NOTIFY_WAIT_MS 동안 전송 완료를 기다린다. (알림 실패가 요청 자체를 깨지는 않음)
+const NOTIFY_WAIT_MS = 4500;      // 응답 전 알림 전송 최대 대기
+const TG_TIMEOUT_MS  = 3500;      // 텔레그램 1회 호출 타임아웃
+const _notifyPending = new Set();
+let _notifyWarned = false;
+
+const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function _tgSend(botToken, chatId, text) {
+  // 최대 2회 시도: 네트워크 오류/5xx/429(retry_after) 시 1회 재시도
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), TG_TIMEOUT_MS);
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+        signal: ac.signal,
+      });
+      clearTimeout(timer);
+      if (r.ok) return true;
+      let j = null;
+      try { j = await r.json(); } catch (_) {}
+      console.error(`[calendar-notify] Telegram ${r.status}:`, j && j.description);
+      if (r.status === 429 && attempt === 1) {
+        const wait = Math.min(((j && j.parameters && j.parameters.retry_after) || 1) * 1000, 2000);
+        await _sleep(wait);
+        continue;
+      }
+      if (r.status >= 500 && attempt === 1) { await _sleep(400); continue; }
+      return false; // 400/401/403 등은 재시도 무의미 (토큰·chat_id 문제)
+    } catch (e) {
+      clearTimeout(timer);
+      console.error("[calendar-notify] 전송 실패:", e && e.message);
+      if (attempt === 1) { await _sleep(400); continue; }
+      return false;
+    }
+  }
+  return false;
+}
+
+async function _notifyCore(description, byAdmin) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   // 1:1 DM: ADMIN_TELEGRAM_USER_ID (그룹챗인 TELEGRAM_CHAT_ID 사용 안 함)
   const chatId   = process.env.ADMIN_TELEGRAM_USER_ID;
-  if (!botToken || !chatId) return;
+  if (!botToken || !chatId) {
+    if (!_notifyWarned) {
+      _notifyWarned = true;
+      console.error("[calendar-notify] TELEGRAM_BOT_TOKEN 또는 ADMIN_TELEGRAM_USER_ID 환경변수 없음 → 알림 비활성");
+    }
+    return;
+  }
   // 본인 변경 제외 (TELEGRAM_OWNER_ID 미설정 시 전체 알림)
-  const ownerId = process.env.TELEGRAM_OWNER_ID || "";
-  if (ownerId && String(byAdmin || "").toLowerCase() === ownerId.toLowerCase()) return;
+  const ownerId = (process.env.TELEGRAM_OWNER_ID || "").trim();
+  if (ownerId && String(byAdmin || "").trim().toLowerCase() === ownerId.toLowerCase()) return;
   // CALENDAR_NOTIFY 설정 확인 (OFF면 알림 차단)
   try {
     const [nRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'CALENDAR_NOTIFY'`);
@@ -45,12 +97,30 @@ async function notifyCalendarChange(description, byAdmin) {
   } catch (_) {}
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
   const ts = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-  const text = `📅 [달력 변경] ${ts}\n👤 ${byAdmin || "알수없음"}\n${description}`;
-  fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  }).catch(() => {}); // 실패해도 무시
+  let text = `📅 [달력 변경] ${ts}\n👤 ${byAdmin || "알수없음"}\n${description}`;
+  // 텔레그램 한 메시지 최대 4096자 — 초과 시 400 에러로 통째로 누락되던 문제 방지
+  if (text.length > 4000) text = text.slice(0, 3980) + "\n…(이하 생략)";
+  await _tgSend(botToken, chatId, text);
+}
+
+// 호출부는 기존과 동일하게 notifyCalendarChange(desc, admin) 만 부르면 됨 (await 불필요)
+function notifyCalendarChange(description, byAdmin) {
+  const p = _notifyCore(description, byAdmin)
+    .catch((e) => console.error("[calendar-notify] 오류:", e && e.message))
+    .finally(() => _notifyPending.delete(p));
+  _notifyPending.add(p);
+  return p;
+}
+
+// 응답을 끝내기 직전, 진행 중인 알림 전송이 있으면 완료(또는 타임아웃)까지 기다린다
+function _hookResEndForNotify(res) {
+  const origEnd = res.end.bind(res);
+  res.end = function (...args) {
+    if (_notifyPending.size === 0) return origEnd(...args);
+    Promise.race([Promise.allSettled([..._notifyPending]), _sleep(NOTIFY_WAIT_MS)])
+      .then(() => origEnd(...args), () => origEnd(...args));
+    return res;
+  };
 }
 
 const pool = mysql.createPool({
@@ -136,6 +206,7 @@ module.exports = async function (req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
+  _hookResEndForNotify(res); // 📲 알림 전송 완료 후 응답 종료 (서버리스 동결 방지)
 
   try {
     if (req.method === "GET") {
@@ -1003,6 +1074,7 @@ if (action === "VERIFY_SESSION") {
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DB_RAW_DELETE', ?)",
             [currentAdmin, `${type === "out" ? "출고" : "입고"} 테이블 일련번호 [ID: ${rowId}] 로우 강제 소거`],
           );
+          notifyCalendarChange(`[DB직접 삭제] ${type === "out" ? "출고" : "입고"} ID:${rowId} 로우 삭제`, currentAdmin);
           return res.status(200).json({ success: true });
         } catch (e) {
           console.error("API 처리 오류:", e);
@@ -1058,6 +1130,7 @@ if (action === "VERIFY_SESSION") {
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DB_RAW_UPDATE', ?)",
             [currentAdmin, `DB 제어실 전체 컬럼 인라인 수정 [ID:${rowId}]`],
           );
+          notifyCalendarChange(`[DB직접 수정] ${type === "out" ? "출고" : "입고"} ID:${rowId} 전체 컬럼 수정`, currentAdmin);
           return res.status(200).json({ success: true });
         } catch (e) {
           console.error("API 처리 오류:", e);
@@ -1109,6 +1182,7 @@ if (action === "VERIFY_SESSION") {
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'DB_RAW_ADD', ?)",
             [currentAdmin, `[DB 제어실] ${type === "out" ? "출고" : "입고"} 신규 데이터 직접 주입`],
           );
+          notifyCalendarChange(`[DB직접 등록] ${type === "out" ? "출고" : "입고"} 신규 데이터 직접 주입`, currentAdmin);
           return res.status(200).json({ success: true });
         } catch (e) {
           console.error("API 처리 오류:", e);
@@ -1474,6 +1548,9 @@ if (action === "VERIFY_SESSION") {
           `INSERT INTO system_settings (setting_key, setting_value) VALUES ('GLOBAL_COMPANY_COLORS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`,
           [jsonStr, jsonStr],
         );
+        // 사용자가 직접 바꾼 단일 업체 색상만 알림 (화면 로딩 시 자동 정리/자동 배정 저장은 제외)
+        if (compName && !data?.saveAll && !Array.isArray(deleteNames))
+          notifyCalendarChange(`[업체 색상] ${String(compName).replace(/\[TASK\]/gi, "").trim()} 색상 변경`, currentAdmin);
         return res.status(200).json({ success: true });
       } else if (action === "GET_YEARLY_HOLIDAYS") {
         const y = year || new Date().getFullYear();
@@ -1758,7 +1835,7 @@ if (action === "VERIFY_SESSION") {
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
             [currentAdmin, logDesc],
           );
-          notifyCalendarChange(logDesc, currentAdmin);
+          if (changes.length > 0) notifyCalendarChange(logDesc, currentAdmin); // 실제 변경 없는 저장은 알림 생략(감사로그엔 기록)
         } else if (action === "ADD_QTY") {
           // 👈 🚨 여기에 이 블록을 통째로 추가하세요!
           // [출고 수량추가] 버튼 클릭 시 DB 원본에 합산 및 비고(etc) 업데이트
@@ -1865,6 +1942,7 @@ if (action === "VERIFY_SESSION") {
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_SORT', ?)",
             [currentAdmin, `[출고 정렬] 화면 드래그 순서 변경 (${moveCount}건 이동)`],
           );
+          notifyCalendarChange(`[출고 정렬] ${Object.keys(data.dailyOrders).map((d) => d === "미정" ? "미정" : String(d).slice(5).replace("-", "/")).join(", ")} 일정 순서 변경 (${moveCount}건)`, currentAdmin);
         } else if (action === "MULTI_DELETE" && data?.items) {
           for (const it of data.items) {
             const tDate = it.dateStr === "미정" ? null : it.dateStr;
@@ -2739,7 +2817,7 @@ ${JSON.stringify(rows, null, 2)}
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
             [currentAdmin, inLogDesc],
           );
-          notifyCalendarChange(inLogDesc, currentAdmin);
+          if (changes.length > 0) notifyCalendarChange(inLogDesc, currentAdmin);
         } else if (action === "ADD") {
           let reqBl = (data?.newBL || data?.bl || data?.newComp || data?.company || data?.bl_number || "").trim();
           let reqDate =
@@ -2806,6 +2884,7 @@ ${JSON.stringify(rows, null, 2)}
             "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_SORT', ?)",
             [currentAdmin, `[입고 정렬] 화면 드래그 순서 변경 (${moveCount}건 이동)`],
           );
+          notifyCalendarChange(`[입고 정렬] ${Object.keys(data.dailyOrders).map((d) => d === "미정" ? "미정" : String(d).slice(5).replace("-", "/")).join(", ")} 일정 순서 변경 (${moveCount}건)`, currentAdmin);
         } else if (action === "MULTI_DELETE" && data?.items) {
           for (const it of data.items) {
             if (it.id) await pool.query(`DELETE FROM inbound WHERE id = ?`, [it.id]);
