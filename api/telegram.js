@@ -1883,6 +1883,44 @@ function attachRowYCoords(rows, visionData) {
 //    (텍스트 순서는 틀려도 단어 박스의 Y좌표는 정확하므로, 같은 높이의 행에 다시 붙인다)
 //    안전장치: 앵커 행 부족·단어 대부분이 행에 안 붙음·열 위치 불명 → 아무것도 바꾸지 않음
 // =================================================================
+// 비고 단어들을 읽는 순서대로 이어 붙임.
+//  - Vision 은 "11월" 을 "11" + "월" 두 단어로 쪼개는데, 숫자·한글은 박스 높이/중심Y가 달라
+//    Y만으로 정렬하면 "11" 이 맨 끝이나 맨 앞으로 튀어 "월 지연 가능성 높음 11" 처럼 됨 →
+//    ① 비슷한 높이끼리 같은 줄로 묶고 ② 줄 안에서는 X(왼→오) 순으로 정렬,
+//    ③ 글자 사이 틈이 거의 없으면(같은 단어를 쪼갠 것) 공백 없이 붙임.
+function joinEtcWords(ws) {
+  if (!ws || ws.length === 0) return "";
+  const hs = ws.map((w) => w.h).filter((v) => v > 0).sort((a, b) => a - b);
+  const medH = hs.length ? hs[Math.floor(hs.length / 2)] : 12;
+  const lineTol = Math.max(4, medH * 0.75); // 같은 줄 판정 폭 (줄바꿈된 비고의 다음 줄은 보통 글자높이 이상 떨어져 있음)
+  const lines = [];
+  ws.slice().sort((a, b) => a.cy - b.cy).forEach((w) => {
+    const ln = lines.find((l) => Math.abs(l.cy - w.cy) <= lineTol);
+    if (ln) { ln.w.push(w); ln.cy = ln.w.reduce((s, x) => s + x.cy, 0) / ln.w.length; }
+    else lines.push({ cy: w.cy, w: [w] });
+  });
+  lines.sort((a, b) => a.cy - b.cy);
+  // 글자 종류: 숫자 / 영문 / 한글 / 그 외(기호·한자 등). 종류가 바뀌는 지점에서 Vision 이 단어를 쪼개므로 틈이 아주 작으면 같은 단어로 본다.
+  const cls = (ch) => (/\d/.test(ch) ? "d" : /[A-Za-z]/.test(ch) ? "a" : /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(ch) ? "k" : "o");
+  return lines
+    .map((ln) => {
+      const a = ln.w.slice().sort((x, y) => x.lft - y.lft);
+      let out = a[0].t;
+      for (let k = 1; k < a.length; k++) {
+        const gap = a[k].lft - a[k - 1].rgt;
+        const prevCh = a[k - 1].t.slice(-1);
+        const curCh = a[k].t.slice(0, 1);
+        const sameWordGap = gap <= Math.max(1, medH * 0.12);                       // 글자가 거의 붙어 있음
+        const splitAtScript = gap <= medH * 0.2 && cls(prevCh) !== cls(curCh);    // 숫자|한글, 영문|한글, 기호 경계에서 쪼개진 경우
+        out += (sameWordGap || splitAtScript ? "" : " ") + a[k].t;
+      }
+      return out;
+    })
+    .join(" ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function realignInvoiceEtcByPosition(rows, visionData) {
   const cleanup = () => rows.forEach((r) => { if (r) delete r._anc; });
   try {
@@ -1916,6 +1954,7 @@ function realignInvoiceEtcByPosition(rows, visionData) {
         cx: (Math.min(...xs) + Math.max(...xs)) / 2,
         lft: Math.min(...xs),
         rgt: Math.max(...xs),
+        h: Math.max(...ys) - Math.min(...ys),
       };
     });
     const etcHdr = words.find((w) => w.t.toUpperCase() === "ETC");
@@ -1952,7 +1991,7 @@ function realignInvoiceEtcByPosition(rows, visionData) {
     if (etcX != null) {
       posEtc = rows.map(() => []);
       words
-        .filter((w) => w.lft > invEdge + 2 && w.t.toUpperCase() !== "ETC")
+        .filter((w) => w.lft > invEdge + 2 && w !== etcHdr) // 헤더 단어 자체만 제외 (비고 내용에 "etc" 가 있어도 보존)
         .sort((a, b) => a.cy - b.cy || a.cx - b.cx)
         .forEach((w) => {
           const i = rowOf(w);
@@ -1965,9 +2004,9 @@ function realignInvoiceEtcByPosition(rows, visionData) {
       const exist = String(r.invoice || "").split(/[,\s]+/).filter(Boolean);
       const keep = exist.filter((v) => !/^\d{7,8}$/.test(v)); // PI-형식 등 숫자 아닌 인보이스는 유지
       r.invoice = [...keep, ...posInv[i]].join(", ");
-      if (posEtc) {
+      if (posEtc && posEtc.some((a) => a.length > 0)) { // 위치로 읽은 비고가 전혀 없으면(좌표 이상) 기존 값 유지
         // 같은 줄(Y 차이 작음)끼리 이어 붙이고 줄 사이는 공백
-        r.etc = posEtc[i].map((w) => w.t).join(" ");
+        r.etc = joinEtcWords(posEtc[i]);
       }
     });
   } finally {
@@ -1991,7 +2030,9 @@ function parseOcrLinesLocal(text) {
     if (cleaned === "발행전") return true;
     //return /^[A-Za-z]{2,5}\d{5,9}$/.test(cleaned);
     //2026-09-18: SCAC 1글자도 허용 (예: D12345678) → {1,5}로 변경
-    return /^[A-Za-z]{1,5}\d{5,9}$/.test(cleaned);
+    //2026-10-20: 다른 선사 B/L 형식도 인식 (MAEU123456789, COSU6123456789, EGLV142500012345, HDMUBUSA12345678, ONEYTYOG12345600 등)
+    //            → 영문 4~8자 + 숫자 6~12자. in.js 의 isBLok / rawRowCount 와 동일 규칙 유지할 것
+    return /^[A-Za-z]{1,5}\d{5,9}$/.test(cleaned) || /^[A-Za-z]{4,8}\d{6,12}$/.test(cleaned);
   };
   const isPal = (v) => /^\d{1,3}$/.test(v);
   const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);

@@ -2498,7 +2498,8 @@ async function verifyOcrRows(_btn, _skipFixPrompt) {
     const c = cleanBL(v);
     //return /^[A-Za-z]{2,5}\d{5,9}$/.test(c) || c === "발행전";
     //2026-09-18: B/L 형식이 2~5자리 영문 + 5~9자리 숫자 외에도, 2~5자리 영문 + 4자리 숫자 + 1~2자리 영문 형식도 있음. (예: ABCD1234EF)
-    return /^[A-Za-z]{1,5}\d{5,9}$/.test(c) || c === "발행전";
+    // 2026-10-20: 다른 선사 형식(MAEU123456789, COSU6123456789, EGLV142500012345, HDMUBUSA12345678 등)도 정상 — telegram.js isBL 과 동일 규칙
+    return /^[A-Za-z]{1,5}\d{5,9}$/.test(c) || /^[A-Za-z]{4,8}\d{6,12}$/.test(c) || c === "발행전";
   };
   const isInvOk = (v) => /^\d{7,8}$/.test(String(v).trim()) || /^PI-?\d{4}-?\d{3,4}$/i.test(String(v).trim());
   const hasInvLike = (v) => /\d{7,8}/.test(String(v)) || /PI-?\d{4}-?\d{3,4}/i.test(String(v));
@@ -2659,7 +2660,7 @@ async function verifyOcrRows(_btn, _skipFixPrompt) {
   const rawTokens = currentRawOcrString.toUpperCase().split(/[\s\n\r•·*/().,\-]+/).filter(Boolean);
   //const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{2,5}\d{5,9}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
   //2026-09-20: B/L 형식이 2~5자리 영문 + 5~9자리 숫자 외에도, 2~5자리 영문 + 4자리 숫자 + 1~2자리 영문 형식도 있음. (예: ABCD1234EF)
-  const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{1,5}\d{5,9}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
+  const rawRowCount = rawTokens.filter((t) => /^[A-Za-z]{1,5}\d{5,9}$/.test(t) || /^[A-Za-z]{4,8}\d{6,12}$/.test(t)).length + (currentRawOcrString.match(/발행\s*전/g) || []).length;
   // 행수 비교: OCR 파싱 행 + 이미 완료처리된 _fromDb 행 중 원본에 실제 있는 것
   const nonDbCount = ocrEditRows.filter((r) => !r._fromDb).length;
   const doneInRaw = ocrEditRows.filter((r) => r._fromDb && norm(r.bl || "") && (rawNorm.includes(norm(r.bl || "")) || rawTokens.includes(norm(r.bl || "")))).length;
