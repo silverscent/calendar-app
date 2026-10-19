@@ -1272,6 +1272,7 @@ module.exports = async function handler(req, res) {
           let useCachedData = false;
           let finalRows = [];
           let extractedText = "";
+          let ocrGeo = undefined; // 좌표 독립 판독: undefined=이번엔 Vision 없음(재파싱), null=판독 불가, 객체=성공
           let aiSuccess = false;
 
           if (text.startsWith("/ocr") && (targetUniqueId || targetFileId)) {
@@ -1461,6 +1462,13 @@ module.exports = async function handler(req, res) {
               attachRowYCoords(finalRows, visionData);
             } catch (e) {
               console.error("행 좌표 매핑 실패:", e);
+            }
+            // 🧭 검증용 독립 판독 — 실패해도 OCR 본 흐름과 무관 (웹 '검증'이 칸별 대조에 사용)
+            try {
+              ocrGeo = readTableByGeometry(visionData);
+            } catch (e) {
+              console.error("좌표 독립 판독 실패:", e);
+              ocrGeo = null;
             }
             // 🧷 Vision 이 표 열을 뒤섞어 읽은 경우(인보이스·비고가 엉뚱한 행에 붙음) → 단어 좌표로 행에 다시 배정
             try {
@@ -1697,6 +1705,22 @@ module.exports = async function handler(req, res) {
               `INSERT INTO ocr_store (store_key, store_value) VALUES ('LAST_OCR_RAW', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
               [jsonRawStr, jsonRawStr],
             );
+          }
+          // 🧭 좌표 독립 판독 저장 (Vision 을 새로 돌린 경우에만 갱신 — 실패 시 이전 이미지의 값이 남지 않도록 삭제)
+          if (ocrGeo !== undefined) {
+            try {
+              if (ocrGeo) {
+                const geoStr = JSON.stringify(ocrGeo);
+                await pool.query(
+                  `INSERT INTO ocr_store (store_key, store_value) VALUES ('LAST_OCR_GEO', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
+                  [geoStr, geoStr],
+                );
+              } else {
+                await pool.query(`DELETE FROM ocr_store WHERE store_key = 'LAST_OCR_GEO'`);
+              }
+            } catch (e) {
+              console.error("LAST_OCR_GEO 저장 실패:", e);
+            }
           }
           return res.status(200).send("OK");
         } finally {
@@ -2012,6 +2036,142 @@ function realignInvoiceEtcByPosition(rows, visionData) {
   } finally {
     cleanup();
   }
+}
+
+// =================================================================
+// 🧭 좌표 기반 독립 판독 (검증용) — 파싱 결과와는 무관하게, 단어 좌표만으로 표를 다시 읽는다.
+//    ① 헤더(PAL·ETA·Invoice# 등)의 X 위치로 열을 나누고 ② PAL·B/L 단어의 Y 위치로 행을 나눈 뒤
+//    ③ 단어를 (행, 열) 칸에 넣어 읽는다. 웹 '검증'이 파싱된 표와 칸별로 대조해 어긋난 칸만 표시한다.
+//    저장 값/확정 로직에는 쓰이지 않으며, 헤더를 못 찾는 등 불확실하면 null(= 기존 검증만 사용).
+// =================================================================
+function readTableByGeometry(visionData) {
+  const anns = visionData && visionData.responses && visionData.responses[0] && visionData.responses[0].textAnnotations;
+  if (!Array.isArray(anns) || anns.length < 20) return null;
+  let imgW = 0;
+  let imgH = 0;
+  const words = [];
+  anns.slice(1).forEach((a) => {
+    const vs = (a.boundingPoly && a.boundingPoly.vertices) || [];
+    if (!vs.length) return;
+    const xs = vs.map((v) => v.x || 0);
+    const ys = vs.map((v) => v.y || 0);
+    const t = String(a.description || "").trim();
+    if (!t) return;
+    const w = {
+      t,
+      lft: Math.min(...xs),
+      rgt: Math.max(...xs),
+      top: Math.min(...ys),
+      bot: Math.max(...ys),
+    };
+    w.cx = (w.lft + w.rgt) / 2;
+    w.cy = (w.top + w.bot) / 2;
+    w.h = Math.max(1, w.bot - w.top);
+    imgW = Math.max(imgW, w.rgt);
+    imgH = Math.max(imgH, w.bot);
+    words.push(w);
+  });
+  if (words.length < 20) return null;
+  const U = (w) => w.t.toUpperCase();
+  const median = (arr) => {
+    const a = arr.filter((v) => typeof v === "number").sort((x, y) => x - y);
+    return a.length ? a[Math.floor(a.length / 2)] : null;
+  };
+  // 1) 헤더: PAL 단어와 같은 높이의 단어들에서 열 기준 X 를 잡는다
+  const palH = words.find((w) => U(w) === "PAL");
+  if (!palH) return null;
+  const band = words.filter((w) => Math.abs(w.cy - palH.cy) <= Math.max(6, palH.h * 0.8));
+  const findH = (re) => band.find((w) => re.test(U(w)));
+  const anc = {};
+  const set = (k, w) => { if (w) anc[k] = w.cx; };
+  set("bl", findH(/^B\/?L#?$/));
+  set("pal", palH);
+  set("eta", findH(/^ETA$/));
+  set("inDate", findH(/^3PL$/));
+  set("fwd", findH(/^FWD$/));
+  set("sType", findH(/^(S\.?TYPE|TYPE)$/));
+  set("invoice", findH(/^INVOICE#?$/));
+  const etcH = findH(/^ETC$/);
+  if (etcH) anc.etc = etcH.cx;
+  const keys = Object.keys(anc);
+  if (keys.length < 6 || anc.pal == null || anc.invoice == null) return null;
+  const sorted = keys.map((k) => ({ k, x: anc[k] })).sort((a, b) => a.x - b.x);
+  const colOf = (cx) => {
+    let best = sorted[0];
+    sorted.forEach((c) => { if (Math.abs(c.x - cx) < Math.abs(best.x - cx)) best = c; });
+    return best.k;
+  };
+  // 2) 본문 단어(헤더·인사말 제외)
+  const hdrLike = /^(입고|3PL|TYPE|S\.?TYPE|INVOICE#?|B\/?L#?|FWD|ETA|PAL|ETC)$/i;
+  let body = words.filter((w) => w.cy > palH.cy + palH.h * 0.9);
+  if (body.length < 6) return null;
+  const medH = median(body.map((w) => w.h)) || 12;
+  // 3) 행 앵커: PAL 열의 1~3자리 숫자 + B/L 열의 B/L 모양 단어("발행" 포함)
+  const seeds = body.filter((w) => {
+    const c = colOf(w.cx);
+    if (c === "pal") return /^\d{1,3}$/.test(w.t);
+    if (c === "bl") return /^[A-Za-z]{1,8}\d{5,12}$/.test(w.t) || /^발행/.test(w.t);
+    return false;
+  });
+  if (seeds.length < 2) return null;
+  const rows = [];
+  seeds.slice().sort((a, b) => a.cy - b.cy).forEach((w) => {
+    const r = rows.find((q) => Math.abs(q.cy - w.cy) <= Math.max(4, medH * 0.6));
+    if (r) { r.seeds.push(w); r.cy = median(r.seeds.map((x) => x.cy)); }
+    else rows.push({ cy: w.cy, seeds: [w], words: [] });
+  });
+  rows.sort((a, b) => a.cy - b.cy);
+  if (rows.length < 2) return null;
+  const diffs = [];
+  for (let i = 1; i < rows.length; i++) diffs.push(rows[i].cy - rows[i - 1].cy);
+  const pitch = median(diffs) || medH * 1.6;
+  if (pitch < 6 || pitch > 300) return null;
+  const tol = pitch * 0.6;
+  // 헤더가 두 줄로 줄바꿈된 경우("3PL" / "입고")의 둘째 줄 단어는 첫 행보다 위에 있으므로 제외 (첫 행 안의 같은 단어는 보존)
+  body = body.filter((w) => !(hdrLike.test(w.t) && w.cy < rows[0].cy - tol));
+  // 4) 단어 → 가장 가까운 행
+  body.forEach((w) => {
+    let best = null;
+    let bd = Infinity;
+    rows.forEach((r) => {
+      const d = Math.abs(w.cy - r.cy);
+      if (d < bd) { bd = d; best = r; }
+    });
+    if (best && bd <= tol) best.words.push(w);
+  });
+  // 5) 비고 영역 경계: 인보이스 숫자(7~8자리)의 오른쪽 끝보다 오른쪽이면 비고
+  const invWords = body.filter((w) => colOf(w.cx) === "invoice" && /^\d{7,8}$/.test(w.t));
+  const invEdge = invWords.length ? Math.max(...invWords.map((w) => w.rgt)) : null;
+  const etcLeft = invEdge != null ? invEdge + 2 : anc.etc != null ? (anc.invoice + anc.etc) / 2 : null;
+  const hasEtcCol = etcLeft != null;
+  const DATE = /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/;
+  const out = rows.map((r) => {
+    const cells = { bl: [], pal: [], eta: [], inDate: [], fwd: [], sType: [], invoice: [], etc: [] };
+    r.words.forEach((w) => {
+      if (hasEtcCol && w.lft > etcLeft) { cells.etc.push(w); return; }
+      const c = colOf(w.cx);
+      if (c === "etc") { cells.etc.push(w); return; }
+      if (cells[c]) cells[c].push(w);
+    });
+    const byX = (a) => a.slice().sort((x, y) => x.lft - y.lft);
+    const bl = byX(cells.bl).map((w) => w.t).join("").replace(/[^A-Za-z0-9가-힣]/g, "");
+    const palW = cells.pal.find((w) => /^\d{1,3}$/.test(w.t));
+    const dates = (a) => byX(a).filter((w) => DATE.test(w.t)).map((w) => w.t.replace(/[/.]/g, "-"));
+    const inv = byX(cells.invoice).map((w) => w.t).filter((t) => /^\d{7,8}$/.test(t) || /^PI-?\d{4}-?\d{3,4}$/i.test(t));
+    const st = cells.sType.map((w) => w.t.toUpperCase()).find((t) => t === "AIR" || t === "SEA") || "";
+    return {
+      y: Math.round(r.cy),
+      bl,
+      pal: palW ? palW.t : "",
+      eta: dates(cells.eta)[0] || "",
+      inDate: dates(cells.inDate)[0] || "",
+      fwd: joinEtcWords(cells.fwd),
+      sType: st,
+      invoice: inv.join(", "),
+      etc: hasEtcCol ? joinEtcWords(cells.etc) : "",
+    };
+  });
+  return { rows: out, pitch: Math.round(pitch), w: Math.round(imgW), h: Math.round(imgH), cols: keys, hasEtc: hasEtcCol };
 }
 
 // =================================================================

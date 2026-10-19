@@ -1947,6 +1947,7 @@ function loadOcrSplitData() {
     const innerNow = document.getElementById("ocrTableInner");
     if (!innerNow) return;
     currentRawOcrString = (data && data.rawData) || "가져온 Raw 데이터가 존재하지 않습니다.";
+    currentOcrGeo = data && data.geo && Array.isArray(data.geo.rows) && data.geo.rows.length ? data.geo : null;
 
     const parsed = data && Array.isArray(data.parsedData) ? data.parsedData : [];
     ocrEditRows = parsed.map((r) => ({
@@ -2564,6 +2565,60 @@ async function verifyOcrRows(_btn, _skipFixPrompt) {
     (s) => !isReasonableDate(s),
   ).length;
 
+  // ── 🟠 참고(주황) 검사용 준비 — 빨강(확실한 오류)과 달리 '확인해 보세요' 수준. 저장 값은 절대 바꾸지 않음
+  const _rawTok = new Set(currentRawOcrString.toUpperCase().split(/[\s\n\r•·*/().,\-]+/).filter(Boolean));
+  //  1) 좌표 독립 판독(서버가 OCR 때 단어 좌표로 표를 다시 읽어 둔 것)과 표를 행(Y위치) 단위로 짝짓기
+  const geo = currentOcrGeo && Array.isArray(currentOcrGeo.rows) && currentOcrGeo.rows.length ? currentOcrGeo : null;
+  const geoOf = new Map();
+  if (geo) {
+    const gtol = Math.max(6, (geo.pitch || 20) * 0.5);
+    const cand = [];
+    ocrEditRows.forEach((r, idx) => {
+      if (r._fromDb || typeof r.iy !== "number") return;
+      geo.rows.forEach((g, gi) => {
+        const d = Math.abs(g.y - r.iy);
+        if (d <= gtol) cand.push({ idx, gi, d });
+      });
+    });
+    const usedG = new Set();
+    cand
+      .sort((a, b) => a.d - b.d)
+      .forEach((c) => {
+        if (geoOf.has(c.idx) || usedG.has(c.gi)) return;
+        geoOf.set(c.idx, geo.rows[c.gi]);
+        usedG.add(c.gi);
+      });
+  }
+  const _geoNorm = {
+    bl: (v) => cleanBL(v).toUpperCase(),
+    pal: (v) => String(parseInt(String(v || "").replace(/\D/g, ""), 10) || 0),
+    eta: (v) => _padYmd(_normOcrDate(v) || "미정"),
+    inDate: (v) => _padYmd(_normOcrDate(v) || "미정"),
+    fwd: (v) => String(v || "").replace(/\s+/g, "").toUpperCase(),
+    sType: (v) => String(v || "").replace(/\s+/g, "").toUpperCase(),
+    invoice: (v) => String(v || "").split(/[,\s]+/).filter(Boolean).sort().join(","),
+  };
+  // 비고: 표의 비고가 좌표 판독 비고의 '순서를 지킨 부분집합'이어야 정상 (필터로 일부 단어가 빠지는 것은 허용 / 순서가 뒤집히거나 없는 글자가 있으면 이상)
+  const _etcCompact = (v) => String(v || "").toUpperCase().replace(/[\s•·\-\*/().,|_\[\]]/g, "");
+  const _isSubseq = (small, big) => {
+    let i = 0;
+    for (let k = 0; k < big.length && i < small.length; k++) if (big[k] === small[i]) i++;
+    return i === small.length;
+  };
+  //  2) 표 안 중복 (같은 인보이스/B/L 이 두 행 이상)
+  const _dupMap = { invoice: new Map(), bl: new Map() };
+  ocrEditRows.forEach((r, idx) => {
+    if (r._fromDb) return;
+    const inv = String(r.invoice || "").trim();
+    const bl = cleanBL(r.bl).toUpperCase();
+    if (inv) (_dupMap.invoice.get(inv) || _dupMap.invoice.set(inv, []).get(inv)).push(idx);
+    if (bl && bl !== "발행전") (_dupMap.bl.get(bl) || _dupMap.bl.set(bl, []).get(bl)).push(idx);
+  });
+  const ADV_COLOR = "#ffe0b3"; // 🟠 참고
+  let advRows = 0;
+  let geoMatched = 0;
+  const advDetails = [];
+
   const inner = document.getElementById("ocrTableInner");
   let warnRows = 0;
   let dateFixCount = 0; // 날짜 이상 → 미정 변경 건수
@@ -2572,6 +2627,7 @@ async function verifyOcrRows(_btn, _skipFixPrompt) {
   ocrEditRows.forEach((r, idx) => {
     const issues = {}; // field -> 사유 (빨강=확인필요)
     const dateFix = {}; // field -> true (파랑=날짜이상 미정변경)
+    const adv = {}; // field -> 사유 (주황=참고: 확인해 보면 좋은 항목)
     // 달력 저장분/직접 추가 행(_fromDb)은 OCR 원본 텍스트 대조 대상이 아님 → 셀 색만 원복하고 건너뜀
     if (!r._fromDb) {
       // B/L: 형식 + 원본존재
@@ -2610,6 +2666,50 @@ async function verifyOcrRows(_btn, _skipFixPrompt) {
       }
       // PAL: 숫자 형식
       if (r.pal && !isPalOk(r.pal)) issues.pal = "PAL 형식 아님";
+
+      // ── 🟠 참고 검사 (실패해도 검증 본 흐름에 영향 없음)
+      try {
+        // (a) 좌표 독립 판독과 칸별 대조 — 이미 사람이 고친 칸은 제외
+        const g = geoOf.get(idx);
+        if (g) {
+          geoMatched++;
+          ["bl", "pal", "eta", "inDate", "fwd", "sType", "invoice"].forEach((f) => {
+            const gv = g[f];
+            if (gv === undefined || gv === null) return;
+            if (editedAfterOcr(idx, r, f)) return;
+            const gEmpty = String(gv).trim() === "";
+            const tEmpty = f === "pal" ? String(r[f] || "0").trim() === "0" : String(r[f] || "").trim() === "" || String(r[f]).trim() === "미정";
+            if (gEmpty) return; // 좌표 판독이 못 읽은 칸은 판단 보류
+            if (_geoNorm[f](r[f]) !== _geoNorm[f](gv)) adv[f] = `좌표 판독: ${gv}${tEmpty ? " (표는 비어 있음)" : ""}`;
+          });
+          if (currentOcrGeo.hasEtc && !editedAfterOcr(idx, r, "etc")) {
+            const tc = _etcCompact(r.etc);
+            const gc = _etcCompact(g.etc);
+            if (tc && !_isSubseq(tc, gc)) adv.etc = `좌표 판독: ${g.etc || "(비어 있음)"}`;
+          }
+        }
+        // (b) 인보이스가 원본에서 '다른 숫자의 일부'로만 발견되는 경우 (통째 일치 아님)
+        String(r.invoice || "")
+          .split(/[,\s]+/)
+          .filter((v) => /^\d{7,8}$/.test(v))
+          .forEach((v) => {
+            if (!adv.invoice && !issues.invoice && inRaw(v) && !_rawTok.has(v) && !editedAfterOcr(idx, r, "invoice")) adv.invoice = "원본에서 다른 숫자의 일부로만 발견됨";
+          });
+        // (c) 표 안 중복
+        const dInv = _dupMap.invoice.get(String(r.invoice || "").trim());
+        if (dInv && dInv.length > 1 && !adv.invoice) adv.invoice = `표 안 중복 (${dInv.map((i) => i + 1).join("·")}행)`;
+        const dBl = _dupMap.bl.get(cleanBL(r.bl).toUpperCase());
+        if (dBl && dBl.length > 1 && !adv.bl) adv.bl = `표 안 중복 (${dBl.map((i) => i + 1).join("·")}행)`;
+        // (d) ETA → 입고일 간격이 비정상적으로 큼 (보통 2~4일)
+        if (!adv.inDate && !issues.inDate && isReasonableDate(String(r.eta || "").trim()) && isReasonableDate(String(r.inDate || "").trim())) {
+          const gap = Math.round((_toDate(String(r.inDate).trim()) - _toDate(String(r.eta).trim())) / 86400000);
+          if (gap > 14) adv.inDate = `ETA와 ${gap}일 차이`;
+        }
+        // (e) 비고에서 숫자와 단위가 떨어져 보임 (예: "11 월") — 글자 쪼개짐 의심
+        if (!adv.etc && /\d\s+[월일년시분초개건박스]/.test(String(r.etc || ""))) adv.etc = "숫자와 단위가 떨어져 있음(글자 쪼개짐 의심)";
+      } catch (advErr) {
+        console.warn("참고 검사 오류:", advErr);
+      }
     }
 
     const cells = inner ? inner.querySelectorAll(`td[data-idx="${idx}"]`) : [];
@@ -2641,6 +2741,23 @@ async function verifyOcrRows(_btn, _skipFixPrompt) {
       dfKeys.forEach((f) => {
         const colLabel = (OCR_COLS.find((c) => c.key === f) || {}).label || f;
         details.push(`${idx + 1}행(${blLabel}) ${colLabel}: 날짜 이상 → 미정 변경`);
+      });
+    }
+    // 🟠 참고 칸 표시 (빨강·파랑으로 이미 표시된 칸은 그대로 둠)
+    const advKeys = Object.keys(adv).filter((f) => !issues[f] && !dateFix[f]);
+    if (advKeys.length) {
+      advRows++;
+      cells.forEach((td) => {
+        const f = td.getAttribute("data-field");
+        if (advKeys.includes(f) && !td.querySelector("input")) {
+          td.style.background = ADV_COLOR;
+          td.title = adv[f];
+        }
+      });
+      const blLabelA = r.bl || "발행전";
+      advKeys.forEach((f) => {
+        const colLabel = (OCR_COLS.find((c) => c.key === f) || {}).label || f;
+        advDetails.push(`🟠 ${idx + 1}행(${blLabelA}) ${colLabel}: ${adv[f]}`);
       });
     }
     // 자동수정된 칸은 노랑(수정 표시) 유지 + 원래 값 안내
@@ -2689,17 +2806,22 @@ async function verifyOcrRows(_btn, _skipFixPrompt) {
     : "";
   // 사유를 안내줄에 직접 표시(모바일 title 미지원) — 너무 많으면 앞 6건만
   let detailHtml = "";
-  if (details.length) {
-    const shown = details.slice(0, 6);
+  const allDetails = details.concat(advDetails);
+  if (allDetails.length) {
+    const shown = allDetails.slice(0, 6);
     detailHtml =
       `<div style="margin-top:4px; font-weight:normal; color:var(--text-sub,#666); font-size:10.5px; line-height:1.5; text-align:left;">` +
       shown.map((d) => _esc(d)).join("<br>") +
-      (details.length > shown.length ? `<br>…외 ${details.length - shown.length}건` : "") +
+      (allDetails.length > shown.length ? `<br>…외 ${allDetails.length - shown.length}건` : "") +
       `</div>`;
   }
   const hint = document.getElementById("ocrHint");
-  if (hint) hint.innerHTML = `<b style="color:${problem ? "#e74c3c" : "#27ae60"};">${head}</b>${dateNoteHtml}${detailHtml}`;
-  showToast(head + (dateFixCount ? ` · 날짜이상 미정변경 ${dateFixCount}건` : ""), 4000);
+  const advNoteHtml = advRows ? `<span style="color:#d9822b; font-weight:700;"> · 🟠 참고 ${advRows}행</span>` : "";
+  const geoNoteHtml = geo
+    ? `<span style="color:var(--text-sub,#888); font-size:10.5px;"> · 좌표 대조 ${geoMatched}/${ocrEditRows.filter((r) => !r._fromDb).length}행</span>`
+    : `<span style="color:var(--text-sub,#888); font-size:10.5px;"> · 좌표 대조 없음(새 OCR부터 적용)</span>`;
+  if (hint) hint.innerHTML = `<b style="color:${problem ? "#e74c3c" : "#27ae60"};">${head}</b>${dateNoteHtml}${advNoteHtml}${geoNoteHtml}${detailHtml}`;
+  showToast(head + (dateFixCount ? ` · 날짜이상 미정변경 ${dateFixCount}건` : "") + (advRows ? ` · 🟠참고 ${advRows}행` : ""), 4000);
 
   // ── 입고일 < ETA 자동수정 제안 (확인한 경우에만 수정. 수정 후에도 '확정'을 눌러야 DB 반영)
   if (fixes.length && !_skipFixPrompt) {
@@ -4389,6 +4511,7 @@ let dbSortDir = "DESC";
 
 // 🚨 [전역 변수] 원본 텍스트 보관용
 let currentRawOcrString = "";
+let currentOcrGeo = null; // 좌표 독립 판독(검증용) — 서버가 OCR 때 저장, 없으면 null(기존 검증만 수행)
 
 // 📄 Raw 값 보기 토글 함수
 function toggleRawOcrView() {
@@ -5133,6 +5256,7 @@ document.addEventListener("DOMContentLoaded", function () {
   setTimeout(function () {
     apiCall({ source: "vercel", domain: "system", action: "GET_LAST_OCR_DATA" }).then(function (data) {
       if (data && data.rawData) currentRawOcrString = data.rawData;
+      currentOcrGeo = data && data.geo && Array.isArray(data.geo.rows) && data.geo.rows.length ? data.geo : null;
     });
   }, 1000); // 안전하게 1초 뒤 백그라운드 자동 실행
 });

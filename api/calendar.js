@@ -2056,7 +2056,7 @@ if (action === "VERIFY_SESSION") {
                 if (d.status === "완료") continue; // 입고 완료 → 대조창에서 제외
                 merged.push({
                   ...r, // iy/ih/cx 등 좌표 유지
-                  _ocr: { bl: r.bl || "", eta: r.eta || "", inDate: r.inDate || "", invoice: r.invoice || "" }, // OCR 당시 파싱값 (대조창에서 '이후 사람이 고친 값' 구분용)
+                  _ocr: { bl: r.bl || "", eta: r.eta || "", inDate: r.inDate || "", invoice: r.invoice || "", pal: r.pal != null ? String(r.pal) : "", fwd: r.fwd || "", sType: r.sType || "", etc: r.etc || "" }, // OCR 당시 파싱값 (대조창에서 '이후 사람이 고친 값' 구분용)
                   bl: d.bl_number || r.bl,
                   pal: d.pallets != null ? String(d.pallets) : r.pal,
                   eta: d.eta || "",
@@ -2123,10 +2123,20 @@ if (action === "VERIFY_SESSION") {
             }
           }
 
+          // 🧭 좌표 독립 판독(검증용) — 없거나 깨졌으면 null (클라는 기존 검증만 수행)
+          let geo = null;
+          try {
+            const [geoRows] = await pool.query("SELECT store_value FROM ocr_store WHERE store_key = 'LAST_OCR_GEO'");
+            if (geoRows[0] && geoRows[0].store_value) geo = JSON.parse(geoRows[0].store_value);
+          } catch (geoErr) {
+            geo = null;
+          }
+
           // 프론트엔드로 최종 배달
           return res.status(200).json({
             parsedData, // 좌표 캐시 + 현재 inbound 값 병합
             rawData: rawDataStr, // 완벽히 복원된 순수 원본 텍스트
+            geo, // 좌표 독립 판독 결과 (rows[{y,bl,pal,eta,inDate,fwd,sType,invoice,etc}], pitch…)
           });
         } catch (err) {
           console.error("OCR 데이터 조회 에러:", err);
