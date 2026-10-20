@@ -2204,9 +2204,59 @@ function moveOcrSel(dRow, dCol) {
   selectOcrCell(ni, OCR_COLS[nc].key);
 }
 
+// 🧹 셀 입력값 정규화: 대문자/공백 정리 + 날짜 형식 통일. 해석 불가 값은 bad=true 로 돌려줌(확정 시 막음)
+//   B/L·형태(sType): 앞뒤/내부 공백 제거 + 대문자(발행전 유지) / 날짜(eta,inDate): 2026/10/5·2026.10.5·20261005·10/25 → 2026-10-05
+//   PAL: 숫자만(36p·36PLT 는 36 으로) / '미정'·빈값은 그대로 허용
+function normalizeOcrCellValue(field, raw, row) {
+  let v = String(raw == null ? "" : raw).replace(/[\r\n\t]/g, " ").trim();
+  if (field === "bl") {
+    if (v === "발행전") return { val: v, bad: false };
+    v = v.replace(/[\s•·\-\*]/g, "").toUpperCase();
+    return { val: v, bad: false };
+  }
+  if (field === "sType") return { val: v.replace(/\s/g, "").toUpperCase(), bad: false };
+  if (field === "invoice") return { val: v.replace(/\s+/g, ""), bad: false };
+  if (field === "pal") {
+    if (v === "") return { val: v, bad: false };
+    const m = v.match(/^(\d{1,5})\s*(?:p|plt|pallets?|파렛트|팔레트)?$/i);
+    return m ? { val: String(parseInt(m[1], 10)), bad: false } : { val: v, bad: true };
+  }
+  if (field === "eta" || field === "inDate") {
+    if (v === "" || v === "미정") return { val: v, bad: false };
+    const valid = (y, mo, d) => {
+      if (y < 2000 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+      const dt = new Date(y, mo - 1, d);
+      return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+    };
+    const pad = (n) => String(n).padStart(2, "0");
+    let m = v.match(/^(\d{4})[\/.\-\s](\d{1,2})[\/.\-\s](\d{1,2})$/) || v.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (m) {
+      const y = +m[1], mo = +m[2], d = +m[3];
+      return valid(y, mo, d) ? { val: `${y}-${pad(mo)}-${pad(d)}`, bad: false } : { val: v, bad: true };
+    }
+    m = v.match(/^(\d{1,2})[\/.\-](\d{1,2})$/);
+    if (m) {
+      const mo = +m[1], d = +m[2];
+      const other = row ? String(row[field === "eta" ? "inDate" : "eta"] || "") : "";
+      const om = other.match(/^(\d{4})-(\d{2})-\d{2}$/);
+      let y = om ? +om[1] : new Date().getFullYear();
+      if (om) {
+        const omo = +om[2];
+        // 연말·연초에 걸치는 경우(예: ETA 12월 → 입고 1월) 연도 보정
+        if (field === "inDate" && mo + 6 < omo) y += 1;
+        if (field === "eta" && omo + 6 < mo) y -= 1;
+      }
+      return valid(y, mo, d) ? { val: `${y}-${pad(mo)}-${pad(d)}`, bad: false } : { val: v, bad: true };
+    }
+    return { val: v, bad: true };
+  }
+  return { val: v, bad: false };
+}
+
 // 셀 값 직접 설정(키보드 Delete/붙여넣기 등) → 데이터 + 화면 + 수정표시
 function setOcrCellValue(idx, field, val) {
   if (!ocrEditRows[idx]) return;
+  if (val !== "") val = normalizeOcrCellValue(field, val, ocrEditRows[idx]).val;
   ocrEditRows[idx][field] = val;
   const inner = document.getElementById("ocrTableInner");
   const td = inner && inner.querySelector(`td[data-idx="${idx}"][data-field="${field}"]`);
@@ -2415,8 +2465,10 @@ function startEditOcrCell(td, idx, field, initial) {
     if (done) return;
     done = true;
     _ocrUnwatch();
-    ocrEditRows[idx][field] = input.value;
-    td.innerHTML = _esc(input.value);
+    const _nv = normalizeOcrCellValue(field, input.value, ocrEditRows[idx]);
+    ocrEditRows[idx][field] = _nv.val;
+    td.innerHTML = _esc(_nv.val);
+    if (_nv.bad) showToast("⚠️ 해석할 수 없는 값입니다 (날짜는 2026-10-05, PAL은 숫자). 확정 전에 고쳐주세요.", 3500);
     td.style.background = "#fff8d6"; // 수정 표시(노랑)
     const ci = _ocrColIndex(field);
     if (move === "down") selectOcrCell(Math.min(idx + 1, ocrEditRows.length - 1), field);
@@ -2904,7 +2956,37 @@ async function applyOcrEdits(btn) {
     return;
   }
 
+  // 🧹 전송 전 최종 정규화(붙여넣기 등 어떤 경로로 들어왔든) + 해석 불가 값은 확정 차단
+  const badCells = [];
+  const FLD_NAME = { bl: "B/L", pal: "PAL", eta: "ETA", inDate: "입고일" };
+  changed.forEach((r) => {
+    ["bl", "sType", "invoice", "pal", "eta", "inDate"].forEach((f) => {
+      const n = normalizeOcrCellValue(f, r[f], r);
+      r[f] = n.val;
+      if (n.bad) badCells.push(`${r.bl || r.invoice || "(행)"}의 ${FLD_NAME[f] || f} "${n.val}"`);
+    });
+  });
+  if (badCells.length) {
+    showToast(`⚠️ 값을 확인해주세요: ${badCells.slice(0, 4).join(", ")}${badCells.length > 4 ? ` 외 ${badCells.length - 4}건` : ""}`, 5000);
+    return;
+  }
+
+  // 🔴 검증에서 확인필요(빨강)로 남은 칸이 변경 대상 행에 있으면 한 번 더 확인
+  let redCount = 0;
+  try {
+    const changedIdx = new Set();
+    ocrEditRows.forEach((r, i) => {
+      const o = ocrOrigRows[i] || {};
+      if (FLD.some((f) => String(r[f] == null ? "" : r[f]) !== String(o[f] == null ? "" : o[f]))) changedIdx.add(i);
+    });
+    document.querySelectorAll("#ocrTableInner td[data-idx]").forEach((td) => {
+      if (!changedIdx.has(parseInt(td.dataset.idx, 10))) return;
+      if (/#ffd1d1|rgb\(\s*255,\s*209,\s*209\s*\)/i.test(td.style.background || "")) redCount++;
+    });
+  } catch (e) {}
+
   let confirmMsg = "";
+  if (redCount > 0) confirmMsg += `⚠️ 확인필요(빨강) ${redCount}건 — 그래도 반영할까요?\n\n`;
   if (changed.length) confirmMsg += `수정/추가 ${changed.length}건`;
   if (deletes.length) confirmMsg += (confirmMsg ? "\n" : "") + `🗑️ 빈 행 ${deletes.length}건의 입고 일정을 삭제`;
   confirmMsg += "\n입고 DB에 반영할까요?";
@@ -2930,7 +3012,8 @@ async function applyOcrEdits(btn) {
       const delPart = res.deleteCount > 0 ? ` / 삭제 ${res.deleteCount}` : ""
       const dupPart = res.dupCount > 0 ? ` / 중복정리 ${res.dupCount}` : "";
       const skipPart = res.skipCount > 0 ? ` / 건너뜀 ${res.skipCount}${res.skipNames && res.skipNames.length ? " (" + res.skipNames.join(", ") + ")" : ""}` : "";
-      showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount}${delPart}${dupPart}${skipPart})`, 3000);
+      const delFailPart = res.deleteSkipped > 0 ? ` / ⚠️ 삭제 못함 ${res.deleteSkipped}${res.deleteSkippedNames && res.deleteSkippedNames.length ? " (" + res.deleteSkippedNames.join(", ") + ")" : ""}` : "";
+      showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount}${delPart}${delFailPart}${dupPart}${skipPart})`, res.skipCount > 0 || res.deleteSkipped > 0 ? 6000 : 3000);
       if (typeof navMonth === "function") navMonth(0);
       loadOcrSplitData(); // 대조표 새로고침(삭제된 빈 행 제거 + 최신값 반영 + 기준 갱신)
     } else {

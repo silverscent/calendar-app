@@ -2026,8 +2026,12 @@ if (action === "VERIFY_SESSION") {
           if (Array.isArray(parsedData) && parsedData.length > 0) {
             try {
               const cleanBL = (v) => String(v || "").replace(/[\s•·\-\*]/g, "");
-              const invList = parsedData.map((r) => (r.invoice || "").toString().trim()).filter(Boolean);
-              const blList = parsedData.map((r) => cleanBL(r.bl)).filter((b) => b && b !== "발행전");
+              // 🔑 대조표 행 ↔ 현재 DB 행 매칭 키: 확정으로 인보이스/B/L 을 고친 행은 캐시에 _cur(현재 DB 값)를 기록해 두므로 그것을 우선 사용
+              //    (안 그러면 고친 행이 'DB에 없는 옛 스냅샷 + DB 추가분' 두 줄로 보여 복제된 것처럼 보임)
+              const keyInv = (r) => String((r._cur && r._cur.invoice !== undefined ? r._cur.invoice : r.invoice) || "").trim();
+              const keyBl = (r) => cleanBL(r._cur && r._cur.bl !== undefined ? r._cur.bl : r.bl);
+              const invList = parsedData.map((r) => keyInv(r)).filter(Boolean);
+              const blList = parsedData.map((r) => keyBl(r)).filter((b) => b && b !== "발행전");
               const sel =
                 "SELECT bl_number, pallets, DATE_FORMAT(eta,'%Y-%m-%d') AS eta, DATE_FORMAT(receive_date,'%Y-%m-%d') AS receive_date, fwd, s_type, invoice, remarks, status FROM inbound WHERE ";
               const byInv = {};
@@ -2046,8 +2050,8 @@ if (action === "VERIFY_SESSION") {
               // OCR 파싱행: 현재 inbound 값으로 갱신하되, 완료된 건은 제외
               const merged = [];
               for (const r of parsedData) {
-                const inv = (r.invoice || "").toString().trim();
-                const blc = cleanBL(r.bl);
+                const inv = keyInv(r);
+                const blc = keyBl(r);
                 const d = (inv && byInv[inv]) || (blc && blc !== "발행전" && byBl[blc]) || null;
                 if (!d) {
                   merged.push(r); // 달력에 없으면(삭제 등) OCR 스냅샷 유지
@@ -2175,22 +2179,47 @@ if (action === "VERIFY_SESSION") {
           const skipNames = [];
 
           // 🗑️ 대조표에서 행 데이터를 전부 지운 건 → 해당 입고 일정 삭제
+          //   · '완료' 처리된 일정은 절대 지우지 않음 (같은 인보이스를 가진 완료 행까지 같이 지워지던 문제 방지)
+          //   · 같은 조건에 여러 행이 걸려도 가장 일치하는 1행만 삭제
+          //   · 대상을 못 찾으면 조용히 넘기지 않고 deleteSkipped 로 알림
+          let deleteSkipped = 0;
+          const deleteSkippedNames = [];
           for (const r of delRows) {
             const bl = String(r.bl || "").replace(/[\s•·\-\*]/g, "");
-            const inv = String(r.invoice || "").trim();
+            const inv = String(r.invoice || "").replace(/\s/g, "");
             const dt = normDate(r.inDate);
-            let result = null;
-            if (inv) {
-              [result] = await pool.query(`DELETE FROM inbound WHERE TRIM(invoice) = ?`, [inv]);
-            } else if (bl && bl !== "발행전") {
-              [result] = await pool.query(`DELETE FROM inbound WHERE TRIM(bl_number) = ? AND receive_date <=> ?`, [
-                bl,
-                dt,
-              ]);
-            } else {
-              continue;
+            let found = null;
+            try {
+              if (inv) {
+                const [f] = await pool.query(
+                  `SELECT id FROM inbound WHERE TRIM(invoice) = ? AND COALESCE(status,'') <> '완료' ORDER BY (TRIM(bl_number) = ?) DESC, (receive_date <=> ?) DESC, id ASC LIMIT 1`,
+                  [inv, bl, dt],
+                );
+                found = f[0] || null;
+              } else if (bl && bl !== "발행전") {
+                const [f] = await pool.query(
+                  `SELECT id FROM inbound WHERE TRIM(bl_number) = ? AND receive_date <=> ? AND COALESCE(status,'') <> '완료' ORDER BY id ASC LIMIT 1`,
+                  [bl, dt],
+                );
+                found = f[0] || null;
+              } else {
+                // 인보이스·B/L 이 없던 '발행전' 행 → 입고일 + 비어있는 인보이스로 특정
+                const [f] = await pool.query(
+                  `SELECT id FROM inbound WHERE (TRIM(bl_number) = ? OR bl_number IS NULL OR TRIM(bl_number) = '') AND receive_date <=> ? AND (invoice IS NULL OR TRIM(invoice) = '') AND COALESCE(status,'') <> '완료' ORDER BY id ASC LIMIT 1`,
+                  [bl || "발행전", dt],
+                );
+                found = f[0] || null;
+              }
+            } catch (delFindErr) {
+              console.error("[APPLY_OCR] 삭제 대상 조회 실패:", delFindErr.sqlMessage || delFindErr.message);
             }
-            deleteCount += result && result.affectedRows ? result.affectedRows : 0;
+            if (found) {
+              const [result] = await pool.query(`DELETE FROM inbound WHERE id = ?`, [found.id]);
+              deleteCount += result && result.affectedRows ? result.affectedRows : 0;
+            } else {
+              deleteSkipped++;
+              deleteSkippedNames.push(bl || inv || "발행전");
+            }
           }
 
           // OCR 텍스트 전 필드 공통 정형화 (telegram.js /ocr 과 동일 로직)
@@ -2211,7 +2240,7 @@ if (action === "VERIFY_SESSION") {
           };
           const plan = [];
           for (const r of rows) {
-            const bl = safeStr(r.bl, 100).replace(/[\s•·\-\*]/g, "");
+            const bl = safeStr(r.bl, 100).replace(/[\s•·\-\*]/g, "").toUpperCase(); // B/L 은 항상 대문자
             const pal = Math.min(Math.max(parseInt(r.pal) || 0, 0), 99999);
             const inDate = normDate(r.inDate);
             const eta = normDate(r.eta);
@@ -2253,8 +2282,46 @@ if (action === "VERIFY_SESSION") {
             plan.push({ r, bl, pal, inDate, eta, fwd, sType, invoice, etc, target });
           }
 
+          // 🛡️ 인보이스 중복 방지 — 반영 '후' 상태 기준으로 같은 인보이스를 가진 행이 둘 이상 생기면 해당 행은 건너뜀
+          //   · 서로 번호를 맞바꾸는 경우는 반영 후 중복이 없으므로 통과 / 인보이스를 바꾸지 않은 행은 검사 안 함(속도)
+          //   · 같은 번호를 쓰는 행이 대조표 안에 둘이면 먼저 나온 행만 반영
+          try {
+            const splitInv = (v) => String(v || "").split(/[\s,;/]+/).map((t) => t.trim().toUpperCase()).filter(Boolean);
+            const active = plan.filter((p) => !(p.target && p.target.status === "완료"));
+            const activeIds = new Set(active.filter((p) => p.target).map((p) => p.target.id));
+            const firstUse = new Map(); // 토큰 → 먼저 사용한 plan 행
+            for (const p of active) {
+              const toks = splitInv(p.invoice);
+              const oInv = p.r && p.r._o && typeof p.r._o === "object" ? safeStr(p.r._o.invoice, 100).replace(/\s/g, "") : "";
+              const needCheck = toks.length > 0 && (!p.target || p.invoice !== oInv);
+              let clash = null;
+              for (const t of toks) {
+                if (firstUse.has(t) && firstUse.get(t) !== p) { clash = `${t} (표 안 다른 행과 같음)`; break; }
+              }
+              if (!clash && needCheck) {
+                for (const t of toks) {
+                  const [hit] = await pool.query(`SELECT id, invoice FROM inbound WHERE invoice LIKE ?`, [`%${t.replace(/[\\%_]/g, "\\$&")}%`]);
+                  const other = hit.find((h) => !activeIds.has(h.id) && splitInv(h.invoice).includes(t));
+                  if (other) { clash = `${t} (달력에 이미 있음)`; break; }
+                }
+              }
+              if (clash) {
+                p.skipReason = `인보이스 중복 ${clash}`;
+              } else {
+                toks.forEach((t) => { if (!firstUse.has(t)) firstUse.set(t, p); });
+              }
+            }
+          } catch (dupErr) {
+            console.error("[APPLY_OCR] 인보이스 중복 검사 실패(무시):", dupErr.sqlMessage || dupErr.message);
+          }
+
           // 2단계: 확정된 id 로 반영 (한 행이 실패해도 전체 확정이 죽지 않도록 행별 방어)
           for (const p of plan) {
+            if (p.skipReason) {
+              skipCount++;
+              skipNames.push(`${p.bl || p.invoice}: ${p.skipReason}`);
+              continue;
+            }
             try {
               if (p.target) {
                 if (p.target.status === "완료") {
@@ -2280,7 +2347,31 @@ if (action === "VERIFY_SESSION") {
               console.error(`[APPLY_OCR] 행 반영 실패 (${p.bl || p.invoice}):`, rowErr.sqlMessage || rowErr.message);
             }
           }
-          // ⚠️ LAST_OCR_DATA(좌표 캐시)는 덮어쓰지 않음 — 좌표 보존 + 대조창은 GET 때 현재 inbound 값을 합쳐서 보여줌
+          // 🔁 인보이스/B/L 을 고쳐 반영한 행은 캐시 행에 '현재 DB 키(_cur)'만 기록 (OCR 당시 값·좌표는 그대로 보존)
+          //    → 다음 GET 때 새 값으로 DB 행을 찾아 한 줄로 표시. 행 식별은 이미지 세로 위치(iy)로 하고, 같은 iy 가 둘 이상이면 건드리지 않음.
+          try {
+            const touched = plan.filter((p) => p.target && p.target.status !== "완료" && p.r && typeof p.r.iy === "number");
+            if (touched.length) {
+              const [cacheRows] = await pool.query("SELECT store_value FROM ocr_store WHERE store_key = 'LAST_OCR_DATA'");
+              const cache = cacheRows[0] ? parseJSON(cacheRows[0].store_value) : null;
+              if (Array.isArray(cache)) {
+                let changedCache = false;
+                for (const p of touched) {
+                  const same = cache.filter((c) => c && typeof c.iy === "number" && c.iy === p.r.iy);
+                  if (same.length !== 1) continue;
+                  same[0]._cur = { bl: p.bl, invoice: p.invoice };
+                  changedCache = true;
+                }
+                if (changedCache) {
+                  const cacheStr = JSON.stringify(cache);
+                  await pool.query("UPDATE ocr_store SET store_value = ? WHERE store_key = 'LAST_OCR_DATA'", [cacheStr]);
+                }
+              }
+            }
+          } catch (curErr) {
+            console.error("OCR 캐시 _cur 기록 실패(무시):", curErr.message);
+          }
+          // ⚠️ LAST_OCR_DATA(좌표 캐시)의 OCR 당시 값·좌표는 덮어쓰지 않음 — 대조창은 GET 때 현재 inbound 값을 합쳐서 보여줌
 
           // 감사 로그 + 텔레그램 알림
           try {
@@ -2298,7 +2389,7 @@ if (action === "VERIFY_SESSION") {
             notifyCalendarChange(ocrDesc, currentAdmin);
           } catch (e) {}
 
-          return res.status(200).json({ success: true, insertCount, updateCount, skipCount, skipNames: skipNames.slice(0, 10), deleteCount, total: rows.length });
+          return res.status(200).json({ success: true, insertCount, updateCount, skipCount, skipNames: skipNames.slice(0, 10), deleteCount, deleteSkipped, deleteSkippedNames: deleteSkippedNames.slice(0, 10), total: rows.length });
         } catch (err) {
           console.error("OCR 적용 에러:", err);
           return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
