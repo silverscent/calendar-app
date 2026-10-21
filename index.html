@@ -2646,6 +2646,9 @@
       .fab-wrapper.open.snap-bottom .fab-sub-item:nth-last-child(3) {
         animation-delay: 0.18s;
       }
+      .fab-wrapper.open.snap-bottom .fab-sub-item:nth-last-child(4) {
+        animation-delay: 0.26s;
+      }
       /* snap-top 에선 메뉴가 아래로 뜨므로 화면 위=본체쪽=첫 자식 → 정순 딜레이 */
       .fab-wrapper.open.snap-top .fab-sub-item {
         animation: fabItemPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
@@ -2658,6 +2661,9 @@
       }
       .fab-wrapper.open.snap-top .fab-sub-item:nth-child(3) {
         animation-delay: 0.18s;
+      }
+      .fab-wrapper.open.snap-top .fab-sub-item:nth-child(4) {
+        animation-delay: 0.26s;
       }
       @keyframes fabItemPop {
         from {
@@ -6895,8 +6901,35 @@
             🔍
           </button>
         </div>
+        <div class="fab-sub-item">
+          <div class="fab-label">피킹지 촬영</div>
+          <button
+            class="fab-sub-btn add"
+            onclick="
+              toggleFabMenu();
+              openPickCamera();
+            "
+          >
+            📷
+          </button>
+        </div>
       </div>
       <button class="fab-main" onclick="toggleFabMenu()">+</button>
+    </div>
+
+    <!-- 📷 피킹지 사진 → 출고 등록 -->
+    <input type="file" id="pickFile" accept="image/*" capture="environment" style="display: none" onchange="pickOnFile(this)" />
+    <div id="pickModal" class="overlay-modal" onclick="if (event.target === this && (!_pickState || !_pickState.busy)) closePickModal();">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="bottom-sheet-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title" style="color: #0a84ff">📷 피킹지 등록</div>
+          <div style="display: flex; gap: 10px; align-items: center">
+            <button class="close-btn" onclick="closePickModal()">✕</button>
+          </div>
+        </div>
+        <div class="edit-form" id="pickBody"></div>
+      </div>
     </div>
 
     <!-- 🔍 FAB 일정 검색 모달 -->

@@ -26,6 +26,7 @@ require("dotenv").config();
 const mysql = require("mysql2/promise");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const pickLib = require("./_pick.js"); // 출고 피킹지 사진 판독 (api/_pick.js)
 
 // 📲 달력 변경 텔레그램 알림
 // 1:1 DM 전송: ADMIN_TELEGRAM_USER_ID = 봇과 1:1 대화 chat_id (사용자 개인 ID)
@@ -412,6 +413,8 @@ module.exports = async function (req, res) {
         "SAVE_OCR_INFO",
         "SAVE_OCR_FILTERS",
         "APPLY_OCR_DATA",
+        "PICK_PARSE",
+        "PICK_REGISTER",
         "FIND_INBOUND_DUPES",
         "DELETE_INBOUND_DUPES",
         "AI_QUERY",
@@ -2146,6 +2149,102 @@ if (action === "VERIFY_SESSION") {
           console.error("OCR 데이터 조회 에러:", err);
           return res.status(500).json({ success: false, error: err.message });
         }
+      } else if (action === "PICK_PARSE") {
+        // 📷 출고 피킹지 사진 → 업체·PLT·박스 판독 (등록은 하지 않음. 확인창에서 PICK_REGISTER 로 등록)
+        const b64 = typeof data?.image === "string" ? data.image.replace(/^data:[^,]+,/, "") : "";
+        const mime = /^image\/(jpeg|png|webp)$/.test(String(data?.mime || "")) ? data.mime : "image/jpeg";
+        if (!b64 || b64.length < 1000) return res.status(200).json({ success: false, msg: "이미지가 비어 있습니다." });
+        if (b64.length > 4200000) return res.status(200).json({ success: false, msg: "이미지가 너무 큽니다. 다시 촬영해주세요." });
+        if (!process.env.GOOGLE_VISION_API_KEY && !process.env.GEMINI_API_KEY)
+          return res.status(200).json({ success: false, msg: "OCR API 키가 설정되어 있지 않습니다." });
+
+        const parsed = await pickLib.parsePicking(b64, mime, {
+          fetch,
+          visionKey: process.env.GOOGLE_VISION_API_KEY,
+          geminiKey: process.env.GEMINI_API_KEY,
+        });
+        if (!parsed.ok) return res.status(200).json({ success: false, msg: "판독 실패: " + (parsed.err || "알 수 없는 오류") });
+
+        // 업체 매칭: 업체정보 DB + 이전에 직접 고른 연결
+        let compDb = {};
+        let aliasMap = {};
+        try {
+          const [cr] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`);
+          if (cr.length) compDb = typeof cr[0].setting_value === "object" ? cr[0].setting_value : JSON.parse(cr[0].setting_value);
+          const [ar] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PICK_ALIAS'`);
+          if (ar.length) aliasMap = typeof ar[0].setting_value === "object" ? ar[0].setting_value : JSON.parse(ar[0].setting_value);
+        } catch (_) {}
+        const comp = pickLib.matchCompany(parsed.customer, compDb || {}, aliasMap || {}, { floor: parsed.floor }); // floor: 주소 호수(301호→3층)로 같은 회사의 층 구분
+
+        // 이미 등록된 피킹지인지
+        let duplicate = false;
+        try {
+          await pool.query(`CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+          if (parsed.orderNo) {
+            const [dr] = await pool.query(`SELECT 1 FROM processed_images WHERE unique_id = ?`, ["PICK:" + parsed.orderNo]);
+            duplicate = dr.length > 0;
+          }
+        } catch (_) {}
+
+        return res.status(200).json({ success: true, result: parsed, company: comp, duplicate });
+      } else if (action === "PICK_REGISTER") {
+        // ✅ 확인창에서 [등록] → 출고 '새 행' 추가 (기존 행을 덮어쓰지 않음)
+        const company = String(data?.company || "").trim().slice(0, 100);
+        const toI = (v) => { const n = parseInt(v, 10); return isFinite(n) && n >= 0 && n <= 9999 ? n : null; };
+        const pal = toI(data?.pal);
+        const box = toI(data?.box);
+        let outDate = data?.date ? String(data.date).slice(0, 10) : null;
+        if (outDate === "미정") outDate = null;
+        if (outDate) {
+          const dm = outDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          const dd = dm ? new Date(+dm[1], +dm[2] - 1, +dm[3]) : null;
+          if (!dd || dd.getFullYear() !== +dm[1] || dd.getMonth() !== +dm[2] - 1 || dd.getDate() !== +dm[3])
+            return res.status(200).json({ success: false, msg: "출고일 형식이 올바르지 않습니다." });
+        }
+        const etc = String(data?.etc || "").trim().slice(0, 500);
+        const orderNo = String(data?.orderNo || "").trim().replace(/[^A-Za-z0-9]/g, "").slice(0, 40);
+        if (!company) return res.status(200).json({ success: false, msg: "업체를 선택해주세요." });
+        if (pal === null || box === null) return res.status(200).json({ success: false, msg: "PLT와 박스는 0 이상의 숫자로 입력해주세요." });
+
+        await pool.query(`CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+        let marked = false;
+        if (orderNo) {
+          // 같은 피킹지 이중 등록 방지 (동시에 두 번 눌러도 한 번만 통과)
+          const [mk] = await pool.query(`INSERT IGNORE INTO processed_images (unique_id) VALUES (?)`, ["PICK:" + orderNo]);
+          if (!mk || !mk.affectedRows) return res.status(200).json({ success: false, msg: `이미 등록된 피킹지입니다. (${orderNo})` });
+          marked = true;
+        }
+        try {
+          await pool.query(
+            `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`,
+            [company, String(pal), String(box), outDate, etc],
+          );
+        } catch (insErr) {
+          if (marked) { try { await pool.query(`DELETE FROM processed_images WHERE unique_id = ?`, ["PICK:" + orderNo]); } catch (_) {} }
+          throw insErr;
+        }
+
+        // 직접 고른 업체 연결 기억 (다음부터 자동 매칭)
+        try {
+          const printed = pickLib.normName(data?.printedName || "");
+          if (printed && printed !== pickLib.normName(company)) {
+            const [ar] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PICK_ALIAS'`);
+            let am = {};
+            try { am = ar.length ? (typeof ar[0].setting_value === "object" ? ar[0].setting_value : JSON.parse(ar[0].setting_value)) || {} : {}; } catch (_) {}
+            if (am[printed] !== company && Object.keys(am).length < 500) {
+              am[printed] = company;
+              const js = JSON.stringify(am);
+              await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('PICK_ALIAS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [js, js]);
+            }
+          }
+        } catch (aliasErr) {
+          console.error("[PICK] 업체 연결 저장 실패(무시):", aliasErr.sqlMessage || aliasErr.message);
+        }
+
+        const logDesc = `[출고 등록·피킹지] ${company} (${outDate || "미정"}) PL:${pal}, BOX:${box}${orderNo ? " / " + orderNo : ""}`;
+        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)", [currentAdmin, logDesc]);
+        notifyCalendarChange(logDesc, currentAdmin);
+        return res.status(200).json({ success: true });
       } else if (action === "APPLY_OCR_DATA") {
         // 웹 OCR 대조창에서 셀 수정 후 '확정' → inbound 테이블에 upsert (텔레그램 /ocr 과 동일 로직)
         try {

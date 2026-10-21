@@ -6136,3 +6136,250 @@ document.addEventListener("click", function (event) {
 let globalOcrFilters = [];
 
 // 👆 ----------------------------------------------------
+
+// ═══════════════════════════════════════════════════════════════
+// 📷 피킹지 사진 → 출고 자동 등록
+//   촬영/선택 → 폰에서 크기 축소 → 서버 PICK_PARSE(판독) → 확인창(수정 가능) → PICK_REGISTER(새 행 등록)
+//   · 손글씨 PLT / 완박스 / 혼재박스 가 핵심 (박스 = 완박스 + 혼재박스)
+//   · 빨강 = 비어 있어 직접 입력 필수 / 주황 = 참고(다시 확인)
+//   · 출고일이 문서에 없으면 '미정'
+// ═══════════════════════════════════════════════════════════════
+let _pickState = null; // { result, company, duplicate, busy }
+
+function openPickCamera() {
+  if (!isAdmin) {
+    showToast("⚠️ 로그인한 관리자만 사용할 수 있습니다.", 2500);
+    return;
+  }
+  const inp = document.getElementById("pickFile");
+  if (!inp) return;
+  inp.value = "";
+  inp.click();
+}
+
+function closePickModal() {
+  const m = document.getElementById("pickModal");
+  if (m) m.style.display = "none";
+  _pickState = null;
+}
+
+// 사진 → 긴 변 1800px JPEG(base64). 서버 요청 한도(약 4.5MB)와 인식 선명도 사이 균형
+function _pickResize(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const MAX = 2000; // 손글씨 인식을 위해 충분한 해상도(서버 요청 한도 안에서 품질을 자동 조절)
+        const sc = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * sc));
+        const h = Math.max(1, Math.round(img.naturalHeight * sc));
+        const cv = document.createElement("canvas");
+        cv.width = w;
+        cv.height = h;
+        cv.getContext("2d").drawImage(img, 0, 0, w, h);
+        let q = 0.85;
+        let data = cv.toDataURL("image/jpeg", q);
+        while (data.length > 3800000 && q > 0.4) {
+          q -= 0.1;
+          data = cv.toDataURL("image/jpeg", q);
+        }
+        URL.revokeObjectURL(url);
+        resolve(data.replace(/^data:[^,]+,/, ""));
+      } catch (e) {
+        URL.revokeObjectURL(url);
+        reject(e);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("이미지를 열 수 없습니다."));
+    };
+    img.src = url;
+  });
+}
+
+async function pickOnFile(inp) {
+  const file = inp && inp.files && inp.files[0];
+  if (!file) return;
+  const modal = document.getElementById("pickModal");
+  const body = document.getElementById("pickBody");
+  if (!modal || !body) return;
+  modal.style.display = "flex";
+  _pickState = { busy: true };
+  body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)">
+    <div style="font-size:2em">⏳</div>
+    <div style="margin-top:10px;font-weight:800;color:var(--text-main)">피킹지를 읽는 중입니다</div>
+    <div style="margin-top:6px;font-size:0.85em">약 10~20초 걸립니다. 창을 닫지 마세요.</div></div>`;
+  try {
+    const b64 = await _pickResize(file);
+    const token = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 55000); // 서버 한도(60초) 안에서 충분히 기다림 (기본 apiCall 은 15초라 사용 안 함)
+    let d;
+    try {
+      const r = await fetch(VERCEL_API_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          source: "vercel", domain: "system", action: "PICK_PARSE",
+          admin_id: localStorage.getItem("admin_id"), session_token: token,
+          data: { image: b64, mime: "image/jpeg" },
+        }),
+        signal: ctl.signal,
+      });
+      const raw = await r.json();
+      d = typeof raw === "string" ? JSON.parse(raw) : raw;
+    } finally {
+      clearTimeout(timer);
+    }
+    if (d && d.forceLogout) {
+      closePickModal();
+      showToast(d.msg || "세션이 만료되었습니다. 다시 로그인하세요.", 3000);
+      if (typeof executeLogout === "function") executeLogout();
+      return;
+    }
+    if (!d || !d.success) {
+      _pickShowError((d && d.msg) || "판독에 실패했습니다. 다시 촬영해주세요.");
+      return;
+    }
+    _pickState = { result: d.result, company: d.company, duplicate: !!d.duplicate, busy: false };
+    _pickRender();
+  } catch (e) {
+    _pickShowError(e && e.name === "AbortError" ? "판독 시간이 초과되었습니다. 다시 시도해주세요." : "판독 중 오류가 발생했습니다: " + (e.message || e));
+  }
+}
+
+function _pickShowError(msg) {
+  const body = document.getElementById("pickBody");
+  if (!body) return;
+  _pickState = null;
+  body.innerHTML = `<div style="text-align:center;padding:28px 8px">
+    <div style="font-size:2em">⚠️</div>
+    <div style="margin:10px 0 16px;font-weight:800;color:var(--text-main)">${_esc(msg)}</div>
+    <button class="save-btn" style="width:100%" onclick="closePickModal(); openPickCamera();">📷 다시 촬영</button></div>`;
+}
+
+const _PICK_RED = "#ff3b30";
+const _PICK_ORANGE = "#ff9f0a";
+function _pickFlagHtml(f) {
+  const fl = _pickState && _pickState.result && _pickState.result.flags && _pickState.result.flags[f];
+  if (!fl) return "";
+  const c = fl.level === "red" ? _PICK_RED : _PICK_ORANGE;
+  return `<div style="margin-top:4px;font-size:0.78em;font-weight:700;color:${c}">${fl.level === "red" ? "🔴" : "🟠"} ${_esc(fl.msg)}</div>`;
+}
+function _pickBorder(f) {
+  const fl = _pickState && _pickState.result && _pickState.result.flags && _pickState.result.flags[f];
+  return fl ? `border:2px solid ${fl.level === "red" ? _PICK_RED : _PICK_ORANGE};` : "";
+}
+
+function _pickRender() {
+  const body = document.getElementById("pickBody");
+  const st = _pickState;
+  if (!body || !st || !st.result) return;
+  const r = st.result;
+  const c = st.company || {};
+  // 업체 초기값: 자동 연결된 마스터 이름만 채움(후보만 있으면 비워 두고 선택하게 함)
+  const compVal = c.company || "";
+  const cands = !c.company && Array.isArray(c.candidates) ? c.candidates : [];
+  const dupHtml = st.duplicate
+    ? `<div style="background:rgba(255,59,48,0.12);color:${_PICK_RED};padding:10px 12px;border-radius:10px;font-weight:800;margin-bottom:10px">🚫 이미 등록된 피킹지입니다 (${_esc(r.orderNo || "")}). 중복 등록을 막기 위해 등록할 수 없습니다.</div>`
+    : "";
+  const unfinishedHtml = r.unfinished
+    ? `<div style="background:rgba(255,59,48,0.12);color:${_PICK_RED};padding:10px 12px;border-radius:10px;font-weight:800;margin-bottom:10px">🚫 작성 전 피킹지로 보입니다 (PLT·완박스·혼재박스가 모두 비어 있음). 작업이 끝난 마지막 장을 다시 찍어주세요.</div>`
+    : "";
+  const isYongcha = !r.shipType || /용차/.test(r.shipType);
+  const shipHtml = r.shipType
+    ? `<div style="margin-top:12px;font-size:0.85em;font-weight:800;color:${isYongcha ? "var(--text-sub)" : _PICK_ORANGE}">택배유형: ${_esc(r.shipType)}${isYongcha ? "" : " — 용차가 아닙니다. 달력에 넣을지 등록할 때 한 번 더 묻습니다."}</div>`
+    : "";
+  const noteHtml = r.buyerNote
+    ? `<div style="margin-top:6px;font-size:0.8em;color:var(--text-sub)">구매처 비고: ${_esc(r.buyerNote)}</div>`
+    : "";
+  const matchNote = c.company
+    ? `<div style="margin-top:4px;font-size:0.78em;color:var(--text-sub)">인쇄된 출고처명 "${_esc(r.customer || "")}" → 자동 연결</div>`
+    : `<div style="margin-top:4px;font-size:0.78em;color:var(--text-sub)">인쇄된 출고처명: ${_esc(r.customer || "(읽지 못함)")}</div>`;
+  const chips = cands
+    .map((n) => `<button type="button" class="pick-chip" data-name="${_esc(n)}" style="margin:4px 6px 0 0;padding:6px 10px;border-radius:14px;border:1px solid #0a84ff;background:transparent;color:#0a84ff;font-weight:800;font-size:0.82em;cursor:pointer">${_esc(n)}</button>`)
+    .join("");
+  const numIn = (id, v, f) =>
+    `<input type="number" inputmode="numeric" min="0" id="${id}" class="edit-input" style="width:100%;${_pickBorder(f)}" value="${v === null || v === undefined ? "" : v}" oninput="_pickRecalc()" />`;
+  body.innerHTML = `
+    ${unfinishedHtml}${dupHtml}
+    <div class="form-label">업체 (필수)</div>
+    <div class="input-wrapper"><input type="text" id="pick-comp" class="edit-input" style="${_pickBorder("customer")}" placeholder="업체 선택 또는 입력" autocomplete="off" value="${_esc(compVal)}" /></div>
+    ${matchNote}${chips ? `<div>${chips}</div>` : ""}${_pickFlagHtml("customer")}
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <div style="flex:1"><div class="form-label">PLT</div>${numIn("pick-pal", r.plt, "plt")}${_pickFlagHtml("plt")}</div>
+      <div style="flex:1"><div class="form-label">완박스</div>${numIn("pick-wan", r.wanbox, "wanbox")}${_pickFlagHtml("wanbox")}</div>
+      <div style="flex:1"><div class="form-label">혼재박스</div>${numIn("pick-hon", r.honjae, "honjae")}${_pickFlagHtml("honjae")}</div>
+    </div>
+    <div id="pick-box-line" style="margin-top:10px;font-weight:900;font-size:1.05em;color:var(--text-main)"></div>
+    <div style="margin-top:4px;font-size:0.78em;color:var(--text-sub)">이 장 인쇄 합계 SBOX ${r.sbox === null || r.sbox === undefined ? "?" : _esc(String(r.sbox))} / RBOX ${r.rbox === null || r.rbox === undefined ? "?" : _esc(String(r.rbox))} (다른 피킹리스트가 더해진 손글씨 값과 달라도 정상)</div>${shipHtml}
+    <div class="form-label" style="margin-top:12px">출고일 <span style="font-weight:400;color:var(--text-sub)">(비우면 미정)</span></div>
+    <input type="date" id="pick-date" class="edit-input" style="width:100%;${_pickBorder("shipDate")}" value="${_esc(r.shipDate || "")}" />
+    ${r.shipDate ? (_pickFlagHtml("shipDate") || `<div style="margin-top:4px;font-size:0.78em;color:var(--text-sub)">문서에 인쇄된 출고일</div>`) : `<div style="margin-top:4px;font-size:0.78em;color:var(--text-sub)">문서에서 출고일을 찾지 못해 미정으로 둡니다</div>`}${noteHtml}
+    <div class="form-label" style="margin-top:12px">비고</div>
+    <input type="text" id="pick-etc" class="edit-input" style="width:100%" placeholder="(선택)" />
+    ${r.orderNo ? `<div style="margin-top:10px;font-size:0.78em;color:var(--text-sub)">출고지시번호 ${_esc(r.orderNo)}</div>` : _pickFlagHtml("orderNo")}
+    ${r.ai === "fail" ? `<div style="margin-top:8px;font-size:0.78em;font-weight:700;color:${_PICK_ORANGE}">🟠 AI 판독이 실패해 문자인식 값만 사용했습니다. 손글씨 값을 꼭 확인하세요.</div>` : ""}
+    <button id="pick-submit" class="save-btn" style="width:100%;margin-top:16px" onclick="submitPick(this)" ${st.duplicate || r.unfinished ? "disabled" : ""}>등록</button>
+    <button class="close-btn" style="width:100%;margin-top:8px;background:transparent;border:1px solid var(--text-sub);border-radius:12px;padding:12px;font-size:1em" onclick="closePickModal(); openPickCamera();">📷 다시 촬영</button>`;
+  body.querySelectorAll(".pick-chip").forEach((b) => {
+    b.onclick = () => {
+      document.getElementById("pick-comp").value = b.getAttribute("data-name");
+      body.querySelectorAll(".pick-chip").forEach((x) => (x.style.background = "transparent"));
+      b.style.background = "rgba(10,132,255,0.15)";
+    };
+  });
+  try { attachAutocomplete("pick-comp"); } catch (e) {}
+  _pickRecalc();
+}
+
+function _pickInt(id) {
+  const el = document.getElementById(id);
+  if (!el || String(el.value).trim() === "") return null;
+  const n = parseInt(el.value, 10);
+  return isNaN(n) || n < 0 ? null : n;
+}
+function _pickRecalc() {
+  const line = document.getElementById("pick-box-line");
+  if (!line) return;
+  const w = _pickInt("pick-wan"), h = _pickInt("pick-hon");
+  line.textContent = w === null || h === null ? "박스 합계: 완박스·혼재박스를 입력하세요 (0도 입력)" : `박스 합계 = ${w} + ${h} = ${w + h}`;
+}
+
+async function submitPick(btn) {
+  const st = _pickState;
+  if (!st || !st.result || st.busy || st.duplicate || st.result.unfinished) return;
+  const rawComp = (document.getElementById("pick-comp").value || "").trim();
+  const pal = _pickInt("pick-pal"), wan = _pickInt("pick-wan"), hon = _pickInt("pick-hon");
+  if (!rawComp) { showToast("⚠️ 업체를 선택해주세요.", 2500); return; }
+  if (pal === null) { showToast("⚠️ PLT 수를 입력해주세요. (없으면 0)", 2500); return; }
+  if (wan === null || hon === null) { showToast("⚠️ 완박스와 혼재박스를 입력해주세요. (없으면 0)", 2500); return; }
+  const company = getFullName(rawComp); // 약어로 입력해도 마스터 업체명으로 통일 (신규 등록과 동일)
+  const date = document.getElementById("pick-date").value || null;
+  const etc = (document.getElementById("pick-etc").value || "").trim();
+  const orangeLeft = Object.values((st.result && st.result.flags) || {}).filter((f) => f.level === "orange").length;
+  const shipT = st.result.shipType;
+  if (shipT && !/용차/.test(shipT)) {
+    if (!(await uiConfirm(`택배유형이 "${shipT}" 입니다.\n출고 달력은 용차 기준인데, 이 건도 달력에 등록할까요?`, { okText: "등록 계속" }))) return;
+  }
+  const msg = `${company}\nPLT ${pal} / 박스 ${wan + hon} (완박스 ${wan} + 혼재 ${hon})\n출고일 ${date || "미정"}\n새 출고 일정으로 등록할까요?` + (orangeLeft ? `\n\n🟠 참고 표시 ${orangeLeft}건이 남아 있습니다.` : "");
+  if (!(await uiConfirm(msg, { okText: "등록" }))) return;
+  st.busy = true;
+  const orig = btn ? btn.innerHTML : "";
+  if (btn) { btn.disabled = true; btn.innerHTML = "등록 중... ⏳"; }
+  const res = await apiCall({
+    source: "vercel", domain: "system", action: "PICK_REGISTER",
+    admin_id: localStorage.getItem("admin_id"),
+    data: { company, pal, box: wan + hon, date, etc, orderNo: st.result.orderNo || "", printedName: st.result.customer || "" },
+  });
+  st.busy = false;
+  if (res && res.success) {
+    showToast(`✅ 등록 완료: ${company} PLT ${pal} / 박스 ${wan + hon}`, 3000);
+    closePickModal();
+    goToAsync(serverData.year, serverData.month);
+  } else {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+    showToast("⚠️ " + ((res && res.msg) || "등록에 실패했습니다."), 3500);
+  }
+}
