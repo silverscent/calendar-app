@@ -1761,7 +1761,7 @@ function showLastOcrImage() {
       return;
     }
     let url = res && res.url ? res.url : typeof res === "string" ? res : "";
-    if (url && url.startsWith("http")) {
+    if (url && (url.startsWith("http") || url.startsWith("data:image/"))) { // 앱에서 올린 사진은 data URL
       document.getElementById("ocrImageContent").innerHTML = `
         <div style="display:flex; flex-direction:column; width:100%; height:100%; overflow:hidden;">
           <div id="ocrHint" style="flex:0 0 auto; font-size:11px; color:var(--text-sub,#888); padding:0 2px 6px; text-align:center; line-height:1.4;">
@@ -5365,3 +5365,141 @@ let globalOcrFilters = [];
 
 // 👆 ----------------------------------------------------
 //새버전 테스트용
+
+// =====================================================
+// 📥 앱에서 사진첩 이미지로 OCR (관리자 전용)
+//   사진 선택 → 폰에서 크기 축소 → 서버 OCR_UPLOAD (텔레그램 /ocr 와 같은 읽기) → 'OCR 대조·수정' 창이 자동으로 열림
+//   · DB 에는 아직 반영되지 않음 → 대조창에서 확인·수정 후 [확정] 을 눌러야 반영 (APPLY_OCR_DATA)
+//   · 텔레그램 /ocr 은 그대로 동작. '최근 OCR' 자리는 하나라서 나중에 올린 쪽이 대조창에 보임
+// =====================================================
+function openOcrUpload() {
+  if (!isAdmin) {
+    showToast("⚠️ 로그인한 관리자만 사용할 수 있습니다.", 2500);
+    return;
+  }
+  const inp = document.getElementById("ocrUploadFile");
+  if (!inp) return;
+  inp.value = ""; // 같은 사진을 다시 골라도 동작하게
+  inp.click();
+}
+
+// 사진 → 긴 변 2400px JPEG(base64). 표 글자 인식을 위해 텔레그램(1280px)보다 크게, 서버 한도(약 4.5MB) 안에서 품질 자동 조절
+function _ocrUpResize(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const MAX = 2400;
+        const sc = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * sc));
+        const h = Math.max(1, Math.round(img.naturalHeight * sc));
+        const cv = document.createElement("canvas");
+        cv.width = w;
+        cv.height = h;
+        cv.getContext("2d").drawImage(img, 0, 0, w, h);
+        let q = 0.88;
+        let data = cv.toDataURL("image/jpeg", q);
+        while (data.length > 3800000 && q > 0.4) {
+          q -= 0.1;
+          data = cv.toDataURL("image/jpeg", q);
+        }
+        URL.revokeObjectURL(url);
+        resolve(data.replace(/^data:[^,]+,/, ""));
+      } catch (e) {
+        URL.revokeObjectURL(url);
+        reject(e);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("이미지를 열 수 없습니다."));
+    };
+    img.src = url;
+  });
+}
+
+function _ocrUpBusy(on, msg) {
+  let el = document.getElementById("ocrUpBusy");
+  if (!on) {
+    if (el) el.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "ocrUpBusy";
+    el.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px";
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<div style="background:var(--card-bg,#2a2c30);color:var(--text-main,#f0f0f0);padding:24px 22px;border-radius:16px;text-align:center;max-width:320px;width:100%">
+    <div style="font-size:2em">⏳</div>
+    <div style="margin-top:10px;font-weight:800">${_esc(msg)}</div>
+    <div style="margin-top:6px;font-size:0.85em;color:var(--text-sub,#a0a0a0)">약 20~40초 걸립니다. 창을 닫지 마세요.</div></div>`;
+}
+
+let _ocrUpRunning = false;
+async function ocrUploadOnFile(inp) {
+  const file = inp && inp.files && inp.files[0];
+  if (!file || _ocrUpRunning) return;
+  _ocrUpRunning = true;
+  try {
+    _ocrUpBusy(true, "사진을 준비하는 중...");
+    const b64 = await _ocrUpResize(file);
+    _ocrUpBusy(true, "OCR 판독 중...");
+    const token = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 58000); // 서버 한도(60초) 안에서 충분히 기다림 (기본 apiCall 은 15초라 사용 안 함)
+    let d;
+    try {
+      const r = await fetch(VERCEL_API_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          source: "vercel", domain: "system", action: "OCR_UPLOAD",
+          admin_id: localStorage.getItem("admin_id"), session_token: token,
+          data: { image: b64, mime: "image/jpeg" },
+        }),
+        signal: ctl.signal,
+      });
+      const raw = await r.json();
+      d = typeof raw === "string" ? JSON.parse(raw) : raw;
+    } finally {
+      clearTimeout(timer);
+    }
+    _ocrUpBusy(false);
+    if (d && d.forceLogout) {
+      showToast(d.msg || "세션이 만료되었습니다. 다시 로그인하세요.", 3000);
+      if (typeof executeLogout === "function") executeLogout();
+      return;
+    }
+    if (!d || !d.success) {
+      showToast("⚠️ " + ((d && d.msg) || "OCR 에 실패했습니다."), 4500);
+      return;
+    }
+    showToast(`✅ ${d.rowCount}행 판독 완료${d.aiSuccess ? " (AI 교정)" : " (기본 파싱)"} — 대조창에서 확인 후 [확정] 하세요`, 3500);
+    _ocrOpenCompareAfterUpload();
+  } catch (e) {
+    _ocrUpBusy(false);
+    showToast(e && e.name === "AbortError" ? "⚠️ 판독 시간이 초과되었습니다. 잠시 후 다시 시도해주세요." : "⚠️ OCR 중 오류가 발생했습니다: " + ((e && e.message) || e), 4500);
+  } finally {
+    _ocrUpRunning = false;
+  }
+}
+
+// 방금 올린 결과를 대조창으로 바로 열기 (이미지 표시 → '대조·수정 켜기' 자동 실행)
+function _ocrOpenCompareAfterUpload() {
+  _ocrImgCache = null; // 이전(텔레그램) 이미지 캐시 무효화
+  showLastOcrImage();
+  let tries = 0;
+  const t = setInterval(() => {
+    tries++;
+    const btn = document.getElementById("ocrCompareBtn");
+    const img = document.getElementById("ocrImgElement");
+    if (btn && img) {
+      clearInterval(t);
+      const pane = document.getElementById("ocrPaneTable");
+      if (pane && pane.style.display === "none") toggleOcrCompare(btn);
+    } else if (tries > 40) {
+      clearInterval(t); // 10초 안에 안 열리면 포기(사용자가 OCR 🖼️ 버튼으로 직접 열 수 있음)
+    }
+  }, 250);
+}

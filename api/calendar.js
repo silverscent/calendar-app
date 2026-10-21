@@ -27,6 +27,7 @@ const mysql = require("mysql2/promise");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const pickLib = require("./_pick.js"); // 출고 피킹지 사진 판독 (api/_pick.js)
+const ocrLib = require("./_ocr.js"); // 입고 OCR 읽기 엔진 — 앱에서 사진 업로드용 (api/_ocr.js)
 
 // 📲 달력 변경 텔레그램 알림
 // 1:1 DM 전송: ADMIN_TELEGRAM_USER_ID = 봇과 1:1 대화 chat_id (사용자 개인 ID)
@@ -413,6 +414,7 @@ module.exports = async function (req, res) {
         "SAVE_OCR_INFO",
         "SAVE_OCR_FILTERS",
         "APPLY_OCR_DATA",
+        "OCR_UPLOAD",
         "PICK_PARSE",
         "PICK_REGISTER",
         "FIND_INBOUND_DUPES",
@@ -2148,6 +2150,90 @@ if (action === "VERIFY_SESSION") {
         } catch (err) {
           console.error("OCR 데이터 조회 에러:", err);
           return res.status(500).json({ success: false, error: err.message });
+        }
+      } else if (action === "OCR_UPLOAD") {
+        // 📥 앱(입고 화면)에서 사진첩 이미지를 올려 OCR — DB 에는 반영하지 않고 '최근 OCR' 로 저장 → 대조창에서 확인·수정 후 [확정] 시 APPLY_OCR_DATA 로 반영
+        //   읽기 순서·저장 형식은 텔레그램 /ocr 과 동일 (ocr_store: LAST_OCR_DATA · LAST_OCR_RAW · LAST_OCR_GEO · last_ocr_image)
+        const b64 = typeof data?.image === "string" ? data.image.replace(/^data:[^,]+,/, "") : "";
+        const mime = /^image\/(jpeg|png|webp)$/.test(String(data?.mime || "")) ? data.mime : "image/jpeg";
+        if (!b64 || b64.length < 1000) return res.status(200).json({ success: false, msg: "이미지가 비어 있습니다." });
+        if (b64.length > 4200000) return res.status(200).json({ success: false, msg: "이미지가 너무 큽니다. 더 작은 이미지로 다시 시도해주세요." });
+        if (!process.env.GOOGLE_VISION_API_KEY) return res.status(200).json({ success: false, msg: "OCR API 키가 설정되어 있지 않습니다." });
+
+        await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS ocr_store (store_key VARCHAR(100) PRIMARY KEY, store_value MEDIUMTEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`);
+
+        // 텔레그램 /ocr 와 같은 잠금(40초) — 동시에 두 OCR 이 돌며 서로의 결과를 덮어쓰지 않게
+        const [lockRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_IS_RUNNING'`);
+        const nowT = Date.now();
+        if (lockRows.length > 0 && lockRows[0].setting_value !== "0") {
+          const lockTime = parseInt(lockRows[0].setting_value, 10) || 0;
+          if (nowT - lockTime < 40000) return res.status(200).json({ success: false, msg: "다른 OCR 이 처리 중입니다. 잠시(약 40초) 후 다시 시도해주세요." });
+        }
+        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_IS_RUNNING', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [String(nowT), String(nowT)]);
+        let skipLockReset = false;
+        try {
+          // 이번 달 사용량 (텔레그램과 같은 카운터·한도)
+          const OCR_FREE_LIMIT_MONTHLY = 1000;
+          const monthStr = String(new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" })).getMonth() + 1);
+          const [mRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_MONTH'`);
+          const [cRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_COUNT'`);
+          const [tRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_TOTAL_COUNT'`);
+          const dbMonth = mRows.length > 0 ? String(mRows[0].setting_value).replace(/"/g, "") : "";
+          let ocrCount = cRows.length > 0 ? parseInt(cRows[0].setting_value) || 0 : 0;
+          let ocrTotal = tRows.length > 0 ? parseInt(tRows[0].setting_value) || 0 : 0;
+          if (dbMonth !== monthStr) {
+            ocrCount = 0;
+            const valMonth = JSON.stringify(monthStr);
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_MONTH', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [valMonth, valMonth]);
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, ["0", "0"]);
+          }
+          if (ocrCount >= OCR_FREE_LIMIT_MONTHLY) return res.status(200).json({ success: false, msg: "이번 달 무료 OCR 한도를 모두 사용했습니다." });
+
+          const out = await ocrLib.runOcrPipeline(b64, { fetch, visionKey: process.env.GOOGLE_VISION_API_KEY, geminiKey: process.env.GEMINI_API_KEY });
+          if (out.visionCalled) {
+            ocrCount++; ocrTotal++;
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [String(ocrCount), String(ocrCount)]);
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_TOTAL_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [String(ocrTotal), String(ocrTotal)]);
+          }
+          if (!out.ok) {
+            skipLockReset = false;
+            return res.status(200).json({ success: false, msg: out.err || "OCR 에 실패했습니다." });
+          }
+
+          // 비고 정리 (텔레그램이 DB 반영 직전에 하는 것과 동일) — 대조창이 보여줄 값이 텔레그램 결과와 같도록 저장 전에 적용
+          let customFilters = [];
+          try {
+            const [fRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_ETC_FILTERS'`);
+            if (fRows.length > 0) {
+              let rawVal = fRows[0].setting_value;
+              if (typeof rawVal === "string") {
+                if (rawVal.startsWith('"') && rawVal.endsWith('"')) rawVal = JSON.parse(rawVal);
+                customFilters = JSON.parse(rawVal);
+              } else customFilters = rawVal;
+            }
+            if (!Array.isArray(customFilters)) customFilters = [];
+          } catch (fe) { customFilters = []; }
+          out.rows.forEach((r) => { r.etc = ocrLib.cleanEtcText(r.etc, customFilters); });
+
+          // 최근 OCR 로 저장 (이미지는 앱에서 올린 사진 자체를 data URL 로 보관 — 대조창이 그대로 표시)
+          const KST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+          const timeStr = `${KST.getMonth() + 1}월${KST.getDate()}일 ${String(KST.getHours()).padStart(2, "0")}:${String(KST.getMinutes()).padStart(2, "0")}`;
+          const put = (k, v) => pool.query(`INSERT INTO ocr_store (store_key, store_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE store_value = ?`, [k, v, v]);
+          await put("LAST_OCR_DATA", JSON.stringify(out.rows));
+          const rawCapped = out.text.length > 20000 ? out.text.slice(0, 20000) + "\n[TRUNCATED]" : out.text;
+          await put("LAST_OCR_RAW", JSON.stringify(rawCapped));
+          if (out.geo) await put("LAST_OCR_GEO", JSON.stringify(out.geo));
+          else await pool.query(`DELETE FROM ocr_store WHERE store_key = 'LAST_OCR_GEO'`);
+          await put("last_ocr_image", JSON.stringify({ url: `data:${mime};base64,${b64}`, fileId: null, uploaded: true }));
+          const jsonTime = JSON.stringify({ time: timeStr });
+          await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
+          await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'SYS_OCR_SAVE', ?)", [currentAdmin, `앱에서 OCR 업로드 (${out.rows.length}행${out.aiSuccess ? ", AI 교정" : ", 기본 파싱"})`]);
+          return res.status(200).json({ success: true, rowCount: out.rows.length, aiSuccess: !!out.aiSuccess, usage: ocrCount, limit: OCR_FREE_LIMIT_MONTHLY });
+        } finally {
+          if (!skipLockReset) {
+            try { await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_IS_RUNNING', '0') ON DUPLICATE KEY UPDATE setting_value = '0'`); } catch (_) {}
+          }
         }
       } else if (action === "PICK_PARSE") {
         // 📷 출고 피킹지 사진 → 업체·PLT·박스 판독 (등록은 하지 않음. 확인창에서 PICK_REGISTER 로 등록)

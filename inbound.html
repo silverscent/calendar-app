@@ -2110,6 +2110,9 @@
       .fab-wrapper.open.snap-bottom .fab-sub-item:nth-last-child(4) {
         animation-delay: 0.26s;
       }
+      .fab-wrapper.open.snap-bottom .fab-sub-item:nth-last-child(5) {
+        animation-delay: 0.34s;
+      }
       .fab-wrapper.open.snap-top .fab-sub-item {
         animation: fabItemPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
       }
@@ -2124,6 +2127,9 @@
       }
       .fab-wrapper.open.snap-top .fab-sub-item:nth-child(4) {
         animation-delay: 0.26s;
+      }
+      .fab-wrapper.open.snap-top .fab-sub-item:nth-child(5) {
+        animation-delay: 0.34s;
       }
       @keyframes fabItemPop {
         from {
@@ -6060,8 +6066,21 @@
             🧹
           </button>
         </div>
+        <div class="fab-sub-item">
+          <div class="fab-label">사진 OCR</div>
+          <button
+            class="fab-sub-btn add"
+            onclick="
+              toggleFabMenu();
+              openOcrUpload();
+            "
+          >
+            📥
+          </button>
+        </div>
       </div>
       <button class="fab-main" onclick="toggleFabMenu()">+</button>
+      <input type="file" id="ocrUploadFile" accept="image/*" style="display: none" onchange="ocrUploadOnFile(this)" />
     </div>
 
     <!-- 🔍 FAB 일정 검색 모달 -->
