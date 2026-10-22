@@ -94,8 +94,9 @@ async function runOcrPipeline(base64Image, opts) {
     if (geminiJson.candidates && geminiJson.candidates.length > 0) {
       const aiText = geminiJson.candidates[0].content.parts[0].text.replace(/```json/gi, "").replace(/```/g, "").trim();
       const aiData = JSON.parse(aiText);
-      if (Array.isArray(aiData) && aiData.length > 0) {
-        finalRows = aiData;
+      const aiRows = Array.isArray(aiData) ? aiData.filter((o) => o && typeof o === "object" && !Array.isArray(o)) : []; // 문자열·null 같은 잘못된 항목은 버림
+      if (aiRows.length > 0) {
+        finalRows = aiRows;
         aiSuccess = true;
       }
     }

@@ -1769,7 +1769,7 @@ function showLastOcrImage() {
           </div>
           <div id="ocrSplitWrap" style="flex:1 1 auto; display:flex; overflow:hidden; background:#e9ecef; border-radius:8px; position:relative;">
             <div id="ocrPaneImg" style="flex:1 1 100%; min-width:0; overflow:hidden; position:relative; touch-action:none;">
-              <img id="ocrImgElement" src="${url}" alt="스케줄 이미지" draggable="false" onload="ocrImgLoaded()" style="position:absolute; left:0; top:0; display:block; transform-origin:center center; user-select:none; -webkit-user-drag:none; -moz-user-select:none; will-change:transform;">
+              <img id="ocrImgElement" src="${_esc(url)}" alt="스케줄 이미지" draggable="false" onload="ocrImgLoaded()" style="position:absolute; left:0; top:0; display:block; transform-origin:center center; user-select:none; -webkit-user-drag:none; -moz-user-select:none; will-change:transform;">
             </div>
             <div id="ocrSplitDivider" title="드래그해서 좌우 너비 조절" style="display:none; flex:0 0 8px; align-items:center; justify-content:center; cursor:col-resize; background:#cfd4da; touch-action:none; position:relative; z-index:6;">
               <div style="width:2px; height:44px; border-radius:2px; background:#7b828c; pointer-events:none;"></div>

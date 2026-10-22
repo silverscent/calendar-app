@@ -368,7 +368,7 @@ function reconcile(printed, hw, g, errs) {
   const flags = {};
   const setFlag = (f, fl) => { if (!fl) return; if (!flags[f] || (flags[f].level === "orange" && fl.level === "red")) flags[f] = fl; };
 
-  const orderNo = clean(printed.orderNo) || clean(g.orderNo);
+  const orderNo = ((clean(printed.orderNo) || clean(g.orderNo) || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 40)) || null; // 등록 때와 같은 규칙으로 정리(중복판단 키 일치)
   const customer = clean(printed.customer) || clean(g.customer);
   if (clean(printed.customer) && clean(g.customer) && normName(printed.customer) !== normName(g.customer) && similarity(normName(printed.customer), normName(g.customer)) < 0.6)
     setFlag("customer", { level: "orange", msg: `문자인식 "${printed.customer}" / AI "${g.customer}" 불일치` });
@@ -411,7 +411,7 @@ function reconcile(printed, hw, g, errs) {
   // '기존에 추가': AI 또는 문자인식 중 하나라도 보면 후보로 제시(화면에서 사용자가 새 일정/추가를 최종 선택)
   const gAdd = g.addToExisting === true || String(g.addToExisting).toLowerCase() === "true";
   const addExisting = !!(gAdd || hw.addExisting);
-  const addNote = clean(g.handNote) || hw.addNote || null;
+  const addNote = (clean(typeof g.handNote === "string" ? g.handNote : null) || hw.addNote || "").slice(0, 40) || null;
   const box = wan !== null && hon !== null ? wan + hon : null;
   if (!orderNo) setFlag("orderNo", { level: "orange", msg: "출고지시번호를 읽지 못함 — 중복 등록 방지가 동작하지 않음" });
   if (!customer) setFlag("customer", { level: "red", msg: "출고처명을 읽지 못함 — 직접 선택" });

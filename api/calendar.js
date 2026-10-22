@@ -131,10 +131,45 @@ function _hookResEndForNotify(res) {
   };
 }
 
+// 같은 날·같은 업체 기존 일정에 수량을 '더하기' ([+수량추가] 와 같은 이력 문구). 한 번의 UPDATE 라 동시에 여러 요청이 와도 합산이 사라지지 않고,
+// 완료 처리된 행에는 적용되지 않는다. 반환 {ok, hist}
+async function appendQtyAtomic(id, company, pal, box, extraEtc) {
+  const _now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  const hist = `[${_now.getMonth() + 1}/${_now.getDate()} ${pal ? pal + "P" : ""}${pal && box ? " " : ""}${box ? box + "B" : ""} 추가]`;
+  const add = extraEtc ? hist + " " + String(extraEtc).trim() : hist;
+  const [upr] = await pool.query(
+    `UPDATE outbound SET pal = CAST(COALESCE(NULLIF(pal,''),'0') AS SIGNED) + ?, box = CAST(COALESCE(NULLIF(box,''),'0') AS SIGNED) + ?, etc = CASE WHEN etc IS NULL OR TRIM(etc) = '' THEN ? ELSE CONCAT(TRIM(etc), ' ', ?) END WHERE id = ? AND TRIM(company) = ? AND (isDone = 0 OR isDone IS NULL)`,
+    [pal, box, add, add, id, company],
+  );
+  return { ok: !!(upr && upr.affectedRows), hist };
+}
+
+// 업체명이 조금 달라도(㈜ 유무·공백·약어) 같은 업체로 볼지 — 피킹지에서 '기존 일정'을 찾을 때 사용. 층(2층/3층)처럼 구분 글자는 유지됨
+async function pickLoadCompDb() {
+  try {
+    const [cr] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`);
+    if (cr.length) return typeof cr[0].setting_value === "object" ? cr[0].setting_value || {} : JSON.parse(cr[0].setting_value) || {};
+  } catch (_) {}
+  return {};
+}
+function pickSameCompany(a, b, compDb) {
+  const na = pickLib.normName(a), nb = pickLib.normName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const sn = (n) => { const e = compDb && compDb[n]; return e && e.shortName ? pickLib.normName(e.shortName) : ""; };
+  // 등록된 업체 약어(shortName)와 같은 이름이면 같은 업체
+  for (const full of Object.keys(compDb || {})) {
+    const nf = pickLib.normName(full), ns = sn(full);
+    const ids = [nf, ns].filter(Boolean);
+    if (ids.includes(na) && ids.includes(nb)) return true;
+  }
+  return false;
+}
+
 // ───────── 피킹지 등록 기록 (같은 피킹지 이중 등록 방지) ─────────
 //  pick_registered: 출고지시번호 → 등록된 일정(outbound_id). 그 일정이 지금도 있을 때만 '이미 등록'으로 본다.
 async function pickEnsureTable() {
-  await pool.query(`CREATE TABLE IF NOT EXISTS pick_registered (order_no VARCHAR(40) PRIMARY KEY, outbound_id INT NOT NULL DEFAULT 0, mode VARCHAR(8), hist VARCHAR(80), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS pick_registered (order_no VARCHAR(40) PRIMARY KEY, outbound_id BIGINT NOT NULL DEFAULT 0, mode VARCHAR(8), hist VARCHAR(80), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 }
 // 등록 기록이 가리키는 일정이 아직 살아 있는지. 반환 {alive, info}
 async function pickRecAlive(rec) {
@@ -175,7 +210,7 @@ async function pickClaim(orderNo, mode) {
     const a = await pickRecAlive(rec);
     if (a.alive) return { ok: false, msg: `이미 등록된 피킹지입니다. (${orderNo})` + (a.info ? ` → ${a.info.company} ${a.info.date || "미정"}` : "") };
   }
-  const [up] = await pool.query(`UPDATE pick_registered SET outbound_id = 0, mode = ?, hist = NULL, created_at = NOW() WHERE order_no = ? AND outbound_id = ?`, [mode, orderNo, rec.outbound_id]);
+  const [up] = await pool.query(`UPDATE pick_registered SET outbound_id = 0, mode = ?, hist = NULL, created_at = NOW() WHERE order_no = ? AND outbound_id = ? AND (outbound_id <> 0 OR TIMESTAMPDIFF(SECOND, created_at, NOW()) >= 120)`, [mode, orderNo, rec.outbound_id]);
   if (up && up.affectedRows) return { ok: true };
   return { ok: false, msg: `이미 처리 중인 피킹지입니다. (${orderNo})` };
 }
@@ -1704,18 +1739,20 @@ if (action === "VERIFY_SESSION") {
         const dates     = _dateRange(bStart, bEnd);
         if (!reqComp || dates.length === 0)
           return res.status(200).json({ success: false, msg: "잘못된 블록 범위" });
+        // 기간 안에 같은 업체의 '완료되지 않은' 일정이 이미 있는 날이 있으면 덮어쓰지 않고 중단 (onDup:"new" 면 기존은 그대로 두고 별도 일정으로 추가)
+        const _dupDates = [];
         for (const d of dates) {
-          const [ex] = await pool.query(
-            `SELECT id FROM outbound WHERE company=? AND outbound_date=? LIMIT 1`,
-            [reqComp, d],
+          const [ex] = await pool.query(`SELECT id, isDone FROM outbound WHERE TRIM(company)=? AND outbound_date=?`, [String(reqComp).trim(), d]);
+          if (ex.some((r) => !(r.isDone === 1 || r.isDone === true))) _dupDates.push(d);
+        }
+        if (_dupDates.length > 0 && data?.onDup !== "new") {
+          return res.status(200).json({ success: false, dup: true, dates: _dupDates.slice(0, 31), msg: `선택한 기간 중 같은 업체 일정이 이미 있는 날(${_dupDates.slice(0, 3).map((x) => x.slice(5).replace("-", "/")).join(", ")}${_dupDates.length > 3 ? " 외" : ""})이 있어 추가하지 않았습니다.` });
+        }
+        for (const d of dates) {
+          await pool.query(
+            `INSERT INTO outbound (company,pal,box,outbound_date,isDone,etc) VALUES (?,?,?,?,0,?)`,
+            [reqComp, reqPalOut, reqBoxOut, d, reqEtcOut],
           );
-          if (ex.length > 0)
-            await pool.query(`UPDATE outbound SET pal=?,box=?,etc=? WHERE id=?`, [reqPalOut, reqBoxOut, reqEtcOut, ex[0].id]);
-          else
-            await pool.query(
-              `INSERT INTO outbound (company,pal,box,outbound_date,isDone,etc) VALUES (?,?,?,?,0,?)`,
-              [reqComp, reqPalOut, reqBoxOut, d, reqEtcOut],
-            );
         }
         const label = _blockLabel(bStart, bEnd);
         const cleanComp = reqComp.replace(/\[TASK\]/gi, "").trim();
@@ -1958,22 +1995,36 @@ if (action === "VERIFY_SESSION") {
           let reqBoxOut = data?.newBox || data?.box || "0";
           let reqEtcOut = data?.newEtc || data?.etc || "";
 
-          const [exist] = await pool.query(`SELECT id FROM outbound WHERE TRIM(company) = ? AND outbound_date <=> ?`, [
+          // 같은 날 같은 업체의 '완료되지 않은' 일정이 이미 있으면 절대 덮어쓰지 않는다.
+          //   onDup 없음  → 아무것도 쓰지 않고 dup 응답 (화면이 "더하기/따로 추가/취소" 를 묻는다)
+          //   "append"    → dupTargetId 일정에 수량 더하기 ([+수량추가] 와 동일)
+          //   "new"       → 기존 일정은 그대로 두고 별도 일정으로 추가
+          const [exist] = await pool.query(`SELECT id, pal, box, etc, isDone FROM outbound WHERE TRIM(company) = ? AND outbound_date <=> ?`, [
             reqComp,
             reqDateOut,
           ]);
-          if (exist.length > 0) {
-            await pool.query(`UPDATE outbound SET pal = ?, box = ?, etc = ? WHERE id = ?`, [
-              reqPalOut,
-              reqBoxOut,
-              reqEtcOut,
-              exist[0].id,
-            ]);
-            await pool.query(
-              "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
-              [currentAdmin, `[출고 병합] ${reqComp} (${reqDateOut || "미정"}) ➡️ 덮어쓰기 완료 (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`],
-            );
-            notifyCalendarChange(`[출고 병합] ${reqComp} (${reqDateOut || "미정"})`, currentAdmin);
+          const live = exist.filter((r) => !(r.isDone === 1 || r.isDone === true));
+          const onDup = data?.onDup === "append" || data?.onDup === "new" ? data.onDup : null;
+          if (live.length > 0 && !onDup) {
+            return res.status(200).json({
+              success: false,
+              dup: true,
+              existing: live.map((r) => ({ id: r.id, pal: r.pal, box: r.box, etc: String(r.etc || "").slice(0, 120) })),
+              msg: `같은 날 같은 업체(${reqComp.replace(/\[TASK\]/gi, "").trim()}) 일정이 이미 있어 추가하지 않았습니다.`,
+            });
+          }
+          if (live.length > 0 && onDup === "append") {
+            const tid = parseInt(data?.dupTargetId, 10);
+            const tgt = live.find((r) => r.id === tid);
+            const addP = parseInt(reqPalOut, 10) || 0;
+            const addB = parseInt(reqBoxOut, 10) || 0;
+            if (!tgt) return res.status(200).json({ success: false, msg: "수량을 더할 기존 일정을 찾지 못했습니다. 화면을 새로고침한 뒤 다시 시도해주세요." });
+            if (addP === 0 && addB === 0) return res.status(200).json({ success: false, msg: "더할 파레트/박스 수량이 0 입니다." });
+            const ap = await appendQtyAtomic(tgt.id, reqComp, addP, addB, String(reqEtcOut || "").trim());
+            if (!ap.ok) return res.status(200).json({ success: false, msg: "그 사이 일정이 완료·삭제되어 추가하지 못했습니다. 새로고침 후 다시 시도해주세요." });
+            const dd = `[출고 수량추가] ${reqComp} (${reqDateOut || "미정"}) +PL:${addP}, +BOX:${addB}`;
+            await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, dd]);
+            notifyCalendarChange(dd, currentAdmin);
           } else {
             await pool.query(
               `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`,
@@ -1981,7 +2032,7 @@ if (action === "VERIFY_SESSION") {
             );
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)",
-              [currentAdmin, `[출고 등록] ${reqComp} (${reqDateOut || "미정"}) 신규 추가 (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`],
+              [currentAdmin, `[출고 등록] ${reqComp} (${reqDateOut || "미정"}) ${live.length > 0 ? "별도 일정으로 추가" : "신규 추가"} (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`],
             );
             notifyCalendarChange(`[출고 등록] ${reqComp} (${reqDateOut || "미정"}) PL:${reqPalOut || 0}`, currentAdmin);
           }
@@ -2208,20 +2259,21 @@ if (action === "VERIFY_SESSION") {
         const mime = /^image\/(jpeg|png|webp)$/.test(String(data?.mime || "")) ? data.mime : "image/jpeg";
         if (!b64 || b64.length < 1000) return res.status(200).json({ success: false, msg: "이미지가 비어 있습니다." });
         if (b64.length > 4200000) return res.status(200).json({ success: false, msg: "이미지가 너무 큽니다. 더 작은 이미지로 다시 시도해주세요." });
+        if (!/^[A-Za-z0-9+\/]+={0,2}$/.test(b64)) return res.status(200).json({ success: false, msg: "이미지 형식이 올바르지 않습니다." });
         if (!process.env.GOOGLE_VISION_API_KEY) return res.status(200).json({ success: false, msg: "OCR API 키가 설정되어 있지 않습니다." });
 
         await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
         await pool.query(`CREATE TABLE IF NOT EXISTS ocr_store (store_key VARCHAR(100) PRIMARY KEY, store_value MEDIUMTEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`);
 
         // 텔레그램 /ocr 와 같은 잠금(40초) — 동시에 두 OCR 이 돌며 서로의 결과를 덮어쓰지 않게
-        const [lockRows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'OCR_IS_RUNNING'`);
         const nowT = Date.now();
-        if (lockRows.length > 0 && lockRows[0].setting_value !== "0") {
-          const lockTime = parseInt(lockRows[0].setting_value, 10) || 0;
-          if (nowT - lockTime < 40000) return res.status(200).json({ success: false, msg: "다른 OCR 이 처리 중입니다. 잠시(약 40초) 후 다시 시도해주세요." });
-        }
-        await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_IS_RUNNING', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [String(nowT), String(nowT)]);
-        let skipLockReset = false;
+        await pool.query(`INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES ('OCR_IS_RUNNING', '0')`);
+        // 잠금 확인+획득을 한 번에 (동시에 두 곳에서 올려도 한 쪽만 통과). 40초 넘은 잠금은 낡은 것으로 보고 넘겨받음
+        const [lk] = await pool.query(
+          `UPDATE system_settings SET setting_value = ? WHERE setting_key = 'OCR_IS_RUNNING' AND (setting_value = '0' OR setting_value = '' OR CAST(setting_value AS UNSIGNED) < ?)`,
+          [String(nowT), nowT - 40000],
+        );
+        if (!lk || !lk.affectedRows) return res.status(200).json({ success: false, msg: "다른 OCR 이 처리 중입니다. 잠시(약 40초) 후 다시 시도해주세요." });
         try {
           // 이번 달 사용량 (텔레그램과 같은 카운터·한도)
           const OCR_FREE_LIMIT_MONTHLY = 1000;
@@ -2247,7 +2299,6 @@ if (action === "VERIFY_SESSION") {
             await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_TOTAL_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [String(ocrTotal), String(ocrTotal)]);
           }
           if (!out.ok) {
-            skipLockReset = false;
             return res.status(200).json({ success: false, msg: out.err || "OCR 에 실패했습니다." });
           }
 
@@ -2269,21 +2320,21 @@ if (action === "VERIFY_SESSION") {
           // 최근 OCR 로 저장 (이미지는 앱에서 올린 사진 자체를 data URL 로 보관 — 대조창이 그대로 표시)
           const KST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
           const timeStr = `${KST.getMonth() + 1}월${KST.getDate()}일 ${String(KST.getHours()).padStart(2, "0")}:${String(KST.getMinutes()).padStart(2, "0")}`;
-          const put = (k, v) => pool.query(`INSERT INTO ocr_store (store_key, store_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE store_value = ?`, [k, v, v]);
+          const put = (k, v) => pool.query(`INSERT INTO ocr_store (store_key, store_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE store_value = VALUES(store_value)`, [k, v]);
+          // 가장 크고 실패 가능성이 높은 이미지를 먼저 저장 — 실패하면 기존 최근 OCR 이 그대로 남는다
+          await put("last_ocr_image", JSON.stringify({ url: `data:${mime};base64,${b64}`, fileId: null, uploaded: true }));
           await put("LAST_OCR_DATA", JSON.stringify(out.rows));
           const rawCapped = out.text.length > 20000 ? out.text.slice(0, 20000) + "\n[TRUNCATED]" : out.text;
           await put("LAST_OCR_RAW", JSON.stringify(rawCapped));
           if (out.geo) await put("LAST_OCR_GEO", JSON.stringify(out.geo));
           else await pool.query(`DELETE FROM ocr_store WHERE store_key = 'LAST_OCR_GEO'`);
-          await put("last_ocr_image", JSON.stringify({ url: `data:${mime};base64,${b64}`, fileId: null, uploaded: true }));
           const jsonTime = JSON.stringify({ time: timeStr });
           await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
           await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'SYS_OCR_SAVE', ?)", [currentAdmin, `앱에서 OCR 업로드 (${out.rows.length}행${out.aiSuccess ? ", AI 교정" : ", 기본 파싱"})`]);
           return res.status(200).json({ success: true, rowCount: out.rows.length, aiSuccess: !!out.aiSuccess, usage: ocrCount, limit: OCR_FREE_LIMIT_MONTHLY });
         } finally {
-          if (!skipLockReset) {
-            try { await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_IS_RUNNING', '0') ON DUPLICATE KEY UPDATE setting_value = '0'`); } catch (_) {}
-          }
+          // 내가 잡은 잠금일 때만 풀기 (너무 오래 걸려 다른 요청이 넘겨받았다면 건드리지 않음)
+          try { await pool.query(`UPDATE system_settings SET setting_value = '0' WHERE setting_key = 'OCR_IS_RUNNING' AND setting_value = ?`, [String(nowT)]); } catch (_) {}
         }
       } else if (action === "PICK_PARSE") {
         // 📷 출고 피킹지 사진 → 업체·PLT·박스 판독 (등록은 하지 않음. 확인창에서 PICK_REGISTER 로 등록)
@@ -2291,6 +2342,7 @@ if (action === "VERIFY_SESSION") {
         const mime = /^image\/(jpeg|png|webp)$/.test(String(data?.mime || "")) ? data.mime : "image/jpeg";
         if (!b64 || b64.length < 1000) return res.status(200).json({ success: false, msg: "이미지가 비어 있습니다." });
         if (b64.length > 4200000) return res.status(200).json({ success: false, msg: "이미지가 너무 큽니다. 다시 촬영해주세요." });
+        if (!/^[A-Za-z0-9+\/]+={0,2}$/.test(b64)) return res.status(200).json({ success: false, msg: "이미지 형식이 올바르지 않습니다." });
         if (!process.env.GOOGLE_VISION_API_KEY && !process.env.GEMINI_API_KEY)
           return res.status(200).json({ success: false, msg: "OCR API 키가 설정되어 있지 않습니다." });
 
@@ -2333,19 +2385,20 @@ if (action === "VERIFY_SESSION") {
         let fDate = data?.date ? String(data.date).slice(0, 10) : null;
         if (fDate && !/^\d{4}-\d{2}-\d{2}$/.test(fDate)) fDate = null;
         if (!fCompany) return res.status(200).json({ success: true, rows: [] });
+        const compDbF = await pickLoadCompDb();
         let rowsF;
         if (fDate) {
           [rowsF] = await pool.query(
-            `SELECT id, company, pal, box, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date, etc FROM outbound WHERE company = ? AND outbound_date = ? AND (isDone = 0 OR isDone IS NULL) ORDER BY id ASC LIMIT 10`,
-            [fCompany, fDate],
+            `SELECT id, company, pal, box, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date, etc FROM outbound WHERE outbound_date = ? AND (isDone = 0 OR isDone IS NULL) ORDER BY id ASC LIMIT 300`,
+            [fDate],
           );
         } else {
           [rowsF] = await pool.query(
-            `SELECT id, company, pal, box, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date, etc FROM outbound WHERE company = ? AND (outbound_date IS NULL OR outbound_date >= CURDATE()) AND (isDone = 0 OR isDone IS NULL) ORDER BY outbound_date IS NULL DESC, outbound_date ASC, id ASC LIMIT 10`,
-            [fCompany],
+            `SELECT id, company, pal, box, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date, etc FROM outbound WHERE (outbound_date IS NULL OR outbound_date >= CURDATE()) AND (isDone = 0 OR isDone IS NULL) ORDER BY outbound_date IS NULL DESC, outbound_date ASC, id ASC LIMIT 500`,
           );
         }
-        return res.status(200).json({ success: true, rows: rowsF.map((r) => ({ id: r.id, company: r.company, pal: r.pal, box: r.box, date: r.date || null, etc: String(r.etc || "").slice(0, 120) })) });
+        const matched = rowsF.filter((r) => !/^\[TASK\]/i.test(String(r.company || "")) && pickSameCompany(r.company, fCompany, compDbF)).slice(0, 10);
+        return res.status(200).json({ success: true, rows: matched.map((r) => ({ id: r.id, company: r.company, pal: r.pal, box: r.box, date: r.date || null, etc: String(r.etc || "").slice(0, 120) })) });
       } else if (action === "PICK_REGISTER") {
         // ✅ 확인창에서 [등록]
         //   mode "new"(기본)    : 출고 '새 행' 추가 (기존 행을 덮어쓰지 않음)
@@ -2380,7 +2433,7 @@ if (action === "VERIFY_SESSION") {
           if (!cl.ok) return res.status(200).json({ success: false, msg: cl.msg });
           claimed = true;
         }
-        const release = async () => { if (claimed) { try { await pool.query(`DELETE FROM pick_registered WHERE order_no = ?`, [orderNo]); } catch (_) {} } };
+        const release = async () => { if (claimed) { try { await pool.query(`DELETE FROM pick_registered WHERE order_no = ? AND outbound_id = 0`, [orderNo]); } catch (_) {} } }; // 내가 잡은 것(처리 중 표시)만 풀기
         let logDesc = "";
         let outId = null;
         let histStr = "";
@@ -2390,14 +2443,10 @@ if (action === "VERIFY_SESSION") {
             if (!trs.length) { await release(); return res.status(200).json({ success: false, msg: "선택한 일정을 찾을 수 없습니다. (삭제되었을 수 있음) 다시 선택해주세요." }); }
             const tr = trs[0];
             if (tr.isDone === 1 || tr.isDone === true) { await release(); return res.status(200).json({ success: false, msg: "이미 완료 처리된 일정에는 추가할 수 없습니다." }); }
-            if (String(tr.company || "").trim() !== company) { await release(); return res.status(200).json({ success: false, msg: "선택한 일정의 업체가 다릅니다." }); }
-            // [+수량추가] 와 동일한 이력 문구
-            const _now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-            histStr = `[${_now.getMonth() + 1}/${_now.getDate()} ${pal ? pal + "P" : ""}${pal && box ? " " : ""}${box ? box + "B" : ""} 추가]`;
-            const newPal = (parseInt(tr.pal) || 0) + pal;
-            const newBox = (parseInt(tr.box) || 0) + box;
-            const newEtc = tr.etc && String(tr.etc).trim() !== "" ? String(tr.etc).trim() + " " + histStr : histStr;
-            await pool.query(`UPDATE outbound SET pal = ?, box = ?, etc = ? WHERE id = ?`, [newPal, newBox, newEtc, tr.id]);
+            if (!pickSameCompany(tr.company, company, await pickLoadCompDb())) { await release(); return res.status(200).json({ success: false, msg: "선택한 일정의 업체가 다릅니다." }); }
+            const ap = await appendQtyAtomic(tr.id, String(tr.company || "").trim(), pal, box, "");
+            if (!ap.ok) { await release(); return res.status(200).json({ success: false, msg: "그 사이 일정이 완료·삭제·변경되어 추가하지 못했습니다. 일정을 다시 선택해주세요." }); }
+            histStr = ap.hist;
             outId = tr.id;
             logDesc = `[출고 수량추가·피킹지] ${company} (${tr.date || "미정"}) +PL:${pal}, +BOX:${box}${orderNo ? " / " + orderNo : ""}`;
           } else {
@@ -2414,9 +2463,12 @@ if (action === "VERIFY_SESSION") {
         }
         if (orderNo) {
           try {
-            await pool.query(`UPDATE pick_registered SET outbound_id = ?, mode = ?, hist = ? WHERE order_no = ?`, [outId || -1, mode, histStr, orderNo]);
+            const markIt = () => pool.query(`UPDATE pick_registered SET outbound_id = ?, mode = ?, hist = ? WHERE order_no = ?`, [outId || -1, mode, histStr, orderNo]);
+            try { await markIt(); } catch (e1) { await markIt(); } // 한 번 더 시도 (실패하면 120초 뒤 중복 방지가 풀리므로)
             await pool.query(`DELETE FROM processed_images WHERE unique_id = ?`, ["PICK:" + orderNo]); // 이전 버전이 남긴 표시 정리
-          } catch (_) {}
+          } catch (markErr) {
+            console.error("[PICK] 등록 기록 저장 실패(중복 방지 약화):", markErr.sqlMessage || markErr.message);
+          }
         }
 
         // 직접 고른 업체 연결 기억 (다음부터 자동 매칭)

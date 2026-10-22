@@ -3102,6 +3102,19 @@ function clampQty(v) {
   const n = parseInt(v, 10);
   return isNaN(n) ? "" : String(Math.max(0, n));
 }
+// 화면에 이미 불러온 달력에서 '같은 날·같은 업체의 완료 전 일정' 찾기 (다른 달이라 모르면 null → 서버가 한 번 더 막아 줌)
+function _addLiveSame(comp, dateStr) {
+  const norm = (x) => String(x == null ? "" : x).trim();
+  let arr;
+  if (!dateStr || dateStr === "미정") arr = serverData.pendingItems;
+  else {
+    const p = String(dateStr).split("-").map((n) => parseInt(n, 10));
+    if (p.length < 3 || p[0] !== serverData.year || p[1] !== serverData.month) return null;
+    arr = serverData.monthData[p[2]];
+  }
+  return (arr || []).filter((it) => norm(it.company) === norm(comp) && !(it.isDone === true || String(it.isDone) === "true"));
+}
+
 async function submitCMS(
   action,
   oldComp = null,
@@ -3267,6 +3280,51 @@ async function submitCMS(
     }
   }
 
+  // 🛡️ 같은 날 같은 업체 일정이 이미 있으면 덮어쓰지 않고 먼저 묻는다
+  if (action === "ADD") {
+    const isRangeAdd = startDateStr !== "미정" && endDateStr && endDateStr >= startDateStr;
+    if (isRangeAdd) {
+      const dupDays = [];
+      const sd = new Date(startDateStr + "T00:00:00");
+      const ed = new Date(endDateStr + "T00:00:00");
+      for (let t = new Date(sd), n = 0; t <= ed && n < 62; t.setDate(t.getDate() + 1), n++) {
+        const ds = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+        const same = _addLiveSame(payload.newComp, ds);
+        if (same && same.length) dupDays.push(ds.slice(5).replace("-", "/"));
+      }
+      if (dupDays.length) {
+        const ok = await uiConfirm(`선택한 기간 중 같은 업체 일정이 이미 있는 날(${dupDays.slice(0, 3).join(", ")}${dupDays.length > 3 ? " 외" : ""})이 있습니다.\n기존 일정은 그대로 두고 별도 일정으로 추가할까요?`, { okText: "따로 추가", cancelText: "취소" });
+        if (!ok) return;
+        payload.onDup = "new";
+      }
+    } else {
+      const same = _addLiveSame(payload.newComp, startDateStr);
+      if (same && same.length) {
+        const first = same[0];
+        const addP = parseInt(payload.newPal, 10) || 0;
+        const addB = parseInt(payload.newBox, 10) || 0;
+        const canAppend = !isTask && first.id && (addP > 0 || addB > 0);
+        let chosen = null;
+        if (canAppend) {
+          const moreNote = same.length > 1 ? `\n(같은 업체 일정이 ${same.length}건 — 첫 번째에 더합니다)` : "";
+          const doAppend = await uiConfirm(
+            `같은 날 같은 업체 일정이 이미 있습니다.\n현재 PLT ${first.pal || 0} / 박스 ${first.box || 0}${moreNote}\n\n입력한 수량(PLT ${addP} / 박스 ${addB})을 기존 일정에 더할까요?`,
+            { okText: "수량 더하기", cancelText: "다른 선택" },
+          );
+          if (doAppend) { payload.onDup = "append"; payload.dupTargetId = first.id; chosen = "append"; }
+        }
+        if (!chosen) {
+          const doNew = await uiConfirm(
+            canAppend ? "기존 일정은 그대로 두고 별도 일정으로 따로 추가할까요?" : `같은 날 같은 ${isTask ? "작업" : "업체"} 일정이 이미 있습니다.\n기존 일정은 그대로 두고 별도 일정으로 추가할까요?`,
+            { okText: "따로 추가", cancelText: "취소" },
+          );
+          if (!doNew) return;
+          payload.onDup = "new";
+        }
+      }
+    }
+  }
+
   document.getElementById("modal").style.display = "none";
   document.getElementById("addModal").style.display = "none";
 
@@ -3279,6 +3337,11 @@ async function submitCMS(
         source: "vercel", domain: "out", action: "ADD_BLOCK",
         data: { ...payload, blockStart: startDateStr, blockEnd: endDateStr },
         token: adminToken, admin_id: localStorage.getItem("admin_id"),
+      }).then((res) => {
+        if (res === null || !res.success) {
+          showToast(res && res.dup ? "⚠️ " + res.msg : "❌ 서버 실패! 복구합니다.", 4000);
+          goToAsync(serverData.year, serverData.month);
+        }
       });
       return;
     }
@@ -3312,7 +3375,7 @@ async function submitCMS(
       return;
     }
 
-    if (action !== "ADD_QTY") updateLocalState(action, payload, idx);
+    if (action !== "ADD_QTY" && payload.onDup !== "append") updateLocalState(action, payload, idx);
     renderCalendar();
 
     apiCall({
@@ -3324,8 +3387,12 @@ async function submitCMS(
       admin_id: localStorage.getItem("admin_id"),
     }).then(function (res) {
       if (res === null || !res.success) {
-        showToast("❌ 서버 실패! 복구합니다.", 2500);
+        // 같은 업체 일정이 그 사이 생긴 경우(다른 기기 등)도 서버가 덮어쓰지 않고 알려줌
+        showToast(res && res.dup ? "⚠️ " + res.msg + " 다시 추가해주세요." : "❌ 서버 실패! 복구합니다.", res && res.dup ? 4500 : 2500);
         goToAsync(serverData.year, serverData.month);
+      } else if (payload.onDup === "append") {
+        showToast("✅ 기존 일정에 수량을 더했습니다.", 2500);
+        goToAsync(serverData.year, serverData.month); // 합산 결과를 서버 값으로 다시 표시
       }
     });
     // 💡 수정/수량추가 후엔 모달을 닫지 않고 상세보기로 복귀
@@ -6144,6 +6211,7 @@ let globalOcrFilters = [];
 //   · 빨강 = 비어 있어 직접 입력 필수 / 주황 = 참고(다시 확인)
 //   · 출고일이 문서에 없으면 '미정'
 // ═══════════════════════════════════════════════════════════════
+let _pickReq = 0; // 판독 요청 번호 — 창을 닫았다 다시 열어 새로 판독했을 때 늦게 도착한 이전 응답을 버림
 let _pickState = null; // { result, company, duplicate, dupInfo, legacy, busy, mode, targetId, rows, seq }
 
 // FAB 📷 → 가져오기 방법 선택 (촬영 / 사진첩)
@@ -6176,6 +6244,7 @@ function pickChoose(kind) {
 }
 
 function closePickModal() {
+  _pickReq++; // 진행 중이던 판독 응답은 무시
   const m = document.getElementById("pickModal");
   if (m) m.style.display = "none";
   _pickState = null;
@@ -6224,6 +6293,7 @@ async function pickOnFile(inp) {
   const body = document.getElementById("pickBody");
   if (!modal || !body) return;
   modal.style.display = "flex";
+  const myReq = ++_pickReq;
   _pickState = { busy: true };
   body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)">
     <div style="font-size:2em">⏳</div>
@@ -6250,6 +6320,7 @@ async function pickOnFile(inp) {
     } finally {
       clearTimeout(timer);
     }
+    if (myReq !== _pickReq) return; // 그 사이 창을 닫았거나 다른 사진을 골랐음
     if (d && d.forceLogout) {
       closePickModal();
       showToast(d.msg || "세션이 만료되었습니다. 다시 로그인하세요.", 3000);
@@ -6267,6 +6338,7 @@ async function pickOnFile(inp) {
     _pickRender();
     _pickLoadRows();
   } catch (e) {
+    if (myReq !== _pickReq) return;
     _pickShowError(e && e.name === "AbortError" ? "판독 시간이 초과되었습니다. 다시 시도해주세요." : "판독 중 오류가 발생했습니다: " + (e.message || e));
   }
 }
@@ -6344,8 +6416,9 @@ function _pickRender() {
       <label class="pk-label" for="pick-date">출고일 <span style="font-weight:500">(비우면 미정)</span></label>
       <input type="date" id="pick-date" class="pk-input" style="${_pickBorder("shipDate")}" value="${_esc(r.shipDate || "")}" onchange="_pickLoadRows()" />
       ${dateHint}
-      <label class="pk-label" for="pick-etc" style="margin-top:14px">비고</label>
-      <input type="text" id="pick-etc" class="pk-input" placeholder="(선택)" />
+      <div class="pk-hint" id="pick-datehint" style="display:none">기존 일정에 추가할 때는 이 날짜의 일정만 후보로 보입니다. 날짜를 비우면 미정 일정과 앞으로의 일정이 모두 보여요.</div>
+      <div id="pick-etcwrap"><label class="pk-label" for="pick-etc" style="margin-top:14px">비고</label>
+      <input type="text" id="pick-etc" class="pk-input" placeholder="(선택)" /></div>
     </div>
     ${metaHtml}
     ${r.ai === "fail" ? `<div class="pk-banner warn">🟠 AI 판독이 실패해 문자인식 값만 사용했습니다. 손글씨 값을 꼭 확인하세요.</div>` : ""}
@@ -6397,7 +6470,11 @@ async function _pickLoadRows() {
     res = await apiCall({ source: "vercel", domain: "system", action: "PICK_FIND_ROWS", admin_id: localStorage.getItem("admin_id"), data: { company, date } });
   } catch (e) {}
   if (!_pickState || _pickState !== st || seq !== st.seq) return; // 그 사이 입력이 바뀜
-  st.rows = res && res.success && Array.isArray(res.rows) ? res.rows : [];
+  if (!(res && res.success && Array.isArray(res.rows))) { // 불러오기 실패 — '일정 없음'으로 굳히지 않고 다시 시도할 수 있게
+    st.rows = []; st.rowsKey = null; st.rowsErr = true; st.targetId = null; _pickRenderMode(); return;
+  }
+  st.rowsErr = false;
+  st.rows = res.rows;
   if (!st.rows.some((x) => x.id === st.targetId)) st.targetId = st.rows.length === 1 ? st.rows[0].id : null;
   _pickRenderMode();
 }
@@ -6429,6 +6506,7 @@ function _pickRenderMode() {
   if (app) {
     if (r.addExisting) inner += `<div class="pk-hint" style="color:#0a84ff;font-weight:800">✍️ 손글씨에서 "${_esc(r.addNote || "기존에 추가")}" 문구를 찾아 이 방식을 골랐어요. 아니면 '새 일정으로 등록'을 누르세요.</div>`;
     if (rows === null) inner += `<div class="pk-hint">같은 업체 일정을 찾는 중...</div>`;
+    else if (st.rowsErr) inner += `<div class="pk-hint" style="color:${_PICK_RED};font-weight:800">⚠️ 일정을 불러오지 못했습니다. <a href="#" onclick="event.preventDefault(); _pickLoadRows();" style="color:#0a84ff">다시 불러오기</a></div>`;
     else if (!n) inner += `<div class="pk-hint" style="color:${_PICK_ORANGE};font-weight:800">🟠 추가할 수 있는 ${_pickCurComp() ? "같은 업체 일정" : "일정"}이 없습니다. 업체·출고일을 확인하거나 '새 일정으로 등록'을 선택하세요.</div>`;
     else {
       inner += `<div class="pk-hint">수량(PLT·박스)을 더할 일정을 고르세요. [+수량추가] 와 똑같이 합산되고 비고에 이력이 남습니다.</div>`;
@@ -6440,8 +6518,10 @@ function _pickRenderMode() {
     inner += `<div class="pk-hint" style="color:${_PICK_ORANGE};font-weight:800">🟠 같은 업체${document.getElementById("pick-date") && document.getElementById("pick-date").value ? "·같은 날" : ""} 일정이 ${n}건 있어요. 같은 날 같이 나가는 건이면 '기존 일정에 추가'를 쓰세요.</div>`;
   }
   box.innerHTML = inner;
-  const nw = document.getElementById("pick-newonly");
-  if (nw) nw.style.display = app ? "none" : "";
+  const ew = document.getElementById("pick-etcwrap");
+  if (ew) ew.style.display = app ? "none" : "";
+  const dh = document.getElementById("pick-datehint");
+  if (dh) dh.style.display = app ? "" : "none";
   const sb = document.getElementById("pick-submit");
   if (sb && !sb.dataset.busy) {
     sb.textContent = app ? "기존 일정에 추가" : "새 일정으로 등록";
@@ -6464,7 +6544,17 @@ function _pickRecalc() {
     : `<span>박스 합계</span><span>${w} + ${h} = ${w + h}</span>`;
 }
 
+let _pickSubmitting = false;
 async function submitPick(btn) {
+  if (_pickSubmitting) return; // 확인창이 떠 있는 동안·처리 중 연타 방지
+  _pickSubmitting = true;
+  try {
+    await _submitPickInner(btn);
+  } finally {
+    _pickSubmitting = false;
+  }
+}
+async function _submitPickInner(btn) {
   const st = _pickState;
   if (!st || !st.result || st.busy || st.duplicate || st.result.unfinished) return;
   const rawComp = (document.getElementById("pick-comp").value || "").trim();
@@ -6506,7 +6596,14 @@ async function submitPick(btn) {
     goToAsync(serverData.year, serverData.month);
   } else {
     if (btn) { delete btn.dataset.busy; }
-    _pickRenderMode();
-    showToast("⚠️ " + ((res && res.msg) || "처리에 실패했습니다."), 3500);
+    if (res === null || res === undefined) {
+      // 응답이 없음(시간 초과·네트워크) — 서버에서는 처리됐을 수 있으니 같은 걸 또 누르기 전에 달력을 새로 불러와 확인하게 함
+      showToast("⚠️ 서버 응답이 없습니다. 달력에 반영됐는지 확인한 뒤 다시 시도하세요.", 5000);
+      goToAsync(serverData.year, serverData.month);
+    } else {
+      showToast("⚠️ " + (res.msg || "처리에 실패했습니다."), 3500);
+    }
+    if (app) { st.rowsKey = null; _pickLoadRows(); } // 대상 일정이 바뀌었을 수 있으니 목록을 새로 받음
+    else _pickRenderMode();
   }
 }
