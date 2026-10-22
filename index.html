@@ -4826,6 +4826,48 @@
           display: block;
         }
       }
+      /* ───── 📷 피킹지 등록 창 ───── */
+      #pickModal .modal-box { max-height: 92vh; padding-bottom: 0; display: flex; flex-direction: column; }
+      #pickModal .modal-header { flex: 0 0 auto; }
+      #pickBody { display: block !important; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 2px 0; }
+      .pk-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 14px; margin: 0 0 12px; }
+      .pk-label { font-size: 0.78em; font-weight: 800; letter-spacing: 0.02em; color: var(--text-sub); margin: 0 0 8px; display: block; line-height: 1.3; }
+      .pk-input { display: block; width: 100%; box-sizing: border-box; padding: 13px 12px; border: 1.5px solid var(--border-color); border-radius: 12px; background: var(--bg-color); color: var(--text-main); font-size: 16px; font-weight: 700; appearance: none; -webkit-appearance: none; margin: 0; min-height: 48px; }
+      .pk-input:focus { outline: none; border-color: #0a84ff; }
+      .pk-hint { margin-top: 8px; font-size: 0.78em; color: var(--text-sub); line-height: 1.45; }
+      .pk-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .pk-field { min-width: 0; }
+      .pk-num { text-align: center; font-size: 1.5em; font-weight: 900; padding: 10px 4px; }
+      .pk-sum { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: rgba(10, 132, 255, 0.12); color: #0a84ff; font-weight: 900; font-size: 1.05em; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+      .pk-sum small { font-weight: 700; opacity: 0.85; }
+      .pk-flag { margin-top: 6px; font-size: 0.74em; font-weight: 700; line-height: 1.35; }
+      .pk-banner { border-radius: 14px; padding: 12px 14px; margin: 0 0 12px; font-weight: 800; font-size: 0.9em; line-height: 1.45; }
+      .pk-banner.err { background: rgba(255, 59, 48, 0.13); color: #ff453a; }
+      .pk-banner.warn { background: rgba(255, 159, 10, 0.15); color: #ff9f0a; }
+      .pk-banner.info { background: rgba(10, 132, 255, 0.12); color: #0a84ff; }
+      .pk-seg { display: flex; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; padding: 3px; gap: 3px; }
+      .pk-seg button { flex: 1; border: 0; background: transparent; color: var(--text-sub); padding: 11px 6px; border-radius: 9px; font-weight: 800; font-size: 0.88em; cursor: pointer; line-height: 1.25; }
+      .pk-seg button.on { background: #0a84ff; color: #fff; box-shadow: 0 2px 8px rgba(10, 132, 255, 0.35); }
+      .pk-target { display: flex; align-items: center; gap: 10px; padding: 11px 12px; margin-top: 8px; border: 1.5px solid var(--border-color); border-radius: 12px; cursor: pointer; background: var(--bg-color); }
+      .pk-target.on { border-color: #0a84ff; background: rgba(10, 132, 255, 0.1); }
+      .pk-target .dot { flex: 0 0 18px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--text-sub); box-sizing: border-box; }
+      .pk-target.on .dot { border-color: #0a84ff; background: radial-gradient(#0a84ff 45%, transparent 50%); }
+      .pk-target b { color: var(--text-main); font-size: 0.92em; }
+      .pk-target span { color: var(--text-sub); font-size: 0.78em; display: block; margin-top: 2px; word-break: break-all; }
+      .pk-meta { font-size: 0.78em; color: var(--text-sub); line-height: 1.6; padding: 0 4px 12px; word-break: break-all; }
+      .pk-meta b { color: var(--text-main); font-weight: 800; }
+      .pk-foot { position: sticky; bottom: 0; display: flex; gap: 10px; padding: 12px 0 max(14px, env(safe-area-inset-bottom)); background: var(--bg-color); margin-top: 4px; }
+      .pk-btn { border: 0; border-radius: 14px; padding: 15px 12px; font-size: 1em; font-weight: 900; cursor: pointer; }
+      .pk-btn.primary { flex: 1; background: #0a84ff; color: #fff; box-shadow: 0 4px 12px rgba(10, 132, 255, 0.35); }
+      .pk-btn.ghost { flex: 0 0 auto; background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color); }
+      .pk-btn:disabled { opacity: 0.4; box-shadow: none; cursor: not-allowed; }
+      .pk-btn:active:not(:disabled) { transform: scale(0.98); }
+      .pk-choose { display: flex; flex-direction: column; gap: 12px; padding: 8px 0 max(18px, env(safe-area-inset-bottom)); }
+      .pk-choose button { display: flex; align-items: center; gap: 14px; text-align: left; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); border-radius: 16px; padding: 18px 16px; font-size: 1.02em; font-weight: 900; cursor: pointer; }
+      .pk-choose button .ic { font-size: 1.9em; line-height: 1; }
+      .pk-choose button small { display: block; font-weight: 600; color: var(--text-sub); font-size: 0.78em; margin-top: 3px; }
+      .pk-chip { margin: 8px 6px 0 0; padding: 7px 12px; border-radius: 16px; border: 1px solid #0a84ff; background: transparent; color: #0a84ff; font-weight: 800; font-size: 0.82em; cursor: pointer; }
+      .pk-chip.on { background: rgba(10, 132, 255, 0.18); }
     </style>
   </head>
   <body>
@@ -6902,7 +6944,7 @@
           </button>
         </div>
         <div class="fab-sub-item">
-          <div class="fab-label">피킹지 촬영</div>
+          <div class="fab-label">피킹지 등록</div>
           <button
             class="fab-sub-btn add"
             onclick="
@@ -6919,6 +6961,7 @@
 
     <!-- 📷 피킹지 사진 → 출고 등록 -->
     <input type="file" id="pickFile" accept="image/*" capture="environment" style="display: none" onchange="pickOnFile(this)" />
+    <input type="file" id="pickFileLib" accept="image/*" style="display: none" onchange="pickOnFile(this)" />
     <div id="pickModal" class="overlay-modal" onclick="if (event.target === this && (!_pickState || !_pickState.busy)) closePickModal();">
       <div class="modal-box" onclick="event.stopPropagation()">
         <div class="bottom-sheet-handle"></div>

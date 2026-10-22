@@ -48,9 +48,11 @@ const GEMINI_PROMPT = `이 이미지는 물류센터 '피킹 리스트'(출고 �
 - rbox: Sum 줄에서 'RBOX' 열의 인쇄된 숫자. 없으면 null
 
 [손글씨 — 맨 아래 손으로 적는 영역]
-- plt: 크게 동그라미 친 "NPLT" 의 N (예: "4PLT" → 4, "11PLT" → 11). 정수. 적힌 게 전혀 없으면 "empty", 있는데 읽을 수 없으면 null
+- plt: 크게 동그라미 친 "NPLT" 의 N (예: "4PLT" → 4, "11PLT" → 11, "1plt 기존에추가" → 1). 정수. 적힌 게 전혀 없으면 "empty", 있는데 읽을 수 없으면 null
 - wanbox: 표 '완박스' 칸 바로 아래 손으로 쓴 숫자(정수, 예: 108, 285). 칸이 비어 있으면 "empty", 쓰여 있는데 읽을 수 없으면 null
 - honjae: 표 '혼재박스' 칸 바로 아래 손으로 쓴 숫자(정수). 칸이 비어 있으면 "empty", 읽을 수 없으면 null
+- addToExisting: 손글씨 영역(특히 PLT 근처)에 "기존에 추가", "기존 추가", "추가", "합산"처럼 '같은 날 나가는 같은 업체의 이미 잡힌 출고 건에 더한다'는 뜻의 글이 있으면 true, 없으면 false
+- handNote: 위 뜻의 손글씨 원문(예: "기존에추가"). 없으면 null
 - uncertain: 값을 확신하지 못하는 키 이름 배열
 
 날짜(10/15 등)·시간(13:05 등)·피킹/검수 칸의 서명, 빨강·파랑 펜으로 그은 동그라미·체크·계산 메모(예: "145,116,24,+2,+1")는 모두 무시해. 숫자 1 은 짧은 세로선이나 약간 기울어진 선으로 쓰일 수 있다. 읽을 수 없는 값은 추측하지 말고 null 로 둬.`;
@@ -193,7 +195,7 @@ function hwDigits(t) {
 // 반환: 숫자 | undefined(해당 칸에서 아무것도 못 찾음). Vision 은 손글씨를 놓치는 경우가 많아 '없음'을 빈칸으로 단정하지 않는다.
 function extractHandwritingVision(vr) {
   const words = visionWords(vr);
-  const out = { plt: undefined, wanbox: undefined, honjae: undefined };
+  const out = { plt: undefined, wanbox: undefined, honjae: undefined, addExisting: false, addNote: null };
   const hW = findWord(words, /^완박스$/)[0];
   const hH = findWord(words, /^혼재박스$/)[0];
   const colVal = (hd) => {
@@ -208,7 +210,12 @@ function extractHandwritingVision(vr) {
   out.honjae = colVal(hH);
   const below = hW || hH;
   // PLT: 표 아래 '4PLT' · '11PLT' · 'IPLt' 꼴 (분리돼 읽히면 숫자 단어 + PLT 단어)
-  const cand = words.filter((w) => (!below || w.cy > below.cy) && /^(\d{1,2}|[Il|])\s*P\s*L?\s*T?$/i.test(w.t));
+  const cand = words.filter((w) => (!below || w.cy > below.cy) && /^(\d{1,2}|[Il|])\s*P\s*L?\s*T?([가-힣].*)?$/i.test(w.t)); // '1plt기존에추가' 처럼 붙여 써도 숫자만 취함
+  // '기존에 추가' 류 손글씨: 표 아래(손글씨 영역) 단어에서만 찾음 — 인쇄 영역의 '추가' 같은 글자와 섞이지 않게
+  if (below) {
+    const addW = words.filter((w) => w.cy > below.cy && /기존|추가|합산|합쳐|더해/.test(w.t));
+    if (addW.length) { out.addExisting = true; out.addNote = addW.map((w) => w.t).join(" ").slice(0, 40); }
+  }
   if (cand.length) {
     const t = cand[0].t.match(/^(\d{1,2}|[Il|])/);
     out.plt = t ? (/^\d/.test(t[1]) ? parseInt(t[1], 10) : 1) : undefined;
@@ -401,6 +408,10 @@ function reconcile(printed, hw, g, errs) {
     flags.plt = { level: "red", msg: "PLT 가 적혀 있지 않음 — 직접 입력 (없으면 0)" };
   }
   const plt = P.val, wan = W.val, hon = H.val;
+  // '기존에 추가': AI 또는 문자인식 중 하나라도 보면 후보로 제시(화면에서 사용자가 새 일정/추가를 최종 선택)
+  const gAdd = g.addToExisting === true || String(g.addToExisting).toLowerCase() === "true";
+  const addExisting = !!(gAdd || hw.addExisting);
+  const addNote = clean(g.handNote) || hw.addNote || null;
   const box = wan !== null && hon !== null ? wan + hon : null;
   if (!orderNo) setFlag("orderNo", { level: "orange", msg: "출고지시번호를 읽지 못함 — 중복 등록 방지가 동작하지 않음" });
   if (!customer) setFlag("customer", { level: "red", msg: "출고처명을 읽지 못함 — 직접 선택" });
@@ -408,6 +419,7 @@ function reconcile(printed, hw, g, errs) {
   return {
     orderNo, customer, address, floor, buyerNote, shipType, shipDate, shipDateNote,
     plt, wanbox: wan, honjae: hon, box, sbox, rbox,
+    addExisting, addNote,
     unfinished, flags,
     ai: g && Object.keys(g).length ? "ok" : "fail",
     errs: errs || [],

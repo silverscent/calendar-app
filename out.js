@@ -6144,16 +6144,34 @@ let globalOcrFilters = [];
 //   · 빨강 = 비어 있어 직접 입력 필수 / 주황 = 참고(다시 확인)
 //   · 출고일이 문서에 없으면 '미정'
 // ═══════════════════════════════════════════════════════════════
-let _pickState = null; // { result, company, duplicate, busy }
+let _pickState = null; // { result, company, duplicate, dupInfo, legacy, busy, mode, targetId, rows, seq }
 
+// FAB 📷 → 가져오기 방법 선택 (촬영 / 사진첩)
 function openPickCamera() {
   if (!isAdmin) {
     showToast("⚠️ 로그인한 관리자만 사용할 수 있습니다.", 2500);
     return;
   }
-  const inp = document.getElementById("pickFile");
+  const modal = document.getElementById("pickModal");
+  if (!modal) return;
+  modal.style.display = "flex";
+  _pickChooser();
+}
+
+function _pickChooser() {
+  const body = document.getElementById("pickBody");
+  if (!body) return;
+  _pickState = null;
+  body.innerHTML = `<div class="pk-choose">
+    <button type="button" onclick="pickChoose('cam')"><span class="ic">📷</span><span>지금 촬영하기<small>카메라로 피킹지 마지막 장을 찍어요</small></span></button>
+    <button type="button" onclick="pickChoose('lib')"><span class="ic">🖼️</span><span>사진첩에서 선택<small>이미 찍어 둔 사진·스캔 이미지를 불러와요</small></span></button>
+  </div>`;
+}
+
+function pickChoose(kind) {
+  const inp = document.getElementById(kind === "lib" ? "pickFileLib" : "pickFile");
   if (!inp) return;
-  inp.value = "";
+  inp.value = ""; // 같은 사진을 다시 골라도 동작하게
   inp.click();
 }
 
@@ -6163,7 +6181,7 @@ function closePickModal() {
   _pickState = null;
 }
 
-// 사진 → 긴 변 1800px JPEG(base64). 서버 요청 한도(약 4.5MB)와 인식 선명도 사이 균형
+// 사진 → 긴 변 2000px JPEG(base64). 서버 요청 한도(약 4.5MB)와 인식 선명도 사이 균형
 function _pickResize(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -6239,11 +6257,15 @@ async function pickOnFile(inp) {
       return;
     }
     if (!d || !d.success) {
-      _pickShowError((d && d.msg) || "판독에 실패했습니다. 다시 촬영해주세요.");
+      _pickShowError((d && d.msg) || "판독에 실패했습니다. 다시 시도해주세요.");
       return;
     }
-    _pickState = { result: d.result, company: d.company, duplicate: !!d.duplicate, busy: false };
+    _pickState = {
+      result: d.result, company: d.company, duplicate: !!d.duplicate, dupInfo: d.dupInfo || null, legacy: !!d.legacy,
+      busy: false, mode: d.result && d.result.addExisting ? "append" : "new", targetId: null, rows: null, seq: 0,
+    };
     _pickRender();
+    _pickLoadRows();
   } catch (e) {
     _pickShowError(e && e.name === "AbortError" ? "판독 시간이 초과되었습니다. 다시 시도해주세요." : "판독 중 오류가 발생했습니다: " + (e.message || e));
   }
@@ -6256,20 +6278,20 @@ function _pickShowError(msg) {
   body.innerHTML = `<div style="text-align:center;padding:28px 8px">
     <div style="font-size:2em">⚠️</div>
     <div style="margin:10px 0 16px;font-weight:800;color:var(--text-main)">${_esc(msg)}</div>
-    <button class="save-btn" style="width:100%" onclick="closePickModal(); openPickCamera();">📷 다시 촬영</button></div>`;
+    <div class="pk-foot"><button class="pk-btn primary" onclick="_pickChooser()">다시 선택</button></div></div>`;
 }
 
-const _PICK_RED = "#ff3b30";
+const _PICK_RED = "#ff453a";
 const _PICK_ORANGE = "#ff9f0a";
 function _pickFlagHtml(f) {
   const fl = _pickState && _pickState.result && _pickState.result.flags && _pickState.result.flags[f];
   if (!fl) return "";
   const c = fl.level === "red" ? _PICK_RED : _PICK_ORANGE;
-  return `<div style="margin-top:4px;font-size:0.78em;font-weight:700;color:${c}">${fl.level === "red" ? "🔴" : "🟠"} ${_esc(fl.msg)}</div>`;
+  return `<div class="pk-flag" style="color:${c}">${fl.level === "red" ? "🔴" : "🟠"} ${_esc(fl.msg)}</div>`;
 }
 function _pickBorder(f) {
   const fl = _pickState && _pickState.result && _pickState.result.flags && _pickState.result.flags[f];
-  return fl ? `border:2px solid ${fl.level === "red" ? _PICK_RED : _PICK_ORANGE};` : "";
+  return fl ? `border-color:${fl.level === "red" ? _PICK_RED : _PICK_ORANGE};` : "";
 }
 
 function _pickRender() {
@@ -6281,57 +6303,150 @@ function _pickRender() {
   // 업체 초기값: 자동 연결된 마스터 이름만 채움(후보만 있으면 비워 두고 선택하게 함)
   const compVal = c.company || "";
   const cands = !c.company && Array.isArray(c.candidates) ? c.candidates : [];
-  const dupHtml = st.duplicate
-    ? `<div style="background:rgba(255,59,48,0.12);color:${_PICK_RED};padding:10px 12px;border-radius:10px;font-weight:800;margin-bottom:10px">🚫 이미 등록된 피킹지입니다 (${_esc(r.orderNo || "")}). 중복 등록을 막기 위해 등록할 수 없습니다.</div>`
-    : "";
-  const unfinishedHtml = r.unfinished
-    ? `<div style="background:rgba(255,59,48,0.12);color:${_PICK_RED};padding:10px 12px;border-radius:10px;font-weight:800;margin-bottom:10px">🚫 작성 전 피킹지로 보입니다 (PLT·완박스·혼재박스가 모두 비어 있음). 작업이 끝난 마지막 장을 다시 찍어주세요.</div>`
-    : "";
+  let banners = "";
+  if (r.unfinished)
+    banners += `<div class="pk-banner err">🚫 작성 전 피킹지로 보입니다<br><span style="font-weight:600">PLT·완박스·혼재박스가 모두 비어 있어요. 작업이 끝난 마지막 장을 다시 찍어주세요.</span></div>`;
+  if (st.duplicate) {
+    const di = st.dupInfo;
+    banners += `<div class="pk-banner err">🚫 이미 등록된 피킹지입니다<br><span style="font-weight:600">${_esc(r.orderNo || "")}${di ? ` → ${_esc(di.company)} · ${_esc(di.date || "미정")} 일정` : ""}<br>그 일정을 지웠다면 다시 등록할 수 있어요. 일정이 남아 있으면 중복 등록을 막기 위해 등록되지 않습니다.</span></div>`;
+  } else if (st.legacy) {
+    banners += `<div class="pk-banner warn">⚠️ 이전 버전에서 등록한 기록이 있는 피킹지입니다<br><span style="font-weight:600">달력에 이미 들어가 있는지 확인한 뒤 등록하세요.</span></div>`;
+  }
   const isYongcha = !r.shipType || /용차/.test(r.shipType);
-  const shipHtml = r.shipType
-    ? `<div style="margin-top:12px;font-size:0.85em;font-weight:800;color:${isYongcha ? "var(--text-sub)" : _PICK_ORANGE}">택배유형: ${_esc(r.shipType)}${isYongcha ? "" : " — 용차가 아닙니다. 달력에 넣을지 등록할 때 한 번 더 묻습니다."}</div>`
-    : "";
-  const noteHtml = r.buyerNote
-    ? `<div style="margin-top:6px;font-size:0.8em;color:var(--text-sub)">구매처 비고: ${_esc(r.buyerNote)}</div>`
-    : "";
+  const metaRows = [];
+  if (r.orderNo) metaRows.push(`출고지시번호 <b>${_esc(r.orderNo)}</b>`);
+  if (r.shipType) metaRows.push(`택배유형 <b style="${isYongcha ? "" : "color:" + _PICK_ORANGE}">${_esc(r.shipType)}</b>${isYongcha ? "" : " — 용차가 아니라 등록 때 한 번 더 묻습니다"}`);
+  if (r.buyerNote) metaRows.push(`구매처 비고 <b>${_esc(r.buyerNote)}</b>`);
+  if (r.sbox !== null && r.sbox !== undefined) metaRows.push(`이 장 인쇄 합계 SBOX ${_esc(String(r.sbox))} / RBOX ${r.rbox === null || r.rbox === undefined ? "?" : _esc(String(r.rbox))} <span style="opacity:.8">(손글씨 합계와 달라도 정상)</span>`);
+  const metaHtml = (metaRows.length ? `<div class="pk-meta">${metaRows.join("<br>")}</div>` : "") + (!r.orderNo ? _pickFlagHtml("orderNo") : "");
   const matchNote = c.company
-    ? `<div style="margin-top:4px;font-size:0.78em;color:var(--text-sub)">인쇄된 출고처명 "${_esc(r.customer || "")}" → 자동 연결</div>`
-    : `<div style="margin-top:4px;font-size:0.78em;color:var(--text-sub)">인쇄된 출고처명: ${_esc(r.customer || "(읽지 못함)")}</div>`;
-  const chips = cands
-    .map((n) => `<button type="button" class="pick-chip" data-name="${_esc(n)}" style="margin:4px 6px 0 0;padding:6px 10px;border-radius:14px;border:1px solid #0a84ff;background:transparent;color:#0a84ff;font-weight:800;font-size:0.82em;cursor:pointer">${_esc(n)}</button>`)
-    .join("");
-  const numIn = (id, v, f) =>
-    `<input type="number" inputmode="numeric" min="0" id="${id}" class="edit-input" style="width:100%;${_pickBorder(f)}" value="${v === null || v === undefined ? "" : v}" oninput="_pickRecalc()" />`;
+    ? `인쇄된 출고처명 "${_esc(r.customer || "")}" → 자동 연결`
+    : `인쇄된 출고처명: ${_esc(r.customer || "(읽지 못함)")}`;
+  const chips = cands.map((n) => `<button type="button" class="pk-chip" data-name="${_esc(n)}">${_esc(n)}</button>`).join("");
+  const numIn = (id, v, f, lab) =>
+    `<div class="pk-field"><label class="pk-label" for="${id}">${lab}</label><input type="number" inputmode="numeric" min="0" id="${id}" class="pk-input pk-num" style="${_pickBorder(f)}" value="${v === null || v === undefined ? "" : v}" oninput="_pickRecalc()" />${_pickFlagHtml(f)}</div>`;
+  const dateHint = r.shipDate ? (_pickFlagHtml("shipDate") || `<div class="pk-hint">문서에 인쇄된 출고일</div>`) : `<div class="pk-hint">문서에서 출고일을 찾지 못해 미정으로 둡니다. 날짜를 고르면 같은 날 일정과 합산도 할 수 있어요.</div>`;
   body.innerHTML = `
-    ${unfinishedHtml}${dupHtml}
-    <div class="form-label">업체 (필수)</div>
-    <div class="input-wrapper"><input type="text" id="pick-comp" class="edit-input" style="${_pickBorder("customer")}" placeholder="업체 선택 또는 입력" autocomplete="off" value="${_esc(compVal)}" /></div>
-    ${matchNote}${chips ? `<div>${chips}</div>` : ""}${_pickFlagHtml("customer")}
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <div style="flex:1"><div class="form-label">PLT</div>${numIn("pick-pal", r.plt, "plt")}${_pickFlagHtml("plt")}</div>
-      <div style="flex:1"><div class="form-label">완박스</div>${numIn("pick-wan", r.wanbox, "wanbox")}${_pickFlagHtml("wanbox")}</div>
-      <div style="flex:1"><div class="form-label">혼재박스</div>${numIn("pick-hon", r.honjae, "honjae")}${_pickFlagHtml("honjae")}</div>
+    ${banners}
+    <div class="pk-card">
+      <label class="pk-label" for="pick-comp">업체 (필수)</label>
+      <div class="input-wrapper"><input type="text" id="pick-comp" class="pk-input" style="${_pickBorder("customer")}" placeholder="업체 선택 또는 입력" autocomplete="off" value="${_esc(compVal)}" /></div>
+      <div class="pk-hint">${matchNote}</div>${chips ? `<div>${chips}</div>` : ""}${_pickFlagHtml("customer")}
     </div>
-    <div id="pick-box-line" style="margin-top:10px;font-weight:900;font-size:1.05em;color:var(--text-main)"></div>
-    <div style="margin-top:4px;font-size:0.78em;color:var(--text-sub)">이 장 인쇄 합계 SBOX ${r.sbox === null || r.sbox === undefined ? "?" : _esc(String(r.sbox))} / RBOX ${r.rbox === null || r.rbox === undefined ? "?" : _esc(String(r.rbox))} (다른 피킹리스트가 더해진 손글씨 값과 달라도 정상)</div>${shipHtml}
-    <div class="form-label" style="margin-top:12px">출고일 <span style="font-weight:400;color:var(--text-sub)">(비우면 미정)</span></div>
-    <input type="date" id="pick-date" class="edit-input" style="width:100%;${_pickBorder("shipDate")}" value="${_esc(r.shipDate || "")}" />
-    ${r.shipDate ? (_pickFlagHtml("shipDate") || `<div style="margin-top:4px;font-size:0.78em;color:var(--text-sub)">문서에 인쇄된 출고일</div>`) : `<div style="margin-top:4px;font-size:0.78em;color:var(--text-sub)">문서에서 출고일을 찾지 못해 미정으로 둡니다</div>`}${noteHtml}
-    <div class="form-label" style="margin-top:12px">비고</div>
-    <input type="text" id="pick-etc" class="edit-input" style="width:100%" placeholder="(선택)" />
-    ${r.orderNo ? `<div style="margin-top:10px;font-size:0.78em;color:var(--text-sub)">출고지시번호 ${_esc(r.orderNo)}</div>` : _pickFlagHtml("orderNo")}
-    ${r.ai === "fail" ? `<div style="margin-top:8px;font-size:0.78em;font-weight:700;color:${_PICK_ORANGE}">🟠 AI 판독이 실패해 문자인식 값만 사용했습니다. 손글씨 값을 꼭 확인하세요.</div>` : ""}
-    <button id="pick-submit" class="save-btn" style="width:100%;margin-top:16px" onclick="submitPick(this)" ${st.duplicate || r.unfinished ? "disabled" : ""}>등록</button>
-    <button class="close-btn" style="width:100%;margin-top:8px;background:transparent;border:1px solid var(--text-sub);border-radius:12px;padding:12px;font-size:1em" onclick="closePickModal(); openPickCamera();">📷 다시 촬영</button>`;
-  body.querySelectorAll(".pick-chip").forEach((b) => {
+    <div class="pk-card">
+      <div class="pk-grid3">
+        ${numIn("pick-pal", r.plt, "plt", "PLT")}${numIn("pick-wan", r.wanbox, "wanbox", "완박스")}${numIn("pick-hon", r.honjae, "honjae", "혼재박스")}
+      </div>
+      <div class="pk-sum" id="pick-box-line"></div>
+    </div>
+    <div class="pk-card" id="pick-mode-box"></div>
+    <div class="pk-card" id="pick-newonly">
+      <label class="pk-label" for="pick-date">출고일 <span style="font-weight:500">(비우면 미정)</span></label>
+      <input type="date" id="pick-date" class="pk-input" style="${_pickBorder("shipDate")}" value="${_esc(r.shipDate || "")}" onchange="_pickLoadRows()" />
+      ${dateHint}
+      <label class="pk-label" for="pick-etc" style="margin-top:14px">비고</label>
+      <input type="text" id="pick-etc" class="pk-input" placeholder="(선택)" />
+    </div>
+    ${metaHtml}
+    ${r.ai === "fail" ? `<div class="pk-banner warn">🟠 AI 판독이 실패해 문자인식 값만 사용했습니다. 손글씨 값을 꼭 확인하세요.</div>` : ""}
+    <div class="pk-foot">
+      <button class="pk-btn ghost" type="button" onclick="_pickChooser()">다시 선택</button>
+      <button id="pick-submit" class="pk-btn primary" type="button" onclick="submitPick(this)">등록</button>
+    </div>`;
+  body.querySelectorAll(".pk-chip").forEach((b) => {
     b.onclick = () => {
       document.getElementById("pick-comp").value = b.getAttribute("data-name");
-      body.querySelectorAll(".pick-chip").forEach((x) => (x.style.background = "transparent"));
-      b.style.background = "rgba(10,132,255,0.15)";
+      body.querySelectorAll(".pk-chip").forEach((x) => x.classList.remove("on"));
+      b.classList.add("on");
+      _pickLoadRows();
     };
   });
+  const compEl = document.getElementById("pick-comp");
   try { attachAutocomplete("pick-comp"); } catch (e) {}
+  let _t = null;
+  const later = () => { clearTimeout(_t); _t = setTimeout(_pickLoadRows, 350); };
+  compEl.addEventListener("input", later);
+  compEl.addEventListener("change", later);
+  compEl.addEventListener("blur", () => setTimeout(_pickLoadRows, 300)); // 자동완성 선택 후 값이 채워진 뒤
   _pickRecalc();
+  _pickRenderMode();
+}
+
+function _pickCurComp() {
+  const el = document.getElementById("pick-comp");
+  const raw = el ? (el.value || "").trim() : "";
+  return raw ? getFullName(raw) : "";
+}
+
+// 같은 업체(+날짜)의 완료 전 일정 불러오기 → '기존 일정에 추가' 후보
+async function _pickLoadRows() {
+  const st = _pickState;
+  if (!st || !st.result) return;
+  const company = _pickCurComp();
+  const dEl = document.getElementById("pick-date");
+  const date = dEl && dEl.value ? dEl.value : null;
+  const key = company + "|" + (date || "");
+  if (st.rowsKey === key && st.rows) return;
+  const seq = ++st.seq;
+  st.rowsKey = key;
+  if (!company) { st.rows = []; st.targetId = null; _pickRenderMode(); return; }
+  st.rows = null;
+  _pickRenderMode();
+  let res = null;
+  try {
+    res = await apiCall({ source: "vercel", domain: "system", action: "PICK_FIND_ROWS", admin_id: localStorage.getItem("admin_id"), data: { company, date } });
+  } catch (e) {}
+  if (!_pickState || _pickState !== st || seq !== st.seq) return; // 그 사이 입력이 바뀜
+  st.rows = res && res.success && Array.isArray(res.rows) ? res.rows : [];
+  if (!st.rows.some((x) => x.id === st.targetId)) st.targetId = st.rows.length === 1 ? st.rows[0].id : null;
+  _pickRenderMode();
+}
+
+function pickSetMode(m) {
+  if (!_pickState) return;
+  _pickState.mode = m;
+  _pickRenderMode();
+}
+function pickSetTarget(id) {
+  if (!_pickState) return;
+  _pickState.targetId = id;
+  _pickRenderMode();
+}
+
+function _pickRenderMode() {
+  const st = _pickState;
+  const box = document.getElementById("pick-mode-box");
+  if (!st || !box) return;
+  const r = st.result || {};
+  const rows = st.rows;
+  const n = Array.isArray(rows) ? rows.length : 0;
+  const app = st.mode === "append";
+  let inner = `<label class="pk-label">등록 방식</label>
+    <div class="pk-seg">
+      <button type="button" class="${app ? "" : "on"}" onclick="pickSetMode('new')">새 일정으로 등록</button>
+      <button type="button" class="${app ? "on" : ""}" onclick="pickSetMode('append')">기존 일정에 추가${n ? ` (${n})` : ""}</button>
+    </div>`;
+  if (app) {
+    if (r.addExisting) inner += `<div class="pk-hint" style="color:#0a84ff;font-weight:800">✍️ 손글씨에서 "${_esc(r.addNote || "기존에 추가")}" 문구를 찾아 이 방식을 골랐어요. 아니면 '새 일정으로 등록'을 누르세요.</div>`;
+    if (rows === null) inner += `<div class="pk-hint">같은 업체 일정을 찾는 중...</div>`;
+    else if (!n) inner += `<div class="pk-hint" style="color:${_PICK_ORANGE};font-weight:800">🟠 추가할 수 있는 ${_pickCurComp() ? "같은 업체 일정" : "일정"}이 없습니다. 업체·출고일을 확인하거나 '새 일정으로 등록'을 선택하세요.</div>`;
+    else {
+      inner += `<div class="pk-hint">수량(PLT·박스)을 더할 일정을 고르세요. [+수량추가] 와 똑같이 합산되고 비고에 이력이 남습니다.</div>`;
+      inner += rows
+        .map((x) => `<div class="pk-target ${x.id === st.targetId ? "on" : ""}" onclick="pickSetTarget(${Number(x.id)})"><span class="dot" style="margin:0"></span><div style="min-width:0"><b>${_esc(x.date || "미정")} · PLT ${_esc(String(x.pal))} / 박스 ${_esc(String(x.box))}</b>${x.etc ? `<span>${_esc(x.etc)}</span>` : ""}</div></div>`)
+        .join("");
+    }
+  } else if (n) {
+    inner += `<div class="pk-hint" style="color:${_PICK_ORANGE};font-weight:800">🟠 같은 업체${document.getElementById("pick-date") && document.getElementById("pick-date").value ? "·같은 날" : ""} 일정이 ${n}건 있어요. 같은 날 같이 나가는 건이면 '기존 일정에 추가'를 쓰세요.</div>`;
+  }
+  box.innerHTML = inner;
+  const nw = document.getElementById("pick-newonly");
+  if (nw) nw.style.display = app ? "none" : "";
+  const sb = document.getElementById("pick-submit");
+  if (sb && !sb.dataset.busy) {
+    sb.textContent = app ? "기존 일정에 추가" : "새 일정으로 등록";
+    sb.disabled = !!(st.duplicate || r.unfinished || (app && !st.targetId));
+  }
 }
 
 function _pickInt(id) {
@@ -6344,7 +6459,9 @@ function _pickRecalc() {
   const line = document.getElementById("pick-box-line");
   if (!line) return;
   const w = _pickInt("pick-wan"), h = _pickInt("pick-hon");
-  line.textContent = w === null || h === null ? "박스 합계: 완박스·혼재박스를 입력하세요 (0도 입력)" : `박스 합계 = ${w} + ${h} = ${w + h}`;
+  line.innerHTML = w === null || h === null
+    ? `<small>완박스·혼재박스를 입력하세요 (없으면 0)</small>`
+    : `<span>박스 합계</span><span>${w} + ${h} = ${w + h}</span>`;
 }
 
 async function submitPick(btn) {
@@ -6356,30 +6473,40 @@ async function submitPick(btn) {
   if (pal === null) { showToast("⚠️ PLT 수를 입력해주세요. (없으면 0)", 2500); return; }
   if (wan === null || hon === null) { showToast("⚠️ 완박스와 혼재박스를 입력해주세요. (없으면 0)", 2500); return; }
   const company = getFullName(rawComp); // 약어로 입력해도 마스터 업체명으로 통일 (신규 등록과 동일)
-  const date = document.getElementById("pick-date").value || null;
-  const etc = (document.getElementById("pick-etc").value || "").trim();
+  const app = st.mode === "append";
+  const date = app ? null : document.getElementById("pick-date").value || null;
+  const etc = app ? "" : (document.getElementById("pick-etc").value || "").trim();
+  const box = wan + hon;
+  let target = null;
+  if (app) {
+    target = (st.rows || []).find((x) => x.id === st.targetId);
+    if (!target) { showToast("⚠️ 수량을 추가할 기존 일정을 선택해주세요.", 2500); return; }
+    if (pal === 0 && box === 0) { showToast("⚠️ 추가할 PLT 또는 박스가 0 입니다.", 2500); return; }
+  }
   const orangeLeft = Object.values((st.result && st.result.flags) || {}).filter((f) => f.level === "orange").length;
   const shipT = st.result.shipType;
   if (shipT && !/용차/.test(shipT)) {
-    if (!(await uiConfirm(`택배유형이 "${shipT}" 입니다.\n출고 달력은 용차 기준인데, 이 건도 달력에 등록할까요?`, { okText: "등록 계속" }))) return;
+    if (!(await uiConfirm(`택배유형이 "${shipT}" 입니다.\n출고 달력은 용차 기준인데, 이 건도 달력에 반영할까요?`, { okText: "계속" }))) return;
   }
-  const msg = `${company}\nPLT ${pal} / 박스 ${wan + hon} (완박스 ${wan} + 혼재 ${hon})\n출고일 ${date || "미정"}\n새 출고 일정으로 등록할까요?` + (orangeLeft ? `\n\n🟠 참고 표시 ${orangeLeft}건이 남아 있습니다.` : "");
-  if (!(await uiConfirm(msg, { okText: "등록" }))) return;
+  const msg = app
+    ? `${company}\n${target.date || "미정"} 일정 (현재 PLT ${target.pal} / 박스 ${target.box})\n+ PLT ${pal} / 박스 ${box} (완박스 ${wan} + 혼재 ${hon})\n→ PLT ${(parseInt(target.pal) || 0) + pal} / 박스 ${(parseInt(target.box) || 0) + box}\n이 일정에 추가할까요?`
+    : `${company}\nPLT ${pal} / 박스 ${box} (완박스 ${wan} + 혼재 ${hon})\n출고일 ${date || "미정"}\n새 출고 일정으로 등록할까요?`;
+  if (!(await uiConfirm(msg + (orangeLeft ? `\n\n🟠 참고 표시 ${orangeLeft}건이 남아 있습니다.` : ""), { okText: app ? "추가" : "등록" }))) return;
   st.busy = true;
-  const orig = btn ? btn.innerHTML : "";
-  if (btn) { btn.disabled = true; btn.innerHTML = "등록 중... ⏳"; }
+  if (btn) { btn.dataset.busy = "1"; btn.disabled = true; btn.textContent = "처리 중... ⏳"; }
   const res = await apiCall({
     source: "vercel", domain: "system", action: "PICK_REGISTER",
     admin_id: localStorage.getItem("admin_id"),
-    data: { company, pal, box: wan + hon, date, etc, orderNo: st.result.orderNo || "", printedName: st.result.customer || "" },
+    data: { company, pal, box, date, etc, orderNo: st.result.orderNo || "", printedName: st.result.customer || "", mode: app ? "append" : "new", targetId: app ? target.id : undefined },
   });
   st.busy = false;
   if (res && res.success) {
-    showToast(`✅ 등록 완료: ${company} PLT ${pal} / 박스 ${wan + hon}`, 3000);
+    showToast(app ? `✅ 추가 완료: ${company} +PLT ${pal} / +박스 ${box}` : `✅ 등록 완료: ${company} PLT ${pal} / 박스 ${box}`, 3000);
     closePickModal();
     goToAsync(serverData.year, serverData.month);
   } else {
-    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
-    showToast("⚠️ " + ((res && res.msg) || "등록에 실패했습니다."), 3500);
+    if (btn) { delete btn.dataset.busy; }
+    _pickRenderMode();
+    showToast("⚠️ " + ((res && res.msg) || "처리에 실패했습니다."), 3500);
   }
 }

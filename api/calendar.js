@@ -131,6 +131,55 @@ function _hookResEndForNotify(res) {
   };
 }
 
+// ───────── 피킹지 등록 기록 (같은 피킹지 이중 등록 방지) ─────────
+//  pick_registered: 출고지시번호 → 등록된 일정(outbound_id). 그 일정이 지금도 있을 때만 '이미 등록'으로 본다.
+async function pickEnsureTable() {
+  await pool.query(`CREATE TABLE IF NOT EXISTS pick_registered (order_no VARCHAR(40) PRIMARY KEY, outbound_id INT NOT NULL DEFAULT 0, mode VARCHAR(8), hist VARCHAR(80), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+}
+// 등록 기록이 가리키는 일정이 아직 살아 있는지. 반환 {alive, info}
+async function pickRecAlive(rec) {
+  if (!rec || !(rec.outbound_id > 0)) return { alive: false, info: null };
+  const [rs] = await pool.query(`SELECT company, pal, box, etc, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date FROM outbound WHERE id = ? LIMIT 1`, [rec.outbound_id]);
+  if (!rs.length) return { alive: false, info: null };
+  const r = rs[0];
+  if (rec.mode === "append" && rec.hist && !String(r.etc || "").includes(rec.hist)) return { alive: false, info: null }; // 추가 이력을 지웠으면 되돌린 것으로 본다
+  return { alive: true, info: { company: r.company, date: r.date || null, mode: rec.mode || "new" } };
+}
+async function pickDupState(orderNo) {
+  await pickEnsureTable();
+  const [rs] = await pool.query(`SELECT outbound_id, mode, hist, TIMESTAMPDIFF(SECOND, created_at, NOW()) AS age FROM pick_registered WHERE order_no = ?`, [orderNo]);
+  if (rs.length) {
+    const rec = rs[0];
+    if (rec.outbound_id === 0) return { dup: rec.age < 120, info: null, legacy: false }; // 다른 곳에서 등록 처리 중
+    const a = await pickRecAlive(rec);
+    return { dup: a.alive, info: a.info, legacy: false };
+  }
+  // 이전 버전(processed_images)이 남긴 표시: 어느 일정인지 알 수 없어 막지 않고 알려만 준다
+  let legacy = false;
+  try {
+    const [lr] = await pool.query(`SELECT 1 FROM processed_images WHERE unique_id = ?`, ["PICK:" + orderNo]);
+    legacy = lr.length > 0;
+  } catch (_) {}
+  return { dup: false, info: null, legacy };
+}
+// 등록 권리 확보: 새로 만들거나, 지워진 일정의 기록을 한 번에 한 요청만 넘겨받는다
+async function pickClaim(orderNo, mode) {
+  await pickEnsureTable();
+  const [ins] = await pool.query(`INSERT IGNORE INTO pick_registered (order_no, outbound_id, mode) VALUES (?, 0, ?)`, [orderNo, mode]);
+  if (ins && ins.affectedRows) return { ok: true };
+  const [rs] = await pool.query(`SELECT outbound_id, mode, hist, TIMESTAMPDIFF(SECOND, created_at, NOW()) AS age FROM pick_registered WHERE order_no = ?`, [orderNo]);
+  if (!rs.length) return { ok: false, msg: "등록 처리 중 충돌이 났습니다. 다시 시도해주세요." };
+  const rec = rs[0];
+  if (rec.outbound_id === 0 && rec.age < 120) return { ok: false, msg: `이미 처리 중인 피킹지입니다. (${orderNo})` };
+  if (rec.outbound_id !== 0) {
+    const a = await pickRecAlive(rec);
+    if (a.alive) return { ok: false, msg: `이미 등록된 피킹지입니다. (${orderNo})` + (a.info ? ` → ${a.info.company} ${a.info.date || "미정"}` : "") };
+  }
+  const [up] = await pool.query(`UPDATE pick_registered SET outbound_id = 0, mode = ?, hist = NULL, created_at = NOW() WHERE order_no = ? AND outbound_id = ?`, [mode, orderNo, rec.outbound_id]);
+  if (up && up.affectedRows) return { ok: true };
+  return { ok: false, msg: `이미 처리 중인 피킹지입니다. (${orderNo})` };
+}
+
 const pool = mysql.createPool({
   uri: process.env.DATABASE_URL,
   connectionLimit: 3, // TiDB 무료 티어 연결 한도(25) 초과 방지
@@ -417,6 +466,7 @@ module.exports = async function (req, res) {
         "OCR_UPLOAD",
         "PICK_PARSE",
         "PICK_REGISTER",
+        "PICK_FIND_ROWS",
         "FIND_INBOUND_DUPES",
         "DELETE_INBOUND_DUPES",
         "AI_QUERY",
@@ -2262,23 +2312,50 @@ if (action === "VERIFY_SESSION") {
         } catch (_) {}
         const comp = pickLib.matchCompany(parsed.customer, compDb || {}, aliasMap || {}, { floor: parsed.floor }); // floor: 주소 호수(301호→3층)로 같은 회사의 층 구분
 
-        // 이미 등록된 피킹지인지
+        // 이미 등록된 피킹지인지 — 등록 기록(pick_registered)이 가리키는 일정이 '지금도 있을 때만' 중복.
+        //   일정을 지웠다면(또는 수량추가 이력을 지웠다면) 다시 등록할 수 있다.
         let duplicate = false;
+        let dupInfo = null;
+        let legacy = false;
         try {
-          await pool.query(`CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
           if (parsed.orderNo) {
-            const [dr] = await pool.query(`SELECT 1 FROM processed_images WHERE unique_id = ?`, ["PICK:" + parsed.orderNo]);
-            duplicate = dr.length > 0;
+            const st = await pickDupState(parsed.orderNo);
+            duplicate = st.dup;
+            dupInfo = st.info;
+            legacy = st.legacy;
           }
         } catch (_) {}
 
-        return res.status(200).json({ success: true, result: parsed, company: comp, duplicate });
+        return res.status(200).json({ success: true, result: parsed, company: comp, duplicate, dupInfo, legacy });
+      } else if (action === "PICK_FIND_ROWS") {
+        // 같은 업체의 '완료되지 않은' 출고 일정 찾기 (수량 추가 대상 후보). 날짜가 있으면 그 날짜만, 없으면 미정 + 오늘 이후
+        const fCompany = String(data?.company || "").trim().slice(0, 100);
+        let fDate = data?.date ? String(data.date).slice(0, 10) : null;
+        if (fDate && !/^\d{4}-\d{2}-\d{2}$/.test(fDate)) fDate = null;
+        if (!fCompany) return res.status(200).json({ success: true, rows: [] });
+        let rowsF;
+        if (fDate) {
+          [rowsF] = await pool.query(
+            `SELECT id, company, pal, box, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date, etc FROM outbound WHERE company = ? AND outbound_date = ? AND (isDone = 0 OR isDone IS NULL) ORDER BY id ASC LIMIT 10`,
+            [fCompany, fDate],
+          );
+        } else {
+          [rowsF] = await pool.query(
+            `SELECT id, company, pal, box, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date, etc FROM outbound WHERE company = ? AND (outbound_date IS NULL OR outbound_date >= CURDATE()) AND (isDone = 0 OR isDone IS NULL) ORDER BY outbound_date IS NULL DESC, outbound_date ASC, id ASC LIMIT 10`,
+            [fCompany],
+          );
+        }
+        return res.status(200).json({ success: true, rows: rowsF.map((r) => ({ id: r.id, company: r.company, pal: r.pal, box: r.box, date: r.date || null, etc: String(r.etc || "").slice(0, 120) })) });
       } else if (action === "PICK_REGISTER") {
-        // ✅ 확인창에서 [등록] → 출고 '새 행' 추가 (기존 행을 덮어쓰지 않음)
+        // ✅ 확인창에서 [등록]
+        //   mode "new"(기본)    : 출고 '새 행' 추가 (기존 행을 덮어쓰지 않음)
+        //   mode "append"       : 같은 업체·날짜의 기존 일정에 [+수량추가] 와 똑같이 합산 + 비고에 [10/22 1P 143B 추가] 이력
         const company = String(data?.company || "").trim().slice(0, 100);
         const toI = (v) => { const n = parseInt(v, 10); return isFinite(n) && n >= 0 && n <= 9999 ? n : null; };
         const pal = toI(data?.pal);
         const box = toI(data?.box);
+        const mode = data?.mode === "append" ? "append" : "new";
+        const targetId = parseInt(data?.targetId, 10);
         let outDate = data?.date ? String(data.date).slice(0, 10) : null;
         if (outDate === "미정") outDate = null;
         if (outDate) {
@@ -2291,23 +2368,55 @@ if (action === "VERIFY_SESSION") {
         const orderNo = String(data?.orderNo || "").trim().replace(/[^A-Za-z0-9]/g, "").slice(0, 40);
         if (!company) return res.status(200).json({ success: false, msg: "업체를 선택해주세요." });
         if (pal === null || box === null) return res.status(200).json({ success: false, msg: "PLT와 박스는 0 이상의 숫자로 입력해주세요." });
-
-        await pool.query(`CREATE TABLE IF NOT EXISTS processed_images (unique_id VARCHAR(100) PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
-        let marked = false;
-        if (orderNo) {
-          // 같은 피킹지 이중 등록 방지 (동시에 두 번 눌러도 한 번만 통과)
-          const [mk] = await pool.query(`INSERT IGNORE INTO processed_images (unique_id) VALUES (?)`, ["PICK:" + orderNo]);
-          if (!mk || !mk.affectedRows) return res.status(200).json({ success: false, msg: `이미 등록된 피킹지입니다. (${orderNo})` });
-          marked = true;
+        if (mode === "append") {
+          if (!isFinite(targetId) || targetId <= 0) return res.status(200).json({ success: false, msg: "수량을 추가할 기존 일정을 선택해주세요." });
+          if (pal === 0 && box === 0) return res.status(200).json({ success: false, msg: "추가할 PLT 또는 박스가 0 입니다." });
         }
+
+        // 같은 피킹지 이중 등록 방지 (동시에 두 번 눌러도 한 번만 통과). 지운 일정의 기록은 다시 쓸 수 있음.
+        let claimed = false;
+        if (orderNo) {
+          const cl = await pickClaim(orderNo, mode);
+          if (!cl.ok) return res.status(200).json({ success: false, msg: cl.msg });
+          claimed = true;
+        }
+        const release = async () => { if (claimed) { try { await pool.query(`DELETE FROM pick_registered WHERE order_no = ?`, [orderNo]); } catch (_) {} } };
+        let logDesc = "";
+        let outId = null;
+        let histStr = "";
         try {
-          await pool.query(
-            `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`,
-            [company, String(pal), String(box), outDate, etc],
-          );
+          if (mode === "append") {
+            const [trs] = await pool.query(`SELECT id, company, pal, box, etc, isDone, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date FROM outbound WHERE id = ? LIMIT 1`, [targetId]);
+            if (!trs.length) { await release(); return res.status(200).json({ success: false, msg: "선택한 일정을 찾을 수 없습니다. (삭제되었을 수 있음) 다시 선택해주세요." }); }
+            const tr = trs[0];
+            if (tr.isDone === 1 || tr.isDone === true) { await release(); return res.status(200).json({ success: false, msg: "이미 완료 처리된 일정에는 추가할 수 없습니다." }); }
+            if (String(tr.company || "").trim() !== company) { await release(); return res.status(200).json({ success: false, msg: "선택한 일정의 업체가 다릅니다." }); }
+            // [+수량추가] 와 동일한 이력 문구
+            const _now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+            histStr = `[${_now.getMonth() + 1}/${_now.getDate()} ${pal ? pal + "P" : ""}${pal && box ? " " : ""}${box ? box + "B" : ""} 추가]`;
+            const newPal = (parseInt(tr.pal) || 0) + pal;
+            const newBox = (parseInt(tr.box) || 0) + box;
+            const newEtc = tr.etc && String(tr.etc).trim() !== "" ? String(tr.etc).trim() + " " + histStr : histStr;
+            await pool.query(`UPDATE outbound SET pal = ?, box = ?, etc = ? WHERE id = ?`, [newPal, newBox, newEtc, tr.id]);
+            outId = tr.id;
+            logDesc = `[출고 수량추가·피킹지] ${company} (${tr.date || "미정"}) +PL:${pal}, +BOX:${box}${orderNo ? " / " + orderNo : ""}`;
+          } else {
+            const [ins] = await pool.query(
+              `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`,
+              [company, String(pal), String(box), outDate, etc],
+            );
+            outId = ins && ins.insertId ? ins.insertId : null;
+            logDesc = `[출고 등록·피킹지] ${company} (${outDate || "미정"}) PL:${pal}, BOX:${box}${orderNo ? " / " + orderNo : ""}`;
+          }
         } catch (insErr) {
-          if (marked) { try { await pool.query(`DELETE FROM processed_images WHERE unique_id = ?`, ["PICK:" + orderNo]); } catch (_) {} }
+          await release();
           throw insErr;
+        }
+        if (orderNo) {
+          try {
+            await pool.query(`UPDATE pick_registered SET outbound_id = ?, mode = ?, hist = ? WHERE order_no = ?`, [outId || -1, mode, histStr, orderNo]);
+            await pool.query(`DELETE FROM processed_images WHERE unique_id = ?`, ["PICK:" + orderNo]); // 이전 버전이 남긴 표시 정리
+          } catch (_) {}
         }
 
         // 직접 고른 업체 연결 기억 (다음부터 자동 매칭)
@@ -2327,10 +2436,9 @@ if (action === "VERIFY_SESSION") {
           console.error("[PICK] 업체 연결 저장 실패(무시):", aliasErr.sqlMessage || aliasErr.message);
         }
 
-        const logDesc = `[출고 등록·피킹지] ${company} (${outDate || "미정"}) PL:${pal}, BOX:${box}${orderNo ? " / " + orderNo : ""}`;
-        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)", [currentAdmin, logDesc]);
+        await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, ?, ?)", [currentAdmin, mode === "append" ? "CAL_EDIT" : "CAL_ADD", logDesc]);
         notifyCalendarChange(logDesc, currentAdmin);
-        return res.status(200).json({ success: true });
+        return res.status(200).json({ success: true, mode });
       } else if (action === "APPLY_OCR_DATA") {
         // 웹 OCR 대조창에서 셀 수정 후 '확정' → inbound 테이블에 upsert (텔레그램 /ocr 과 동일 로직)
         try {
