@@ -1781,7 +1781,7 @@ function showLastOcrImage() {
           <div style="flex:0 0 auto; padding:8px 4px 2px; display:flex; gap:4px; flex-wrap:nowrap; overflow-x:auto;">
             <button onclick="resetOcrTransform()" style="flex:0 0 auto; padding:9px 10px; background:var(--border-color,#444); color:var(--text-main,#fff); border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px;">↺</button>
             ${
-              isAdmin
+              isAdmin && hasPerm("ocr_compare") // 🔐 대조·수정은 시스템 관리자 또는 권한 부여된 관리자만 (서버도 한 번 더 검사)
                 ? `<button id="ocrRawBtn" onclick="toggleRawOcrView()" style="flex:0 0 auto; padding:9px 8px; background:var(--border-color,#444); color:var(--text-main,#fff); border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px;">📄 Raw</button>
             <button id="ocrCompareBtn" onclick="toggleOcrCompare(this)" style="flex:1 1 auto; min-width:0; padding:9px 6px; background:#4a90e2; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px; white-space:nowrap;">📊 대조·수정 켜기</button>
             <button id="ocrAddRowBtn" onclick="addOcrBlankRow()" style="display:none; flex:0 0 auto; padding:9px 8px; background:#0a84ff; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px;">➕ 행</button>
@@ -1829,7 +1829,7 @@ function showLastOcrImage() {
 
 // 대조·수정 모드 토글 (로그인 관리자 전용) — 기본은 이미지만, 켜면 우측에 편집 표
 function toggleOcrCompare(btn) {
-  if (!isAdmin) return;
+  if (!isAdmin || !hasPerm("ocr_compare")) return;
   const pane = document.getElementById("ocrPaneTable");
   const imgPane = document.getElementById("ocrPaneImg");
   const applyBtn = document.getElementById("ocrApplyBtn");
@@ -2908,8 +2908,8 @@ function resetOcrTransform() {
 
 // '수정 확정' → 서버 upsert
 async function applyOcrEdits(btn) {
-  if (!isAdmin) {
-    showToast("⚠️ 로그인한 관리자만 수정할 수 있습니다.", 2500);
+  if (!isAdmin || !hasPerm("ocr_compare")) {
+    showToast("⚠️ 시스템 관리자(또는 권한을 부여받은 관리자)만 수정할 수 있습니다.", 2500);
     return;
   }
   if (!ocrEditRows || ocrEditRows.length === 0) {
@@ -4339,6 +4339,7 @@ window.addEventListener("DOMContentLoaded", () => {
   if (localStorage.getItem("isAdmin") === "true" || sessionStorage.getItem("isAdmin") === "true") {
     window.isAdmin = true;
     isAdmin = true;
+    refreshMyPerms(); // 🔐 최신 권한 반영 (회수/부여가 새로고침 시 바로 적용)
 
     // 초록색 관리자 버튼으로 변신! (이 4줄만 남기면 끝입니다)
     const btn = document.getElementById("adminBtn");
@@ -4793,6 +4794,12 @@ function _isOwnerUser() {
 function syncDupFabVisibility() {
   const w = document.getElementById("fab-sub-dupe-wrap");
   if (w) w.style.display = _isOwnerUser() ? "flex" : "none";
+  applyPermUi();
+}
+// 🔐 권한에 따라 화면 요소 표시/숨김 (기본 숨김). 서버가 최종 차단하므로 여기는 편의용
+function applyPermUi() {
+  const up = document.getElementById("fab-sub-ocrupload-wrap");
+  if (up) up.style.display = hasPerm("ocr_upload") ? "flex" : "none";
 }
 // FAB 메뉴를 열 때마다 오너 여부를 다시 반영 (로그인/로그아웃 직후에도 정확하게)
 (function _watchFabForDup() {
@@ -5373,8 +5380,8 @@ let globalOcrFilters = [];
 //   · 텔레그램 /ocr 은 그대로 동작. '최근 OCR' 자리는 하나라서 나중에 올린 쪽이 대조창에 보임
 // =====================================================
 function openOcrUpload() {
-  if (!isAdmin) {
-    showToast("⚠️ 로그인한 관리자만 사용할 수 있습니다.", 2500);
+  if (!isAdmin || !hasPerm("ocr_upload")) {
+    showToast("⚠️ 시스템 관리자(또는 권한을 부여받은 관리자)만 사용할 수 있습니다.", 2800);
     return;
   }
   const inp = document.getElementById("ocrUploadFile");
@@ -5441,6 +5448,7 @@ let _ocrUpRunning = false;
 async function ocrUploadOnFile(inp) {
   const file = inp && inp.files && inp.files[0];
   if (!file || _ocrUpRunning) return;
+  if (!hasPerm("ocr_upload")) return; // 🔐 화면 숨김을 우회한 호출 방어 (서버도 별도 차단)
   _ocrUpRunning = true;
   try {
     _ocrUpBusy(true, "사진을 준비하는 중...");
@@ -5472,6 +5480,7 @@ async function ocrUploadOnFile(inp) {
       return;
     }
     if (!d || !d.success) {
+      if (d && d.forbidden) refreshMyPerms(); // 권한이 회수된 경우 화면도 즉시 갱신
       showToast("⚠️ " + ((d && d.msg) || "OCR 에 실패했습니다."), 4500);
       return;
     }

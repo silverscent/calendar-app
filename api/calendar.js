@@ -156,14 +156,17 @@ function pickSameCompany(a, b, compDb) {
   const na = pickLib.normName(a), nb = pickLib.normName(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
-  const sn = (n) => { const e = compDb && compDb[n]; return e && e.shortName ? pickLib.normName(e.shortName) : ""; };
-  // 등록된 업체 약어(shortName)와 같은 이름이면 같은 업체
-  for (const full of Object.keys(compDb || {})) {
-    const nf = pickLib.normName(full), ns = sn(full);
-    const ids = [nf, ns].filter(Boolean);
-    if (ids.includes(na) && ids.includes(nb)) return true;
-  }
-  return false;
+  // 정식명·CRM 약어(여러 개 가능)·옛 약어/옛 이름 어느 쪽으로 적혀 있어도 같은 마스터 업체로 환원해 비교
+  const ca = pickLib.canonCompany(a, compDb), cb = pickLib.canonCompany(b, compDb);
+  const ka = ca ? pickLib.normName(ca) : na, kb = cb ? pickLib.normName(cb) : nb;
+  return ka === kb;
+}
+// 출고 일정 이름 비교용 — [TASK] 표시가 같은 것끼리만 같은 업체로 본다
+function pickSameCompanyT(a, b, compDb) {
+  const ta = /^\[TASK\]/i.test(String(a || "").trim()), tb = /^\[TASK\]/i.test(String(b || "").trim());
+  if (ta !== tb) return false;
+  const strip = (x) => String(x || "").replace(/\[TASK\]/gi, "").trim();
+  return pickSameCompany(strip(a), strip(b), compDb);
 }
 
 // ───────── 피킹지 등록 기록 (같은 피킹지 이중 등록 방지) ─────────
@@ -262,6 +265,72 @@ function verifyToken(token) {
     return null;
   }
 }
+
+// ───────────────────────────────────────────────────────────
+// 🔐 권한 체계
+//  - 시스템 관리자(isSystem): TELEGRAM_OWNER_ID 와 일치하는 계정 또는 role='SYSTEM'
+//  - 위임 권한(PERM_KEYS): 시스템 관리자가 관리자페이지에서 ID별로 ON/OFF (기본 OFF)
+//      ocr_compare : 입고 OCR 대조·수정·확정
+//      ocr_upload  : 입고 앱 사진 OCR (※ ocr_compare 가 꺼져 있으면 함께 무효)
+// ───────────────────────────────────────────────────────────
+const PERM_KEYS = ["ocr_compare", "ocr_upload"];
+let _permTableReady = false;
+async function ensurePermTable() {
+  if (_permTableReady) return;
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS admin_perms (
+       admin_id VARCHAR(64) NOT NULL,
+       perm_key VARCHAR(32) NOT NULL,
+       enabled TINYINT NOT NULL DEFAULT 0,
+       updated_by VARCHAR(64) NULL,
+       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+       PRIMARY KEY (admin_id, perm_key)
+     )`,
+  );
+  _permTableReady = true;
+}
+function isOwnerId(adminId) {
+  const o = (process.env.TELEGRAM_OWNER_ID || "").trim().toLowerCase();
+  return !!o && String(adminId || "").trim().toLowerCase() === o;
+}
+// 계정 1개의 권한 컨텍스트 → { isSystem, perms:{ocr_compare,ocr_upload} }
+async function loadAdminCtx(adminId, roleHint) {
+  let role = roleHint;
+  if (role === undefined) {
+    const [r] = await pool.query("SELECT role FROM admins WHERE LOWER(admin_id) = LOWER(?)", [adminId]);
+    role = r.length ? r[0].role : null;
+  }
+  const isSystem = isOwnerId(adminId) || String(role || "").toUpperCase() === "SYSTEM";
+  const perms = { ocr_compare: false, ocr_upload: false };
+  if (isSystem) {
+    perms.ocr_compare = true;
+    perms.ocr_upload = true;
+    return { isSystem, perms };
+  }
+  try {
+    await ensurePermTable();
+    const [rows] = await pool.query(
+      "SELECT perm_key, enabled FROM admin_perms WHERE LOWER(admin_id) = LOWER(?)",
+      [adminId],
+    );
+    rows.forEach((x) => {
+      if (PERM_KEYS.includes(x.perm_key)) perms[x.perm_key] = Number(x.enabled) === 1;
+    });
+  } catch (e) {
+    console.error("권한 조회 오류(기본 OFF 처리):", e);
+  }
+  if (!perms.ocr_compare) perms.ocr_upload = false; // 업로드는 대조 권한이 전제
+  return { isSystem, perms };
+}
+// 시스템 관리자 전용 액션 (관리자페이지 전체 + 시스템 설정)
+const SYSTEM_ONLY_ACTIONS = new Set([
+  "CREATE_ADMIN", "DELETE_ADMIN", "REACTIVATE_ADMIN", "HARD_DELETE_ADMIN", "RESET_ADMIN_PW",
+  "GET_ADMIN_LIST", "GET_ADMIN_CONN_LOGS", "GET_AUDIT_LOGS", "GET_ALL_CONN_LOGS",
+  "GET_RAW_DB_ROWS", "UPDATE_RAW_ROW_FULL", "UPDATE_RAW_ROW_DIRECT", "ADD_RAW_ROW_DIRECT", "DELETE_RAW_ROW_DIRECT",
+  "SAVE_OCR_INFO", "SAVE_OCR_FILTERS", "SET_ADMIN_PERMS",
+]);
+// 위임 권한이 필요한 액션 (시스템 관리자는 항상 통과)
+const PERM_ACTIONS = { OCR_UPLOAD: "ocr_upload", APPLY_OCR_DATA: "ocr_compare" };
 
 function getMondayOfWeek(dateStr) {
   const d = new Date(dateStr);
@@ -459,6 +528,7 @@ module.exports = async function (req, res) {
       // 🚨 변수 구조 분해
       const { domain, action, data, keyword, type, rowId, year, month, id, admin_id } = payload;
       let currentAdmin = admin_id || "system"; // secureActions 토큰 검증 후 실제 admin_id로 갱신
+      let _ctx = null; // secureActions 통과 시 { isSystem, perms }
 
       // 관리자 인증 필요 액션 (Set → O(1) 조회)
       const secureActions = new Set([
@@ -505,6 +575,8 @@ module.exports = async function (req, res) {
         "FIND_INBOUND_DUPES",
         "DELETE_INBOUND_DUPES",
         "AI_QUERY",
+        "GET_MY_PERMS",
+        "SET_ADMIN_PERMS",
       ]);
 
       if (secureActions.has(action)) {
@@ -537,6 +609,15 @@ module.exports = async function (req, res) {
           return res
             .status(200)
             .json({ success: false, forceLogout: true, msg: "관리자에 의해 계정이 비활성화되었습니다." });
+        }
+
+        // 🔐 권한 게이트 (서버 최종 방어선 — 화면 숨김과 무관하게 항상 검사)
+        _ctx = await loadAdminCtx(effectiveAdminId);
+        if (SYSTEM_ONLY_ACTIONS.has(action) && !_ctx.isSystem) {
+          return res.status(200).json({ success: false, forbidden: true, msg: "시스템 관리자만 사용할 수 있는 기능입니다." });
+        }
+        if (PERM_ACTIONS[action] && !_ctx.perms[PERM_ACTIONS[action]]) {
+          return res.status(200).json({ success: false, forbidden: true, msg: "이 기능은 권한이 부여된 관리자만 사용할 수 있습니다." });
         }
       }
 
@@ -588,6 +669,11 @@ if (action === "VERIFY_SESSION") {
     
     if (!tokenAdmin)
         return res.status(200).json({ success: false, msg: "세션이 만료되었습니다. 다시 로그인하세요." });
+
+    // 🔒 생체인증 계정 혼선 방지: 클라이언트가 기대하는 계정(bio_id)과 토큰의 계정이 다르면 거부
+    if (payload.expect_admin_id &&
+        String(payload.expect_admin_id).trim().toLowerCase() !== String(tokenAdmin).trim().toLowerCase())
+        return res.status(200).json({ success: false, mismatch: true, msg: "생체인증에 등록된 계정과 저장된 세션이 일치하지 않습니다. 비밀번호로 로그인해 주세요." });
     
     const [rows] = await pool.query("SELECT admin_id, admin_name, role, status FROM admins WHERE admin_id = ?", [
         tokenAdmin,
@@ -600,7 +686,10 @@ if (action === "VERIFY_SESSION") {
     
     // 만료된 토큰이면 새 토큰 발급해서 반환
     const newToken = isExpired ? generateToken(rows[0].admin_id) : token;
+    const _vctx = await loadAdminCtx(rows[0].admin_id, rows[0].role);
     return res.status(200).json({ 
+        isSystem: _vctx.isSystem,
+        perms: _vctx.perms,
         success: true, 
         admin_id: rows[0].admin_id, 
         name: rows[0].admin_name, 
@@ -743,6 +832,41 @@ if (action === "VERIFY_SESSION") {
         }
       }
 
+      // 🔐 내 권한 조회 (로그인한 모든 관리자)
+      else if (action === "GET_MY_PERMS") {
+        return res.status(200).json({ success: true, isSystem: _ctx.isSystem, perms: _ctx.perms });
+      }
+
+      // 🔐 ID별 위임 권한 ON/OFF (시스템 관리자 전용 — SYSTEM_ONLY_ACTIONS 에서 선차단)
+      else if (action === "SET_ADMIN_PERMS") {
+        try {
+          const targetId = String((data && data.targetId) || "").trim();
+          const permKey = String((data && data.perm) || "");
+          const enabled = !!(data && data.enabled);
+          if (!targetId || !PERM_KEYS.includes(permKey))
+            return res.status(200).json({ success: false, msg: "잘못된 요청입니다." });
+          const [t] = await pool.query("SELECT admin_id, role FROM admins WHERE LOWER(admin_id) = LOWER(?)", [targetId]);
+          if (t.length === 0) return res.status(200).json({ success: false, msg: "존재하지 않는 계정입니다." });
+          if (isOwnerId(t[0].admin_id) || String(t[0].role || "").toUpperCase() === "SYSTEM")
+            return res.status(200).json({ success: false, msg: "시스템 관리자는 항상 모든 권한을 가집니다." });
+          await ensurePermTable();
+          const tid = String(t[0].admin_id).toLowerCase();
+          const upsert = "INSERT INTO admin_perms (admin_id, perm_key, enabled, updated_by) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_by = VALUES(updated_by)";
+          await pool.query(upsert, [tid, permKey, enabled ? 1 : 0, currentAdmin]);
+          // 대조 권한을 끄면 업로드 권한도 함께 회수
+          if (permKey === "ocr_compare" && !enabled) await pool.query(upsert, [tid, "ocr_upload", 0, currentAdmin]);
+          await pool.query(
+            "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'PERM_CHANGE', ?)",
+            [currentAdmin, `[권한 ${enabled ? "부여" : "회수"}] ${t[0].admin_id} · ${permKey}`],
+          );
+          const c = await loadAdminCtx(t[0].admin_id, t[0].role);
+          return res.status(200).json({ success: true, perms: c.perms });
+        } catch (e) {
+          console.error("권한 설정 오류:", e);
+          return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
+        }
+      }
+
       // 👤 관리자 리스트 조회 (🚨 기존 GET_ADMIN_LIST를 이걸로 교체! status 컬럼을 가져와야 함)
       else if (action === "GET_ADMIN_LIST") {
         try {
@@ -762,6 +886,23 @@ if (action === "VERIFY_SESSION") {
                ) AS last_login_at
              FROM admins a ORDER BY a.created_at ASC`,
           );
+          // 위임 권한(ID별 ON/OFF) 합치기 — 기본 OFF
+          await ensurePermTable();
+          const [permRows] = await pool.query("SELECT admin_id, perm_key, enabled FROM admin_perms");
+          const permMap = {};
+          permRows.forEach((x) => {
+            const k = String(x.admin_id).toLowerCase();
+            (permMap[k] = permMap[k] || {})[x.perm_key] = Number(x.enabled) === 1;
+          });
+          rows.forEach((r) => {
+            const sys = isOwnerId(r.admin_id) || String(r.role || "").toUpperCase() === "SYSTEM";
+            const m = permMap[String(r.admin_id).toLowerCase()] || {};
+            r.isSystem = sys;
+            r.perms = {
+              ocr_compare: sys || !!m.ocr_compare,
+              ocr_upload: sys || (!!m.ocr_compare && !!m.ocr_upload),
+            };
+          });
           return res.status(200).json({ success: true, list: rows });
         } catch (e) {
           console.error("API 처리 오류:", e);
@@ -1347,6 +1488,8 @@ if (action === "VERIFY_SESSION") {
                 name: masterCheck[0].admin_name,
                 role: masterCheck[0].role,
                 session_token,
+                isSystem: true,
+                perms: { ocr_compare: true, ocr_upload: true },
                 msg: "비상 우회 통로로 안전하게 로그인되었습니다.",
               });
             }
@@ -1395,9 +1538,10 @@ if (action === "VERIFY_SESSION") {
             const session_token = generateToken(user.admin_id);
             const isOwner = !!(process.env.TELEGRAM_OWNER_ID &&
               user.admin_id.toLowerCase() === process.env.TELEGRAM_OWNER_ID.toLowerCase());
+            const _lctx = await loadAdminCtx(user.admin_id, user.role);
             return res
               .status(200)
-              .json({ success: true, admin_id: user.admin_id, name: user.admin_name, role: user.role, session_token, isOwner });
+              .json({ success: true, admin_id: user.admin_id, name: user.admin_name, role: user.role, session_token, isOwner, isSystem: _lctx.isSystem, perms: _lctx.perms });
           } else {
             const connInfo = `[비밀번호 틀림] IP: ${ip} | ${connInfoBase}`;
             await pool.query(
@@ -1741,8 +1885,10 @@ if (action === "VERIFY_SESSION") {
           return res.status(200).json({ success: false, msg: "잘못된 블록 범위" });
         // 기간 안에 같은 업체의 '완료되지 않은' 일정이 이미 있는 날이 있으면 덮어쓰지 않고 중단 (onDup:"new" 면 기존은 그대로 두고 별도 일정으로 추가)
         const _dupDates = [];
+        const _cdbBlk = await pickLoadCompDb();
         for (const d of dates) {
-          const [ex] = await pool.query(`SELECT id, isDone FROM outbound WHERE TRIM(company)=? AND outbound_date=?`, [String(reqComp).trim(), d]);
+          const [exAll] = await pool.query(`SELECT id, company, isDone FROM outbound WHERE outbound_date=?`, [d]);
+          const ex = exAll.filter((r) => String(r.company || "").trim() === String(reqComp).trim() || pickSameCompanyT(r.company, reqComp, _cdbBlk));
           if (ex.some((r) => !(r.isDone === 1 || r.isDone === true))) _dupDates.push(d);
         }
         if (_dupDates.length > 0 && data?.onDup !== "new") {
@@ -1999,10 +2145,10 @@ if (action === "VERIFY_SESSION") {
           //   onDup 없음  → 아무것도 쓰지 않고 dup 응답 (화면이 "더하기/따로 추가/취소" 를 묻는다)
           //   "append"    → dupTargetId 일정에 수량 더하기 ([+수량추가] 와 동일)
           //   "new"       → 기존 일정은 그대로 두고 별도 일정으로 추가
-          const [exist] = await pool.query(`SELECT id, pal, box, etc, isDone FROM outbound WHERE TRIM(company) = ? AND outbound_date <=> ?`, [
-            reqComp,
-            reqDateOut,
-          ]);
+          // 업체명은 정식명/CRM 약어/옛 약어 어느 표기든 같은 업체로 본다 (같은 날 그 날짜 일정만 조회 후 비교)
+          const [_dayRows] = await pool.query(`SELECT id, company, pal, box, etc, isDone FROM outbound WHERE outbound_date <=> ?`, [reqDateOut]);
+          const _cdbAdd = await pickLoadCompDb();
+          const exist = _dayRows.filter((r) => String(r.company || "").trim() === reqComp || pickSameCompanyT(r.company, reqComp, _cdbAdd));
           const live = exist.filter((r) => !(r.isDone === 1 || r.isDone === true));
           const onDup = data?.onDup === "append" || data?.onDup === "new" ? data.onDup : null;
           if (live.length > 0 && !onDup) {
@@ -2020,7 +2166,7 @@ if (action === "VERIFY_SESSION") {
             const addB = parseInt(reqBoxOut, 10) || 0;
             if (!tgt) return res.status(200).json({ success: false, msg: "수량을 더할 기존 일정을 찾지 못했습니다. 화면을 새로고침한 뒤 다시 시도해주세요." });
             if (addP === 0 && addB === 0) return res.status(200).json({ success: false, msg: "더할 파레트/박스 수량이 0 입니다." });
-            const ap = await appendQtyAtomic(tgt.id, reqComp, addP, addB, String(reqEtcOut || "").trim());
+            const ap = await appendQtyAtomic(tgt.id, String(tgt.company || "").trim() || reqComp, addP, addB, String(reqEtcOut || "").trim()); // 기존 행에 적힌 이름(약어일 수 있음)으로 비교해야 함
             if (!ap.ok) return res.status(200).json({ success: false, msg: "그 사이 일정이 완료·삭제되어 추가하지 못했습니다. 새로고침 후 다시 시도해주세요." });
             const dd = `[출고 수량추가] ${reqComp} (${reqDateOut || "미정"}) +PL:${addP}, +BOX:${addB}`;
             await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, dd]);
@@ -2099,6 +2245,13 @@ if (action === "VERIFY_SESSION") {
       // 🎯 [여기서부터 복사해서 새로 붙여넣으세요!] -----------------------------------------
       else if (action === "GET_LAST_OCR_DATA") {
         try {
+          // 🔐 대조 권한자만 원본 OCR 데이터 열람 (그 외에는 빈 값 — 로그아웃 유도 없이 조용히 차단)
+          {
+            const _tk = payload.session_token ? verifyToken(payload.session_token) : null;
+            const _gc = _tk ? await loadAdminCtx(_tk) : null;
+            if (!_gc || !_gc.perms.ocr_compare)
+              return res.status(200).json({ parsedData: [], rawData: "", geo: null, forbidden: true });
+          }
           const [rows] = await pool.query(
             "SELECT store_value FROM ocr_store WHERE store_key = 'LAST_OCR_DATA'",
           );

@@ -6509,7 +6509,7 @@ function _pickRenderMode() {
     else if (st.rowsErr) inner += `<div class="pk-hint" style="color:${_PICK_RED};font-weight:800">⚠️ 일정을 불러오지 못했습니다. <a href="#" onclick="event.preventDefault(); _pickLoadRows();" style="color:#0a84ff">다시 불러오기</a></div>`;
     else if (!n) inner += `<div class="pk-hint" style="color:${_PICK_ORANGE};font-weight:800">🟠 추가할 수 있는 ${_pickCurComp() ? "같은 업체 일정" : "일정"}이 없습니다. 업체·출고일을 확인하거나 '새 일정으로 등록'을 선택하세요.</div>`;
     else {
-      inner += `<div class="pk-hint">수량(PLT·박스)을 더할 일정을 고르세요. [+수량추가] 와 똑같이 합산되고 비고에 이력이 남습니다.</div>`;
+      inner += `<div class="pk-hint">수량(PLT·박스)을 더할 일정을 고르세요. [+수량추가] 와 똑같이 합산되고 비고에 이력이 남습니다. PLT 칸이 비어 있으면 박스만 더해져요.</div>`;
       inner += rows
         .map((x) => `<div class="pk-target ${x.id === st.targetId ? "on" : ""}" onclick="pickSetTarget(${Number(x.id)})"><span class="dot" style="margin:0"></span><div style="min-width:0"><b>${_esc(x.date || "미정")} · PLT ${_esc(String(x.pal))} / 박스 ${_esc(String(x.box))}</b>${x.etc ? `<span>${_esc(x.etc)}</span>` : ""}</div></div>`)
         .join("");
@@ -6558,9 +6558,15 @@ async function _submitPickInner(btn) {
   const st = _pickState;
   if (!st || !st.result || st.busy || st.duplicate || st.result.unfinished) return;
   const rawComp = (document.getElementById("pick-comp").value || "").trim();
-  const pal = _pickInt("pick-pal"), wan = _pickInt("pick-wan"), hon = _pickInt("pick-hon");
+  let pal = _pickInt("pick-pal");
+  const wan = _pickInt("pick-wan"), hon = _pickInt("pick-hon");
   if (!rawComp) { showToast("⚠️ 업체를 선택해주세요.", 2500); return; }
+  // 기존 일정에 추가할 때는 PLT 를 비워도 됨(박스 수량만 더함). 새 일정은 PLT 필수
+  if (pal === null && st.mode === "append") pal = 0;
   if (pal === null) { showToast("⚠️ PLT 수를 입력해주세요. (없으면 0)", 2500); return; }
+  if (st.mode !== "append" && st.result.pltAddZero && pal === 0) {
+    if (!(await uiConfirm("PLT 가 적혀 있지 않은 피킹지입니다(기존에추가 표시).\nPLT 0 인 새 일정으로 등록할까요?", { okText: "등록" }))) return;
+  }
   if (wan === null || hon === null) { showToast("⚠️ 완박스와 혼재박스를 입력해주세요. (없으면 0)", 2500); return; }
   const company = getFullName(rawComp); // 약어로 입력해도 마스터 업체명으로 통일 (신규 등록과 동일)
   const app = st.mode === "append";

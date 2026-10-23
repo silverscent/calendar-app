@@ -49,13 +49,14 @@ const GEMINI_PROMPT = `이 이미지는 물류센터 '피킹 리스트'(출고 �
 
 [손글씨 — 맨 아래 손으로 적는 영역]
 - plt: 크게 동그라미 친 "NPLT" 의 N (예: "4PLT" → 4, "11PLT" → 11, "1plt 기존에추가" → 1). 정수. 적힌 게 전혀 없으면 "empty", 있는데 읽을 수 없으면 null
-- wanbox: 표 '완박스' 칸 바로 아래 손으로 쓴 숫자(정수, 예: 108, 285). 칸이 비어 있으면 "empty", 쓰여 있는데 읽을 수 없으면 null
-- honjae: 표 '혼재박스' 칸 바로 아래 손으로 쓴 숫자(정수). 칸이 비어 있으면 "empty", 읽을 수 없으면 null
+- wanbox: 표 '완박스' 칸 바로 아래 손으로 쓴 숫자(정수, 예: 7, 108, 285). 이 칸에는 숫자만 쓰이며 아무것도 안 쓰였으면 "empty". 뭔가 쓰여 있으면 반드시 가장 그럴듯한 숫자로 답하고(모양이 흐트러져도 null 금지) 확신이 없으면 uncertain 에 "wanbox" 를 넣어.
+- honjae: 표 '혼재박스' 칸 바로 아래 손으로 쓴 숫자(정수). 숫자만 쓰이며 아무것도 안 쓰였으면 "empty". 뭔가 쓰여 있으면 가장 그럴듯한 숫자로 답하고(null 금지) 확신이 없으면 uncertain 에 "honjae" 를 넣어.
+- 완박스·혼재박스 칸 찾기: 사진이 기울거나 비스듬해도 '완박스'·'혼재박스' 머리글 바로 아래 칸만 본다. 옆 칸(날짜·피킹·검수)의 서명·이니셜·동그라미 글씨는 그 칸의 숫자가 아니다.
 - addToExisting: 손글씨 영역(특히 PLT 근처)에 "기존에 추가", "기존 추가", "추가", "합산"처럼 '같은 날 나가는 같은 업체의 이미 잡힌 출고 건에 더한다'는 뜻의 글이 있으면 true, 없으면 false
 - handNote: 위 뜻의 손글씨 원문(예: "기존에추가"). 없으면 null
 - uncertain: 값을 확신하지 못하는 키 이름 배열
 
-날짜(10/15 등)·시간(13:05 등)·피킹/검수 칸의 서명, 빨강·파랑 펜으로 그은 동그라미·체크·계산 메모(예: "145,116,24,+2,+1")는 모두 무시해. 숫자 1 은 짧은 세로선이나 약간 기울어진 선으로 쓰일 수 있다. 읽을 수 없는 값은 추측하지 말고 null 로 둬.`;
+날짜(10/15 등)·시간(13:05 등)·피킹/검수 칸의 서명, 빨강·파랑 펜으로 그은 동그라미·체크·계산 메모(예: "145,116,24,+2,+1")는 모두 무시해. 숫자 1 은 짧은 세로선이나 약간 기울어진 선으로, 숫자 7 은 윗줄이 구부러져 "ㄱ"처럼 보일 수 있다. PLT 는 읽을 수 없으면 null 로 두되, 완박스·혼재박스는 위 규칙대로 숫자(또는 empty)로만 답해.`;
 
 async function callGemini(b64, mime, fetchFn, apiKey) {
   const ctl = new AbortController();
@@ -271,6 +272,65 @@ const normName = (s) =>
     .toLowerCase()
     .replace(/㈜|\(주\)|\(유\)|\(재\)|\(사\)|주식회사|유한회사/g, "")
     .replace(/[\s()\[\]{}·.,\-_/\\:：]/g, "");
+// ── 업체 약어·옛 이름 사전 (출고 화면 out.js 의 compFullMap 과 같은 내용 — 한쪽을 고치면 다른 쪽도 고칠 것) ──
+// 화면은 약어를 정식명으로 바꿔 저장하지만, 옛 데이터·손으로 쓴 이름에는 약어/옛 이름이 남아 있을 수 있어 서버도 같은 사전으로 맞춘다.
+const LEGACY_COMP_MAP = {
+  // 💡 1. 약어를 새 이름으로 연결
+  메2: "(주)메디맥 2층",
+  메디맥2층: "(주)메디맥 2층",
+  메3: "(주)메디맥 3층",
+  메디맥3층: "(주)메디맥 3층",
+  메뱅: "(주)메디뱅크",
+  메써: "메디칼써프라이",
+  서호: "서호메디코",
+  엠코: "엠코리아토탈서비스",
+  국제: "백년가게국제의료기",
+  드림: "드림케어메디칼",
+  지엔: "지엔씨메딕",
+  지엔씨: "지엔씨메딕",
+  링랩: "링크더랩",
+  링크: "링크더랩",
+  위비: "위드비아",
+  위드: "위드비아",
+  하메: "하이메드",
+  하이: "하이메드",
+  스엠: "스마트엠케어",
+  스마: "스마트엠케어",
+  제니: "제니스엠지",
+  세람: "세람메디칼",
+
+  // 🚨 2. [가장 중요!] 과거 DB에 박혀있는 옛날 이름을 -> '새 이름'으로 강제 세탁!!
+  "메디맥 주식회사 2층": "(주)메디맥 2층",
+  "메디맥 주식회사 3층": "(주)메디맥 3층",
+  "메디멕 주식회사 2층": "(주)메디맥 2층", // 멕/맥 오타까지 방어
+  "메디멕 주식회사 3층": "(주)메디맥 3층",
+  제니스: "제니스엠지",
+  국제의료기: "백년가게국제의료기",
+};
+const _LEGACY_N = {};
+Object.keys(LEGACY_COMP_MAP).forEach((k) => { const nk = normName(k); if (nk) _LEGACY_N[nk] = LEGACY_COMP_MAP[k]; });
+// CRM 약어 칸에 "메3, 메디맥3" 처럼 여러 개를 적어도 각각 약어로 취급
+function shortsOf(entry) {
+  const s = entry && entry.shortName ? String(entry.shortName) : "";
+  return s.split(/[,，/·;]+/).map((x) => normName(x)).filter(Boolean);
+}
+// 어떤 이름(정식명·CRM 약어·옛 약어/옛 이름)이든 마스터 업체명(compDb 의 키)으로 환원. 못 찾거나 애매하면 null
+function canonCompany(name, compDb) {
+  const n = normName(name);
+  if (!n) return null;
+  const names = Object.keys(compDb || {});
+  const full = names.find((f) => normName(f) === n);
+  if (full) return full;
+  const sh = names.filter((f) => shortsOf(compDb[f]).includes(n));
+  if (sh.length === 1) return sh[0];
+  if (sh.length > 1) return null; // 같은 약어를 쓰는 업체가 여럿 → 애매
+  const L = _LEGACY_N[n];
+  if (L) {
+    const m = names.find((f) => normName(f) === normName(L));
+    return m || L;
+  }
+  return null;
+}
 function bigrams(s) { const o = new Set(); for (let i = 0; i < s.length - 1; i++) o.add(s.slice(i, i + 2)); return o; }
 function similarity(a, b) {
   if (!a || !b) return 0;
@@ -298,12 +358,22 @@ function matchCompany(printed, compDb, alias, opts) {
   const names = Object.keys(compDb || {});
   if (!p) return { status: "none", company: null, candidates: [] };
   if (alias && alias[p] && names.includes(alias[p])) return { status: "alias", company: alias[p], candidates: [alias[p]] };
-  const exact = names.filter((n) => normName(n) === p || (compDb[n] && compDb[n].shortName && normName(compDb[n].shortName) === p));
+  const exact = names.filter((n) => normName(n) === p || shortsOf(compDb[n]).includes(p));
   if (exact.length === 1) return { status: "exact", company: exact[0], candidates: exact };
+  if (exact.length > 1) { // 같은 이름·약어를 쓰는 업체가 여럿 → 층(호수)으로 좁혀지면 그것, 아니면 자동 연결하지 않고 후보로
+    const byF = floor ? exact.filter((n) => floorOfName(n) === floor) : [];
+    if (byF.length === 1) return { status: "floor", company: byF[0], candidates: byF };
+    return { status: "candidates", company: null, candidates: exact.slice(0, 5) };
+  }
+  // 옛 약어/옛 이름 사전 (엠코·국제·메3 …) 으로 마스터 업체 찾기
+  if (exact.length === 0) {
+    const cc = canonCompany(printed, compDb);
+    if (cc && names.includes(cc)) return { status: "alias", company: cc, candidates: [cc] };
+  }
   let contain = names.filter((n) => {
     const k = normName(n);
-    const s = compDb[n] && compDb[n].shortName ? normName(compDb[n].shortName) : "";
-    return (k.length >= 3 && (p.includes(k) || k.includes(p))) || (s.length >= 3 && (p.includes(s) || s.includes(p)));
+    const ss = shortsOf(compDb[n]);
+    return (k.length >= 3 && (p.includes(k) || k.includes(p))) || ss.some((s) => s.length >= 3 && (p.includes(s) || s.includes(p)));
   });
   // 같은 회사의 층 구분: 주소 호수로 좁힘 (301호 → 3층)
   if (contain.length > 1 && floor) {
@@ -317,7 +387,18 @@ function matchCompany(printed, compDb, alias, opts) {
     .sort((a, b) => b.s - a.s)
     .slice(0, 5)
     .map((x) => x.n);
-  const cands = contain.length > 1 ? contain.slice(0, 5) : ranked;
+  // 2글자 약어(예: 엠코)는 우연히 겹치기 쉬워 자동 연결하지 않고, 출고처명이 그 약어로 '시작'하면 후보로만 올린다
+  let cands = contain.length > 1 ? contain.slice(0, 5) : ranked;
+  if (!contain.length) {
+    const pre = names.filter((n) => shortsOf(compDb[n]).some((s) => s.length === 2 && p.startsWith(s)));
+    Object.keys(_LEGACY_N).forEach((k) => {
+      if (k.length === 2 && p.startsWith(k)) {
+        const m = names.find((f) => normName(f) === normName(_LEGACY_N[k]));
+        if (m && !pre.includes(m)) pre.push(m);
+      }
+    });
+    if (pre.length) cands = pre.concat(cands.filter((c) => !pre.includes(c))).slice(0, 5);
+  }
   return { status: cands.length ? "candidates" : "none", company: null, candidates: cands };
 }
 
@@ -404,13 +485,21 @@ function reconcile(printed, hw, g, errs) {
   const unfinished = P.empty && W.empty && H.empty;
   if (unfinished) {
     flags.plt = { level: "red", msg: "PLT·완박스·혼재박스가 모두 비어 있습니다 — 작성 전 피킹지로 보여 등록할 수 없습니다" };
-  } else if (P.empty) {
-    flags.plt = { level: "red", msg: "PLT 가 적혀 있지 않음 — 직접 입력 (없으면 0)" };
   }
-  const plt = P.val, wan = W.val, hon = H.val;
   // '기존에 추가': AI 또는 문자인식 중 하나라도 보면 후보로 제시(화면에서 사용자가 새 일정/추가를 최종 선택)
   const gAdd = g.addToExisting === true || String(g.addToExisting).toLowerCase() === "true";
   const addExisting = !!(gAdd || hw.addExisting);
+  // PLT 가 비어 있고 '기존에 추가' 이면 → 파렛트 없이 박스 수량만 더하는 건 (PLT 0 으로 두고 빨간 경고 없음)
+  let pltAddZero = false;
+  if (!unfinished && P.empty) {
+    if (addExisting) {
+      pltAddZero = true;
+      delete flags.plt;
+    } else {
+      flags.plt = { level: "red", msg: "PLT 가 적혀 있지 않음 — 직접 입력 (없으면 0). 기존 일정에 추가라면 비워 두면 박스만 더해져요" };
+    }
+  }
+  const plt = pltAddZero ? 0 : P.val, wan = W.val, hon = H.val;
   const addNote = (clean(typeof g.handNote === "string" ? g.handNote : null) || hw.addNote || "").slice(0, 40) || null;
   const box = wan !== null && hon !== null ? wan + hon : null;
   if (!orderNo) setFlag("orderNo", { level: "orange", msg: "출고지시번호를 읽지 못함 — 중복 등록 방지가 동작하지 않음" });
@@ -419,7 +508,7 @@ function reconcile(printed, hw, g, errs) {
   return {
     orderNo, customer, address, floor, buyerNote, shipType, shipDate, shipDateNote,
     plt, wanbox: wan, honjae: hon, box, sbox, rbox,
-    addExisting, addNote,
+    addExisting, addNote, pltAddZero,
     unfinished, flags,
     ai: g && Object.keys(g).length ? "ok" : "fail",
     errs: errs || [],
@@ -444,4 +533,4 @@ async function parsePicking(b64, mime, opts) {
   return out;
 }
 
-module.exports = { parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };
+module.exports = { canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };

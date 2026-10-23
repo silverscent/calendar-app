@@ -252,6 +252,28 @@ function refreshAdminList() {
         ? `<span style="font-size:0.7em; color:#ff3b30; border:1px solid #ff3b30; padding:2px 4px; border-radius:4px; font-weight:bold;">비활성</span>`
         : "";
 
+      // 🔐 ID별 위임 권한 토글 (시스템 관리자 전용 화면 · 기본 OFF · 서버가 최종 검증)
+      let permArea = "";
+      if (!isLocked) {
+        if (isMaster || item.isSystem) {
+          permArea = `<div style="font-size:0.75em; color:var(--text-sub); font-weight:700; padding:8px 10px; border-radius:8px; background:rgba(10,132,255,0.06);">🔑 시스템 관리자 — 모든 권한 보유</div>`;
+        } else {
+          const pc = !!(item.perms && item.perms.ocr_compare);
+          const pu = !!(item.perms && item.perms.ocr_upload);
+          const sw = (key, label, on, dis) =>
+            `<label style="display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:0.82em; font-weight:800; color:var(--text-main); ${dis ? "opacity:0.45;" : ""}">
+               <span>${label}</span>
+               <input type="checkbox" data-perm="${key}" ${on ? "checked" : ""} ${dis ? "disabled" : ""}
+                 onchange="toggleAdminPerm(this, '${_argq(item.admin_id)}', '${key}')" style="width:20px; height:20px; accent-color:#0a84ff; flex-shrink:0;">
+             </label>`;
+          permArea = `<div class="admin-perm-box" style="display:flex; flex-direction:column; gap:8px; padding:10px; border-radius:8px; background:rgba(120,120,128,0.08);">
+               <div style="font-size:0.72em; font-weight:900; color:var(--text-sub);">🔐 권한 (기본 OFF)</div>
+               ${sw("ocr_compare", "입고 OCR 대조·수정", pc, false)}
+               ${sw("ocr_upload", "입고 앱 사진 OCR", pu, !pc)}
+             </div>`;
+        }
+      }
+
       card.innerHTML = `
                       <div style="display:flex; justify-content:space-between; align-items:flex-start; width:100%;">
                           <div>
@@ -263,6 +285,7 @@ function refreshAdminList() {
                           </div>
                           <button onclick="showAdminConnInfo('${_argq(item.admin_id)}', '${_argq(item.admin_name)}')" style="flex-shrink:0; background:rgba(10,132,255,0.1); border:1px solid #0a84ff; color:#0a84ff; border-radius:6px; padding:6px 10px; font-size:0.8em; cursor:pointer; font-weight:900; white-space:nowrap;">📡 접속확인</button>
                       </div>
+                      ${permArea}
                       <div style='display:flex; width:100%; gap:8px; margin-top:4px;'>${actionArea}</div>
                   `;
       return card;
@@ -283,6 +306,34 @@ function refreshAdminList() {
       lockedUsers.forEach((u) => container.appendChild(buildCard(u, true)));
     }
   });
+}
+
+// 🔐 관리자 권한 ON/OFF (SET_ADMIN_PERMS). 실패 시 되돌림. 대조 권한을 끄면 사진OCR 도 함께 꺼짐
+function toggleAdminPerm(cb, adminId, perm) {
+  const want = cb.checked;
+  const box = cb.closest(".admin-perm-box");
+  cb.disabled = true;
+  apiCall({ source: "vercel", action: "SET_ADMIN_PERMS", data: { targetId: adminId, perm, enabled: want } }).then(
+    function (res) {
+      cb.disabled = false;
+      if (res && res.success) {
+        if (box && res.perms) {
+          const c = box.querySelector('input[data-perm="ocr_compare"]');
+          const u = box.querySelector('input[data-perm="ocr_upload"]');
+          if (c) c.checked = !!res.perms.ocr_compare;
+          if (u) {
+            u.checked = !!res.perms.ocr_upload;
+            u.disabled = !res.perms.ocr_compare;
+            if (u.parentElement) u.parentElement.style.opacity = res.perms.ocr_compare ? "" : "0.45";
+          }
+        }
+        showToast(want ? "✅ 권한을 부여했습니다." : "🚫 권한을 회수했습니다.", 1800);
+      } else {
+        cb.checked = !want;
+        showToast("⚠️ " + ((res && res.msg) || "권한 변경에 실패했습니다."), 2800);
+      }
+    },
+  );
 }
 
 function bindBioAuthEvents() {
@@ -867,10 +918,17 @@ async function handleBioLogin() {
         document.getElementById("adminLoginModal").style.display = "none";
         showToast("🔒 생체 인증 성공! 서버 확인 중...", 0);
 
-        apiCall({ source: "vercel", action: "VERIFY_SESSION", session_token: savedToken }).then(function (res) {
+        apiCall({ source: "vercel", action: "VERIFY_SESSION", session_token: savedToken, expect_admin_id: savedId }).then(function (res) {
           if (res === null || !res.success) {
-            showToast("❌ 세션이 만료되었습니다. 다시 로그인하세요.", 2500);
+            showToast(res && res.mismatch ? "⚠️ " + res.msg : "❌ 세션이 만료되었습니다. 다시 로그인하세요.", 3000);
             localStorage.removeItem("bio_token"); // bio_registered·bio_id 는 유지
+            openLoginModal();
+            return;
+          }
+          // 🔒 이중 방어: 서버 응답 계정이 생체인증 등록 계정(bio_id)과 다르면 로그인 거부
+          if (String(res.admin_id || "").trim().toLowerCase() !== String(savedId).trim().toLowerCase()) {
+            showToast("⚠️ 생체인증에 등록된 계정과 달라 로그인하지 않았습니다. 비밀번호로 로그인해 주세요.", 3500);
+            localStorage.removeItem("bio_token");
             openLoginModal();
             return;
           }
@@ -883,6 +941,7 @@ async function handleBioLogin() {
           window.isAdmin = true;
           isAdmin = true;
           saveAuthData(res.admin_id, res.role, true, activeToken, res.isOwner);
+          saveMyPerms(res);
           window._sessionToken = activeToken;
 
           const btn = document.getElementById("adminBtn");
@@ -977,9 +1036,16 @@ if (res.success) {
     saveAuthData(res.admin_id, res.role, true, res.session_token, res.isOwner);
     if (res.session_token) window._sessionToken = res.session_token;
     // 생체인증 등록된 기기면 새 토큰으로 bio_token 갱신 (세션 만료 후 재로그인 시 생체인증 유지)
-    if (res.session_token && localStorage.getItem("bio_registered") === "true") {
+    // ⚠️ 생체인증에 등록된 "그 계정"으로 로그인했을 때만 갱신 (다른 계정 토큰이 bio_token 을 덮어쓰면
+    //    다음 생체인증 때 엉뚱한 계정으로 로그인되는 버그 → bio_id 와 일치할 때만)
+    if (
+        res.session_token &&
+        localStorage.getItem("bio_registered") === "true" &&
+        String(res.admin_id || "").trim().toLowerCase() === String(localStorage.getItem("bio_id") || "").trim().toLowerCase()
+    ) {
         localStorage.setItem("bio_token", res.session_token);
     }
+    saveMyPerms(res);
 
       const btn = document.getElementById("adminBtn");
       if (btn) {
@@ -1150,6 +1216,7 @@ function saveAuthData(id, role, isSave, session_token, isOwner) {
     otherStorage.removeItem("admin_role");
     otherStorage.removeItem("session_token");
     otherStorage.removeItem("isOwner");
+    otherStorage.removeItem("my_perms");
     targetStorage.setItem("isAdmin", "true");
     targetStorage.setItem("admin_id", id);
     targetStorage.setItem("admin_role", role);
@@ -1172,8 +1239,59 @@ function saveAuthData(id, role, isSave, session_token, isOwner) {
     sessionStorage.removeItem("admin_role");
     sessionStorage.removeItem("session_token");
     sessionStorage.removeItem("isOwner");
+    localStorage.removeItem("my_perms");
+    sessionStorage.removeItem("my_perms");
     // ⚠️ bio_registered/bio_id/bio_token 은 로그아웃해도 유지 (생체 재로그인용)
   }
+}
+
+// ─────────────────────────────────────────────
+// 🔐 내 권한(시스템 관리자 여부 + 위임 권한 ocr_compare / ocr_upload) — 화면 표시용 캐시
+//   ※ 실제 차단은 서버가 한다. 여기 값은 버튼을 보여줄지 말지만 결정한다 (기본값 = 없음/OFF)
+// ─────────────────────────────────────────────
+function saveMyPerms(res) {
+  try {
+    if (!res) return;
+    const isAuto = localStorage.getItem("auto_login") !== "false";
+    const st = isAuto ? localStorage : sessionStorage;
+    const other = isAuto ? sessionStorage : localStorage;
+    other.removeItem("my_perms");
+    st.setItem(
+      "my_perms",
+      JSON.stringify({
+        isSystem: !!res.isSystem,
+        ocr_compare: !!(res.perms && res.perms.ocr_compare),
+        ocr_upload: !!(res.perms && res.perms.ocr_upload),
+      }),
+    );
+  } catch (e) {}
+  if (typeof applyPermUi === "function") applyPermUi();
+}
+function getMyPerms() {
+  try {
+    const raw = localStorage.getItem("my_perms") || sessionStorage.getItem("my_perms");
+    if (raw) return JSON.parse(raw) || {};
+  } catch (e) {}
+  return {};
+}
+function hasPerm(key) {
+  try {
+    if (!(localStorage.getItem("isAdmin") === "true" || sessionStorage.getItem("isAdmin") === "true")) return false;
+  } catch (e) {
+    return false;
+  }
+  return !!getMyPerms()[key];
+}
+function isSystemUser() {
+  return !!getMyPerms().isSystem;
+}
+// 로그인 상태에서 페이지가 열릴 때 서버의 최신 권한으로 갱신 (권한 회수가 바로 반영되도록)
+function refreshMyPerms() {
+  const tok = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
+  if (!tok) return;
+  apiCall({ source: "vercel", action: "GET_MY_PERMS" }).then(function (res) {
+    if (res && res.success) saveMyPerms(res);
+  });
 }
 
 function checkMasterAuthButtonVisibility() {
@@ -1966,3 +2084,15 @@ async function showIpInfo(ip) {
     _setup();
   }
 }());
+
+// 🔐 페이지 로드 시 로그인 상태면 최신 권한으로 갱신 (권한 회수/부여 즉시 반영)
+(function _initMyPerms() {
+  const run = () => {
+    try {
+      if (localStorage.getItem("isAdmin") === "true" || sessionStorage.getItem("isAdmin") === "true") refreshMyPerms();
+      else if (typeof applyPermUi === "function") applyPermUi();
+    } catch (e) {}
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+  else run();
+})();
