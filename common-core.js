@@ -90,7 +90,10 @@ async function apiGet(params) {
   const timeoutId = setTimeout(() => controller.abort(), 15000);
   try {
     const qs = new URLSearchParams({ api: "true", ...params, t: Date.now() }).toString();
-    const r = await fetch(`${VERCEL_API_URL}?${qs}`, { signal: controller.signal });
+    // 로그인 중이면 세션 토큰을 헤더로 함께 보냄 (주소창·로그에 남지 않게 헤더 사용) — 서버가 관리자에게만 출고지시번호를 실어 보내는 데 사용
+    let _gst = null;
+    try { _gst = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token"); } catch (_) {}
+    const r = await fetch(`${VERCEL_API_URL}?${qs}`, { signal: controller.signal, ...(_gst ? { headers: { "x-session-token": _gst } } : {}) });
     clearTimeout(timeoutId);
     const d = await r.json();
     if (d && d.error) {

@@ -175,11 +175,17 @@ async function pickEnsureTable() {
   await pool.query(`CREATE TABLE IF NOT EXISTS pick_registered (order_no VARCHAR(40) PRIMARY KEY, outbound_id BIGINT NOT NULL DEFAULT 0, mode VARCHAR(8), hist VARCHAR(80), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 }
 // ───────── 출고지시번호 (일정 ↔ 번호 1:N) ─────────
-//  outbound_orders: 한 일정에 번호가 여러 개(1차·수량추가 2차…). 중복 방지용 pick_registered 와는 별개(조회·검색용).
+//  outbound_orders: 한 일정에 번호가 여러 개. slot 0 = 원래 일정, slot k = k번째 수량추가(수량추가 이력 순서와 같음).
+//  중복 방지용 pick_registered 와는 별개(조회·검색용).
 let _ordTableReady = false;
 async function ordEnsureTable() {
   if (_ordTableReady) return;
-  await pool.query(`CREATE TABLE IF NOT EXISTS outbound_orders (id BIGINT AUTO_INCREMENT PRIMARY KEY, outbound_id BIGINT NOT NULL, order_no VARCHAR(40) NOT NULL, kind VARCHAR(8), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_ord (outbound_id, order_no), KEY ix_ord_no (order_no))`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS outbound_orders (id BIGINT AUTO_INCREMENT PRIMARY KEY, outbound_id BIGINT NOT NULL, order_no VARCHAR(40) NOT NULL, kind VARCHAR(8), slot INT NOT NULL DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_ord (outbound_id, order_no), KEY ix_ord_no (order_no))`);
+  // 처음 만든 버전에는 slot 이 없었음 → 컬럼 추가
+  try {
+    const [cols] = await pool.query(`SHOW COLUMNS FROM outbound_orders LIKE 'slot'`);
+    if (!cols.length) await pool.query(`ALTER TABLE outbound_orders ADD COLUMN slot INT NOT NULL DEFAULT 0`);
+  } catch (e) { if (!/Duplicate column/i.test(String(e.message || ""))) console.error("[ORD] slot 컬럼 추가 실패:", e.sqlMessage || e.message); }
   // 이미 피킹지로 등록된(일정이 남아 있는) 번호를 한 번만 옮겨 채움 — 이후 지운 번호가 되살아나지 않게 완료 표시를 남김
   try {
     const [fl] = await pool.query(`SELECT 1 FROM system_settings WHERE setting_key = 'ORD_BACKFILL_DONE' LIMIT 1`);
@@ -189,6 +195,19 @@ async function ordEnsureTable() {
       await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('ORD_BACKFILL_DONE', '1') ON DUPLICATE KEY UPDATE setting_value = '1'`);
     }
   } catch (e) { console.error("[ORD] 기존 번호 채우기 실패(무시):", e.sqlMessage || e.message); }
+  // 예전 방식('수량추가'로 저장됐지만 slot 이 0)인 번호는 만들어진 순서대로 1차·2차… 로 맞춤
+  try {
+    const [lg] = await pool.query(`SELECT id, outbound_id FROM outbound_orders WHERE kind = 'append' AND slot = 0 ORDER BY outbound_id, id`);
+    if (lg.length) {
+      const [mx] = await pool.query(`SELECT outbound_id, MAX(slot) AS m FROM outbound_orders WHERE kind = 'append' GROUP BY outbound_id`);
+      const next = {};
+      for (const r of mx) next[r.outbound_id] = Number(r.m) || 0;
+      for (const r of lg) {
+        next[r.outbound_id] = (next[r.outbound_id] || 0) + 1;
+        await pool.query(`UPDATE outbound_orders SET slot = ? WHERE id = ?`, [next[r.outbound_id], r.id]);
+      }
+    }
+  } catch (e) { console.error("[ORD] 순서 맞추기 실패(무시):", e.sqlMessage || e.message); }
   _ordTableReady = true;
 }
 // 붙여넣은 글(줄바꿈·쉼표·공백 구분)에서 번호 목록 추출: 영문·숫자만, 대문자, 6자 이상, 중복 제거, 최대 20개
@@ -201,16 +220,63 @@ function ordNormList(v) {
   }
   return out.slice(0, 20);
 }
-async function ordAdd(outboundId, list, kind) {
+async function ordAdd(outboundId, list, kind, slot) {
   if (!(outboundId > 0) || !list || !list.length) return 0;
   await ordEnsureTable();
   let n = 0;
   for (const no of list) {
-    const [r] = await pool.query(`INSERT IGNORE INTO outbound_orders (outbound_id, order_no, kind) VALUES (?, ?, ?)`, [outboundId, no, kind || "manual"]);
+    const [r] = await pool.query(`INSERT IGNORE INTO outbound_orders (outbound_id, order_no, kind, slot) VALUES (?, ?, ?, ?)`, [outboundId, no, kind || "manual", Number(slot) || 0]);
     n += r && r.affectedRows ? 1 : 0;
   }
   return n;
 }
+// 방금 수량추가한 일정의 '몇 번째 수량추가인지' = 비고에 남은 [M/D …추가] 이력 개수
+async function ordAppendSlot(outboundId) {
+  try {
+    const [r] = await pool.query(`SELECT etc FROM outbound WHERE id = ? LIMIT 1`, [outboundId]);
+    const m = String((r[0] && r[0].etc) || "").match(/\[\d{1,2}\/\d{1,2}\s*(?:\d+P)?\s*(?:\d+B)?\s*추가\]/g);
+    return Math.max(1, m ? m.length : 1);
+  } catch (_) { return 1; }
+}
+// 수정창에서 보낸 {slot: "번호 텍스트"} 로 그 일정의 번호를 통째로 바꾼다. 반환: 바뀌었는지
+async function ordSetSlots(outboundId, slots) {
+  if (!(outboundId > 0) || !slots || typeof slots !== "object") return false;
+  await ordEnsureTable();
+  const want = [];
+  const seen = new Set();
+  for (const k of Object.keys(slots).slice(0, 60)) {
+    const sl = parseInt(k, 10);
+    if (!(sl >= 0)) continue;
+    for (const no of ordNormList(slots[k])) { if (!seen.has(no)) { seen.add(no); want.push({ no, slot: sl }); } }
+  }
+  const [cur] = await pool.query(`SELECT order_no, slot, kind FROM outbound_orders WHERE outbound_id = ? ORDER BY id ASC`, [outboundId]);
+  const same = cur.length === want.length && want.every((w) => cur.some((c) => c.order_no === w.no && Number(c.slot) === w.slot));
+  if (same) return false;
+  await pool.query(`DELETE FROM outbound_orders WHERE outbound_id = ?`, [outboundId]);
+  try {
+    for (const w of want) await pool.query(`INSERT IGNORE INTO outbound_orders (outbound_id, order_no, kind, slot) VALUES (?, ?, ?, ?)`, [outboundId, w.no, w.slot > 0 ? "append" : "manual", w.slot]);
+  } catch (e) { // 중간에 실패하면 원래 번호로 되돌림(번호가 반쯤만 남는 것 방지)
+    try { await pool.query(`DELETE FROM outbound_orders WHERE outbound_id = ?`, [outboundId]); for (const c of cur) await pool.query(`INSERT IGNORE INTO outbound_orders (outbound_id, order_no, kind, slot) VALUES (?, ?, ?, ?)`, [outboundId, c.order_no, c.kind || "manual", Number(c.slot) || 0]); } catch (_) {}
+    throw e;
+  }
+  return true;
+}
+// 일정 id 목록 → { id: [{no, slot}] } (달력 데이터에 함께 실어 보냄). 실패해도 달력은 그대로
+async function ordMapFor(ids) {
+  const out = {};
+  const list = (ids || []).filter((x) => x > 0);
+  if (!list.length) return out;
+  try {
+    await ordEnsureTable();
+    for (let i = 0; i < list.length; i += 500) {
+      const part = list.slice(i, i + 500);
+      const [rs] = await pool.query(`SELECT outbound_id, order_no, slot FROM outbound_orders WHERE outbound_id IN (${part.map(() => "?").join(",")}) ORDER BY slot ASC, id ASC`, part);
+      for (const r of rs) (out[r.outbound_id] = out[r.outbound_id] || []).push({ no: r.order_no, slot: Number(r.slot) || 0 });
+    }
+  } catch (e) { console.error("[ORD] 번호 불러오기 실패(무시):", e.sqlMessage || e.message); }
+  return out;
+}
+
 // 등록 기록이 가리키는 일정이 아직 살아 있는지. 반환 {alive, info}
 async function pickRecAlive(rec) {
   if (!rec || !(rec.outbound_id > 0)) return { alive: false, info: null };
@@ -485,6 +551,13 @@ module.exports = async function (req, res) {
         const [pendingRows] = await pool.query(
           `SELECT id, company, pal, box, etc, isDone, sort_idx FROM outbound WHERE outbound_date IS NULL ORDER BY sort_idx ASC, id ASC`,
         );
+        // 출고지시번호도 같이 실어 보냄 (상세를 열 때 따로 불러오지 않아도 바로 보이게)
+        // 번호는 로그인한 관리자에게만 (이 주소는 로그인 없이도 열리므로 토큰이 없거나 틀리면 싣지 않음)
+        let _ordMap = {};
+        try {
+          const _gt = String((req.headers && req.headers["x-session-token"]) || "");
+          if (_gt && verifyToken(_gt)) _ordMap = await ordMapFor([...monthRows, ...pendingRows].map((r) => r.id));
+        } catch (_) {}
         monthRows.forEach((row) => {
           const day = new Date(row.outbound_date).getUTCDate();
           if (!formattedData.monthData[day]) formattedData.monthData[day] = [];
@@ -496,6 +569,7 @@ module.exports = async function (req, res) {
             etc: row.etc,
             isDone: row.isDone === 1,
             sortIdx: row.sort_idx !== null ? row.sort_idx : 999,
+            ...(_ordMap[row.id] ? { ords: _ordMap[row.id] } : {}),
           });
         });
         pendingRows.forEach((row) => {
@@ -507,6 +581,7 @@ module.exports = async function (req, res) {
             etc: row.etc,
             isDone: row.isDone === 1,
             sortIdx: row.sort_idx !== null ? row.sort_idx : 999,
+            ...(_ordMap[row.id] ? { ords: _ordMap[row.id] } : {}),
           });
         });
       } else {
@@ -609,9 +684,6 @@ module.exports = async function (req, res) {
         "PICK_PARSE",
         "PICK_REGISTER",
         "PICK_FIND_ROWS",
-        "GET_ORDER_NOS",
-        "ADD_ORDER_NOS",
-        "DEL_ORDER_NO",
         "FIND_INBOUND_DUPES",
         "DELETE_INBOUND_DUPES",
         "AI_QUERY",
@@ -2096,6 +2168,13 @@ if (action === "VERIFY_SESSION") {
               `UPDATE outbound SET outbound_date = ?, company = ?, pal = CASE WHEN ? THEN pal ELSE ? END, box = CASE WHEN ? THEN box ELSE ? END, etc = ? WHERE id = ?`,
               [newDate, newName, keepPal ? 1 : 0, data?.newPal ?? "", keepBox ? 1 : 0, data?.newBox ?? "", data?.newEtc ?? "", data.id],
             );
+            // 출고지시번호(원래 일정 / N차 수량추가별) — 수정창에서 바꾼 경우에만 전달됨
+            if (data?.orderSlots && typeof data.orderSlots === "object") {
+              try {
+                if (await ordSetSlots(parseInt(data.id, 10), data.orderSlots))
+                  await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `[출고지시번호 수정] ${targetName} (${targetDate || "미정"}) 일정 ID:${data.id}`]);
+              } catch (_oe) { console.error("EDIT 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
+            }
           } else {
             await pool.query(
               `UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? WHERE company = ? AND outbound_date <=> ? AND COALESCE(NULLIF(pal,''),'0')=COALESCE(NULLIF(?,''),'0') AND COALESCE(NULLIF(box,''),'0')=COALESCE(NULLIF(?,''),'0')`,
@@ -2178,7 +2257,7 @@ if (action === "VERIFY_SESSION") {
               [currentAdmin, `[출고 수량추가] ${targetName} (${targetDate || "미정"}) +PL:${addPal}, +BOX:${addBox}`],
             );
             notifyCalendarChange(`[출고 수량추가] ${targetName} (${targetDate || "미정"}) +PL:${addPal}, +BOX:${addBox}`, currentAdmin);
-            try { const _ol = ordNormList(data?.orderNos); if (_ol.length) await ordAdd(row.id, _ol, "append"); } catch (_oe) { console.error("ADD_QTY 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
+            try { const _ol = ordNormList(data?.orderNos); if (_ol.length) await ordAdd(row.id, _ol, "append", await ordAppendSlot(row.id)); } catch (_oe) { console.error("ADD_QTY 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
           }
         } else if (action === "ADD") {
           let reqComp = (data?.newComp || data?.company || data?.comp || "").trim();
@@ -2221,13 +2300,13 @@ if (action === "VERIFY_SESSION") {
             const dd = `[출고 수량추가] ${reqComp} (${reqDateOut || "미정"}) +PL:${addP}, +BOX:${addB}`;
             await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, dd]);
             notifyCalendarChange(dd, currentAdmin);
-            try { const _ol = ordNormList(data?.orderNos); if (_ol.length) await ordAdd(tgt.id, _ol, "append"); } catch (_oe) { console.error("ADD 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
+            try { const _ol = ordNormList(data?.orderNos); if (_ol.length) await ordAdd(tgt.id, _ol, "append", await ordAppendSlot(tgt.id)); } catch (_oe) { console.error("ADD 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
           } else {
             const [_insR] = await pool.query(
               `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`,
               [reqComp, reqPalOut, reqBoxOut, reqDateOut, reqEtcOut],
             );
-            try { const _ol = ordNormList(data?.orderNos); if (_ol.length && _insR && _insR.insertId) await ordAdd(_insR.insertId, _ol, "manual"); } catch (_oe) { console.error("ADD 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
+            try { const _ol = ordNormList(data?.orderNos); if (_ol.length && _insR && _insR.insertId) await ordAdd(_insR.insertId, _ol, "manual", 0); } catch (_oe) { console.error("ADD 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)",
               [currentAdmin, `[출고 등록] ${reqComp} (${reqDateOut || "미정"}) ${live.length > 0 ? "별도 일정으로 추가" : "신규 추가"} (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`],
@@ -2584,49 +2663,6 @@ if (action === "VERIFY_SESSION") {
         } catch (_) {}
 
         return res.status(200).json({ success: true, result: parsed, company: comp, duplicate, dupInfo, legacy });
-      } else if (action === "GET_ORDER_NOS") {
-        // 일정 id 목록 → 각 일정에 붙은 출고지시번호
-        const ids = (Array.isArray(data?.ids) ? data.ids : []).map((x) => parseInt(x, 10)).filter((x) => x > 0).slice(0, 100);
-        if (!ids.length) return res.status(200).json({ success: true, map: {} });
-        try {
-          await ordEnsureTable();
-          const [rs] = await pool.query(`SELECT outbound_id, order_no, kind FROM outbound_orders WHERE outbound_id IN (${ids.map(() => "?").join(",")}) ORDER BY id ASC`, ids);
-          const map = {};
-          for (const r of rs) (map[r.outbound_id] = map[r.outbound_id] || []).push({ no: r.order_no, kind: r.kind || "" });
-          return res.status(200).json({ success: true, map });
-        } catch (e) {
-          console.error("GET_ORDER_NOS 오류:", e.sqlMessage || e.message);
-          return res.status(200).json({ success: false, msg: "지시번호를 불러오지 못했습니다." });
-        }
-      } else if (action === "ADD_ORDER_NOS") {
-        // 수동 입력: 한 번에 여러 개(줄바꿈·쉼표·공백 구분) 가능
-        const oid = parseInt(data?.id, 10);
-        if (!(oid > 0)) return res.status(200).json({ success: false, msg: "일정을 찾을 수 없습니다." });
-        const list = ordNormList(data?.orders);
-        if (!list.length) return res.status(200).json({ success: false, msg: "인식할 수 있는 번호가 없습니다. (영문·숫자 6자 이상)" });
-        try {
-          const [er] = await pool.query(`SELECT company, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date FROM outbound WHERE id = ? LIMIT 1`, [oid]);
-          if (!er.length) return res.status(200).json({ success: false, msg: "일정을 찾을 수 없습니다. (삭제되었을 수 있음)" });
-          const added = await ordAdd(oid, list, "manual");
-          await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `[출고지시번호 추가] ${er[0].company} (${er[0].date || "미정"}) ${list.join(", ")}`]);
-          return res.status(200).json({ success: true, added, orders: list });
-        } catch (e) {
-          console.error("ADD_ORDER_NOS 오류:", e.sqlMessage || e.message);
-          return res.status(200).json({ success: false, msg: "저장 중 오류가 발생했습니다." });
-        }
-      } else if (action === "DEL_ORDER_NO") {
-        const oid = parseInt(data?.id, 10);
-        const no = String(data?.order_no || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 40);
-        if (!(oid > 0) || !no) return res.status(200).json({ success: false, msg: "대상을 찾을 수 없습니다." });
-        try {
-          await ordEnsureTable();
-          const [dr] = await pool.query(`DELETE FROM outbound_orders WHERE outbound_id = ? AND order_no = ?`, [oid, no]);
-          if (dr && dr.affectedRows) await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `[출고지시번호 삭제] 일정 ID:${oid} ${no}`]);
-          return res.status(200).json({ success: true });
-        } catch (e) {
-          console.error("DEL_ORDER_NO 오류:", e.sqlMessage || e.message);
-          return res.status(200).json({ success: false, msg: "삭제 중 오류가 발생했습니다." });
-        }
       } else if (action === "PICK_FIND_ROWS") {
         // 같은 업체의 '완료되지 않은' 출고 일정 찾기 (수량 추가 대상 후보). 날짜가 있으면 그 날짜만, 없으면 미정 + 오늘 이후
         const fCompany = String(data?.company || "").trim().slice(0, 100);
@@ -2720,7 +2756,7 @@ if (action === "VERIFY_SESSION") {
         }
 
         if (orderNo && outId > 0) {
-          try { await ordAdd(outId, ordNormList(orderNo), mode === "append" ? "append" : "new"); } // 일정 화면 조회·검색용 (실패해도 등록 자체는 유지)
+          try { await ordAdd(outId, ordNormList(orderNo), mode === "append" ? "append" : "new", mode === "append" ? await ordAppendSlot(outId) : 0); } // 일정 화면 조회·검색용 (실패해도 등록 자체는 유지)
           catch (ordErr) { console.error("[PICK] 출고지시번호 저장 실패(무시):", ordErr.sqlMessage || ordErr.message); }
         }
 

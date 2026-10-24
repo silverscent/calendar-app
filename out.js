@@ -2251,6 +2251,9 @@ function updateLocalState(action, payload, idx) {
 
   let oldDay = parseDay(payload.oldDate);
   let newDay = parseDay(payload.newDate);
+  // 출고지시번호(화면 즉시 반영용): 수정창에서 바꾼 값(orderSlots) 또는 새 일정 등록 때 적은 값(orderNos)
+  const _slotOrds = payload.orderSlots ? _ordSlotsToList(payload.orderSlots) : action === "ADD" && payload.orderNos ? _ordSlotsToList({ 0: payload.orderNos }) : null;
+  let _removedOrds = null;
 
   // 📂 새 일정이 들어가거나 다른 날로 옮겨진 날은 접혀 있어도 펼쳐서 결과가 바로 보이게
   const _nc = String(payload.newComp || payload.oldComp || "");
@@ -2284,6 +2287,7 @@ function updateLocalState(action, payload, idx) {
       targetArr[idx].pal = payload.newPal ?? payload.oldPal;
       targetArr[idx].box = payload.newBox ?? payload.oldBox;
       targetArr[idx].etc = payload.newEtc;
+      if (_slotOrds) targetArr[idx].ords = _slotOrds;
       // isDone 상태 및 기존 배열의 순서는 완벽히 유지됨
       
     }
@@ -2331,7 +2335,7 @@ function updateLocalState(action, payload, idx) {
         }
       } else {
         let targetArr = oldDay === "pending" ? serverData.pendingItems : serverData.monthData[oldDay];
-        if (targetArr && idx !== null && targetArr[idx]) targetArr.splice(idx, 1);
+        if (targetArr && idx !== null && targetArr[idx]) { _removedOrds = targetArr[idx].ords || null; targetArr.splice(idx, 1); }
       }
     }
 
@@ -2344,6 +2348,7 @@ function updateLocalState(action, payload, idx) {
         etc: payload.newEtc,
         isDone: action === "EDIT" ? payload.oldDone : false,
         startDate: payload.newDate,
+        ...((_slotOrds || _removedOrds) ? { ords: _slotOrds || _removedOrds } : {}),
       };
       let startD = parseDay(payload.newDate);
       let endD =
@@ -3115,6 +3120,17 @@ function _addLiveSame(comp, dateStr) {
   return (arr || []).filter((it) => norm(it.company) === norm(comp) && !(it.isDone === true || String(it.isDone) === "true"));
 }
 
+// 수정 저장이 'EDIT_BLOCK'(같은 업체·같은 날짜 전부를 한꺼번에 고치는 방식)을 타야 하는 경우인지.
+//  기간이 있는 작업(TASK)만 해당. 일반 출고 일정은 같은 날 같은 업체가 여러 건일 수 있어(따로 추가·피킹지 등록) 반드시 그 일정의 id 로만 수정한다.
+function _editNeedsBlockPath(oldComp, oldBlockStart, oldBlockEnd, isTaskNow, itemId) {
+  if (!oldBlockStart || oldBlockStart === "null" || oldBlockStart === "미정") return false;
+  if (!itemId) return true; // id 를 모르면 예전 방식 유지
+  const nm = String(oldComp || "");
+  const wasTask = /^\[TASK\]/i.test(nm) || /OC|IC|폐기|반품|제작|하프|점검|휴무/i.test(getFullName(nm.replace(/\[TASK\]/gi, "").trim()));
+  const ranged = !!(oldBlockEnd && oldBlockEnd !== "null" && oldBlockEnd !== oldBlockStart);
+  return !!(isTaskNow || wasTask || ranged);
+}
+
 async function submitCMS(
   action,
   oldComp = null,
@@ -3143,6 +3159,7 @@ async function submitCMS(
   let currentIsDone = isDone === true || String(isDone) === "true";
 
   let _itemId = null;
+  let _itemOrds = []; // 이 일정에 붙어 있던 출고지시번호(수정창에서 바뀌었는지 비교용)
   let _itemOrigEtc = ""; // 원본 비고 — EDIT_BLOCK 변경 전 값 비교용
   if (idx !== null) {
     let day = oldDate === "미정" ? "pending" : parseInt(oldDate.split("-")[2], 10);
@@ -3157,6 +3174,7 @@ async function submitCMS(
       oldBox = safeStr(item.box);
       currentIsDone = item.isDone === true || String(item.isDone) === "true";
       _itemId = item.id || null;
+      _itemOrds = Array.isArray(item.ords) ? item.ords : [];
       _itemOrigEtc = String(item.etc || "").replace(/\[[\d/]+[^)]*추가\]/g, "").trim();
     }
   }
@@ -3228,6 +3246,7 @@ async function submitCMS(
     let histStr = histArr.join(" ");
     payload.newEtc = histStr !== "" ? (cleanEtc !== "" ? cleanEtc + " " + histStr : histStr) : cleanEtc;
     payload.oldEtc = _itemOrigEtc; // 비고 변경 전 값 — EDIT_BLOCK 로그에서 변경 내용 표시용
+    if (!isTask) { const _os = _ordCollectSlots(idx, _itemOrds); if (_os) payload.orderSlots = _os; } // 출고지시번호를 바꾼 경우에만 전송
 
     if (tempEditColorObj && tempEditColorIdx !== null && !isTask) {
       let stdName = getFullName(rawComp);
@@ -3264,6 +3283,12 @@ async function submitCMS(
         let spc = payload.addPal && payload.addBox ? " " : "";
         let histStr = `[${histDate} ${pStr}${spc}${bStr} 추가]`;
         item.etc = item.etc ? item.etc + " " + histStr : histStr;
+        // 이번 수량추가에 적은 출고지시번호는 'N차 수량추가'(N = 지금까지 쌓인 추가 이력 수)로 바로 화면에 반영
+        const _addNos = _ordNorm(payload.orderNos || "");
+        if (_addNos.length) {
+          const _hn = (String(item.etc).match(/\[\d{1,2}\/\d{1,2}\s*(?:\d+P)?\s*(?:\d+B)?\s*추가\]/g) || []).length || 1;
+          item.ords = (Array.isArray(item.ords) ? item.ords : []).concat(_addNos.filter((no) => !(item.ords || []).some((o) => o.no === no)).map((no) => ({ no, slot: _hn })));
+        }
       }
     }
   }
@@ -3352,7 +3377,7 @@ async function submitCMS(
       return;
     }
 
-    if (action === "EDIT" && oldBlockStart && oldBlockStart !== "null" && oldBlockStart !== "미정") {
+    if (action === "EDIT" && _editNeedsBlockPath(oldComp, oldBlockStart, oldBlockEnd, isTask, _itemId)) {
       const optimisticPayload = {
         ...payload,
         newEndDate: endDateStr,
@@ -3544,22 +3569,21 @@ function _ordInjectCss() {
   const st = document.createElement("style");
   st.id = "ordCss";
   st.textContent = `
-    .ord-wrap{margin-top:8px;display:flex;flex-direction:column;gap:6px}
-    .ord-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--border-color,rgba(128,128,128,.3));border-radius:8px}
-    .ord-no{font-weight:800;font-size:.9em;letter-spacing:.2px;word-break:break-all;flex:1 1 150px;user-select:all}
-    .ord-tag{font-size:.7em;font-weight:800;color:var(--text-sub,#888);border:1px solid rgba(128,128,128,.35);border-radius:6px;padding:1px 5px}
-    .ord-btn{background:transparent;border:1px solid #0a84ff;color:#0a84ff;border-radius:6px;padding:3px 9px;font-size:.78em;font-weight:800;cursor:pointer}
-    .ord-btn.sub{border-color:rgba(128,128,128,.5);color:var(--text-sub,#888)}
-    .ord-btn.del{border-color:rgba(255,69,58,.6);color:#ff453a}
-    .ord-add{align-self:flex-start;background:transparent;border:1px dashed rgba(128,128,128,.55);color:var(--text-sub,#888);border-radius:6px;padding:3px 9px;font-size:.78em;font-weight:800;cursor:pointer}
+    .ord-ico{display:inline-flex;flex-direction:row;flex:0 0 auto;white-space:nowrap;width:auto;height:auto;align-items:center;gap:4px;margin-left:8px;background:transparent;border:1px solid rgba(128,128,128,.55);color:var(--text-sub,#888);border-radius:6px;padding:2px 7px;font-size:.78em;font-weight:800;cursor:pointer;line-height:1.3}
+    .ord-ico svg{width:15px;height:13px;display:block}
     #ordOverlay{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box}
-    #ordOverlay .ord-card{background:#fff;color:#000;border-radius:14px;padding:16px;width:min(560px,100%);box-sizing:border-box;max-height:92vh;overflow:auto}
-    #ordOverlay .ord-card.dk{background:var(--card-bg,#1c1c1e);color:var(--text-main,#fff)}
-    #ordOverlay .ord-bcno{text-align:center;font-weight:900;font-size:1.15em;letter-spacing:1px;margin:8px 0 4px;word-break:break-all}
+    #ordOverlay .ord-card{background:#fff;color:#000;border-radius:14px;padding:16px;width:min(560px,100%);box-sizing:border-box;max-height:92vh;overflow:auto;-webkit-overflow-scrolling:touch}
+    #ordOverlay .ord-title{font-weight:900;font-size:1em;margin-bottom:2px}
+    #ordOverlay .ord-item{border-top:1px solid #e5e5ea;padding:12px 0 6px}
+    #ordOverlay .ord-item:first-of-type{border-top:none}
+    #ordOverlay .ord-lbl{display:inline-block;font-size:.75em;font-weight:800;color:#fff;background:#0a84ff;border-radius:5px;padding:2px 7px;margin-bottom:6px}
+    #ordOverlay .ord-lbl.base{background:#636366}
+    #ordOverlay .ord-bcno{text-align:center;font-weight:900;font-size:1.1em;letter-spacing:1px;margin:6px 0 2px;word-break:break-all}
     #ordOverlay .ord-hint{font-size:.75em;color:#666;text-align:center;margin-top:6px}
-    #ordOverlay textarea{width:100%;min-height:96px;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid rgba(128,128,128,.5);font-size:1em;background:transparent;color:inherit}
     #ordOverlay .ord-actions{display:flex;gap:8px;margin-top:12px}
-    #ordOverlay .ord-actions button{flex:1;padding:11px;border-radius:9px;border:1px solid rgba(128,128,128,.5);background:transparent;color:inherit;font-weight:800;font-size:.95em;cursor:pointer}
+    #ordOverlay .ord-actions button,#ordOverlay .ord-cp{padding:9px 12px;border-radius:9px;border:1px solid rgba(128,128,128,.5);background:transparent;color:inherit;font-weight:800;font-size:.9em;cursor:pointer}
+    #ordOverlay .ord-cp{display:block;margin:4px auto 0;font-size:.8em;padding:5px 12px}
+    #ordOverlay .ord-actions button{flex:1}
     #ordOverlay .ord-actions button.pri{background:#0a84ff;border-color:#0a84ff;color:#fff}
   `;
   document.head.appendChild(st);
@@ -3567,59 +3591,89 @@ function _ordInjectCss() {
 function _ordClose() {
   const o = document.getElementById("ordOverlay");
   if (o) o.remove();
-  if (window._ordPrevBright != null) window._ordPrevBright = null;
 }
-function _ordOpenOverlay(innerHtml, dark) {
+// 영문·숫자 6자 이상만 번호로 인정(서버와 같은 규칙)
+function _ordNorm(text) {
+  const out = [];
+  for (const t of String(text == null ? "" : text).split(/[\s,;]+/)) {
+    const n = t.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 40);
+    if (n.length >= 6 && !out.includes(n)) out.push(n);
+  }
+  return out.slice(0, 20);
+}
+function _ordSlotsToList(slots) {
+  const list = [];
+  const seen = new Set();
+  Object.keys(slots || {}).map(Number).filter((k) => k >= 0).sort((x, y) => x - y).forEach((k) => {
+    _ordNorm(slots[k]).forEach((no) => { if (!seen.has(no)) { seen.add(no); list.push({ no, slot: k }); } });
+  });
+  return list;
+}
+function _ordText(item, slot) {
+  return (item && Array.isArray(item.ords) ? item.ords : []).filter((o) => Number(o.slot) === slot).map((o) => o.no).join(", ");
+}
+function _ordSlotLabel(slot) {
+  return slot > 0 ? `${slot}차 수량추가` : "원래 일정";
+}
+// 수정창: 원래 일정 칸 + 수량추가 이력 칸의 번호를 모아 서버로 보낼 {slot: 글} 로 만든다. 바뀐 게 없으면 null(서버를 건드리지 않음)
+function _ordCollectSlots(idx, origOrds) {
+  const base = document.getElementById(`edit-ord-0-${idx}`);
+  if (!base) return null;
+  const slots = { 0: base.value };
+  let k = 0;
+  document.querySelectorAll(`.hist-edit-row-${idx}`).forEach((row) => {
+    const p = Math.max(0, parseInt(row.querySelector(`.hist-pal-${idx}`).value) || 0);
+    const b = Math.max(0, parseInt(row.querySelector(`.hist-box-${idx}`).value) || 0);
+    if (p > 0 || b > 0) { // 수량이 남은 이력만 N차로 다시 센다 (삭제된 이력의 번호는 함께 사라짐)
+      k++;
+      const o = row.querySelector(`.hist-ord-${idx}`);
+      slots[k] = o ? o.value : "";
+    }
+  });
+  const oldBy = {};
+  (origOrds || []).forEach((o) => { (oldBy[Number(o.slot)] = oldBy[Number(o.slot)] || []).push(o.no); });
+  const maxSlot = Math.max(k, 0, ...Object.keys(oldBy).map(Number));
+  for (let sl = 0; sl <= maxSlot; sl++) {
+    const nw = _ordNorm(slots[sl] || "").slice().sort().join(",");
+    const od = (oldBy[sl] || []).slice().sort().join(",");
+    if (nw !== od) return slots;
+  }
+  return null;
+}
+function _ordOpenOverlay(innerHtml) {
   _ordInjectCss();
   _ordClose();
   const o = document.createElement("div");
   o.id = "ordOverlay";
   o.onclick = (e) => { if (e.target === o) _ordClose(); };
-  o.innerHTML = `<div class="ord-card${dark ? " dk" : ""}" onclick="event.stopPropagation()">${innerHtml}</div>`;
+  o.innerHTML = `<div class="ord-card" onclick="event.stopPropagation()">${innerHtml}</div>`;
   document.body.appendChild(o);
   return o;
 }
-// 일정 카드에 붙는 번호 영역(출고 일정이고 id가 있을 때만). 번호는 뒤이어 한 번에 불러온다.
-function _ordSlotHtml(item, isAdminNow, isTaskNow) {
-  if (!isAdminNow || isTaskNow || !item || !(Number(item.id) > 0)) return "";
-  return `<div class="ord-slot" data-ordid="${Number(item.id)}"></div>`;
+// 상세의 수량 줄 옆에 붙는 바코드 아이콘 (번호가 있는 출고 일정에만). 번호는 달력 데이터에 이미 들어 있어 바로 열린다.
+function _ordBtnHtml(item, day, idx, isAdminNow, isTaskNow) {
+  if (!isAdminNow || isTaskNow || !item || !Array.isArray(item.ords) || !item.ords.length) return "";
+  _ordInjectCss(); // 아이콘 모양(스타일)이 팝업을 열기 전에도 적용되도록
+  const svg = `<svg viewBox="0 0 16 13" fill="currentColor" aria-hidden="true"><rect x="0" y="0" width="1.4" height="13"/><rect x="2.6" y="0" width="0.8" height="13"/><rect x="4.6" y="0" width="2" height="13"/><rect x="7.6" y="0" width="0.8" height="13"/><rect x="9.4" y="0" width="1.6" height="13"/><rect x="12" y="0" width="0.8" height="13"/><rect x="13.8" y="0" width="2.2" height="13"/></svg>`;
+  return `<button type="button" class="ord-ico" title="출고지시번호 · 바코드" onclick="event.stopPropagation();ordOpenList('${day}', ${idx})">${svg}<span>${item.ords.length > 1 ? item.ords.length : ""}</span></button>`;
 }
-function _ordRenderSlot(slot, list) {
-  const id = Number(slot.getAttribute("data-ordid"));
-  const multi = list.length > 1;
-  const rows = list
-    .map((o, i) => {
-      const no = _esc(o.no);
-      const tag = multi ? `<span class="ord-tag">${i + 1}차</span>` : "";
-      return `<div class="ord-row">${tag}<span class="ord-no">${no}</span><button class="ord-btn" onclick="event.stopPropagation();ordShowBarcode('${_argq(o.no)}')">바코드</button><button class="ord-btn sub" onclick="event.stopPropagation();ordCopy('${_argq(o.no)}')">복사</button><button class="ord-btn del" onclick="event.stopPropagation();ordDel(${id},'${_argq(o.no)}')">삭제</button></div>`;
+function ordOpenList(day, idx) {
+  const arr = day === "pending" ? serverData.pendingItems : serverData.monthData[day];
+  const item = arr && arr[idx];
+  if (!item || !Array.isArray(item.ords) || !item.ords.length) return;
+  const ords = item.ords.slice().sort((a, b) => Number(a.slot) - Number(b.slot));
+  const name = getFullName(String(item.company || "").replace(/\[TASK\]/gi, "").trim());
+  let lastSlot = null;
+  const body = ords
+    .map((o) => {
+      const svg = _c128Svg(o.no, 92);
+      const lbl = Number(o.slot) !== lastSlot ? `<span class="ord-lbl${Number(o.slot) > 0 ? "" : " base"}">${_esc(_ordSlotLabel(Number(o.slot)))}</span>` : "";
+      lastSlot = Number(o.slot);
+      return `<div class="ord-item">${lbl}${svg || `<div class="ord-hint">바코드로 만들 수 없는 번호</div>`}<div class="ord-bcno">${_esc(o.no)}</div><button type="button" class="ord-cp" onclick="ordCopy('${_argq(o.no)}')">번호 복사</button></div>`;
     })
     .join("");
-  slot.innerHTML = `<div class="ord-wrap">${rows}<button class="ord-add" onclick="event.stopPropagation();ordOpenAdd(${id})">＋ 출고지시번호${list.length ? " 추가" : ""}</button></div>`;
-}
-async function _ordLoadSlots() {
-  const slots = Array.from(document.querySelectorAll("#modalContent .ord-slot"));
-  if (!slots.length) return;
-  _ordInjectCss();
-  const tok = (window._ordTok = (window._ordTok || 0) + 1);
-  slots.forEach((s) => _ordRenderSlot(s, [])); // 번호를 불러오는 동안에도 '＋' 버튼은 바로 쓸 수 있게
-  const ids = slots.map((s) => Number(s.getAttribute("data-ordid"))).filter((x) => x > 0);
-  let res = null;
-  try {
-    res = await apiCall({ source: "vercel", domain: "system", action: "GET_ORDER_NOS", admin_id: localStorage.getItem("admin_id"), data: { ids } });
-  } catch (e) {}
-  if (tok !== window._ordTok || !res || !res.success || !res.map) return; // 그 사이 모달이 바뀜/실패 → 그대로 둠
-  slots.forEach((s) => {
-    if (!s.isConnected) return;
-    const list = res.map[Number(s.getAttribute("data-ordid"))] || [];
-    if (list.length) _ordRenderSlot(s, list);
-  });
-}
-function ordShowBarcode(no) {
-  const svg = _c128Svg(no, 130);
-  if (!svg) { showToast("⚠️ 바코드로 만들 수 없는 번호입니다.", 2000); return; }
   _ordOpenOverlay(
-    `<div style="font-weight:800;font-size:.85em;color:#666;margin-bottom:6px">출고지시번호 바코드</div>${svg}<div class="ord-bcno">${_esc(no)}</div><div class="ord-hint">스캔이 안 되면 화면 밝기를 최대로 올리고, 바코드를 스캐너 쪽으로 가까이 대 주세요</div><div class="ord-actions"><button onclick="ordCopy('${_argq(no)}')">번호 복사</button><button class="pri" onclick="_ordClose()">닫기</button></div>`,
-    false,
+    `<div class="ord-title">${_esc(name)}</div><div class="ord-hint" style="text-align:left;margin:0 0 4px">출고지시번호 · 번호 수정은 일정의 ✏️수정에서 합니다</div>${body}<div class="ord-hint">스캔이 안 되면 화면 밝기를 최대로 올리고, 바코드를 스캐너 쪽으로 가까이 대 주세요</div><div class="ord-actions"><button class="pri" onclick="_ordClose()">닫기</button></div>`,
   );
 }
 async function ordCopy(no) {
@@ -3641,39 +3695,6 @@ async function ordCopy(no) {
       showToast("⚠️ 복사하지 못했습니다. 번호를 길게 눌러 복사해 주세요.", 2500);
     }
   }
-}
-async function ordDel(id, no) {
-  if (!(await uiConfirm(`출고지시번호 ${no} 를 이 일정에서 지울까요?\n(일정 자체는 지워지지 않습니다)`, { danger: true }))) return;
-  const res = await apiCall({ source: "vercel", domain: "system", action: "DEL_ORDER_NO", admin_id: localStorage.getItem("admin_id"), data: { id, order_no: no } });
-  if (!res || !res.success) { showToast("❌ " + ((res && res.msg) || "삭제하지 못했습니다."), 2500); return; }
-  _ordRefreshOne(id);
-}
-async function _ordRefreshOne(id) {
-  const slot = document.querySelector(`#modalContent .ord-slot[data-ordid="${Number(id)}"]`);
-  if (!slot) return;
-  const res = await apiCall({ source: "vercel", domain: "system", action: "GET_ORDER_NOS", admin_id: localStorage.getItem("admin_id"), data: { ids: [Number(id)] } });
-  if (res && res.success && res.map && slot.isConnected) _ordRenderSlot(slot, res.map[Number(id)] || []);
-}
-function ordOpenAdd(id) {
-  _ordOpenOverlay(
-    `<div style="font-weight:800;margin-bottom:8px">출고지시번호 직접 입력</div><textarea id="ordAddText" placeholder="번호를 붙여넣거나 입력하세요&#10;여러 개는 줄바꿈·쉼표·띄어쓰기로 구분" autocapitalize="characters" autocomplete="off" spellcheck="false"></textarea><div class="ord-hint" style="text-align:left">영문·숫자 6자 이상만 인식됩니다. 이미 있는 번호는 건너뜁니다.</div><div class="ord-actions"><button onclick="_ordClose()">취소</button><button class="pri" id="ordAddBtn" onclick="ordSaveAdd(${Number(id)})">저장</button></div>`,
-    true,
-  );
-  setTimeout(() => { const t = document.getElementById("ordAddText"); if (t) t.focus(); }, 50);
-}
-async function ordSaveAdd(id) {
-  const t = document.getElementById("ordAddText");
-  const btn = document.getElementById("ordAddBtn");
-  if (!t || (btn && btn.disabled)) return;
-  const txt = t.value.trim();
-  if (!txt) { showToast("⚠️ 번호를 입력해 주세요.", 1800); return; }
-  if (btn) btn.disabled = true;
-  const res = await apiCall({ source: "vercel", domain: "system", action: "ADD_ORDER_NOS", admin_id: localStorage.getItem("admin_id"), data: { id, orders: txt } });
-  if (btn) btn.disabled = false;
-  if (!res || !res.success) { showToast("❌ " + ((res && res.msg) || "저장하지 못했습니다."), 3000); return; }
-  _ordClose();
-  showToast(res.added > 0 ? `✅ ${res.added}개 저장` : "이미 등록된 번호입니다.", 2000);
-  _ordRefreshOne(id);
 }
 
 function showModal(day, clickedIdx) {
@@ -3834,17 +3855,15 @@ function showModal(day, clickedIdx) {
                                     ${compNameHtml}
                                     ${actionBtns}
                                 </div>
-                                <div class="modal-vol" style="display:flex; align-items:center;">${iconHtml}${volStr} ${addQtyBtn}</div>
+                                <div class="modal-vol" style="display:flex; align-items:center; flex-wrap:wrap;">${iconHtml}${volStr} ${addQtyBtn}${_ordBtnHtml(item, day, idx, isAdmin, isTaskMode)}</div>
                                 ${histHtml} 
                                 ${etcHtml}
-                                ${_ordSlotHtml(item, isAdmin, isTaskMode)}
                             </div>
                             ${addQtyForm}
                             ${stampHtml}
                         </div>`;
   });
   document.getElementById("modalContent").innerHTML = contentHtml;
-  try { _ordLoadSlots(); } catch (_e) {} // 출고지시번호 목록(있을 때만 표시) — 실패해도 상세보기에는 영향 없음
   const _modal = document.getElementById("modal");
   _modal.style.display = "flex";
   const _modalBox = _modal.querySelector(".modal-box");
@@ -3881,6 +3900,8 @@ function _snapshotEdit(idx) {
     g(`edit-${idx}-end-date`),
     g(`edit-etc-${idx}`),
     c(`edit-type-task-${idx}`),
+    g(`edit-ord-0-${idx}`),
+    Array.from(document.querySelectorAll(`.hist-ord-${idx}`)).map((e) => e.value),
   ]);
 }
 function _isEditDirty() {
@@ -3973,6 +3994,11 @@ async function openEditForm(
     .replace(/\s{2,}/g, " ")
     .trim();
 
+  // 출고지시번호: 원래 일정(slot 0) + N차 수량추가(slot N)
+  const _ordArr = day === "pending" ? serverData.pendingItems : serverData.monthData[day];
+  const _ordItem = _ordArr && _ordArr[idx] ? _ordArr[idx] : null;
+  const _ordInputAttr = `type="text" class="edit-input" autocapitalize="characters" autocomplete="off" spellcheck="false"`;
+
   let histHtml = "";
   if (matches.length > 0) {
     histHtml += `<div class="form-label" style="margin-bottom: 6px; margin-top: 10px;">수량 추가 이력 세부 제어</div>`;
@@ -3981,7 +4007,7 @@ async function openEditForm(
       let pVal = match[2] || 0;
       let bVal = match[3] || 0;
       histHtml += `
-                <div class="hist-edit-row-${idx}" id="hist-item-${idx}-${i}" style="display:flex; gap:6px; align-items:center; width:100%;">
+                <div class="hist-edit-row-${idx}" id="hist-item-${idx}-${i}" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; width:100%;">
                     <span style="font-size:0.75em; background:#0a84ff; color:#fff; padding:2px 5px; border-radius:4px; font-weight:bold; white-space:nowrap; flex-shrink:0;">${i + 1}차</span>
                     <span class="hist-date-${idx}" style="font-size:0.85em; font-weight:900; color:#0a84ff; white-space:nowrap; flex-shrink:0;">${match[1]}</span>
                     
@@ -3989,6 +4015,7 @@ async function openEditForm(
                     <input type="number" min="0" class="hist-box-${idx} edit-input" value="${bVal}" data-old="${bVal}" oninput="onHistQtyChange(this, ${idx}, 'box')" style="padding:6px; font-size:0.85em; flex:1; min-width:0; text-align:center;" placeholder="BOX">
                     
                     <button onclick="deleteHistItem(${idx}, ${i})" style="background:rgba(255,59,48,0.1); color:#ff3b30; border:none; border-radius:6px; padding:6px 10px; font-weight:bold; cursor:pointer; font-size:0.85em; white-space:nowrap; flex-shrink:0;">삭제</button>
+                    ${!isTaskMode ? `<input type="text" class="hist-ord-${idx} edit-input" autocapitalize="characters" autocomplete="off" spellcheck="false" id="edit-ord-${i + 1}-${idx}" value="${_esc(_ordText(_ordItem, i + 1))}" placeholder="${i + 1}차 수량추가 출고지시번호 (선택 · 여러 개는 쉼표)" style="flex:1 1 100%; padding:6px; font-size:0.85em; margin-top:2px;">` : ""}
                 </div>`;
     });
     histHtml += `</div>`;
@@ -4051,6 +4078,9 @@ async function openEditForm(
               </div>
             </div>
             
+            ${!isTaskMode ? `<div class="form-label" style="margin-top:10px;">출고지시번호 (원래 일정 · 선택)</div>
+            <input ${_ordInputAttr} id="edit-ord-0-${idx}" value="${_esc(_ordText(_ordItem, 0))}" placeholder="여러 개는 쉼표·띄어쓰기로 구분">` : ""}
+
             ${histHtml}
 
             <div class="form-label">비고 (메모 입력)</div>
