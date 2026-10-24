@@ -35,7 +35,7 @@ async function callVision(b64, fetchFn, apiKey) {
   }
 }
 
-const GEMINI_PROMPT = `이 이미지는 물류센터 '피킹 리스트'(출고 작업지시서)의 마지막 장을 폰으로 찍은 사진이다(약간 기울거나 그림자가 있을 수 있음). 아래 값을 JSON 객체 하나로만 출력해.
+const GEMINI_PROMPT = `이 이미지는 물류센터 '피킹 리스트'(출고 작업지시서)의 마지막 장을 폰으로 찍은 사진이다(약간 기울거나 그림자가 있을 수 있고, 종이가 옆으로 눕거나 거꾸로 찍혔을 수도 있으니 글자가 읽히는 방향으로 돌려서 읽을 것). 아래 값을 JSON 객체 하나로만 출력해.
 
 [인쇄된 글자 — 사람이 펜으로 쓴 것은 섞지 말 것]
 - orderNo: '출고지시번호' (예: SH2610200371). 없으면 null
@@ -102,7 +102,12 @@ function visionWords(vr) {
   // 페이지 기울기 = 길쭉한 단어들(글자 한두 개 제외)의 윗변 각도 중앙값. ±12° 를 넘으면 보정하지 않음(오판 방지)
   const angs = raw.filter((r) => r.w > r.h * 2.2 && r.t.length >= 3).map((r) => r.ang).sort((a, b) => a - b);
   let theta = angs.length >= 5 ? angs[Math.floor(angs.length / 2)] : 0;
-  if (Math.abs(theta) > (12 * Math.PI) / 180) theta = 0;
+  // 종이가 옆으로(90°)·거꾸로(180°) 찍힌 사진도 바로 세운다: 가장 가까운 90° 배수에서 ±12° 이내면 그 각도 그대로 되돌림.
+  //   (단어 꼭짓점은 글자가 읽히는 방향 기준이라, 누운 종이는 각도가 ±90°·180° 근처로 나온다)
+  {
+    const q = Math.PI / 2, k = Math.round(theta / q), resid = theta - k * q;
+    if (Math.abs(resid) > (12 * Math.PI) / 180) theta = 0;
+  }
   const c = Math.cos(-theta), s = Math.sin(-theta);
   return raw.map((r) => {
     const x = r.cx * c - r.cy * s, y = r.cx * s + r.cy * c;

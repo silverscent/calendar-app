@@ -6521,9 +6521,315 @@ function pickChoose(kind) {
 
 function closePickModal() {
   _pickReq++; // 진행 중이던 판독 응답은 무시
+  _dsEd = null;
   const m = document.getElementById("pickModal");
   if (m) m.style.display = "none";
   _pickState = null;
+}
+
+// ==DOCSCAN-BEGIN==  📄 문서 스캐너식 모서리 찾기·펴기 (외부 라이브러리 없음, 화면 없이도 시험 가능한 순수 계산)
+// gray: 0~255 Uint8Array(w*h). 종이(밝은 덩어리)의 네 모서리를 찾아 [{x,y}×4] (좌상→우상→우하→좌하) 와 신뢰도를 돌려줌. 못 찾으면 null.
+function _dsOtsu(gray) {
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < gray.length; i++) hist[gray[i]]++;
+  const total = gray.length;
+  let sum = 0;
+  for (let t = 0; t < 256; t++) sum += t * hist[t];
+  let sB = 0, wB = 0, best = 0, thr = 128;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t];
+    if (!wB) continue;
+    const wF = total - wB;
+    if (!wF) break;
+    sB += t * hist[t];
+    const mB = sB / wB, mF = (sum - sB) / wF;
+    const v = wB * wF * (mB - mF) * (mB - mF);
+    if (v > best) { best = v; thr = t; }
+  }
+  return thr;
+}
+function _dsHull(pts) {
+  const p = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  const cr = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lo = [];
+  for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  const up = [];
+  for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+  lo.pop(); up.pop();
+  return lo.concat(up);
+}
+function _dsPolyArea(P) {
+  let a = 0;
+  for (let i = 0; i < P.length; i++) { const j = (i + 1) % P.length; a += P[i].x * P[j].y - P[j].x * P[i].y; }
+  return Math.abs(a) / 2;
+}
+function _dsFindQuad(gray, w, h) {
+  if (!gray || gray.length !== w * h || w < 20 || h < 20) return null;
+  const thr = Math.min(215, Math.max(80, _dsOtsu(gray)));
+  const mask = new Uint8Array(w * h);
+  for (let i = 0; i < mask.length; i++) mask[i] = gray[i] > thr ? 1 : 0;
+  // 가장 큰 밝은 덩어리(= 종이)
+  const lab = new Int32Array(w * h);
+  let bestId = 0, bestSize = 0, id = 0;
+  const stack = new Int32Array(w * h);
+  for (let s = 0; s < mask.length; s++) {
+    if (!mask[s] || lab[s]) continue;
+    id++;
+    let sp = 0, size = 0;
+    stack[sp++] = s; lab[s] = id;
+    while (sp) {
+      const c = stack[--sp]; size++;
+      const x = c % w, y = (c / w) | 0;
+      if (x > 0 && mask[c - 1] && !lab[c - 1]) { lab[c - 1] = id; stack[sp++] = c - 1; }
+      if (x < w - 1 && mask[c + 1] && !lab[c + 1]) { lab[c + 1] = id; stack[sp++] = c + 1; }
+      if (y > 0 && mask[c - w] && !lab[c - w]) { lab[c - w] = id; stack[sp++] = c - w; }
+      if (y < h - 1 && mask[c + w] && !lab[c + w]) { lab[c + w] = id; stack[sp++] = c + w; }
+    }
+    if (size > bestSize) { bestSize = size; bestId = id; }
+  }
+  if (!bestId || bestSize < w * h * 0.12) return null;
+  const pts = [];
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const c = y * w + x;
+      if (lab[c] !== bestId) continue;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1 || lab[c - 1] !== bestId || lab[c + 1] !== bestId || lab[c - w] !== bestId || lab[c + w] !== bestId) pts.push({ x, y });
+    }
+  let H = _dsHull(pts);
+  if (H.length < 4) return null;
+  // 꼭짓점이 4개가 될 때까지, 면적을 가장 덜 깎는 점부터 제거
+  while (H.length > 4) {
+    let bi = 0, bl = Infinity;
+    for (let i = 0; i < H.length; i++) {
+      const a = H[(i + H.length - 1) % H.length], b = H[i], c = H[(i + 1) % H.length];
+      const loss = Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) / 2;
+      if (loss < bl) { bl = loss; bi = i; }
+    }
+    H.splice(bi, 1);
+  }
+  // 시계 방향 정렬 후 좌상(x+y 최소)부터
+  const cx = H.reduce((s, p) => s + p.x, 0) / 4, cy = H.reduce((s, p) => s + p.y, 0) / 4;
+  H.sort((a, b) => Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx));
+  let s0 = 0;
+  for (let i = 1; i < 4; i++) if (H[i].x + H[i].y < H[s0].x + H[s0].y) s0 = i;
+  const Q = [0, 1, 2, 3].map((k) => H[(s0 + k) % 4]);
+  const qa = _dsPolyArea(Q);
+  const fill = bestSize / Math.max(1, qa); // 덩어리가 사각형을 얼마나 채우나(글씨 구멍이 있어도 보통 0.8 이상)
+  const areaRatio = qa / (w * h);
+  if (areaRatio < 0.12 || fill < 0.6) return null;
+  return { quad: Q, conf: Math.min(1, fill) * Math.min(1, areaRatio / 0.4), areaRatio, fill };
+}
+// 사각형을 사방으로 조금 넓힘(종이 가장자리가 잘리지 않게)
+function _dsExpand(Q, k) {
+  const cx = Q.reduce((s, p) => s + p.x, 0) / 4, cy = Q.reduce((s, p) => s + p.y, 0) / 4;
+  return Q.map((p) => ({ x: cx + (p.x - cx) * (1 + k), y: cy + (p.y - cy) * (1 + k) }));
+}
+function _dsOutSize(Q, maxSide) {
+  const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  let ow = Math.max(d(Q[0], Q[1]), d(Q[3], Q[2])), oh = Math.max(d(Q[0], Q[3]), d(Q[1], Q[2]));
+  const sc = Math.min(1, maxSide / Math.max(ow, oh));
+  return { w: Math.max(2, Math.round(ow * sc)), h: Math.max(2, Math.round(oh * sc)) };
+}
+// 출력 사각형(0,0)-(ow,0)-(ow,oh)-(0,oh) → 원본의 Q 로 가는 투영 변환 계수 8개
+function _dsHomography(Q, ow, oh) {
+  const dst = [[0, 0], [ow, 0], [ow, oh], [0, oh]];
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const [u, v] = dst[i], { x, y } = Q[i];
+    A.push([u, v, 1, 0, 0, 0, -u * x, -v * x]); b.push(x);
+    A.push([0, 0, 0, u, v, 1, -u * y, -v * y]); b.push(y);
+  }
+  for (let c = 0; c < 8; c++) {
+    let p = c;
+    for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+    [A[c], A[p]] = [A[p], A[c]]; [b[c], b[p]] = [b[p], b[c]];
+    if (Math.abs(A[c][c]) < 1e-12) return null;
+    for (let r = 0; r < 8; r++) {
+      if (r === c) continue;
+      const f = A[r][c] / A[c][c];
+      for (let k = c; k < 8; k++) A[r][k] -= f * A[c][k];
+      b[r] -= f * b[c];
+    }
+  }
+  return b.map((v, i) => v / A[i][i]);
+}
+// RGBA(sw×sh) 에서 Q 영역을 ow×oh 직사각형으로 펴서 RGBA 로 돌려줌
+function _dsWarp(src, sw, sh, Q, ow, oh) {
+  const m = _dsHomography(Q, ow, oh);
+  if (!m) return null;
+  const out = new Uint8ClampedArray(ow * oh * 4);
+  for (let v = 0; v < oh; v++)
+    for (let u = 0; u < ow; u++) {
+      const dn = m[6] * u + m[7] * v + 1;
+      const x = (m[0] * u + m[1] * v + m[2]) / dn, y = (m[3] * u + m[4] * v + m[5]) / dn;
+      const o = (v * ow + u) * 4;
+      if (x < 0 || y < 0 || x > sw - 1 || y > sh - 1) { out[o] = out[o + 1] = out[o + 2] = 255; out[o + 3] = 255; continue; }
+      const x0 = x | 0, y0 = y | 0, x1 = Math.min(sw - 1, x0 + 1), y1 = Math.min(sh - 1, y0 + 1), fx = x - x0, fy = y - y0;
+      const i00 = (y0 * sw + x0) * 4, i10 = (y0 * sw + x1) * 4, i01 = (y1 * sw + x0) * 4, i11 = (y1 * sw + x1) * 4;
+      for (let k = 0; k < 3; k++)
+        out[o + k] = src[i00 + k] * (1 - fx) * (1 - fy) + src[i10 + k] * fx * (1 - fy) + src[i01 + k] * (1 - fx) * fy + src[i11 + k] * fx * fy;
+      out[o + 3] = 255;
+    }
+  return out;
+}
+// ==DOCSCAN-END==
+
+// ───────── 📄 모서리 맞추기 화면 ─────────
+// 사진 → (자동으로 종이 모서리 찾기) → 사람이 점을 끌어 확인 → 반듯하게 펴서 서버로.
+let _dsEd = null; // { cv(원본 캔버스), quad, disp(표시 캔버스), sc, drag }
+function _dsLoad(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const MAX = 2000;
+        const sc = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+        const cv = document.createElement("canvas");
+        cv.width = Math.max(1, Math.round(img.naturalWidth * sc));
+        cv.height = Math.max(1, Math.round(img.naturalHeight * sc));
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        URL.revokeObjectURL(url);
+        resolve(cv);
+      } catch (e) { URL.revokeObjectURL(url); reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("이미지를 열 수 없습니다.")); };
+    img.src = url;
+  });
+}
+function _dsAuto(cv) {
+  try {
+    const sc = Math.min(1, 480 / Math.max(cv.width, cv.height));
+    const w = Math.max(20, Math.round(cv.width * sc)), h = Math.max(20, Math.round(cv.height * sc));
+    const t = document.createElement("canvas");
+    t.width = w; t.height = h;
+    const c2 = t.getContext("2d");
+    c2.drawImage(cv, 0, 0, w, h);
+    const d = c2.getImageData(0, 0, w, h).data;
+    const g = new Uint8Array(w * h);
+    for (let i = 0; i < g.length; i++) g[i] = (d[i * 4] * 299 + d[i * 4 + 1] * 587 + d[i * 4 + 2] * 114) / 1000;
+    const r = _dsFindQuad(g, w, h);
+    if (!r) return null;
+    const k = cv.width / w;
+    return { quad: _dsExpand(r.quad.map((p) => ({ x: p.x * k, y: p.y * k })), 0.015), conf: r.conf };
+  } catch (_) { return null; }
+}
+function _dsClampQuad(Q, W, H) {
+  return Q.map((p) => ({ x: Math.min(W - 1, Math.max(0, p.x)), y: Math.min(H - 1, Math.max(0, p.y)) }));
+}
+function _dsDraw() {
+  const E = _dsEd;
+  if (!E || !E.disp) return;
+  const c = E.disp, x = c.getContext("2d");
+  x.clearRect(0, 0, c.width, c.height);
+  x.drawImage(E.cv, 0, 0, c.width, c.height);
+  const P = E.quad.map((p) => ({ x: p.x * E.sc, y: p.y * E.sc }));
+  x.fillStyle = "rgba(10,132,255,0.14)";
+  x.strokeStyle = "#0a84ff";
+  x.lineWidth = 3;
+  x.beginPath();
+  x.moveTo(P[0].x, P[0].y);
+  for (let i = 1; i < 4; i++) x.lineTo(P[i].x, P[i].y);
+  x.closePath(); x.fill(); x.stroke();
+  P.forEach((p, i) => {
+    x.beginPath();
+    x.arc(p.x, p.y, 15, 0, Math.PI * 2);
+    x.fillStyle = E.drag === i ? "#ff9f0a" : "rgba(255,255,255,0.92)";
+    x.fill();
+    x.lineWidth = 3; x.strokeStyle = "#0a84ff"; x.stroke();
+  });
+}
+function _dsPtr(ev) {
+  const c = _dsEd.disp, r = c.getBoundingClientRect();
+  return { x: ((ev.clientX - r.left) / r.width) * c.width, y: ((ev.clientY - r.top) / r.height) * c.height };
+}
+function _dsDown(ev) {
+  const E = _dsEd;
+  if (!E) return;
+  const p = _dsPtr(ev);
+  let bi = -1, bd = 46 * (E.disp.width / Math.max(1, E.disp.getBoundingClientRect().width)); // 손가락 크기만큼 넉넉히
+  E.quad.forEach((q, i) => { const d = Math.hypot(q.x * E.sc - p.x, q.y * E.sc - p.y); if (d < bd) { bd = d; bi = i; } });
+  if (bi < 0) return;
+  E.drag = bi;
+  try { E.disp.setPointerCapture(ev.pointerId); } catch (_) {}
+  ev.preventDefault();
+  _dsDraw();
+}
+function _dsMove(ev) {
+  const E = _dsEd;
+  if (!E || E.drag == null || E.drag < 0) return;
+  const p = _dsPtr(ev);
+  E.quad[E.drag] = { x: Math.min(E.cv.width - 1, Math.max(0, p.x / E.sc)), y: Math.min(E.cv.height - 1, Math.max(0, p.y / E.sc)) };
+  ev.preventDefault();
+  _dsDraw();
+}
+function _dsUp() {
+  if (_dsEd) { _dsEd.drag = null; _dsDraw(); }
+}
+function _dsQuadOk(Q) {
+  // 볼록한 사각형이고 너무 작지 않아야 펼 수 있음
+  const cr = (a, b, c) => (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+  const sg = [0, 1, 2, 3].map((i) => cr(Q[i], Q[(i + 1) % 4], Q[(i + 2) % 4]));
+  return (sg.every((v) => v > 0) || sg.every((v) => v < 0)) && _dsPolyArea(Q) > 40000;
+}
+function _pickEditShow(cv, auto) {
+  const body = document.getElementById("pickBody");
+  if (!body) return;
+  const W = cv.width, H = cv.height;
+  const q0 = auto ? auto.quad : [{ x: W * 0.08, y: H * 0.08 }, { x: W * 0.92, y: H * 0.08 }, { x: W * 0.92, y: H * 0.92 }, { x: W * 0.08, y: H * 0.92 }];
+  _dsEd = { cv, quad: _dsClampQuad(q0, W, H), disp: null, sc: 1, drag: null, auto: !!auto };
+  body.innerHTML = `<div id="pkEd">
+    <div id="pkEdMsg" style="font-weight:800;color:var(--text-main);margin:2px 0 8px;font-size:0.95em">${auto ? "📄 종이 모서리를 찾았어요. 맞는지 보고, 틀리면 점을 끌어 맞춰주세요." : "📄 종이 모서리를 못 찾았어요. 네 점을 종이 모서리에 끌어 맞춰주세요."}</div>
+    <div style="text-align:center"><canvas id="pkEdCv" style="max-width:100%;max-height:58vh;touch-action:none;border-radius:10px"></canvas></div>
+    <div class="pk-foot">
+      <button type="button" class="pk-btn ghost" onclick="_pickChooser()">다시 선택</button>
+      <button type="button" class="pk-btn ghost" onclick="pickEditSend(false)">그대로 읽기</button>
+      <button type="button" class="pk-btn primary" id="pkEdGo" onclick="pickEditSend(true)">📄 펴서 읽기</button>
+    </div></div>`;
+  const disp = document.getElementById("pkEdCv");
+  const sc = Math.min(1, 900 / Math.max(W, H));
+  disp.width = Math.round(W * sc); disp.height = Math.round(H * sc);
+  _dsEd.disp = disp; _dsEd.sc = sc;
+  disp.addEventListener("pointerdown", _dsDown);
+  disp.addEventListener("pointermove", _dsMove);
+  disp.addEventListener("pointerup", _dsUp);
+  disp.addEventListener("pointercancel", _dsUp);
+  _dsDraw();
+}
+function _dsToB64(cv) {
+  let q = 0.85;
+  let data = cv.toDataURL("image/jpeg", q);
+  while (data.length > 3800000 && q > 0.4) { q -= 0.1; data = cv.toDataURL("image/jpeg", q); }
+  return data.replace(/^data:[^,]+,/, "");
+}
+async function pickEditSend(flatten) {
+  const E = _dsEd;
+  if (!E) return;
+  let b64;
+  try {
+    if (flatten) {
+      if (!_dsQuadOk(E.quad)) { showToast("모서리 점이 꼬였어요. 네 점을 종이 모서리 순서대로 맞춰주세요.", 2800); return; }
+      const go = document.getElementById("pkEdGo");
+      if (go) { go.disabled = true; go.textContent = "펴는 중…"; }
+      await new Promise((r) => setTimeout(r, 30)); // 버튼 문구가 먼저 그려지게
+      const sw = E.cv.width, sh = E.cv.height;
+      const src = E.cv.getContext("2d").getImageData(0, 0, sw, sh).data;
+      const o = _dsOutSize(E.quad, 2000);
+      const px = _dsWarp(src, sw, sh, E.quad, o.w, o.h);
+      if (!px) throw new Error("warp");
+      const oc = document.createElement("canvas");
+      oc.width = o.w; oc.height = o.h;
+      oc.getContext("2d").putImageData(new ImageData(px, o.w, o.h), 0, 0);
+      b64 = _dsToB64(oc);
+    } else {
+      b64 = _dsToB64(E.cv);
+    }
+  } catch (e) {
+    // 펴기에 실패하면 원본 그대로 읽는다
+    b64 = _dsToB64(E.cv);
+  }
+  _dsEd = null;
+  await _pickSend(b64);
 }
 
 // 사진 → 긴 변 2000px JPEG(base64). 서버 요청 한도(약 4.5MB)와 인식 선명도 사이 균형
@@ -6571,12 +6877,30 @@ async function pickOnFile(inp) {
   modal.style.display = "flex";
   const myReq = ++_pickReq;
   _pickState = { busy: true };
+  body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)"><div style="font-size:2em">⏳</div><div style="margin-top:10px;font-weight:800;color:var(--text-main)">사진을 여는 중입니다</div></div>`;
+  try {
+    const cv = await _dsLoad(file);
+    if (myReq !== _pickReq) return;
+    _pickState = null; // 편집 화면에서는 닫기 가능
+    _pickEditShow(cv, _dsAuto(cv));
+  } catch (e) {
+    if (myReq !== _pickReq) return;
+    _pickShowError("사진을 열 수 없습니다. 다시 시도해주세요.");
+  }
+}
+
+async function _pickSend(b64) {
+  const modal = document.getElementById("pickModal");
+  const body = document.getElementById("pickBody");
+  if (!modal || !body) return;
+  modal.style.display = "flex";
+  const myReq = ++_pickReq;
+  _pickState = { busy: true };
   body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)">
     <div style="font-size:2em">⏳</div>
     <div style="margin-top:10px;font-weight:800;color:var(--text-main)">피킹지를 읽는 중입니다</div>
     <div style="margin-top:6px;font-size:0.85em">약 10~20초 걸립니다. 창을 닫지 마세요.</div></div>`;
   try {
-    const b64 = await _pickResize(file);
     const token = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 55000); // 서버 한도(60초) 안에서 충분히 기다림 (기본 apiCall 은 15초라 사용 안 함)
