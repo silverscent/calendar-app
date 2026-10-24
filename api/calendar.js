@@ -2145,6 +2145,7 @@ if (action === "VERIFY_SESSION") {
         } else if (action === "DELETE") {
           if (data?.id) {
             await pool.query(`DELETE FROM outbound WHERE id = ?`, [data.id]);
+            try { await pool.query(`DELETE FROM outbound_orders WHERE outbound_id = ?`, [data.id]); } catch (_) {} // 지운 일정의 출고지시번호 기록 정리(없어도 무방)
           } else {
             await pool.query(
               `DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND COALESCE(NULLIF(pal,''),'0')=COALESCE(NULLIF(?,''),'0') AND COALESCE(NULLIF(box,''),'0')=COALESCE(NULLIF(?,''),'0')`,
@@ -2339,6 +2340,7 @@ if (action === "VERIFY_SESSION") {
             const tDate = it.dateStr === "미정" ? null : it.dateStr;
             if (it.id) {
               await pool.query(`DELETE FROM outbound WHERE id = ?`, [it.id]);
+              try { await pool.query(`DELETE FROM outbound_orders WHERE outbound_id = ?`, [it.id]); } catch (_) {}
             } else {
               await pool.query(
                 `DELETE FROM outbound WHERE company = ? AND outbound_date <=> ? AND COALESCE(NULLIF(pal,''),'0')=COALESCE(NULLIF(?,''),'0') AND COALESCE(NULLIF(box,''),'0')=COALESCE(NULLIF(?,''),'0')`,

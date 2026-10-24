@@ -3213,7 +3213,7 @@ async function submitCMS(
     endDateStr = endNode ? endNode.value : "";
     payload.newDate = startDateStr;
     payload.newEtc = document.getElementById("add-etc").value;
-    { const _oe = document.getElementById("add-orders"); if (_oe && _oe.value.trim() && !isTask) payload.orderNos = _oe.value.trim(); } // 출고지시번호(선택)
+    { const _oe = document.getElementById("add-orders"); if (_oe && _oe.value.trim() && !isTask) { payload.orderNos = _oe.value.trim(); if (_ordHasIgnored(_oe.value)) showToast("ℹ️ 영문·숫자 6자 미만 번호는 저장되지 않습니다.", 3500); } } // 출고지시번호(선택)
   } else if (action === "EDIT") {
     isTask = document.getElementById(`edit-type-task-${idx}`).checked;
     rawComp = document.getElementById(`edit-comp-${idx}`).value.trim();
@@ -3246,7 +3246,12 @@ async function submitCMS(
     let histStr = histArr.join(" ");
     payload.newEtc = histStr !== "" ? (cleanEtc !== "" ? cleanEtc + " " + histStr : histStr) : cleanEtc;
     payload.oldEtc = _itemOrigEtc; // 비고 변경 전 값 — EDIT_BLOCK 로그에서 변경 내용 표시용
-    if (!isTask) { const _os = _ordCollectSlots(idx, _itemOrds); if (_os) payload.orderSlots = _os; } // 출고지시번호를 바꾼 경우에만 전송
+    if (!isTask) {
+      const _os = _ordCollectSlots(idx, _itemOrds);
+      if (_os) payload.orderSlots = _os; // 출고지시번호를 바꾼 경우에만 전송
+      const _ordInputs = Array.from(document.querySelectorAll(`#edit-ord-0-${idx}, #edit-ord-x-${idx}, .hist-ord-${idx}`));
+      if (_ordInputs.some((e) => _ordHasIgnored(e.value))) showToast("ℹ️ 영문·숫자 6자 미만 번호는 저장되지 않습니다.", 3500);
+    }
 
     if (tempEditColorObj && tempEditColorIdx !== null && !isTask) {
       let stdName = getFullName(rawComp);
@@ -3263,7 +3268,7 @@ async function submitCMS(
   } else if (action === "ADD_QTY") {
     payload.addPal = clampQty(document.getElementById(`add-q-pal-${idx}`).value);
     payload.addBox = clampQty(document.getElementById(`add-q-box-${idx}`).value);
-    { const _oe = document.getElementById(`add-q-ord-${idx}`); if (_oe && _oe.value.trim()) payload.orderNos = _oe.value.trim(); } // 출고지시번호(선택)
+    { const _oe = document.getElementById(`add-q-ord-${idx}`); if (_oe && _oe.value.trim()) { payload.orderNos = _oe.value.trim(); if (_ordHasIgnored(_oe.value)) showToast("ℹ️ 영문·숫자 6자 미만 번호는 저장되지 않습니다.", 3500); } } // 출고지시번호(선택)
 
     if (!payload.addPal && !payload.addBox) {
       showToast("⚠️ 추가할 파레트나 박스 수량을 입력해주세요.", 2000);
@@ -3574,10 +3579,18 @@ function _ordInjectCss() {
     #ordOverlay{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box}
     #ordOverlay .ord-card{background:#fff;color:#000;border-radius:14px;padding:16px;width:min(560px,100%);box-sizing:border-box;max-height:92vh;overflow:auto;-webkit-overflow-scrolling:touch}
     #ordOverlay .ord-title{font-weight:900;font-size:1em;margin-bottom:2px}
-    #ordOverlay .ord-item{border-top:1px solid #e5e5ea;padding:12px 0 6px}
-    #ordOverlay .ord-item:first-of-type{border-top:none}
-    #ordOverlay .ord-lbl{display:inline-block;font-size:.75em;font-weight:800;color:#fff;background:#0a84ff;border-radius:5px;padding:2px 7px;margin-bottom:6px}
-    #ordOverlay .ord-lbl.base{background:#636366}
+    #ordOverlay .ord-grp{border:1px solid #d1d1d6;border-radius:12px;margin:10px 0;overflow:hidden;background:#fff}
+    #ordOverlay .ord-grp-h{display:flex;align-items:center;gap:6px;padding:6px 10px;background:#f2f2f7;font-size:.78em;font-weight:900;color:#3a3a3c;border-bottom:1px solid #e5e5ea}
+    #ordOverlay .ord-grp-h .n{margin-left:auto;font-weight:800;color:#8e8e93}
+    #ordOverlay .ord-grp.add .ord-grp-h{background:#e8f1ff;color:#0a60d0}
+    #ordOverlay .ord-row{display:flex;align-items:center;width:100%;box-sizing:border-box;padding:13px 12px;background:#fff;border:none;border-top:1px solid #efeff4;color:#000;font-size:1.02em;font-weight:900;letter-spacing:.5px;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+    #ordOverlay .ord-grp-h + .ord-row{border-top:none}
+    #ordOverlay .ord-row .no{flex:1;word-break:break-all}
+    #ordOverlay .ord-row .chev{font-size:.8em;color:#8e8e93;transition:transform .2s}
+    #ordOverlay .ord-row.on{background:#eef5ff}
+    #ordOverlay .ord-row.on .chev{transform:rotate(180deg);color:#0a84ff}
+    #ordOverlay .ord-pan{max-height:0;overflow:hidden;transition:max-height .25s ease;background:#fff}
+    #ordOverlay .ord-pan-in{padding:10px 12px 12px;border-top:1px dashed #c7c7cc}
     #ordOverlay .ord-bcno{text-align:center;font-weight:900;font-size:1.1em;letter-spacing:1px;margin:6px 0 2px;word-break:break-all}
     #ordOverlay .ord-hint{font-size:.75em;color:#666;text-align:center;margin-top:6px}
     #ordOverlay .ord-actions{display:flex;gap:8px;margin-top:12px}
@@ -3612,6 +3625,9 @@ function _ordSlotsToList(slots) {
 function _ordText(item, slot) {
   return (item && Array.isArray(item.ords) ? item.ords : []).filter((o) => Number(o.slot) === slot).map((o) => o.no).join(", ");
 }
+function _ordOrphanText(item, histN) {
+  return (item && Array.isArray(item.ords) ? item.ords : []).filter((o) => Number(o.slot) > histN).map((o) => o.no).join(", ");
+}
 function _ordSlotLabel(slot) {
   return slot > 0 ? `${slot}차 수량추가` : "원래 일정";
 }
@@ -3620,6 +3636,7 @@ function _ordCollectSlots(idx, origOrds) {
   const base = document.getElementById(`edit-ord-0-${idx}`);
   if (!base) return null;
   const slots = { 0: base.value };
+  const histN = parseInt(base.getAttribute("data-histn"), 10) || 0; // 수정창을 열 때의 수량추가 이력 줄 수
   let k = 0;
   document.querySelectorAll(`.hist-edit-row-${idx}`).forEach((row) => {
     const p = Math.max(0, parseInt(row.querySelector(`.hist-pal-${idx}`).value) || 0);
@@ -3632,6 +3649,18 @@ function _ordCollectSlots(idx, origOrds) {
   });
   const oldBy = {};
   (origOrds || []).forEach((o) => { (oldBy[Number(o.slot)] = oldBy[Number(o.slot)] || []).push(o.no); });
+  // 수량추가 이력 줄보다 큰 칸의 번호('이력과 연결 안 된 번호')는 별도 칸에서 보여 주며, 지우지 않는 한 원래 칸을 그대로 유지
+  const ox = document.getElementById(`edit-ord-x-${idx}`);
+  if (ox) {
+    const slotOf = {};
+    (origOrds || []).forEach((o) => { if (Number(o.slot) > histN) slotOf[o.no] = Number(o.slot); });
+    _ordNorm(ox.value).forEach((no) => {
+      const sl = slotOf[no] || histN + 1;
+      slots[sl] = (slots[sl] ? slots[sl] + "," : "") + no;
+    });
+  } else {
+    Object.keys(oldBy).map(Number).filter((sl) => sl > histN).forEach((sl) => { slots[sl] = oldBy[sl].join(","); }); // 칸이 안 보이면 건드리지 않음
+  }
   const maxSlot = Math.max(k, 0, ...Object.keys(oldBy).map(Number));
   for (let sl = 0; sl <= maxSlot; sl++) {
     const nw = _ordNorm(slots[sl] || "").slice().sort().join(",");
@@ -3639,6 +3668,13 @@ function _ordCollectSlots(idx, origOrds) {
     if (nw !== od) return slots;
   }
   return null;
+}
+// 6자 미만 등 번호로 인정되지 않는 입력이 섞여 있으면 true (저장은 되지만 그 부분은 빠짐 → 안내용)
+function _ordHasIgnored(text) {
+  return String(text == null ? "" : text).split(/[\s,;]+/).some((t) => {
+    const n = t.replace(/[^A-Za-z0-9]/g, "");
+    return t.trim() !== "" && n.length < 6;
+  });
 }
 function _ordOpenOverlay(innerHtml) {
   _ordInjectCss();
@@ -3663,18 +3699,45 @@ function ordOpenList(day, idx) {
   if (!item || !Array.isArray(item.ords) || !item.ords.length) return;
   const ords = item.ords.slice().sort((a, b) => Number(a.slot) - Number(b.slot));
   const name = getFullName(String(item.company || "").replace(/\[TASK\]/gi, "").trim());
-  let lastSlot = null;
-  const body = ords
-    .map((o) => {
-      const svg = _c128Svg(o.no, 92);
-      const lbl = Number(o.slot) !== lastSlot ? `<span class="ord-lbl${Number(o.slot) > 0 ? "" : " base"}">${_esc(_ordSlotLabel(Number(o.slot)))}</span>` : "";
-      lastSlot = Number(o.slot);
-      return `<div class="ord-item">${lbl}${svg || `<div class="ord-hint">바코드로 만들 수 없는 번호</div>`}<div class="ord-bcno">${_esc(o.no)}</div><button type="button" class="ord-cp" onclick="ordCopy('${_argq(o.no)}')">번호 복사</button></div>`;
+  // 같은 칸(원래 일정 / N차 수량추가)의 번호들은 한 묶음 카드로
+  const groups = [];
+  ords.forEach((o) => {
+    const sl = Number(o.slot) || 0;
+    let g = groups.find((x) => x.slot === sl);
+    if (!g) { g = { slot: sl, list: [] }; groups.push(g); }
+    g.list.push(o.no);
+  });
+  const body = groups
+    .map((g) => {
+      const rows = g.list
+        .map((no) => `<button type="button" class="ord-row" data-no="${_esc(no)}" onclick="ordToggleBar(this)"><span class="no">${_esc(no)}</span><span class="chev">▼</span></button><div class="ord-pan"></div>`)
+        .join("");
+      return `<div class="ord-grp${g.slot > 0 ? " add" : ""}"><div class="ord-grp-h"><span>${_esc(_ordSlotLabel(g.slot))}</span><span class="n">${g.list.length}건</span></div>${rows}</div>`;
     })
     .join("");
   _ordOpenOverlay(
-    `<div class="ord-title">${_esc(name)}</div><div class="ord-hint" style="text-align:left;margin:0 0 4px">출고지시번호 · 번호 수정은 일정의 ✏️수정에서 합니다</div>${body}<div class="ord-hint">스캔이 안 되면 화면 밝기를 최대로 올리고, 바코드를 스캐너 쪽으로 가까이 대 주세요</div><div class="ord-actions"><button class="pri" onclick="_ordClose()">닫기</button></div>`,
+    `<div class="ord-title">${_esc(name)}</div><div class="ord-hint" style="text-align:left;margin:0 0 2px">번호를 누르면 바로 아래에 바코드가 열립니다 (한 번에 1개) · 번호 수정은 ✏️수정에서</div>${body}<div class="ord-hint">스캔이 안 되면 화면 밝기를 최대로 올리고, 바코드를 스캐너 쪽으로 가까이 대 주세요</div><div class="ord-actions"><button class="pri" onclick="_ordClose()">닫기</button></div>`,
   );
+}
+// 번호 줄을 누르면 그 줄 바로 아래가 펼쳐지며 바코드가 나타나고, 이미 열려 있던 다른 바코드는 닫힌다 (같은 줄을 다시 누르면 닫힘)
+function ordToggleBar(btn) {
+  const root = document.getElementById("ordOverlay");
+  if (!root || !btn) return;
+  const pan = btn.nextElementSibling;
+  const wasOn = btn.classList.contains("on");
+  root.querySelectorAll(".ord-row.on").forEach((r) => {
+    r.classList.remove("on");
+    const pn = r.nextElementSibling;
+    if (pn) { pn.style.maxHeight = "0px"; pn.innerHTML = ""; pn.removeAttribute("data-open"); } // 닫는 쪽 바코드는 바로 없앰 → 화면에는 항상 1개만
+  });
+  if (wasOn || !pan) return;
+  const no = btn.getAttribute("data-no") || "";
+  const svg = _c128Svg(no, 110);
+  pan.innerHTML = `<div class="ord-pan-in">${svg || `<div class="ord-hint">바코드로 만들 수 없는 번호</div>`}<div class="ord-bcno">${_esc(no)}</div><button type="button" class="ord-cp" onclick="ordCopy('${_argq(no)}')">번호 복사</button></div>`;
+  pan.setAttribute("data-open", "1");
+  btn.classList.add("on");
+  pan.style.maxHeight = pan.scrollHeight + "px";
+  setTimeout(() => { try { btn.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (_) {} }, 60);
 }
 async function ordCopy(no) {
   try {
@@ -4079,7 +4142,9 @@ async function openEditForm(
             </div>
             
             ${!isTaskMode ? `<div class="form-label" style="margin-top:10px;">출고지시번호 (원래 일정 · 선택)</div>
-            <input ${_ordInputAttr} id="edit-ord-0-${idx}" value="${_esc(_ordText(_ordItem, 0))}" placeholder="여러 개는 쉼표·띄어쓰기로 구분">` : ""}
+            <input ${_ordInputAttr} id="edit-ord-0-${idx}" data-histn="${matches.length}" value="${_esc(_ordText(_ordItem, 0))}" placeholder="여러 개는 쉼표·띄어쓰기로 구분">` : ""}
+            ${!isTaskMode && _ordOrphanText(_ordItem, matches.length) ? `<div class="form-label" style="margin-top:10px;">수량추가 이력과 연결되지 않은 번호 (지우면 삭제)</div>
+            <input ${_ordInputAttr} id="edit-ord-x-${idx}" value="${_esc(_ordOrphanText(_ordItem, matches.length))}">` : ""}
 
             ${histHtml}
 
