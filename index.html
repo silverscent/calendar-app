@@ -5479,6 +5479,8 @@
           </div>
           <div class="form-label">비고 (보관 위치 등)</div>
           <input type="text" id="add-etc" class="edit-input" placeholder="예: 바닥보관" />
+          <div class="form-label">출고지시번호 (선택)</div>
+          <textarea id="add-orders" class="edit-input" rows="1" placeholder="여러 개는 줄바꿈·쉼표로 구분" autocapitalize="characters" autocomplete="off" spellcheck="false" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
         </div>
       </div>
     </div>
@@ -6988,7 +6990,7 @@
           class="edit-input"
           type="text"
           inputmode="search"
-          placeholder="업체명 검색"
+          placeholder="업체명 · 출고지시번호 검색"
           autocomplete="off"
           oninput="fabSearchInput()"
           onkeydown="if (event.key === 'Enter') runFabSearch()"

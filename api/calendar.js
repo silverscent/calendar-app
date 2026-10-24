@@ -174,6 +174,43 @@ function pickSameCompanyT(a, b, compDb) {
 async function pickEnsureTable() {
   await pool.query(`CREATE TABLE IF NOT EXISTS pick_registered (order_no VARCHAR(40) PRIMARY KEY, outbound_id BIGINT NOT NULL DEFAULT 0, mode VARCHAR(8), hist VARCHAR(80), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 }
+// ───────── 출고지시번호 (일정 ↔ 번호 1:N) ─────────
+//  outbound_orders: 한 일정에 번호가 여러 개(1차·수량추가 2차…). 중복 방지용 pick_registered 와는 별개(조회·검색용).
+let _ordTableReady = false;
+async function ordEnsureTable() {
+  if (_ordTableReady) return;
+  await pool.query(`CREATE TABLE IF NOT EXISTS outbound_orders (id BIGINT AUTO_INCREMENT PRIMARY KEY, outbound_id BIGINT NOT NULL, order_no VARCHAR(40) NOT NULL, kind VARCHAR(8), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_ord (outbound_id, order_no), KEY ix_ord_no (order_no))`);
+  // 이미 피킹지로 등록된(일정이 남아 있는) 번호를 한 번만 옮겨 채움 — 이후 지운 번호가 되살아나지 않게 완료 표시를 남김
+  try {
+    const [fl] = await pool.query(`SELECT 1 FROM system_settings WHERE setting_key = 'ORD_BACKFILL_DONE' LIMIT 1`);
+    if (!fl.length) {
+      await pickEnsureTable();
+      await pool.query(`INSERT IGNORE INTO outbound_orders (outbound_id, order_no, kind) SELECT pr.outbound_id, UPPER(pr.order_no), pr.mode FROM pick_registered pr JOIN outbound o ON o.id = pr.outbound_id WHERE pr.outbound_id > 0`);
+      await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('ORD_BACKFILL_DONE', '1') ON DUPLICATE KEY UPDATE setting_value = '1'`);
+    }
+  } catch (e) { console.error("[ORD] 기존 번호 채우기 실패(무시):", e.sqlMessage || e.message); }
+  _ordTableReady = true;
+}
+// 붙여넣은 글(줄바꿈·쉼표·공백 구분)에서 번호 목록 추출: 영문·숫자만, 대문자, 6자 이상, 중복 제거, 최대 20개
+function ordNormList(v) {
+  const src = Array.isArray(v) ? v.join("\n") : String(v == null ? "" : v);
+  const out = [];
+  for (const t of src.split(/[\s,;]+/)) {
+    const n = t.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 40);
+    if (n.length >= 6 && !out.includes(n)) out.push(n);
+  }
+  return out.slice(0, 20);
+}
+async function ordAdd(outboundId, list, kind) {
+  if (!(outboundId > 0) || !list || !list.length) return 0;
+  await ordEnsureTable();
+  let n = 0;
+  for (const no of list) {
+    const [r] = await pool.query(`INSERT IGNORE INTO outbound_orders (outbound_id, order_no, kind) VALUES (?, ?, ?)`, [outboundId, no, kind || "manual"]);
+    n += r && r.affectedRows ? 1 : 0;
+  }
+  return n;
+}
 // 등록 기록이 가리키는 일정이 아직 살아 있는지. 반환 {alive, info}
 async function pickRecAlive(rec) {
   if (!rec || !(rec.outbound_id > 0)) return { alive: false, info: null };
@@ -572,6 +609,9 @@ module.exports = async function (req, res) {
         "PICK_PARSE",
         "PICK_REGISTER",
         "PICK_FIND_ROWS",
+        "GET_ORDER_NOS",
+        "ADD_ORDER_NOS",
+        "DEL_ORDER_NO",
         "FIND_INBOUND_DUPES",
         "DELETE_INBOUND_DUPES",
         "AI_QUERY",
@@ -1254,6 +1294,8 @@ if (action === "VERIFY_SESSION") {
             // 출고: 업체명 검색 + 작업기간(선택)
             let where = [];
             let params = [];
+            let ordSel = "";
+            const selParams = [];
             // 약어(CRM 단축명)로 확장된 정식 업체명 목록(클라이언트 전달)
             const compList = Array.isArray(payload.companies) ? payload.companies.filter(Boolean).slice(0, 50) : [];
             if (kwRaw || compList.length) {
@@ -1262,6 +1304,17 @@ if (action === "VERIFY_SESSION") {
                 // 대소문자 무시 (oc → OC D-KIT 등)
                 ors.push("LOWER(company) LIKE LOWER(?)", "LOWER(etc) LIKE LOWER(?)");
                 params.push(kw, kw);
+                // 출고지시번호로도 검색 (영문·숫자 4자 이상일 때만)
+                const kwNo = kwRaw.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+                if (kwNo.length >= 4) {
+                  try {
+                    await ordEnsureTable();
+                    ors.push("id IN (SELECT outbound_id FROM outbound_orders WHERE order_no LIKE ?)");
+                    params.push(`%${kwNo}%`);
+                    ordSel = ", (SELECT GROUP_CONCAT(oo.order_no) FROM outbound_orders oo WHERE oo.outbound_id = outbound.id AND oo.order_no LIKE ?) AS ord_hit"; // 어떤 번호로 걸렸는지 결과에 표시
+                    selParams.push(`%${kwNo}%`);
+                  } catch (_oe) {}
+                }
               }
               if (compList.length) {
                 ors.push("LOWER(company) IN (" + compList.map(() => "LOWER(?)").join(",") + ")");
@@ -1280,10 +1333,10 @@ if (action === "VERIFY_SESSION") {
             if (where.length === 0) return res.status(200).json({ success: true, rows: [] });
             // 미정/대기(outbound_date NULL)도 포함. 단, 작업기간(startDate/endDate)을 지정하면 그 조건상 자연 제외됨.
             const sql =
-              "SELECT id, company, pal, box, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date, etc, isDone FROM outbound WHERE " +
+              "SELECT id, company, pal, box, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date, etc, isDone" + ordSel + " FROM outbound WHERE " +
               where.join(" AND ") +
               " ORDER BY outbound_date IS NULL, outbound_date DESC LIMIT 200";
-            [rows] = await pool.query(sql, params);
+            [rows] = await pool.query(sql, [...selParams, ...params]);
           } else {
             // 입고: B/L · 인보이스 부분 검색 (+ 운송타입/포워더/비고도 함께)
             if (!kwRaw) return res.status(200).json({ success: true, rows: [] });
@@ -2106,10 +2159,10 @@ if (action === "VERIFY_SESSION") {
           let queryStr = "";
           let params = [];
           if (data?.id) {
-            queryStr = `SELECT id, pal, box, etc FROM outbound WHERE id = ? LIMIT 1`;
+            queryStr = `SELECT id, company, pal, box, etc FROM outbound WHERE id = ? LIMIT 1`;
             params = [data.id];
           } else {
-            queryStr = `SELECT id, pal, box, etc FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ? LIMIT 1`;
+            queryStr = `SELECT id, company, pal, box, etc FROM outbound WHERE company = ? AND outbound_date <=> ? AND pal = ? AND box = ? LIMIT 1`;
             params = [targetName, targetDate, targetPal, targetBox];
           }
 
@@ -2117,24 +2170,15 @@ if (action === "VERIFY_SESSION") {
 
           if (rows.length > 0) {
             let row = rows[0];
-            // 원본 수량에 방금 입력한 추가 수량을 더함
-            let newPal = (parseInt(row.pal) || 0) + addPal;
-            let newBox = (parseInt(row.box) || 0) + addBox;
-            // 원본 비고란 텍스트 맨 뒤에 추가 히스토리 글씨를 이어붙임
-            let newEtc = row.etc && row.etc.trim() !== "" ? row.etc.trim() + " " + histStr : histStr;
-
-            // DB 실제 업데이트 및 보안 로그 작성
-            await pool.query(`UPDATE outbound SET pal = ?, box = ?, etc = ? WHERE id = ?`, [
-              newPal,
-              newBox,
-              newEtc,
-              row.id,
-            ]);
+            // 읽어 온 값에 더해 덮어쓰면 동시에 들어온 다른 추가분이 사라지므로, DB 에서 한 번에 합산한다 (완료 처리된 일정에는 적용 안 됨)
+            const _ap = await appendQtyAtomic(row.id, String(row.company || "").trim(), addPal, addBox, "");
+            if (!_ap.ok) return res.status(200).json({ success: false, msg: "그 사이 일정이 완료·삭제되어 추가하지 못했습니다. 새로고침 후 다시 시도해주세요." });
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)",
               [currentAdmin, `[출고 수량추가] ${targetName} (${targetDate || "미정"}) +PL:${addPal}, +BOX:${addBox}`],
             );
             notifyCalendarChange(`[출고 수량추가] ${targetName} (${targetDate || "미정"}) +PL:${addPal}, +BOX:${addBox}`, currentAdmin);
+            try { const _ol = ordNormList(data?.orderNos); if (_ol.length) await ordAdd(row.id, _ol, "append"); } catch (_oe) { console.error("ADD_QTY 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
           }
         } else if (action === "ADD") {
           let reqComp = (data?.newComp || data?.company || data?.comp || "").trim();
@@ -2177,11 +2221,13 @@ if (action === "VERIFY_SESSION") {
             const dd = `[출고 수량추가] ${reqComp} (${reqDateOut || "미정"}) +PL:${addP}, +BOX:${addB}`;
             await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, dd]);
             notifyCalendarChange(dd, currentAdmin);
+            try { const _ol = ordNormList(data?.orderNos); if (_ol.length) await ordAdd(tgt.id, _ol, "append"); } catch (_oe) { console.error("ADD 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
           } else {
-            await pool.query(
+            const [_insR] = await pool.query(
               `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`,
               [reqComp, reqPalOut, reqBoxOut, reqDateOut, reqEtcOut],
             );
+            try { const _ol = ordNormList(data?.orderNos); if (_ol.length && _insR && _insR.insertId) await ordAdd(_insR.insertId, _ol, "manual"); } catch (_oe) { console.error("ADD 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)",
               [currentAdmin, `[출고 등록] ${reqComp} (${reqDateOut || "미정"}) ${live.length > 0 ? "별도 일정으로 추가" : "신규 추가"} (PL:${reqPalOut || 0}, BOX:${reqBoxOut || 0})`],
@@ -2538,6 +2584,49 @@ if (action === "VERIFY_SESSION") {
         } catch (_) {}
 
         return res.status(200).json({ success: true, result: parsed, company: comp, duplicate, dupInfo, legacy });
+      } else if (action === "GET_ORDER_NOS") {
+        // 일정 id 목록 → 각 일정에 붙은 출고지시번호
+        const ids = (Array.isArray(data?.ids) ? data.ids : []).map((x) => parseInt(x, 10)).filter((x) => x > 0).slice(0, 100);
+        if (!ids.length) return res.status(200).json({ success: true, map: {} });
+        try {
+          await ordEnsureTable();
+          const [rs] = await pool.query(`SELECT outbound_id, order_no, kind FROM outbound_orders WHERE outbound_id IN (${ids.map(() => "?").join(",")}) ORDER BY id ASC`, ids);
+          const map = {};
+          for (const r of rs) (map[r.outbound_id] = map[r.outbound_id] || []).push({ no: r.order_no, kind: r.kind || "" });
+          return res.status(200).json({ success: true, map });
+        } catch (e) {
+          console.error("GET_ORDER_NOS 오류:", e.sqlMessage || e.message);
+          return res.status(200).json({ success: false, msg: "지시번호를 불러오지 못했습니다." });
+        }
+      } else if (action === "ADD_ORDER_NOS") {
+        // 수동 입력: 한 번에 여러 개(줄바꿈·쉼표·공백 구분) 가능
+        const oid = parseInt(data?.id, 10);
+        if (!(oid > 0)) return res.status(200).json({ success: false, msg: "일정을 찾을 수 없습니다." });
+        const list = ordNormList(data?.orders);
+        if (!list.length) return res.status(200).json({ success: false, msg: "인식할 수 있는 번호가 없습니다. (영문·숫자 6자 이상)" });
+        try {
+          const [er] = await pool.query(`SELECT company, DATE_FORMAT(outbound_date, '%Y-%m-%d') AS date FROM outbound WHERE id = ? LIMIT 1`, [oid]);
+          if (!er.length) return res.status(200).json({ success: false, msg: "일정을 찾을 수 없습니다. (삭제되었을 수 있음)" });
+          const added = await ordAdd(oid, list, "manual");
+          await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `[출고지시번호 추가] ${er[0].company} (${er[0].date || "미정"}) ${list.join(", ")}`]);
+          return res.status(200).json({ success: true, added, orders: list });
+        } catch (e) {
+          console.error("ADD_ORDER_NOS 오류:", e.sqlMessage || e.message);
+          return res.status(200).json({ success: false, msg: "저장 중 오류가 발생했습니다." });
+        }
+      } else if (action === "DEL_ORDER_NO") {
+        const oid = parseInt(data?.id, 10);
+        const no = String(data?.order_no || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 40);
+        if (!(oid > 0) || !no) return res.status(200).json({ success: false, msg: "대상을 찾을 수 없습니다." });
+        try {
+          await ordEnsureTable();
+          const [dr] = await pool.query(`DELETE FROM outbound_orders WHERE outbound_id = ? AND order_no = ?`, [oid, no]);
+          if (dr && dr.affectedRows) await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_EDIT', ?)", [currentAdmin, `[출고지시번호 삭제] 일정 ID:${oid} ${no}`]);
+          return res.status(200).json({ success: true });
+        } catch (e) {
+          console.error("DEL_ORDER_NO 오류:", e.sqlMessage || e.message);
+          return res.status(200).json({ success: false, msg: "삭제 중 오류가 발생했습니다." });
+        }
       } else if (action === "PICK_FIND_ROWS") {
         // 같은 업체의 '완료되지 않은' 출고 일정 찾기 (수량 추가 대상 후보). 날짜가 있으면 그 날짜만, 없으면 미정 + 오늘 이후
         const fCompany = String(data?.company || "").trim().slice(0, 100);
@@ -2628,6 +2717,11 @@ if (action === "VERIFY_SESSION") {
           } catch (markErr) {
             console.error("[PICK] 등록 기록 저장 실패(중복 방지 약화):", markErr.sqlMessage || markErr.message);
           }
+        }
+
+        if (orderNo && outId > 0) {
+          try { await ordAdd(outId, ordNormList(orderNo), mode === "append" ? "append" : "new"); } // 일정 화면 조회·검색용 (실패해도 등록 자체는 유지)
+          catch (ordErr) { console.error("[PICK] 출고지시번호 저장 실패(무시):", ordErr.sqlMessage || ordErr.message); }
         }
 
         // 직접 고른 업체 연결 기억 (다음부터 자동 매칭)

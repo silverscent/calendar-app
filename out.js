@@ -1449,7 +1449,7 @@ function runPcSearch() {
   window._pcSearchEd = ed;
   // 검색어가 있을 때만 검색 (기간만으로는 결과 출력 안 함 — 기간은 보조 필터)
   if (kw.length < 1) {
-    box.innerHTML = `<div class="pcsr-empty"><span class="pcsr-empty-ico">🔎</span><span>업체·작업 검색어를 입력하세요</span>${sd || ed ? `<span class="pcsr-empty-sub">기간은 보조 필터</span>` : ""}</div>`;
+    box.innerHTML = `<div class="pcsr-empty"><span class="pcsr-empty-ico">🔎</span><span>업체·작업·출고지시번호를 입력하세요</span>${sd || ed ? `<span class="pcsr-empty-sub">기간은 보조 필터</span>` : ""}</div>`;
     window._pcSearchHtml = box.innerHTML;
     return;
   }
@@ -1489,7 +1489,7 @@ function runPcSearch() {
           const dot = isTask ? "#af52de" : done ? "#34c759" : "#ff9f0a";
           const pal = parseInt(r.pal) || 0;
           const bx = parseInt(r.box) || 0;
-          const sub = isTask ? "작업" : `${pal}P · ${bx}B`;
+          const sub = (isTask ? "작업" : `${pal}P · ${bx}B`) + (r.ord_hit ? ` · 🔖${_esc(String(r.ord_hit).split(",")[0])}` : "");
           return `<button class="pcsr-item" onclick="pcJumpTo('${d}','${_argq(raw)}')">
               <span class="pcsr-dot" style="background:${dot}"></span>
               <span class="pcsr-main"><span class="pcsr-big" style="font-weight:700">${isTask ? "🛠 " : ""}${comp}</span><span class="pcsr-inv">${sub}</span></span>
@@ -1583,7 +1583,7 @@ function openFabSearch() {
   const box = document.getElementById("fabSearchResults");
   if (inp) inp.value = "";
   if (box)
-    box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">🔎</span><span>업체·작업 검색어를 입력하세요</span></div>`;
+    box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">🔎</span><span>업체·작업·출고지시번호를 입력하세요</span></div>`;
   requestAnimationFrame(() => { if (inp) inp.focus(); });
 }
 function closeFabSearch() {
@@ -1611,7 +1611,7 @@ function runFabSearch() {
   if (!inp || !box) return;
   const kw = inp.value.trim();
   if (kw.length < 1) {
-    box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">🔎</span><span>업체·작업 검색어를 입력하세요</span></div>`;
+    box.innerHTML = `<div class="fsr-empty"><span class="fsr-empty-ico">🔎</span><span>업체·작업·출고지시번호를 입력하세요</span></div>`;
     return;
   }
   // 약어(CRM 단축명)로도 검색되도록 매칭되는 정식 업체명 확장
@@ -1642,7 +1642,7 @@ function runFabSearch() {
             const dot = isTask ? "#af52de" : done ? "#34c759" : "#ff9f0a";
             const pal = parseInt(r.pal) || 0;
             const bx = parseInt(r.box) || 0;
-            const sub = isTask ? "작업" : `${pal}P · ${bx}B`;
+            const sub = (isTask ? "작업" : `${pal}P · ${bx}B`) + (r.ord_hit ? ` · 🔖${_esc(String(r.ord_hit).split(",")[0])}` : "");
             return `<button class="fsr-item" onclick="closeFabSearch(); pcJumpTo('${d}','${_argq(raw)}')">
               <span class="fsr-dot" style="background:${dot}"></span>
               <span class="fsr-main"><span class="fsr-big" style="font-weight:700">${isTask ? "🛠 " : ""}${comp}</span><span class="fsr-sub">${sub}</span></span>
@@ -3195,6 +3195,7 @@ async function submitCMS(
     endDateStr = endNode ? endNode.value : "";
     payload.newDate = startDateStr;
     payload.newEtc = document.getElementById("add-etc").value;
+    { const _oe = document.getElementById("add-orders"); if (_oe && _oe.value.trim() && !isTask) payload.orderNos = _oe.value.trim(); } // 출고지시번호(선택)
   } else if (action === "EDIT") {
     isTask = document.getElementById(`edit-type-task-${idx}`).checked;
     rawComp = document.getElementById(`edit-comp-${idx}`).value.trim();
@@ -3243,6 +3244,7 @@ async function submitCMS(
   } else if (action === "ADD_QTY") {
     payload.addPal = clampQty(document.getElementById(`add-q-pal-${idx}`).value);
     payload.addBox = clampQty(document.getElementById(`add-q-box-${idx}`).value);
+    { const _oe = document.getElementById(`add-q-ord-${idx}`); if (_oe && _oe.value.trim()) payload.orderNos = _oe.value.trim(); } // 출고지시번호(선택)
 
     if (!payload.addPal && !payload.addBox) {
       showToast("⚠️ 추가할 파레트나 박스 수량을 입력해주세요.", 2000);
@@ -3266,6 +3268,10 @@ async function submitCMS(
     }
   }
 
+  if (action === "ADD" && payload.orderNos && startDateStr !== "미정" && endDateStr && endDateStr > startDateStr) {
+    delete payload.orderNos; // 여러 날에 걸친 등록은 날마다 일정이 따로 생겨 번호를 어디에 붙일지 모호함 → 등록 후 각 일정 상세에서 입력
+    showToast("ℹ️ 기간 등록은 출고지시번호를 저장하지 않습니다. 등록 후 일정에서 입력해 주세요.", 3500);
+  }
   if ((action === "ADD" || action === "EDIT") && (!payload.newComp || payload.newComp === "[TASK]")) {
     showToast("⚠️ 업체/작업명은 필수입니다.", 2000);
     return;
@@ -3494,8 +3500,180 @@ function openAddForm() {
   let endNode = document.getElementById("add-end-date");
   if (endNode) endNode.value = "";
   document.getElementById("add-etc").value = "";
+  { const _ao = document.getElementById("add-orders"); if (_ao) _ao.value = ""; }
   attachAutocomplete("add-comp");
   document.getElementById("addModal").style.display = "flex";
+}
+
+// ───────── 출고지시번호: 일정 상세 표시 · 바코드 · 직접 입력 ─────────
+// Code128(B) 바코드를 외부 라이브러리 없이 직접 그린다 (오프라인에서도 동작). 번호는 영문 대문자·숫자라 B 세트로 충분.
+const _C128 = ["11011001100","11001101100","11001100110","10010011000","10010001100","10001001100","10011001000","10011000100","10001100100","11001001000","11001000100","11000100100","10110011100","10011011100","10011001110","10111001100","10011101100","10011100110","11001110010","11001011100","11001001110","11011100100","11001110100","11101101110","11101001100","11100101100","11100100110","11101100100","11100110100","11100110010","11011011000","11011000110","11000110110","10100011000","10001011000","10001000110","10110001000","10001101000","10001100010","11010001000","11000101000","11000100010","10110111000","10110001110","10001101110","10111011000","10111000110","10001110110","11101110110","11010001110","11000101110","11011101000","11011100010","11011101110","11101011000","11101000110","11100010110","11101101000","11101100010","11100011010","11101111010","11001000010","11110001010","10100110000","10100001100","10010110000","10010000110","10000101100","10000100110","10110010000","10110000100","10011010000","10011000010","10000110100","10000110010","11000010010","11001010000","11110111010","11000010100","10001111010","10100111100","10010111100","10010011110","10111100100","10011110100","10011110010","11110100100","11110010100","11110010010","11011011110","11011110110","11110110110","10101111000","10100011110","10001011110","10111101000","10111100010","11110101000","11110100010","10111011110","10111101110","11101011110","11110101110","11010000100","11010010000","11010011100"];
+function _c128Bits(text) {
+  const t = String(text || "");
+  if (!t || /[^\x20-\x7e]/.test(t)) return null;
+  let sum = 104; // Start B
+  const seq = [104];
+  for (let i = 0; i < t.length; i++) {
+    const v = t.charCodeAt(i) - 32;
+    seq.push(v);
+    sum += v * (i + 1);
+  }
+  seq.push(sum % 103);
+  let bits = seq.map((v) => _C128[v]).join("");
+  bits += "1100011101011"; // Stop(11000111010) + 끝 막대(11)
+  return bits;
+}
+function _c128Svg(text, heightPx) {
+  const bits = _c128Bits(text);
+  if (!bits) return "";
+  const Q = 10; // 양쪽 여백(모듈 수) — 스캐너가 읽으려면 필수
+  const W = bits.length + Q * 2;
+  let rects = "";
+  for (let i = 0; i < bits.length; ) {
+    if (bits[i] === "1") {
+      let j = i;
+      while (j < bits.length && bits[j] === "1") j++;
+      rects += `<rect x="${i + Q}" y="0" width="${j - i}" height="100"/>`;
+      i = j;
+    } else i++;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} 100" preserveAspectRatio="none" style="width:100%;height:${heightPx || 110}px;display:block;background:#fff" shape-rendering="crispEdges" fill="#000" role="img" aria-label="바코드 ${_esc(text)}">${rects}</svg>`;
+}
+function _ordInjectCss() {
+  if (document.getElementById("ordCss")) return;
+  const st = document.createElement("style");
+  st.id = "ordCss";
+  st.textContent = `
+    .ord-wrap{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+    .ord-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--border-color,rgba(128,128,128,.3));border-radius:8px}
+    .ord-no{font-weight:800;font-size:.9em;letter-spacing:.2px;word-break:break-all;flex:1 1 150px;user-select:all}
+    .ord-tag{font-size:.7em;font-weight:800;color:var(--text-sub,#888);border:1px solid rgba(128,128,128,.35);border-radius:6px;padding:1px 5px}
+    .ord-btn{background:transparent;border:1px solid #0a84ff;color:#0a84ff;border-radius:6px;padding:3px 9px;font-size:.78em;font-weight:800;cursor:pointer}
+    .ord-btn.sub{border-color:rgba(128,128,128,.5);color:var(--text-sub,#888)}
+    .ord-btn.del{border-color:rgba(255,69,58,.6);color:#ff453a}
+    .ord-add{align-self:flex-start;background:transparent;border:1px dashed rgba(128,128,128,.55);color:var(--text-sub,#888);border-radius:6px;padding:3px 9px;font-size:.78em;font-weight:800;cursor:pointer}
+    #ordOverlay{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box}
+    #ordOverlay .ord-card{background:#fff;color:#000;border-radius:14px;padding:16px;width:min(560px,100%);box-sizing:border-box;max-height:92vh;overflow:auto}
+    #ordOverlay .ord-card.dk{background:var(--card-bg,#1c1c1e);color:var(--text-main,#fff)}
+    #ordOverlay .ord-bcno{text-align:center;font-weight:900;font-size:1.15em;letter-spacing:1px;margin:8px 0 4px;word-break:break-all}
+    #ordOverlay .ord-hint{font-size:.75em;color:#666;text-align:center;margin-top:6px}
+    #ordOverlay textarea{width:100%;min-height:96px;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid rgba(128,128,128,.5);font-size:1em;background:transparent;color:inherit}
+    #ordOverlay .ord-actions{display:flex;gap:8px;margin-top:12px}
+    #ordOverlay .ord-actions button{flex:1;padding:11px;border-radius:9px;border:1px solid rgba(128,128,128,.5);background:transparent;color:inherit;font-weight:800;font-size:.95em;cursor:pointer}
+    #ordOverlay .ord-actions button.pri{background:#0a84ff;border-color:#0a84ff;color:#fff}
+  `;
+  document.head.appendChild(st);
+}
+function _ordClose() {
+  const o = document.getElementById("ordOverlay");
+  if (o) o.remove();
+  if (window._ordPrevBright != null) window._ordPrevBright = null;
+}
+function _ordOpenOverlay(innerHtml, dark) {
+  _ordInjectCss();
+  _ordClose();
+  const o = document.createElement("div");
+  o.id = "ordOverlay";
+  o.onclick = (e) => { if (e.target === o) _ordClose(); };
+  o.innerHTML = `<div class="ord-card${dark ? " dk" : ""}" onclick="event.stopPropagation()">${innerHtml}</div>`;
+  document.body.appendChild(o);
+  return o;
+}
+// 일정 카드에 붙는 번호 영역(출고 일정이고 id가 있을 때만). 번호는 뒤이어 한 번에 불러온다.
+function _ordSlotHtml(item, isAdminNow, isTaskNow) {
+  if (!isAdminNow || isTaskNow || !item || !(Number(item.id) > 0)) return "";
+  return `<div class="ord-slot" data-ordid="${Number(item.id)}"></div>`;
+}
+function _ordRenderSlot(slot, list) {
+  const id = Number(slot.getAttribute("data-ordid"));
+  const multi = list.length > 1;
+  const rows = list
+    .map((o, i) => {
+      const no = _esc(o.no);
+      const tag = multi ? `<span class="ord-tag">${i + 1}차</span>` : "";
+      return `<div class="ord-row">${tag}<span class="ord-no">${no}</span><button class="ord-btn" onclick="event.stopPropagation();ordShowBarcode('${_argq(o.no)}')">바코드</button><button class="ord-btn sub" onclick="event.stopPropagation();ordCopy('${_argq(o.no)}')">복사</button><button class="ord-btn del" onclick="event.stopPropagation();ordDel(${id},'${_argq(o.no)}')">삭제</button></div>`;
+    })
+    .join("");
+  slot.innerHTML = `<div class="ord-wrap">${rows}<button class="ord-add" onclick="event.stopPropagation();ordOpenAdd(${id})">＋ 출고지시번호${list.length ? " 추가" : ""}</button></div>`;
+}
+async function _ordLoadSlots() {
+  const slots = Array.from(document.querySelectorAll("#modalContent .ord-slot"));
+  if (!slots.length) return;
+  _ordInjectCss();
+  const tok = (window._ordTok = (window._ordTok || 0) + 1);
+  slots.forEach((s) => _ordRenderSlot(s, [])); // 번호를 불러오는 동안에도 '＋' 버튼은 바로 쓸 수 있게
+  const ids = slots.map((s) => Number(s.getAttribute("data-ordid"))).filter((x) => x > 0);
+  let res = null;
+  try {
+    res = await apiCall({ source: "vercel", domain: "system", action: "GET_ORDER_NOS", admin_id: localStorage.getItem("admin_id"), data: { ids } });
+  } catch (e) {}
+  if (tok !== window._ordTok || !res || !res.success || !res.map) return; // 그 사이 모달이 바뀜/실패 → 그대로 둠
+  slots.forEach((s) => {
+    if (!s.isConnected) return;
+    const list = res.map[Number(s.getAttribute("data-ordid"))] || [];
+    if (list.length) _ordRenderSlot(s, list);
+  });
+}
+function ordShowBarcode(no) {
+  const svg = _c128Svg(no, 130);
+  if (!svg) { showToast("⚠️ 바코드로 만들 수 없는 번호입니다.", 2000); return; }
+  _ordOpenOverlay(
+    `<div style="font-weight:800;font-size:.85em;color:#666;margin-bottom:6px">출고지시번호 바코드</div>${svg}<div class="ord-bcno">${_esc(no)}</div><div class="ord-hint">스캔이 안 되면 화면 밝기를 최대로 올리고, 바코드를 스캐너 쪽으로 가까이 대 주세요</div><div class="ord-actions"><button onclick="ordCopy('${_argq(no)}')">번호 복사</button><button class="pri" onclick="_ordClose()">닫기</button></div>`,
+    false,
+  );
+}
+async function ordCopy(no) {
+  try {
+    await navigator.clipboard.writeText(String(no));
+    showToast("📋 복사했습니다.", 1500);
+  } catch (e) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = String(no);
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      showToast("📋 복사했습니다.", 1500);
+    } catch (e2) {
+      showToast("⚠️ 복사하지 못했습니다. 번호를 길게 눌러 복사해 주세요.", 2500);
+    }
+  }
+}
+async function ordDel(id, no) {
+  if (!(await uiConfirm(`출고지시번호 ${no} 를 이 일정에서 지울까요?\n(일정 자체는 지워지지 않습니다)`, { danger: true }))) return;
+  const res = await apiCall({ source: "vercel", domain: "system", action: "DEL_ORDER_NO", admin_id: localStorage.getItem("admin_id"), data: { id, order_no: no } });
+  if (!res || !res.success) { showToast("❌ " + ((res && res.msg) || "삭제하지 못했습니다."), 2500); return; }
+  _ordRefreshOne(id);
+}
+async function _ordRefreshOne(id) {
+  const slot = document.querySelector(`#modalContent .ord-slot[data-ordid="${Number(id)}"]`);
+  if (!slot) return;
+  const res = await apiCall({ source: "vercel", domain: "system", action: "GET_ORDER_NOS", admin_id: localStorage.getItem("admin_id"), data: { ids: [Number(id)] } });
+  if (res && res.success && res.map && slot.isConnected) _ordRenderSlot(slot, res.map[Number(id)] || []);
+}
+function ordOpenAdd(id) {
+  _ordOpenOverlay(
+    `<div style="font-weight:800;margin-bottom:8px">출고지시번호 직접 입력</div><textarea id="ordAddText" placeholder="번호를 붙여넣거나 입력하세요&#10;여러 개는 줄바꿈·쉼표·띄어쓰기로 구분" autocapitalize="characters" autocomplete="off" spellcheck="false"></textarea><div class="ord-hint" style="text-align:left">영문·숫자 6자 이상만 인식됩니다. 이미 있는 번호는 건너뜁니다.</div><div class="ord-actions"><button onclick="_ordClose()">취소</button><button class="pri" id="ordAddBtn" onclick="ordSaveAdd(${Number(id)})">저장</button></div>`,
+    true,
+  );
+  setTimeout(() => { const t = document.getElementById("ordAddText"); if (t) t.focus(); }, 50);
+}
+async function ordSaveAdd(id) {
+  const t = document.getElementById("ordAddText");
+  const btn = document.getElementById("ordAddBtn");
+  if (!t || (btn && btn.disabled)) return;
+  const txt = t.value.trim();
+  if (!txt) { showToast("⚠️ 번호를 입력해 주세요.", 1800); return; }
+  if (btn) btn.disabled = true;
+  const res = await apiCall({ source: "vercel", domain: "system", action: "ADD_ORDER_NOS", admin_id: localStorage.getItem("admin_id"), data: { id, orders: txt } });
+  if (btn) btn.disabled = false;
+  if (!res || !res.success) { showToast("❌ " + ((res && res.msg) || "저장하지 못했습니다."), 3000); return; }
+  _ordClose();
+  showToast(res.added > 0 ? `✅ ${res.added}개 저장` : "이미 등록된 번호입니다.", 2000);
+  _ordRefreshOne(id);
 }
 
 function showModal(day, clickedIdx) {
@@ -3631,6 +3809,7 @@ function showModal(day, clickedIdx) {
                <input type="number" min="0" id="add-q-box-${idx}" class="edit-input" placeholder="+ 박스" style="padding:10px; flex:1;">
                <button onclick="submitCMS('ADD_QTY', '${_argq(item.company)}', '${dateStr}', ${idx})" class="save-btn" style="padding:10px; flex:0.6; font-size:0.9em; border-radius:8px;">추가</button>
             </div>
+            <textarea id="add-q-ord-${idx}" class="edit-input" rows="1" placeholder="출고지시번호 (선택 · 여러 개는 줄바꿈/쉼표)" autocapitalize="characters" autocomplete="off" spellcheck="false" style="padding:10px; width:100%; box-sizing:border-box; resize:vertical;"></textarea>
           </div>
         `
         : "";
@@ -3658,12 +3837,14 @@ function showModal(day, clickedIdx) {
                                 <div class="modal-vol" style="display:flex; align-items:center;">${iconHtml}${volStr} ${addQtyBtn}</div>
                                 ${histHtml} 
                                 ${etcHtml}
+                                ${_ordSlotHtml(item, isAdmin, isTaskMode)}
                             </div>
                             ${addQtyForm}
                             ${stampHtml}
                         </div>`;
   });
   document.getElementById("modalContent").innerHTML = contentHtml;
+  try { _ordLoadSlots(); } catch (_e) {} // 출고지시번호 목록(있을 때만 표시) — 실패해도 상세보기에는 영향 없음
   const _modal = document.getElementById("modal");
   _modal.style.display = "flex";
   const _modalBox = _modal.querySelector(".modal-box");
