@@ -2033,9 +2033,15 @@ if (action === "VERIFY_SESSION") {
           notifyCalendarChange(`[출고 삭제] ${targetName} (${targetDate || "미정"}) 파기`, currentAdmin);
         } else if (action === "EDIT") {
           if (data?.id) {
+            // 🛡️ 동시 수정 보호: 사용자가 바꾸지 않은 수량(PLT/박스)은 화면이 열려 있는 동안 다른 곳(피킹지 추가·다른 기기)에서
+            //    바뀐 DB 값을 그대로 둔다. (이전엔 오래된 화면 값으로 통째로 덮어써 합산분이 사라질 수 있었음)
+            //    "바꾸지 않음" = 새 값이 화면이 알고 있던 옛 값(oldPal/oldBox)과 같음. 옛 값을 모르면 예전처럼 그대로 저장.
+            const _nq = (v) => (String(v ?? "").trim() === "" ? "0" : String(v).trim());
+            const keepPal = data?.oldPal !== undefined && _nq(data?.newPal) === _nq(data?.oldPal);
+            const keepBox = data?.oldBox !== undefined && _nq(data?.newBox) === _nq(data?.oldBox);
             await pool.query(
-              `UPDATE outbound SET outbound_date = ?, company = ?, pal = ?, box = ?, etc = ? WHERE id = ?`,
-              [newDate, newName, data?.newPal ?? "", data?.newBox ?? "", data?.newEtc ?? "", data.id],
+              `UPDATE outbound SET outbound_date = ?, company = ?, pal = CASE WHEN ? THEN pal ELSE ? END, box = CASE WHEN ? THEN box ELSE ? END, etc = ? WHERE id = ?`,
+              [newDate, newName, keepPal ? 1 : 0, data?.newPal ?? "", keepBox ? 1 : 0, data?.newBox ?? "", data?.newEtc ?? "", data.id],
             );
           } else {
             await pool.query(
@@ -2627,7 +2633,13 @@ if (action === "VERIFY_SESSION") {
         // 직접 고른 업체 연결 기억 (다음부터 자동 매칭)
         try {
           const printed = pickLib.normName(data?.printedName || "");
-          if (printed && printed !== pickLib.normName(company)) {
+          // 같은 이름이 여러 업체(메디맥 2층/3층 등)에 걸리면 연결을 학습하지 않는다 — 한 번의 선택이 다음 서류(다른 층)를 잘못 연결하지 않게
+          let _ambig = false;
+          if (printed) {
+            const _cdbL = await pickLoadCompDb();
+            _ambig = Object.keys(_cdbL).filter((n) => { const k = pickLib.normName(n); return k.length >= 3 && (k.includes(printed) || printed.includes(k)); }).length > 1;
+          }
+          if (printed && !_ambig && printed !== pickLib.normName(company)) {
             const [ar] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PICK_ALIAS'`);
             let am = {};
             try { am = ar.length ? (typeof ar[0].setting_value === "object" ? ar[0].setting_value : JSON.parse(ar[0].setting_value)) || {} : {}; } catch (_) {}

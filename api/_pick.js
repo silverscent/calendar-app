@@ -357,7 +357,13 @@ function matchCompany(printed, compDb, alias, opts) {
   const p = normName(printed);
   const names = Object.keys(compDb || {});
   if (!p) return { status: "none", company: null, candidates: [] };
-  if (alias && alias[p] && names.includes(alias[p])) return { status: "alias", company: alias[p], candidates: [alias[p]] };
+  // 학습된 연결(alias)이 우선이되, 주소 호수로 층이 정해졌는데 연결된 업체의 층과 다르면(메디맥 2층↔3층) 무시하고 아래에서 층으로 고른다
+  if (alias && alias[p] && names.includes(alias[p])) {
+    const af = floorOfName(alias[p]);
+    // 같은 이름이 여러 업체(층 구분)에 걸리는데 호수로 층을 못 정했으면 학습값을 믿지 않고 후보로 보여 준다
+    const ambAlias = names.filter((n) => { const k = normName(n); return k.length >= 3 && (k.includes(p) || p.includes(k)); }).length > 1;
+    if (!(floor && af !== null && af !== floor) && !(ambAlias && !floor)) return { status: "alias", company: alias[p], candidates: [alias[p]] };
+  }
   const exact = names.filter((n) => normName(n) === p || shortsOf(compDb[n]).includes(p));
   if (exact.length === 1) return { status: "exact", company: exact[0], candidates: exact };
   if (exact.length > 1) { // 같은 이름·약어를 쓰는 업체가 여럿 → 층(호수)으로 좁혀지면 그것, 아니면 자동 연결하지 않고 후보로

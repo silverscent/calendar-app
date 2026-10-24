@@ -6475,7 +6475,8 @@ async function _pickLoadRows() {
   }
   st.rowsErr = false;
   st.rows = res.rows;
-  if (!st.rows.some((x) => x.id === st.targetId)) st.targetId = st.rows.length === 1 ? st.rows[0].id : null;
+  // 후보가 하나뿐이어도 출고일을 모르면(미정+앞으로 일정 전체가 후보) 자동으로 고르지 않음 — 다른 날짜 일정에 잘못 더하는 일 방지
+  if (!st.rows.some((x) => x.id === st.targetId)) st.targetId = st.rows.length === 1 && date ? st.rows[0].id : null;
   _pickRenderMode();
 }
 
