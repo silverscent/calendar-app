@@ -6756,7 +6756,12 @@ function _dsLoupe(x, c, E) {
   x.save();
   x.beginPath(); x.arc(cx, cy, Rr, 0, Math.PI * 2); x.clip();
   x.fillStyle = "#000"; x.fillRect(cx - Rr, cy - Rr, Rr * 2, Rr * 2);
-  x.drawImage(E.cv, q.x - srcR, q.y - srcR, srcR * 2, srcR * 2, cx - Rr, cy - Rr, Rr * 2, Rr * 2);
+  // 사진 밖으로 벗어난 부분은 검게 두고, 사진 안쪽만 제 위치·제 배율로 그린다(안 그러면 브라우저가 남은 조각을 늘려 그려서 위치가 어긋남)
+  {
+    const sx0 = Math.max(0, q.x - srcR), sy0 = Math.max(0, q.y - srcR);
+    const sx1 = Math.min(E.cv.width, q.x + srcR), sy1 = Math.min(E.cv.height, q.y + srcR);
+    if (sx1 > sx0 && sy1 > sy0) x.drawImage(E.cv, sx0, sy0, sx1 - sx0, sy1 - sy0, cx + (sx0 - q.x) * f, cy + (sy0 - q.y) * f, (sx1 - sx0) * f, (sy1 - sy0) * f);
+  }
   // 사각형의 변도 같이 그려서 어느 방향으로 맞춰야 하는지 보이게
   x.strokeStyle = "#0a84ff"; x.lineWidth = 2 * k;
   x.beginPath();
