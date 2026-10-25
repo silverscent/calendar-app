@@ -3581,7 +3581,9 @@ function _ordInjectCss() {
     @keyframes ordUp{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
     #ordOverlay .ord-card{background:var(--bg-color,#f4f6f9);color:var(--text-main,#222);border-radius:24px 24px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom));width:min(560px,100%);box-sizing:border-box;max-height:88vh;overflow:auto;-webkit-overflow-scrolling:touch;box-shadow:0 -10px 40px rgba(0,0,0,.28);animation:ordUp .22s cubic-bezier(.2,.8,.2,1)}
     @media (min-width:700px){#ordOverlay{align-items:center;padding:24px}#ordOverlay .ord-card{border-radius:22px;padding-bottom:18px}}
-    #ordOverlay .ord-grab{width:38px;height:5px;border-radius:3px;background:var(--border-color,#d1d1d6);margin:2px auto 10px}
+    #ordOverlay .ord-gz{padding:8px 0 12px;margin:-4px 0 0;touch-action:none;cursor:grab;-webkit-tap-highlight-color:transparent}
+    #ordOverlay .ord-grab{width:42px;height:5px;border-radius:3px;background:var(--text-sub,#a0a0a0);opacity:.55;margin:0 auto}
+    #ordOverlay .ord-head{touch-action:none;cursor:grab}
     #ordOverlay .ord-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
     #ordOverlay .ord-head .tx{flex:1;min-width:0}
     #ordOverlay .ord-eyebrow{display:flex;align-items:center;gap:6px;font-size:.74em;font-weight:900;letter-spacing:.6px;color:#0a84ff}
@@ -3696,7 +3698,52 @@ function _ordOpenOverlay(innerHtml) {
   o.onclick = (e) => { if (e.target === o) _ordClose(); };
   o.innerHTML = `<div class="ord-card" onclick="event.stopPropagation()">${innerHtml}</div>`;
   document.body.appendChild(o);
+  _ordAttachSwipe(o);
   return o;
+}
+// 손잡이·제목 줄을 잡고 아래로 끌면 시트가 따라 내려오고, 충분히 내리거나 빠르게 튕기면 닫힌다 (다른 창의 당겨 닫기와 같은 규칙: 120px 또는 속도 0.5)
+function _ordAttachSwipe(o) {
+  const card = o.querySelector(".ord-card");
+  if (!card) return;
+  let st = null;
+  const start = (e) => {
+    if (e.target && e.target.closest && e.target.closest("button")) return; // ✕ 같은 버튼은 그대로 눌리게
+    if (card.scrollTop > 5) return; // 내용이 스크롤된 상태면 끌기 무시
+    st = { y0: e.clientY, y: e.clientY, t0: Date.now(), id: e.pointerId };
+    card.style.transition = "none";
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+  };
+  const move = (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    const d = e.clientY - st.y0;
+    st.y = e.clientY;
+    if (d > 0) {
+      card.style.transform = `translateY(${d}px)`;
+      o.style.background = `rgba(10,12,16,${Math.max(0.1, 0.55 - d / 700)})`;
+    }
+  };
+  const end = (e) => {
+    if (!st || (e && e.pointerId !== st.id)) return;
+    const d = st.y - st.y0;
+    const v = d / Math.max(1, Date.now() - st.t0);
+    st = null;
+    card.style.transition = "transform .25s cubic-bezier(.2,.8,.2,1)";
+    if (d > 120 || v > 0.5) {
+      card.style.transform = "translateY(110%)";
+      o.style.transition = "background .25s";
+      o.style.background = "rgba(10,12,16,0)";
+      setTimeout(_ordClose, 250);
+    } else {
+      card.style.transform = "";
+      o.style.background = "";
+    }
+  };
+  o.querySelectorAll(".ord-gz, .ord-head").forEach((z) => {
+    z.addEventListener("pointerdown", start);
+    z.addEventListener("pointermove", move);
+    z.addEventListener("pointerup", end);
+    z.addEventListener("pointercancel", end);
+  });
 }
 // 상세의 수량 줄 옆에 붙는 바코드 아이콘 (번호가 있는 출고 일정에만). 번호는 달력 데이터에 이미 들어 있어 바로 열린다.
 function _ordBtnHtml(item, day, idx, isAdminNow, isTaskNow) {
@@ -3730,7 +3777,7 @@ function ordOpenList(day, idx) {
     .join("");
   const total = ords.length;
   _ordOpenOverlay(
-    `<div class="ord-grab"></div>
+    `<div class="ord-gz"><div class="ord-grab"></div></div>
     <div class="ord-head"><div class="tx"><div class="ord-eyebrow">${bcIco}<span>출고지시번호</span></div><div class="ord-title">${_esc(name)}</div><div class="ord-sub">총 ${total}건 · 번호를 누르면 바코드가 열립니다</div></div><button type="button" class="ord-x" onclick="_ordClose()" aria-label="닫기">✕</button></div>
     ${body}
     <div class="ord-hint">한 번에 한 개의 바코드만 열립니다 · 번호 수정은 ✏️수정에서<br>스캔이 안 되면 화면 밝기를 높여 보세요</div>`
