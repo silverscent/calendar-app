@@ -215,6 +215,31 @@ async function pickLogSet(id, col, obj, adminId) {
     console.error("[PICK] 판독 기록 갱신 실패(무시):", e.sqlMessage || e.message);
   }
 }
+// ───────── 배송 구분 (용차 = 기본 / 용마택배 / CJ택배) ─────────
+//  outbound.ship_type: NULL = 용차, '용마' = 용마택배, 'CJ' = CJ택배. 컬럼이 없으면 처음 쓸 때 한 번 만든다.
+//  만들지 못해도(권한 등) 달력·등록은 기존대로 동작해야 하므로 실패하면 이 기능만 꺼 둔다(1분 뒤 다시 시도).
+let _shipColOk = null, _shipColTry = 0;
+async function shipColReady() {
+  if (_shipColOk === true) return true;
+  if (_shipColOk === false && Date.now() - _shipColTry < 60000) return false;
+  _shipColTry = Date.now();
+  try {
+    const [cols] = await pool.query(`SHOW COLUMNS FROM outbound LIKE 'ship_type'`);
+    if (!cols.length) await pool.query(`ALTER TABLE outbound ADD COLUMN ship_type VARCHAR(12) NULL`);
+    _shipColOk = true;
+  } catch (e) {
+    if (/Duplicate column/i.test(String(e.message || ""))) _shipColOk = true;
+    else { _shipColOk = false; console.error("[SHIP] ship_type 컬럼 준비 실패(택배 구분만 꺼 둠):", e.sqlMessage || e.message); }
+  }
+  return _shipColOk === true;
+}
+function shipNorm(v) {
+  const t = String(v == null ? "" : v).replace(/\s+/g, "").toLowerCase();
+  if (!t) return null;
+  if (/용마|yongma/.test(t)) return "용마";
+  if (/^cj|씨제이|대한통운/.test(t)) return "CJ";
+  return null; // 용차·알 수 없는 값은 모두 기본(용차)
+}
 // ───────── 출고지시번호 (일정 ↔ 번호 1:N) ─────────
 //  outbound_orders: 한 일정에 번호가 여러 개. slot 0 = 원래 일정, slot k = k번째 수량추가(수량추가 이력 순서와 같음).
 //  중복 방지용 pick_registered 와는 별개(조회·검색용).
@@ -585,12 +610,13 @@ module.exports = async function (req, res) {
       const endYmd = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
 
       if (type === "out") {
+        const _stc = (await shipColReady()) ? ", ship_type" : "";
         const [monthRows] = await pool.query(
-          `SELECT id, company, pal, box, etc, isDone, sort_idx, outbound_date FROM outbound WHERE outbound_date >= ? AND outbound_date < ? ORDER BY sort_idx ASC, id ASC`,
+          `SELECT id, company, pal, box, etc, isDone, sort_idx, outbound_date${_stc} FROM outbound WHERE outbound_date >= ? AND outbound_date < ? ORDER BY sort_idx ASC, id ASC`,
           [startYmd, endYmd],
         );
         const [pendingRows] = await pool.query(
-          `SELECT id, company, pal, box, etc, isDone, sort_idx FROM outbound WHERE outbound_date IS NULL ORDER BY sort_idx ASC, id ASC`,
+          `SELECT id, company, pal, box, etc, isDone, sort_idx${_stc} FROM outbound WHERE outbound_date IS NULL ORDER BY sort_idx ASC, id ASC`,
         );
         // 출고지시번호도 같이 실어 보냄 (상세를 열 때 따로 불러오지 않아도 바로 보이게)
         // 번호는 로그인한 관리자에게만 (이 주소는 로그인 없이도 열리므로 토큰이 없거나 틀리면 싣지 않음)
@@ -610,6 +636,7 @@ module.exports = async function (req, res) {
             etc: row.etc,
             isDone: row.isDone === 1,
             sortIdx: row.sort_idx !== null ? row.sort_idx : 999,
+            ...(row.ship_type ? { shipType: row.ship_type } : {}),
             ...(_ordMap[row.id] ? { ords: _ordMap[row.id] } : {}),
           });
         });
@@ -622,6 +649,7 @@ module.exports = async function (req, res) {
             etc: row.etc,
             isDone: row.isDone === 1,
             sortIdx: row.sort_idx !== null ? row.sort_idx : 999,
+            ...(row.ship_type ? { shipType: row.ship_type } : {}),
             ...(_ordMap[row.id] ? { ords: _ordMap[row.id] } : {}),
           });
         });
@@ -2212,6 +2240,11 @@ if (action === "VERIFY_SESSION") {
               `UPDATE outbound SET outbound_date = ?, company = ?, pal = CASE WHEN ? THEN pal ELSE ? END, box = CASE WHEN ? THEN box ELSE ? END, etc = ? WHERE id = ?`,
               [newDate, newName, keepPal ? 1 : 0, data?.newPal ?? "", keepBox ? 1 : 0, data?.newBox ?? "", data?.newEtc ?? "", data.id],
             );
+            // 배송 구분(용차/용마택배/CJ택배) — 수정창에서 보낸 경우에만 바꿈(보내지 않은 이동·정렬 등은 그대로 둠)
+            if (data?.newShip !== undefined && (await shipColReady())) {
+              try { await pool.query(`UPDATE outbound SET ship_type = ? WHERE id = ?`, [shipNorm(data.newShip), data.id]); }
+              catch (_se) { console.error("EDIT 배송구분 저장 실패(무시):", _se.sqlMessage || _se.message); }
+            }
             // 출고지시번호(원래 일정 / N차 수량추가별) — 수정창에서 바꾼 경우에만 전달됨
             if (data?.orderSlots && typeof data.orderSlots === "object") {
               try {
@@ -2346,10 +2379,16 @@ if (action === "VERIFY_SESSION") {
             notifyCalendarChange(dd, currentAdmin);
             try { const _ol = ordNormList(data?.orderNos); if (_ol.length) await ordAdd(tgt.id, _ol, "append", await ordAppendSlot(tgt.id)); } catch (_oe) { console.error("ADD 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
           } else {
-            const [_insR] = await pool.query(
-              `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`,
-              [reqComp, reqPalOut, reqBoxOut, reqDateOut, reqEtcOut],
-            );
+            const _shipAdd = shipNorm(data?.shipType);
+            const [_insR] = _shipAdd && (await shipColReady())
+              ? await pool.query(
+                  `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc, ship_type) VALUES (?, ?, ?, ?, 0, ?, ?)`,
+                  [reqComp, reqPalOut, reqBoxOut, reqDateOut, reqEtcOut, _shipAdd],
+                )
+              : await pool.query(
+                  `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`,
+                  [reqComp, reqPalOut, reqBoxOut, reqDateOut, reqEtcOut],
+                );
             try { const _ol = ordNormList(data?.orderNos); if (_ol.length && _insR && _insR.insertId) await ordAdd(_insR.insertId, _ol, "manual", 0); } catch (_oe) { console.error("ADD 지시번호 저장 실패(무시):", _oe.sqlMessage || _oe.message); }
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'CAL_ADD', ?)",
@@ -2803,10 +2842,16 @@ if (action === "VERIFY_SESSION") {
             outId = tr.id;
             logDesc = `[출고 수량추가·피킹지] ${company} (${tr.date || "미정"}) +PL:${pal}, +BOX:${box}${orderNo ? " / " + orderNo : ""}`;
           } else {
-            const [ins] = await pool.query(
-              `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`,
-              [company, String(pal), String(box), outDate, etc],
-            );
+            const _shipPick = shipNorm(data?.shipType);
+            const [ins] = _shipPick && (await shipColReady())
+              ? await pool.query(
+                  `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc, ship_type) VALUES (?, ?, ?, ?, 0, ?, ?)`,
+                  [company, String(pal), String(box), outDate, etc, _shipPick],
+                )
+              : await pool.query(
+                  `INSERT INTO outbound (company, pal, box, outbound_date, isDone, etc) VALUES (?, ?, ?, ?, 0, ?)`,
+                  [company, String(pal), String(box), outDate, etc],
+                );
             outId = ins && ins.insertId ? ins.insertId : null;
             logDesc = `[출고 등록·피킹지] ${company} (${outDate || "미정"}) PL:${pal}, BOX:${box}${orderNo ? " / " + orderNo : ""}`;
           }

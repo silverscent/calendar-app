@@ -1034,8 +1034,8 @@ function _foldPillsHtml(dayData, day) {
       const c = getCompanyColor(clean);
       const nm = _esc(getShortName(clean));
       return isDoneIt(it)
-        ? `<i class="fold-pl" style="background:${c.bg}; color:${c.cMain}; text-shadow:${c.txtShadow};">${nm}</i>`
-        : `<i class="fold-pl off" style="box-shadow: inset 0 0 0 1.8px ${c.bg}, 0 1px 2px rgba(0,0,0,0.2);">${nm}</i>`;
+        ? `<i class="fold-pl" style="background:${c.bg}; color:${c.cMain}; text-shadow:${c.txtShadow};">${nm}${_shipDotHtml(it.shipType)}</i>`
+        : `<i class="fold-pl off" style="box-shadow: inset 0 0 0 1.8px ${c.bg}, 0 1px 2px rgba(0,0,0,0.2);">${nm}${_shipDotHtml(it.shipType)}</i>`;
     })
     .join("");
   dayData.forEach((it) => {
@@ -1297,6 +1297,10 @@ function renderCalendar() {
               ? `<span class="pal-sub" style="${subStyle}">${iconHtml}${qtyText}</span>`
               : "";
           innerHtml = `<div style="width:100%; text-align:center; position:relative; z-index:2;"><span class="comp-name" style="${txtStyle}">${_esc(shortName)}</span></div>${subHtml}`;
+          if (!isTaskMode && _shipKey(item.shipType)) { // 택배 표시: 칩 오른쪽 위 모서리 작은 표식
+            innerHtml += _shipBadgeHtml(item.shipType);
+            tagClass += " has-ship";
+          }
         }
 
         let bindItem = `onmousedown="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" onmouseup="cancelPress()" onmouseleave="cancelPress()" ontouchstart="event.stopPropagation(); startPress(event, 'item', ${day}, ${originalIdx})" ontouchend="cancelPress()" ontouchmove="cancelPress()" oncontextmenu="event.preventDefault();" onclick="event.stopPropagation(); handleItemClick(event, ${day}, ${originalIdx}, '${_argq(item.company)}', ${isItemDone})"`;
@@ -1306,6 +1310,7 @@ function renderCalendar() {
         let _pal = parseInt(item.pal) || 0;
         let _box = parseInt(item.box) || 0;
         let _tip = `${cleanCompany}`;
+        if (!isTaskMode && _shipKey(item.shipType)) _tip += ` · ${_shipLabel(_shipKey(item.shipType))}`;
         if (_pal) _tip += `\n팔레트: ${_pal} P`;
         if (_box) _tip += `\n박스: ${_box} B`;
         if (!_pal && !_box) _tip += `\n수량: -`;
@@ -2233,6 +2238,55 @@ function triggerStealthYearlySync(targetYear) {
 }
 
 // 🚀 [제자리 수정 패치] 날짜가 바뀌지 않으면 삭제/추가를 생략하고 '제자리'에서 데이터만 교체!
+// ───────── 🚚 배송 구분 (용차 = 기본 / 용마택배 / CJ택배) ─────────
+//  일정(item)에 shipType: "" (용차, 값 없음) | "용마" | "CJ" 로 붙어 다닌다. 서버 outbound.ship_type 과 같은 값.
+function _shipKey(v) {
+  const t = String(v == null ? "" : v).replace(/\s+/g, "").toLowerCase();
+  if (/용마|yongma/.test(t)) return "용마";
+  if (/^cj|씨제이|대한통운/.test(t)) return "CJ";
+  return "";
+}
+function _shipLabel(k) {
+  return k === "용마" ? "용마택배" : k === "CJ" ? "CJ택배" : "용차";
+}
+const _SHIP_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.6 12 3.2l8.5 4.4v8.8L12 20.8l-8.5-4.4z M3.5 7.6 12 12l8.5-4.4 M12 12v8.8" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+function _shipBadgeHtml(k) {
+  k = _shipKey(k);
+  if (!k) return "";
+  return `<span class="ship-badge ship-${k === "CJ" ? "cj" : "ym"}" aria-label="${_shipLabel(k)}">${_SHIP_SVG}</span>`;
+}
+function _shipPillHtml(k) {
+  k = _shipKey(k);
+  if (!k) return "";
+  return `<span class="ship-pill ship-${k === "CJ" ? "cj" : "ym"}">${_SHIP_SVG}${_shipLabel(k)}</span>`;
+}
+function _shipDotHtml(k) {
+  k = _shipKey(k);
+  return k ? `<u class="ship-dot ship-${k === "CJ" ? "cj" : "ym"}"></u>` : "";
+}
+function _shipSelectHtml(id, cur, cls) {
+  const c = _shipKey(cur);
+  const op = (v, t) => `<option value="${v}"${c === v ? " selected" : ""}>${t}</option>`;
+  return `<select id="${id}" class="${cls || "edit-input"}" style="width:100%;box-sizing:border-box">${op("", "🚚 용차 (기본)")}${op("용마", "📦 용마택배")}${op("CJ", "📦 CJ택배")}</select>`;
+}
+(function _shipInjectCss() {
+  if (document.getElementById("shipCss")) return;
+  const st = document.createElement("style");
+  st.id = "shipCss";
+  st.textContent = `
+    .item-tag.has-ship{position:relative}
+    .ship-badge{position:absolute;top:0;right:0;width:19px;height:19px;clip-path:polygon(0 0,100% 0,100% 100%);color:#fff;z-index:3;pointer-events:none;display:block}
+    .ship-badge svg{position:absolute;top:2px;right:2px;width:9px;height:9px;display:block;filter:drop-shadow(0 0 1px rgba(0,0,0,.35))}
+    .item-tag-slim .ship-badge{display:none}
+    .ship-ym{background:linear-gradient(135deg,#ffb340,#ff8a00)}
+    .ship-cj{background:linear-gradient(135deg,#ff5e7e,#e5174a)}
+    .ship-pill{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 8px 2px 6px;border-radius:999px;font-size:.78em;font-weight:900;color:#fff;letter-spacing:-.2px;vertical-align:middle}
+    .ship-pill svg{width:12px;height:12px;display:block}
+    .ship-dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-left:2px;vertical-align:middle;text-decoration:none;box-shadow:0 0 0 1px rgba(255,255,255,.85)}
+  `;
+  document.head.appendChild(st);
+})();
+
 function updateLocalState(action, payload, idx) {
   const safeStr = (v) => (v == null || v === "" ? "" : String(v).trim());
   const norm = (v) => {
@@ -2254,6 +2308,7 @@ function updateLocalState(action, payload, idx) {
   // 출고지시번호(화면 즉시 반영용): 수정창에서 바꾼 값(orderSlots) 또는 새 일정 등록 때 적은 값(orderNos)
   const _slotOrds = payload.orderSlots ? _ordSlotsToList(payload.orderSlots) : action === "ADD" && payload.orderNos ? _ordSlotsToList({ 0: payload.orderNos }) : null;
   let _removedOrds = null;
+  let _removedShip = "";
 
   // 📂 새 일정이 들어가거나 다른 날로 옮겨진 날은 접혀 있어도 펼쳐서 결과가 바로 보이게
   const _nc = String(payload.newComp || payload.oldComp || "");
@@ -2287,6 +2342,10 @@ function updateLocalState(action, payload, idx) {
       targetArr[idx].pal = payload.newPal ?? payload.oldPal;
       targetArr[idx].box = payload.newBox ?? payload.oldBox;
       targetArr[idx].etc = payload.newEtc;
+      if (payload.newShip !== undefined) { // 수정창에서 배송 구분을 보낸 경우에만 반영
+        if (_shipKey(payload.newShip)) targetArr[idx].shipType = _shipKey(payload.newShip);
+        else delete targetArr[idx].shipType;
+      }
       if (_slotOrds) targetArr[idx].ords = _slotOrds;
       // isDone 상태 및 기존 배열의 순서는 완벽히 유지됨
       
@@ -2335,7 +2394,7 @@ function updateLocalState(action, payload, idx) {
         }
       } else {
         let targetArr = oldDay === "pending" ? serverData.pendingItems : serverData.monthData[oldDay];
-        if (targetArr && idx !== null && targetArr[idx]) { _removedOrds = targetArr[idx].ords || null; targetArr.splice(idx, 1); }
+        if (targetArr && idx !== null && targetArr[idx]) { _removedOrds = targetArr[idx].ords || null; _removedShip = targetArr[idx].shipType || ""; targetArr.splice(idx, 1); }
       }
     }
 
@@ -2349,6 +2408,8 @@ function updateLocalState(action, payload, idx) {
         isDone: action === "EDIT" ? payload.oldDone : false,
         startDate: payload.newDate,
         ...((_slotOrds || _removedOrds) ? { ords: _slotOrds || _removedOrds } : {}),
+        // 배송 구분: 새로 등록하면 고른 값, 수정(날짜 이동 등)이면 고른 값 또는 원래 값을 그대로 이어감
+        ...(() => { const k = _shipKey(action === "ADD" ? payload.shipType : payload.newShip !== undefined ? payload.newShip : _removedShip); return k ? { shipType: k } : {}; })(),
       };
       let startD = parseDay(payload.newDate);
       let endD =
@@ -3213,6 +3274,7 @@ async function submitCMS(
     endDateStr = endNode ? endNode.value : "";
     payload.newDate = startDateStr;
     payload.newEtc = document.getElementById("add-etc").value;
+    if (!isTask) { const _sa = document.getElementById("add-ship"); if (_sa && _sa.value) payload.shipType = _sa.value; } // 배송 구분(기본 용차는 보내지 않음)
     { const _oe = document.getElementById("add-orders"); if (_oe && _oe.value.trim() && !isTask) { payload.orderNos = _oe.value.trim(); if (_ordHasIgnored(_oe.value)) showToast("ℹ️ 영문·숫자 6자 미만 번호는 저장되지 않습니다.", 3500); } } // 출고지시번호(선택)
   } else if (action === "EDIT") {
     isTask = document.getElementById(`edit-type-task-${idx}`).checked;
@@ -3246,6 +3308,7 @@ async function submitCMS(
     let histStr = histArr.join(" ");
     payload.newEtc = histStr !== "" ? (cleanEtc !== "" ? cleanEtc + " " + histStr : histStr) : cleanEtc;
     payload.oldEtc = _itemOrigEtc; // 비고 변경 전 값 — EDIT_BLOCK 로그에서 변경 내용 표시용
+    if (!isTask) { const _se = document.getElementById(`edit-ship-${idx}`); if (_se) payload.newShip = _se.value; } // 배송 구분(용차/용마/CJ)
     if (!isTask) {
       const _os = _ordCollectSlots(idx, _itemOrds);
       if (_os) payload.orderSlots = _os; // 출고지시번호를 바꾼 경우에만 전송
@@ -3299,6 +3362,7 @@ async function submitCMS(
   }
 
   if (action === "ADD" && payload.orderNos && startDateStr !== "미정" && endDateStr && endDateStr > startDateStr) {
+    delete payload.shipType; // 기간 등록은 배송 구분을 저장하지 않음(작업·기간 일정용)
     delete payload.orderNos; // 여러 날에 걸친 등록은 날마다 일정이 따로 생겨 번호를 어디에 붙일지 모호함 → 등록 후 각 일정 상세에서 입력
     showToast("ℹ️ 기간 등록은 출고지시번호를 저장하지 않습니다. 등록 후 일정에서 입력해 주세요.", 3500);
   }
@@ -3519,8 +3583,24 @@ async function executeMultiAction(action) {
   });
 }
 
+// 등록창의 '배송 구분' 칸은 index.html 을 건드리지 않고 여기서 한 번 끼워 넣는다
+function _shipEnsureAddField() {
+  let sel = document.getElementById("add-ship");
+  if (!sel) {
+    const anchor = document.getElementById("add-orders");
+    const lab = anchor && anchor.previousElementSibling;
+    if (!lab) return;
+    const wrap = document.createElement("div");
+    wrap.id = "add-ship-wrap";
+    wrap.innerHTML = `<div class="form-label">배송 구분</div>${_shipSelectHtml("add-ship", "")}`;
+    lab.parentNode.insertBefore(wrap, lab);
+    sel = document.getElementById("add-ship");
+  }
+  if (sel) sel.value = ""; // 기본은 용차
+}
 function openAddForm() {
   if (isMultiMode) toggleMultiMode();
+  _shipEnsureAddField();
   document.getElementById("type-out-add").checked = true;
   toggleEndDate("add", false);
   document.getElementById("add-comp").value = "";
@@ -3985,7 +4065,7 @@ function showModal(day, clickedIdx) {
                                     ${compNameHtml}
                                     ${actionBtns}
                                 </div>
-                                <div class="modal-vol" style="display:flex; align-items:center; flex-wrap:wrap;">${iconHtml}${volStr} ${addQtyBtn}${_ordBtnHtml(item, day, idx, isAdmin, isTaskMode)}</div>
+                                <div class="modal-vol" style="display:flex; align-items:center; flex-wrap:wrap;">${iconHtml}${volStr}${isTaskMode ? "" : _shipPillHtml(item.shipType)} ${addQtyBtn}${_ordBtnHtml(item, day, idx, isAdmin, isTaskMode)}</div>
                                 ${histHtml} 
                                 ${etcHtml}
                             </div>
@@ -4214,6 +4294,8 @@ async function openEditForm(
             <input ${_ordInputAttr} id="edit-ord-x-${idx}" value="${_esc(_ordOrphanText(_ordItem, matches.length))}">` : ""}
 
             ${histHtml}
+
+            ${!isTaskMode ? `<div class="form-label">배송 구분</div>${_shipSelectHtml(`edit-ship-${idx}`, _ordItem && _ordItem.shipType)}` : ""}
 
             <div class="form-label">비고 (메모 입력)</div>
             <input type="text" id="edit-etc-${idx}" class="edit-input" value="${_esc(cleanEtc !== "undefined" ? cleanEtc : "")}">
@@ -7236,17 +7318,17 @@ function _pickRender() {
   const cands = !c.company && Array.isArray(c.candidates) ? c.candidates : [];
   let banners = "";
   if (r.unfinished)
-    banners += `<div class="pk-banner err">🚫 작성 전 피킹지로 보입니다<br><span style="font-weight:600">PLT·완박스·혼재박스가 모두 비어 있어요. 작업이 끝난 마지막 장을 다시 찍어주세요.</span></div>`;
+    banners += `<div class="pk-banner err" id="pick-unfin">🚫 작성 전 피킹지로 보입니다<br><span style="font-weight:600">PLT·완박스·혼재박스가 모두 비어 있어요. 손글씨가 있는데 못 읽은 거라면 아래 칸에 직접 입력하면 등록할 수 있어요. 아니면 작업이 끝난 마지막 장을 다시 찍어주세요.</span></div>`;
   if (st.duplicate) {
     const di = st.dupInfo;
     banners += `<div class="pk-banner err">🚫 이미 등록된 피킹지입니다<br><span style="font-weight:600">${_esc(r.orderNo || "")}${di ? ` → ${_esc(di.company)} · ${_esc(di.date || "미정")} 일정` : ""}<br>그 일정을 지웠다면 다시 등록할 수 있어요. 일정이 남아 있으면 중복 등록을 막기 위해 등록되지 않습니다.</span></div>`;
   } else if (st.legacy) {
     banners += `<div class="pk-banner warn">⚠️ 이전 버전에서 등록한 기록이 있는 피킹지입니다<br><span style="font-weight:600">달력에 이미 들어가 있는지 확인한 뒤 등록하세요.</span></div>`;
   }
-  const isYongcha = !r.shipType || /용차/.test(r.shipType);
+  const isYongcha = !r.shipType || /용차/.test(r.shipType) || !!_shipKey(r.shipType); // 용마·CJ 택배는 아래 '배송 구분' 칸에서 고르므로 경고하지 않음
   const metaRows = [];
   if (r.orderNo) metaRows.push(`출고지시번호 <b>${_esc(r.orderNo)}</b>`);
-  if (r.shipType) metaRows.push(`택배유형 <b style="${isYongcha ? "" : "color:" + _PICK_ORANGE}">${_esc(r.shipType)}</b>${isYongcha ? "" : " — 용차가 아니라 등록 때 한 번 더 묻습니다"}`);
+  if (r.shipType) metaRows.push(`택배유형 <b style="${isYongcha ? "" : "color:" + _PICK_ORANGE}">${_esc(r.shipType)}</b>${isYongcha ? "" : " — 용차·용마·CJ 가 아니라 등록 때 한 번 더 묻습니다"}`);
   if (r.buyerNote) metaRows.push(`구매처 비고 <b>${_esc(r.buyerNote)}</b>`);
   if (r.sbox !== null && r.sbox !== undefined) metaRows.push(`이 장 인쇄 합계 SBOX ${_esc(String(r.sbox))} / RBOX ${r.rbox === null || r.rbox === undefined ? "?" : _esc(String(r.rbox))} <span style="opacity:.8">(손글씨 합계와 달라도 정상)</span>`);
   const metaHtml = (metaRows.length ? `<div class="pk-meta">${metaRows.join("<br>")}</div>` : "") + (!r.orderNo ? _pickFlagHtml("orderNo") : "");
@@ -7277,6 +7359,9 @@ function _pickRender() {
       <input type="date" id="pick-date" class="pk-input" style="${_pickBorder("shipDate")}" value="${_esc(r.shipDate || "")}" onchange="_pickLoadRows()" />
       ${dateHint}
       <div class="pk-hint" id="pick-datehint" style="display:none">기존 일정에 추가할 때는 이 날짜의 일정만 후보로 보입니다. 날짜를 비우면 미정 일정과 앞으로의 일정이 모두 보여요.</div>
+      <div id="pick-shipwrap"><label class="pk-label" for="pick-ship" style="margin-top:14px">배송 구분</label>
+      ${_shipSelectHtml("pick-ship", _shipKey(r.shipType), "pk-input")}
+      <div class="pk-hint">${r.shipType ? `문서의 택배유형: ${_esc(r.shipType)}` : "문서에서 택배유형을 찾지 못해 용차로 두었어요"}</div></div>
       <div id="pick-etcwrap"><label class="pk-label" for="pick-etc" style="margin-top:14px">비고</label>
       <input type="text" id="pick-etc" class="pk-input" placeholder="(선택)" /></div>
     </div>
@@ -7387,12 +7472,14 @@ function _pickRenderMode() {
   box.innerHTML = inner;
   const ew = document.getElementById("pick-etcwrap");
   if (ew) ew.style.display = app ? "none" : "";
+  const sw = document.getElementById("pick-shipwrap");
+  if (sw) sw.style.display = app ? "none" : ""; // 기존 일정에 추가할 때는 그 일정의 배송 구분을 그대로 둠
   const dh = document.getElementById("pick-datehint");
   if (dh) dh.style.display = app ? "" : "none";
   const sb = document.getElementById("pick-submit");
   if (sb && !sb.dataset.busy) {
     sb.textContent = app ? "기존 일정에 추가" : "새 일정으로 등록";
-    sb.disabled = !!(st.duplicate || r.unfinished || (app && !st.targetId));
+    sb.disabled = !!(st.duplicate || _pickUnfin(st) || (app && !st.targetId));
   }
 }
 
@@ -7402,7 +7489,20 @@ function _pickInt(id) {
   const n = parseInt(el.value, 10);
   return isNaN(n) || n < 0 ? null : n;
 }
+// '작성 전 피킹지'(세 칸 모두 못 읽음)는 사람이 칸에 값을 넣으면 풀린다 — 손글씨는 있는데 못 읽은 경우에도 직접 입력해 등록할 수 있게
+function _pickUnfin(st) {
+  if (!st || !st.result || !st.result.unfinished) return false;
+  return (_pickInt("pick-pal") || 0) + (_pickInt("pick-wan") || 0) + (_pickInt("pick-hon") || 0) === 0;
+}
 function _pickRecalc() {
+  const st0 = _pickState;
+  if (st0 && st0.result && st0.result.unfinished) {
+    const un = _pickUnfin(st0);
+    const bn = document.getElementById("pick-unfin");
+    if (bn) bn.style.display = un ? "" : "none";
+    const sb0 = document.getElementById("pick-submit");
+    if (sb0 && !sb0.dataset.busy) sb0.disabled = !!(st0.duplicate || un || (st0.mode === "append" && !st0.targetId));
+  }
   const line = document.getElementById("pick-box-line");
   if (!line) return;
   const w = _pickInt("pick-wan"), h = _pickInt("pick-hon");
@@ -7423,7 +7523,7 @@ async function submitPick(btn) {
 }
 async function _submitPickInner(btn) {
   const st = _pickState;
-  if (!st || !st.result || st.busy || st.duplicate || st.result.unfinished) return;
+  if (!st || !st.result || st.busy || st.duplicate || _pickUnfin(st)) return;
   const rawComp = (document.getElementById("pick-comp").value || "").trim();
   let pal = _pickInt("pick-pal");
   const wan = _pickInt("pick-wan"), hon = _pickInt("pick-hon");
@@ -7448,7 +7548,7 @@ async function _submitPickInner(btn) {
   }
   const orangeLeft = Object.values((st.result && st.result.flags) || {}).filter((f) => f.level === "orange").length;
   const shipT = st.result.shipType;
-  if (shipT && !/용차/.test(shipT)) {
+  if (shipT && !/용차/.test(shipT) && !_shipKey(shipT)) {
     if (!(await uiConfirm(`택배유형이 "${shipT}" 입니다.\n출고 달력은 용차 기준인데, 이 건도 달력에 반영할까요?`, { okText: "계속" }))) return;
   }
   const msg = app
@@ -7460,7 +7560,7 @@ async function _submitPickInner(btn) {
   const res = await apiCall({
     source: "vercel", domain: "system", action: "PICK_REGISTER",
     admin_id: localStorage.getItem("admin_id"),
-    data: { company, pal, box, date, etc, orderNo: st.result.orderNo || "", printedName: st.result.customer || "", mode: app ? "append" : "new", targetId: app ? target.id : undefined, wan, hon, parseId: st.parseId || undefined },
+    data: { company, pal, box, date, etc, orderNo: st.result.orderNo || "", printedName: st.result.customer || "", mode: app ? "append" : "new", targetId: app ? target.id : undefined, wan, hon, parseId: st.parseId || undefined, shipType: app ? undefined : (document.getElementById("pick-ship") ? document.getElementById("pick-ship").value : undefined) },
   });
   st.busy = false;
   if (res && res.success) {
