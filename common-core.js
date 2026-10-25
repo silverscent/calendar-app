@@ -242,7 +242,12 @@ function closePcOverlays() {
   window.applyShellUpdate = reloadWithFreshShell; // 당겨서 새로고침(common-ui.js)에서 사용
 
   function showUpdateBanner() {
-    if (dismissed || !document.body || document.getElementById("appUpdateBanner")) return;
+    if (dismissed || document.getElementById("appUpdateBanner")) return;
+    // 화면이 아직 만들어지기 전에 알림이 오면 놓치지 말고, 만들어진 직후에 띄움
+    if (!document.body) {
+      document.addEventListener("DOMContentLoaded", showUpdateBanner, { once: true });
+      return;
+    }
     const bar = document.createElement("div");
     bar.id = "appUpdateBanner";
     bar.setAttribute("role", "status");
@@ -293,9 +298,9 @@ function closePcOverlays() {
   function checkForUpdate() {
     if (!navigator.onLine) return;
     const now = Date.now();
-    if (now - lastCheck < 60000) return;
+    if (now - lastCheck < 20000) return; // 배포가 막 끝난 직후에도 곧 다시 확인되도록 20초
+    if (!postToSW({ type: "CHECK_UPDATE" })) return; // 서비스워커가 아직 연결 전이면 확인한 걸로 치지 않음
     lastCheck = now;
-    postToSW({ type: "CHECK_UPDATE" });
     navigator.serviceWorker
       .getRegistration()
       .then((r) => r && r.update())
@@ -304,7 +309,13 @@ function closePcOverlays() {
 
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("서비스 워커 등록 실패:", err));
-    setTimeout(() => postToSW({ type: "HELLO" }), 1500); // 로딩 중 놓친 '새 버전' 알림 다시 받기
+    setTimeout(() => {
+      postToSW({ type: "HELLO" }); // 로딩 중 놓친 '새 버전' 알림 다시 받기
+      checkForUpdate(); // 앱을 완전히 닫았다 새로 켠 경우에도 새 배포가 있는지 확인 (예전엔 홈에 나갔다 와야만 확인했음)
+    }, 1500);
+  });
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) checkForUpdate(); // 뒤로가기/복원으로 옛 화면이 그대로 살아 돌아온 경우
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {

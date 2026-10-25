@@ -6574,10 +6574,14 @@ function _pickChooser() {
   if (!body) return;
   _pickState = null;
   _pickSentCv = null;
-  body.innerHTML = `<div class="pk-choose">
+  // 시스템 관리자 전용 '판독 정확도' 바로가기 — 화면 아래쪽은 아이폰 홈 막대에 가려질 수 있어 맨 위 오른쪽 작은 알약으로 둠
+  const statsChip = typeof isSystemUser === "function" && isSystemUser()
+    ? `<div style="display:flex;justify-content:flex-end;margin:2px 0 12px"><button type="button" onclick="pickStatsOpen()" style="display:inline-flex;align-items:center;gap:5px;background:var(--card-bg);border:1px solid var(--border-color);color:var(--text-sub);font-size:0.8em;font-weight:800;border-radius:999px;padding:6px 12px;cursor:pointer">📊 판독 정확도</button></div>`
+    : "";
+  body.innerHTML = `${statsChip}<div class="pk-choose">
     <button type="button" onclick="pickChoose('cam')"><span class="ic">📷</span><span>지금 촬영하기<small>카메라로 피킹지 마지막 장을 찍어요</small></span></button>
     <button type="button" onclick="pickChoose('lib')"><span class="ic">🖼️</span><span>사진첩에서 선택<small>이미 찍어 둔 사진·스캔 이미지를 불러와요</small></span></button>
-  </div>${typeof isSystemUser === "function" && isSystemUser() ? `<div style="text-align:center;margin-top:14px"><button type="button" onclick="pickStatsOpen()" style="background:none;border:none;color:var(--text-sub);font-size:0.82em;font-weight:800;cursor:pointer;text-decoration:underline">📊 판독 정확도 보기</button></div>` : ""}`;
+  </div>`;
 }
 
 function pickChoose(kind) {
