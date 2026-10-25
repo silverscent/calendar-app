@@ -7037,7 +7037,8 @@ async function _pickSend(b64) {
     }
     _pickState = {
       result: d.result, company: d.company, duplicate: !!d.duplicate, dupInfo: d.dupInfo || null, legacy: !!d.legacy,
-      busy: false, mode: d.result && d.result.addExisting ? "append" : "new", targetId: null, rows: null, seq: 0,
+      busy: false, mode: d.result && (d.result.addExisting || d.result.mergeHint) ? "append" : "new", targetId: null, rows: null, seq: 0,
+      autoMerge: !!(d.result && d.result.mergeHint && !d.result.addExisting), mergeMiss: false,
     };
     _pickRender();
     _pickLoadRows();
@@ -7179,6 +7180,8 @@ async function _pickLoadRows() {
   }
   st.rowsErr = false;
   st.rows = res.rows;
+  // 구매처 비고(합배 등)만 보고 '기존 일정에 추가'를 골랐는데 합칠 일정이 없으면 → 새 일정으로 (손글씨로 고른 경우는 그대로 안내만)
+  if (st.autoMerge && st.mode === "append" && !st.rows.length) { st.mode = "new"; st.mergeMiss = true; }
   // 후보가 하나뿐이어도 출고일을 모르면(미정+앞으로 일정 전체가 후보) 자동으로 고르지 않음 — 다른 날짜 일정에 잘못 더하는 일 방지
   if (!st.rows.some((x) => x.id === st.targetId)) st.targetId = st.rows.length === 1 && date ? st.rows[0].id : null;
   _pickRenderMode();
@@ -7209,6 +7212,7 @@ function _pickRenderMode() {
       <button type="button" class="${app ? "on" : ""}" onclick="pickSetMode('append')">기존 일정에 추가${n ? ` (${n})` : ""}</button>
     </div>`;
   if (app) {
+    if (r.mergeHint && !r.addExisting) inner += `<div class="pk-hint" style="color:#0a84ff;font-weight:800">📎 구매처 비고 "${_esc(r.mergeNote || "")}" 를 보고 기존 일정에 추가하는 방식을 골랐어요. 아니면 '새 일정으로 등록'을 누르세요.</div>`;
     if (r.addExisting) inner += `<div class="pk-hint" style="color:#0a84ff;font-weight:800">✍️ 손글씨에서 "${_esc(r.addNote || "기존에 추가")}" 문구를 찾아 이 방식을 골랐어요. 아니면 '새 일정으로 등록'을 누르세요.</div>`;
     if (rows === null) inner += `<div class="pk-hint">같은 업체 일정을 찾는 중...</div>`;
     else if (st.rowsErr) inner += `<div class="pk-hint" style="color:${_PICK_RED};font-weight:800">⚠️ 일정을 불러오지 못했습니다. <a href="#" onclick="event.preventDefault(); _pickLoadRows();" style="color:#0a84ff">다시 불러오기</a></div>`;
@@ -7219,6 +7223,8 @@ function _pickRenderMode() {
         .map((x) => `<div class="pk-target ${x.id === st.targetId ? "on" : ""}" onclick="pickSetTarget(${Number(x.id)})"><span class="dot" style="margin:0"></span><div style="min-width:0"><b>${_esc(x.date || "미정")} · PLT ${_esc(String(x.pal))} / 박스 ${_esc(String(x.box))}</b>${x.etc ? `<span>${_esc(x.etc)}</span>` : ""}</div></div>`)
         .join("");
     }
+  } else if (st.mergeMiss && !n) {
+    inner += `<div class="pk-hint" style="color:${_PICK_ORANGE};font-weight:800">🟠 구매처 비고 "${_esc(r.mergeNote || "")}" 는 기존 일정과 합치라는 뜻 같지만, 같은 업체·같은 날 일정을 찾지 못해 새 일정으로 두었어요. 업체·출고일을 확인하세요.</div>`;
   } else if (n) {
     inner += `<div class="pk-hint" style="color:${_PICK_ORANGE};font-weight:800">🟠 같은 업체${document.getElementById("pick-date") && document.getElementById("pick-date").value ? "·같은 날" : ""} 일정이 ${n}건 있어요. 같은 날 같이 나가는 건이면 '기존 일정에 추가'를 쓰세요.</div>`;
   }

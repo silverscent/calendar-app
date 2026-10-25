@@ -53,6 +53,7 @@ const GEMINI_PROMPT = `이 이미지는 물류센터 '피킹 리스트'(출고 �
 - honjae: 표 '혼재박스' 칸 바로 아래 손으로 쓴 숫자(정수). 숫자만 쓰이며 아무것도 안 쓰였으면 "empty". 뭔가 쓰여 있으면 가장 그럴듯한 숫자로 답하고(null 금지) 확신이 없으면 uncertain 에 "honjae" 를 넣어.
 - 완박스·혼재박스 칸 찾기: 사진이 기울거나 비스듬해도 '완박스'·'혼재박스' 머리글 바로 아래 칸만 본다. 옆 칸(날짜·피킹·검수)의 서명·이니셜·동그라미 글씨는 그 칸의 숫자가 아니다.
 - addToExisting: 손글씨 영역(특히 PLT 근처)에 "기존에 추가", "기존 추가", "추가", "합산"처럼 '같은 날 나가는 같은 업체의 이미 잡힌 출고 건에 더한다'는 뜻의 글이 있으면 true, 없으면 false
+- mergeToExisting: (손글씨가 아니라 인쇄된 '구매처 비고'가) 같은 날 나가는 다른 건과 합쳐서 보내라는 뜻이면 true. 예: "28일 용차 합배", "합차 부탁", "기존 건과 같이 보내주세요", "동봉". 단순 날짜·일반 요청만 있으면 false
 - handNote: 위 뜻의 손글씨 원문(예: "기존에추가"). 없으면 null
 - uncertain: 값을 확신하지 못하는 키 이름 배열
 
@@ -235,6 +236,9 @@ function extractHandwritingVision(vr) {
   return out;
 }
 
+// 구매처 비고 속 '합쳐서 보내라' 표현 (딱 정해진 말은 아니라 AI 판단(mergeToExisting)과 함께 쓴다)
+const MERGE_RE = /합\s*배|합\s*차|합쳐|합포|합\s*출고|(?:같이|함께)\s*(?:배송|보내|출고|나가|실어)|동봉|묶어/;
+
 // ───────────────────────── 날짜 (구매처 비고 등 자유 문장) ─────────────────────────
 // "10월발주) 10/21(수) 부탁드립니다." → 10/21.  'N월' 만 있고 일이 없는 표현(10월발주)은 날짜로 보지 않는다.
 function datesFromNote(note, printedAt) {
@@ -261,7 +265,19 @@ function datesFromNote(note, printedAt) {
   const re1 = /(?<![\d.])(\d{1,2})\s*\/\s*(\d{1,2})(?![\d.]|\s*[:시])/g; // 10/21  (소수 1.5·전화번호·시각은 날짜로 보지 않음)
   while ((m = re1.exec(masked))) push(baseY, +m[1], +m[2]);
   const re2 = /(\d{1,2})\s*월\s*(\d{1,2})\s*일/g; // 10월 21일
-  while ((m = re2.exec(masked))) push(baseY, +m[1], +m[2]);
+  const masked2 = masked.replace(re2, (all, mo, d) => { push(baseY, +mo, +d); return " "; });
+  // '28일 용차 합배' 처럼 월 없이 일만 적은 경우 → 출력일 기준 가장 가까운 앞날(이미 지난 날이면 다음 달). 다른 날짜가 하나도 없을 때만.
+  //   '3일 이내'·'2일 전' 같은 기간 표현은 날짜가 아님
+  if (!found.length) {
+    const re3 = /(?<![\d월./-])(\d{1,2})\s*일(?!\s*(?:이내|이후|이상|이하|전|후|간|동안|치|분|째|정도))/g;
+    while ((m = re3.exec(masked2))) {
+      const d = +m[1];
+      if (d < 1 || d > 31) continue;
+      let mo = baseD.getMonth() + 1, yy = baseD.getFullYear();
+      if (d < baseD.getDate()) { mo += 1; if (mo > 12) { mo = 1; yy += 1; } }
+      push(yy, mo, d);
+    }
+  }
   // 연도 보정
   return found.map((f) => {
     let { y, mo, d } = f;
@@ -500,10 +516,14 @@ function reconcile(printed, hw, g, errs) {
   // '기존에 추가': AI 또는 문자인식 중 하나라도 보면 후보로 제시(화면에서 사용자가 새 일정/추가를 최종 선택)
   const gAdd = g.addToExisting === true || String(g.addToExisting).toLowerCase() === "true";
   const addExisting = !!(gAdd || hw.addExisting);
+  // 구매처 비고가 '같은 날 이미 잡힌 출고와 합쳐 보내라'는 뜻(예: "28일 용차 합배")이면 기존 일정에 추가를 먼저 제안한다(최종 선택은 화면에서 사람이)
+  const gMerge = g.mergeToExisting === true || String(g.mergeToExisting).toLowerCase() === "true";
+  const mergeHint = !!(MERGE_RE.test(String(buyerNote || "")) || gMerge);
+  const mergeNote = mergeHint ? String(buyerNote || "").slice(0, 60) || null : null;
   // PLT 가 비어 있고 '기존에 추가' 이면 → 파렛트 없이 박스 수량만 더하는 건 (PLT 0 으로 두고 빨간 경고 없음)
   let pltAddZero = false;
   if (!unfinished && P.empty) {
-    if (addExisting) {
+    if (addExisting || mergeHint) {
       pltAddZero = true;
       delete flags.plt;
     } else {
@@ -519,7 +539,7 @@ function reconcile(printed, hw, g, errs) {
   return {
     orderNo, customer, address, floor, buyerNote, shipType, shipDate, shipDateNote,
     plt, wanbox: wan, honjae: hon, box, sbox, rbox,
-    addExisting, addNote, pltAddZero,
+    addExisting, addNote, pltAddZero, mergeHint, mergeNote,
     unfinished, flags,
     ai: g && Object.keys(g).length ? "ok" : "fail",
     errs: errs || [],
