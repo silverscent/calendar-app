@@ -1830,6 +1830,7 @@ function changeConnLogPage(dir) {
     (t.closest &&
       (t.closest(".overlay-modal") ||
         t.closest(".modal") ||
+        t.closest("#ordOverlay") || // 출고지시번호 바코드 시트 안에서 당길 때는 새로고침 금지
         t.closest("#dashboardModal") ||
         t.closest("#masterDashboardModal")));
 

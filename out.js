@@ -3576,10 +3576,10 @@ function _ordInjectCss() {
   st.textContent = `
     .ord-ico{display:inline-flex;flex-direction:row;flex:0 0 auto;white-space:nowrap;width:auto;height:auto;align-items:center;gap:4px;margin-left:8px;background:transparent;border:1px solid rgba(128,128,128,.55);color:var(--text-sub,#888);border-radius:6px;padding:2px 7px;font-size:.78em;font-weight:800;cursor:pointer;line-height:1.3}
     .ord-ico svg{width:15px;height:13px;display:block}
-    #ordOverlay{position:fixed;inset:0;z-index:100000;background:rgba(10,12,16,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;box-sizing:border-box;animation:ordFade .18s ease}
+    #ordOverlay{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.6);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);display:flex;align-items:flex-end;justify-content:center;box-sizing:border-box;animation:ordFade .2s;overscroll-behavior:contain;touch-action:pan-y}
     @keyframes ordFade{from{opacity:0}to{opacity:1}}
-    @keyframes ordUp{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
-    #ordOverlay .ord-card{background:var(--bg-color,#f4f6f9);color:var(--text-main,#222);border-radius:24px 24px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom));width:min(560px,100%);box-sizing:border-box;max-height:88vh;overflow:auto;-webkit-overflow-scrolling:touch;box-shadow:0 -10px 40px rgba(0,0,0,.28);animation:ordUp .22s cubic-bezier(.2,.8,.2,1)}
+    @keyframes ordUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+    #ordOverlay .ord-card{background:var(--bg-color,#f4f6f9);color:var(--text-main,#222);border-radius:24px 24px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:500px;box-sizing:border-box;max-height:85vh;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;box-shadow:0 -10px 40px rgba(0,0,0,.2);animation:ordUp .35s cubic-bezier(.175,.885,.32,1)}
     @media (min-width:700px){#ordOverlay{align-items:center;padding:24px}#ordOverlay .ord-card{border-radius:22px;padding-bottom:18px}}
     #ordOverlay .ord-gz{padding:8px 0 12px;margin:-4px 0 0;touch-action:none;cursor:grab;-webkit-tap-highlight-color:transparent}
     #ordOverlay .ord-grab{width:42px;height:5px;border-radius:3px;background:var(--text-sub,#a0a0a0);opacity:.55;margin:0 auto}
@@ -3710,6 +3710,7 @@ function _ordAttachSwipe(o) {
     if (e.target && e.target.closest && e.target.closest("button")) return; // ✕ 같은 버튼은 그대로 눌리게
     if (card.scrollTop > 5) return; // 내용이 스크롤된 상태면 끌기 무시
     st = { y0: e.clientY, y: e.clientY, t0: Date.now(), id: e.pointerId };
+    card.style.animation = "none";
     card.style.transition = "none";
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
   };
@@ -3719,7 +3720,7 @@ function _ordAttachSwipe(o) {
     st.y = e.clientY;
     if (d > 0) {
       card.style.transform = `translateY(${d}px)`;
-      o.style.background = `rgba(10,12,16,${Math.max(0.1, 0.55 - d / 700)})`;
+      o.style.background = `rgba(0,0,0,${Math.max(0.12, 0.6 - d / 700)})`;
     }
   };
   const end = (e) => {
@@ -3727,15 +3728,17 @@ function _ordAttachSwipe(o) {
     const d = st.y - st.y0;
     const v = d / Math.max(1, Date.now() - st.t0);
     st = null;
-    card.style.transition = "transform .25s cubic-bezier(.2,.8,.2,1)";
+    card.style.animation = "none"; // 열릴 때 애니메이션이 끝난 뒤의 위치를 기준으로
+    card.style.transition = "transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)"; // 다른 창과 같은 속도·곡선
     if (d > 120 || v > 0.5) {
-      card.style.transform = "translateY(110%)";
-      o.style.transition = "background .25s";
-      o.style.background = "rgba(10,12,16,0)";
-      setTimeout(_ordClose, 250);
+      card.style.transform = "translateY(100%)";
+      o.style.transition = "background 0.3s";
+      o.style.background = "rgba(0,0,0,0)";
+      setTimeout(_ordClose, 300);
     } else {
-      card.style.transform = "";
+      card.style.transform = "translateY(0)";
       o.style.background = "";
+      setTimeout(() => { card.style.transform = ""; card.style.transition = ""; }, 300);
     }
   };
   o.querySelectorAll(".ord-gz, .ord-head").forEach((z) => {
