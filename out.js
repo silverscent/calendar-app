@@ -3576,28 +3576,40 @@ function _ordInjectCss() {
   st.textContent = `
     .ord-ico{display:inline-flex;flex-direction:row;flex:0 0 auto;white-space:nowrap;width:auto;height:auto;align-items:center;gap:4px;margin-left:8px;background:transparent;border:1px solid rgba(128,128,128,.55);color:var(--text-sub,#888);border-radius:6px;padding:2px 7px;font-size:.78em;font-weight:800;cursor:pointer;line-height:1.3}
     .ord-ico svg{width:15px;height:13px;display:block}
-    #ordOverlay{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box}
-    #ordOverlay .ord-card{background:#fff;color:#000;border-radius:14px;padding:16px;width:min(560px,100%);box-sizing:border-box;max-height:92vh;overflow:auto;-webkit-overflow-scrolling:touch}
-    #ordOverlay .ord-title{font-weight:900;font-size:1em;margin-bottom:2px}
-    #ordOverlay .ord-grp{border:1px solid #d1d1d6;border-radius:12px;margin:10px 0;overflow:hidden;background:#fff}
-    #ordOverlay .ord-grp-h{display:flex;align-items:center;gap:6px;padding:6px 10px;background:#f2f2f7;font-size:.78em;font-weight:900;color:#3a3a3c;border-bottom:1px solid #e5e5ea}
-    #ordOverlay .ord-grp-h .n{margin-left:auto;font-weight:800;color:#8e8e93}
-    #ordOverlay .ord-grp.add .ord-grp-h{background:#e8f1ff;color:#0a60d0}
-    #ordOverlay .ord-row{display:flex;align-items:center;width:100%;box-sizing:border-box;padding:13px 12px;background:#fff;border:none;border-top:1px solid #efeff4;color:#000;font-size:1.02em;font-weight:900;letter-spacing:.5px;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
-    #ordOverlay .ord-grp-h + .ord-row{border-top:none}
-    #ordOverlay .ord-row .no{flex:1;word-break:break-all}
-    #ordOverlay .ord-row .chev{font-size:.8em;color:#8e8e93;transition:transform .2s}
-    #ordOverlay .ord-row.on{background:#eef5ff}
+    #ordOverlay{position:fixed;inset:0;z-index:100000;background:rgba(10,12,16,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;box-sizing:border-box;animation:ordFade .18s ease}
+    @keyframes ordFade{from{opacity:0}to{opacity:1}}
+    @keyframes ordUp{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
+    #ordOverlay .ord-card{background:var(--bg-color,#f4f6f9);color:var(--text-main,#222);border-radius:24px 24px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom));width:min(560px,100%);box-sizing:border-box;max-height:88vh;overflow:auto;-webkit-overflow-scrolling:touch;box-shadow:0 -10px 40px rgba(0,0,0,.28);animation:ordUp .22s cubic-bezier(.2,.8,.2,1)}
+    @media (min-width:700px){#ordOverlay{align-items:center;padding:24px}#ordOverlay .ord-card{border-radius:22px;padding-bottom:18px}}
+    #ordOverlay .ord-grab{width:38px;height:5px;border-radius:3px;background:var(--border-color,#d1d1d6);margin:2px auto 10px}
+    #ordOverlay .ord-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
+    #ordOverlay .ord-head .tx{flex:1;min-width:0}
+    #ordOverlay .ord-eyebrow{display:flex;align-items:center;gap:6px;font-size:.74em;font-weight:900;letter-spacing:.6px;color:#0a84ff}
+    #ordOverlay .ord-eyebrow svg{width:16px;height:13px}
+    #ordOverlay .ord-title{font-weight:900;font-size:1.2em;line-height:1.25;margin-top:3px;word-break:keep-all;overflow-wrap:anywhere}
+    #ordOverlay .ord-sub{font-size:.78em;color:var(--text-sub,#777);margin-top:3px}
+    #ordOverlay .ord-x{flex:0 0 auto;width:32px;height:32px;border-radius:50%;border:none;background:var(--card-bg,#fff);color:var(--text-sub,#777);font-size:1.05em;font-weight:900;line-height:1;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+    #ordOverlay .ord-sec{margin:14px 2px 6px;display:flex;align-items:center;gap:7px;font-size:.78em;font-weight:900;color:var(--text-sub,#777)}
+    #ordOverlay .ord-sec .dot{width:8px;height:8px;border-radius:50%;background:#8e8e93}
+    #ordOverlay .ord-sec.add .dot{background:#0a84ff}
+    #ordOverlay .ord-sec .n{margin-left:auto;font-weight:800;background:var(--card-bg,#fff);border:1px solid var(--border-color,#e5e5e5);border-radius:10px;padding:1px 8px;font-size:.95em}
+    #ordOverlay .ord-grp{border-radius:14px;overflow:hidden;background:var(--card-bg,#fff);border:1px solid var(--border-color,#e5e5e5);box-shadow:0 1px 3px rgba(0,0,0,.06)}
+    #ordOverlay .ord-row{display:flex;align-items:center;gap:11px;width:100%;box-sizing:border-box;padding:14px 14px;background:transparent;border:none;border-top:1px solid var(--border-color,#e5e5e5);color:var(--text-main,#222);font-size:1.02em;font-weight:900;letter-spacing:.4px;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent;font-variant-numeric:tabular-nums}
+    #ordOverlay .ord-grp > .ord-row:first-child{border-top:none}
+    #ordOverlay .ord-row .bi{flex:0 0 auto;width:30px;height:30px;border-radius:9px;background:rgba(10,132,255,.12);color:#0a84ff;display:flex;align-items:center;justify-content:center}
+    #ordOverlay .ord-row .bi svg{width:16px;height:13px}
+    #ordOverlay .ord-row .no{flex:1;min-width:0;word-break:break-all}
+    #ordOverlay .ord-row .chev{flex:0 0 auto;font-size:.7em;color:var(--text-sub,#8e8e93);transition:transform .2s}
+    #ordOverlay .ord-row.on{background:rgba(10,132,255,.09)}
+    #ordOverlay .ord-row.on .bi{background:#0a84ff;color:#fff}
     #ordOverlay .ord-row.on .chev{transform:rotate(180deg);color:#0a84ff}
-    #ordOverlay .ord-pan{max-height:0;overflow:hidden;transition:max-height .25s ease;background:#fff}
-    #ordOverlay .ord-pan-in{padding:10px 12px 12px;border-top:1px dashed #c7c7cc}
-    #ordOverlay .ord-bcno{text-align:center;font-weight:900;font-size:1.1em;letter-spacing:1px;margin:6px 0 2px;word-break:break-all}
-    #ordOverlay .ord-hint{font-size:.75em;color:#666;text-align:center;margin-top:6px}
-    #ordOverlay .ord-actions{display:flex;gap:8px;margin-top:12px}
-    #ordOverlay .ord-actions button,#ordOverlay .ord-cp{padding:9px 12px;border-radius:9px;border:1px solid rgba(128,128,128,.5);background:transparent;color:inherit;font-weight:800;font-size:.9em;cursor:pointer}
-    #ordOverlay .ord-cp{display:block;margin:4px auto 0;font-size:.8em;padding:5px 12px}
-    #ordOverlay .ord-actions button{flex:1}
-    #ordOverlay .ord-actions button.pri{background:#0a84ff;border-color:#0a84ff;color:#fff}
+    #ordOverlay .ord-pan{max-height:0;overflow:hidden;transition:max-height .25s ease}
+    #ordOverlay .ord-pan-in{padding:4px 14px 14px;background:rgba(10,132,255,.09)}
+    #ordOverlay .ord-tile{background:#fff;border-radius:12px;padding:12px 10px 8px;box-shadow:0 1px 4px rgba(0,0,0,.14);border:1px solid rgba(0,0,0,.06)}
+    #ordOverlay .ord-bcno{text-align:center;font-weight:900;font-size:1.08em;letter-spacing:1.2px;margin:7px 0 2px;word-break:break-all;color:#111}
+    #ordOverlay .ord-cprow{display:flex;justify-content:center;margin-top:10px}
+    #ordOverlay .ord-cp{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;border:1px solid #0a84ff;background:transparent;color:#0a84ff;font-weight:800;font-size:.85em;cursor:pointer}
+    #ordOverlay .ord-hint{font-size:.74em;color:var(--text-sub,#777);text-align:center;margin-top:12px;line-height:1.5}
   `;
   document.head.appendChild(st);
 }
@@ -3629,7 +3641,7 @@ function _ordOrphanText(item, histN) {
   return (item && Array.isArray(item.ords) ? item.ords : []).filter((o) => Number(o.slot) > histN).map((o) => o.no).join(", ");
 }
 function _ordSlotLabel(slot) {
-  return slot > 0 ? `${slot}차 수량추가` : "원래 일정";
+  return slot > 0 ? `${slot}차 수량추가` : "기본 일정";
 }
 // 수정창: 원래 일정 칸 + 수량추가 이력 칸의 번호를 모아 서버로 보낼 {slot: 글} 로 만든다. 바뀐 게 없으면 null(서버를 건드리지 않음)
 function _ordCollectSlots(idx, origOrds) {
@@ -3707,16 +3719,21 @@ function ordOpenList(day, idx) {
     if (!g) { g = { slot: sl, list: [] }; groups.push(g); }
     g.list.push(o.no);
   });
+  const bcIco = `<svg viewBox="0 0 16 13" fill="currentColor" aria-hidden="true"><rect x="0" y="0" width="1.4" height="13"/><rect x="2.6" y="0" width="0.8" height="13"/><rect x="4.6" y="0" width="2" height="13"/><rect x="7.6" y="0" width="0.8" height="13"/><rect x="9.4" y="0" width="1.6" height="13"/><rect x="12" y="0" width="0.8" height="13"/><rect x="14" y="0" width="2" height="13"/></svg>`;
   const body = groups
     .map((g) => {
       const rows = g.list
-        .map((no) => `<button type="button" class="ord-row" data-no="${_esc(no)}" onclick="ordToggleBar(this)"><span class="no">${_esc(no)}</span><span class="chev">▼</span></button><div class="ord-pan"></div>`)
+        .map((no) => `<button type="button" class="ord-row" data-no="${_esc(no)}" onclick="ordToggleBar(this)"><span class="bi">${bcIco}</span><span class="no">${_esc(no)}</span><span class="chev">▼</span></button><div class="ord-pan"></div>`)
         .join("");
-      return `<div class="ord-grp${g.slot > 0 ? " add" : ""}"><div class="ord-grp-h"><span>${_esc(_ordSlotLabel(g.slot))}</span><span class="n">${g.list.length}건</span></div>${rows}</div>`;
+      return `<div class="ord-sec${g.slot > 0 ? " add" : ""}"><span class="dot"></span><span>${_esc(_ordSlotLabel(g.slot))}</span><span class="n">${g.list.length}건</span></div><div class="ord-grp">${rows}</div>`;
     })
     .join("");
+  const total = ords.length;
   _ordOpenOverlay(
-    `<div class="ord-title">${_esc(name)}</div><div class="ord-hint" style="text-align:left;margin:0 0 2px">번호를 누르면 바로 아래에 바코드가 열립니다 (한 번에 1개) · 번호 수정은 ✏️수정에서</div>${body}<div class="ord-hint">스캔이 안 되면 화면 밝기를 최대로 올리고, 바코드를 스캐너 쪽으로 가까이 대 주세요</div><div class="ord-actions"><button class="pri" onclick="_ordClose()">닫기</button></div>`,
+    `<div class="ord-grab"></div>
+    <div class="ord-head"><div class="tx"><div class="ord-eyebrow">${bcIco}<span>출고지시번호</span></div><div class="ord-title">${_esc(name)}</div><div class="ord-sub">총 ${total}건 · 번호를 누르면 바코드가 열립니다</div></div><button type="button" class="ord-x" onclick="_ordClose()" aria-label="닫기">✕</button></div>
+    ${body}
+    <div class="ord-hint">한 번에 한 개의 바코드만 열립니다 · 번호 수정은 ✏️수정에서<br>스캔이 안 되면 화면 밝기를 높여 보세요</div>`
   );
 }
 // 번호 줄을 누르면 그 줄 바로 아래가 펼쳐지며 바코드가 나타나고, 이미 열려 있던 다른 바코드는 닫힌다 (같은 줄을 다시 누르면 닫힘)
@@ -3733,7 +3750,7 @@ function ordToggleBar(btn) {
   if (wasOn || !pan) return;
   const no = btn.getAttribute("data-no") || "";
   const svg = _c128Svg(no, 110);
-  pan.innerHTML = `<div class="ord-pan-in">${svg || `<div class="ord-hint">바코드로 만들 수 없는 번호</div>`}<div class="ord-bcno">${_esc(no)}</div><button type="button" class="ord-cp" onclick="ordCopy('${_argq(no)}')">번호 복사</button></div>`;
+  pan.innerHTML = `<div class="ord-pan-in"><div class="ord-tile">${svg || `<div class="ord-hint">바코드로 만들 수 없는 번호</div>`}<div class="ord-bcno">${_esc(no)}</div></div><div class="ord-cprow"><button type="button" class="ord-cp" onclick="ordCopy('${_argq(no)}')">📋 번호 복사</button></div></div>`;
   pan.setAttribute("data-open", "1");
   btn.classList.add("on");
   pan.style.maxHeight = pan.scrollHeight + "px";
@@ -4141,7 +4158,7 @@ async function openEditForm(
               </div>
             </div>
             
-            ${!isTaskMode ? `<div class="form-label" style="margin-top:10px;">출고지시번호 (원래 일정 · 선택)</div>
+            ${!isTaskMode ? `<div class="form-label" style="margin-top:10px;">출고지시번호 (기본 일정 · 선택)</div>
             <input ${_ordInputAttr} id="edit-ord-0-${idx}" data-histn="${matches.length}" value="${_esc(_ordText(_ordItem, 0))}" placeholder="여러 개는 쉼표·띄어쓰기로 구분">` : ""}
             ${!isTaskMode && _ordOrphanText(_ordItem, matches.length) ? `<div class="form-label" style="margin-top:10px;">수량추가 이력과 연결되지 않은 번호 (지우면 삭제)</div>
             <input ${_ordInputAttr} id="edit-ord-x-${idx}" value="${_esc(_ordOrphanText(_ordItem, matches.length))}">` : ""}
