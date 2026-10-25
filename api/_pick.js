@@ -110,10 +110,12 @@ function visionWords(vr) {
     if (Math.abs(resid) > (12 * Math.PI) / 180) theta = 0;
   }
   const c = Math.cos(-theta), s = Math.sin(-theta);
-  return raw.map((r) => {
+  const outW = raw.map((r) => {
     const x = r.cx * c - r.cy * s, y = r.cx * s + r.cy * c;
     return { t: r.t, cx: x, cy: y, w: r.w, h: r.h, x0: x - r.w / 2, x1: x + r.w / 2, y0: y - r.h / 2, y1: y + r.h / 2 };
   });
+  outW.theta = theta; // 되돌린 각도(라디안) — 좌표를 원래 사진 좌표로 다시 돌릴 때 필요
+  return outW;
 }
 const fullText = (vr) => (vr && vr.responses && vr.responses[0] && vr.responses[0].fullTextAnnotation && vr.responses[0].fullTextAnnotation.text) || "";
 const findWord = (words, re) => words.filter((w) => re.test(w.t));
@@ -123,6 +125,131 @@ const rightOf = (words, lab, extra) =>
     .filter((w) => w !== lab && w.x0 >= lab.x1 - 2 && sameRow(w, lab) && (!extra || extra(w)))
     .sort((a, b) => a.x0 - b.x0);
 const joinW = (ws) => ws.map((w) => w.t.replace(/^[:：]/, "")).filter((t) => t && !/^[:：]$/.test(t)).join(" ").trim();
+
+// ───────────────────────── 손글씨 영역 좌표 (2차 판독용) ─────────────────────────
+// 표 머리글('완박스'·'혼재박스' …) 위치를 기준으로 A=머리글 바로 아래 손글씨 줄, B=그 아래 여백(PLT·'기존에추가' 메모)을 잡는다.
+// 돌려 놓은 좌표(기울기·옆으로 누운 사진 보정 후)에서 계산한 뒤, 원래 사진 좌표의 사각형으로 되돌려 돌려준다. 못 찾으면 null.
+function handRegions(vr) {
+  const words = visionWords(vr);
+  const hW = findWord(words, /^완박스$/)[0];
+  const hH = findWord(words, /^혼재박스$/)[0];
+  const anchor = hW || hH;
+  if (!anchor) return null;
+  const hdr = words.filter((w) => /^(날짜|피킹|검수|완박스|혼재박스)$/.test(w.t) && sameRow(w, anchor));
+  const left = Math.min(...hdr.map((w) => w.x0)), right = Math.max(...hdr.map((w) => w.x1));
+  const width = right - left;
+  if (!(width > 80)) return null;
+  const hh = Math.max(...hdr.map((w) => w.h));
+  const pad = width * 0.03;
+  const aTop = Math.min(...hdr.map((w) => w.y0)) - hh * 0.6;
+  const aBot = Math.max(...hdr.map((w) => w.y1)) + Math.max(width * 0.075, hh * 8);
+  const bBot = aBot + width * 0.5;
+  const th = words.theta || 0, ct = Math.cos(th), st = Math.sin(th);
+  const toRaw = (x, y) => ({ x: x * ct - y * st, y: x * st + y * ct });
+  const box = (x0, y0, x1, y1) => {
+    const P = [toRaw(x0, y0), toRaw(x1, y0), toRaw(x1, y1), toRaw(x0, y1)];
+    const xs = P.map((q) => q.x), ys = P.map((q) => q.y);
+    const bx = Math.max(0, Math.min(...xs)), by = Math.max(0, Math.min(...ys));
+    return { x: Math.round(bx), y: Math.round(by), w: Math.round(Math.max(...xs) - bx), h: Math.round(Math.max(...ys) - by) };
+  };
+  return { A: box(left - pad, aTop, right + pad, aBot), B: box(left - pad, aBot, right + pad, bBot), tilt: Math.round((th * 180) / Math.PI) };
+}
+
+// ───────────────────────── 손글씨 2차 판독 (Gemini, 잘라 낸 그림만) ─────────────────────────
+const REREAD_PROMPT = `아래 그림은 물류 '피킹 리스트'를 찍은 사진에서 손글씨가 쓰이는 부분만 잘라 확대한 것이다.
+- 그림 1: 표 머리글(날짜·피킹·검수·완박스·혼재박스) 바로 아래 손으로 적는 줄
+- 그림 2(있으면): 그 아래 여백 — 크게 동그라미 친 "NPLT"(예: 4PLT, 1plt 기존에추가)와 메모가 적히는 곳
+(그림이 90도 돌아가 있거나 기울어 있을 수 있으니 글자가 읽히는 방향으로 판단해라)
+
+아래 JSON 하나만 답해라.
+{
+ "wanbox": 그림 1에서 '완박스' 머리글 바로 아래 칸에 손으로 쓴 숫자(정수). 아무것도 안 쓰였으면 "empty". 쓰여 있는데 읽을 수 없으면 null,
+ "honjae": 그림 1에서 '혼재박스' 머리글 바로 아래 칸의 숫자(정수). 아무것도 안 쓰였으면 "empty". 읽을 수 없으면 null,
+ "plt": 그림 2(없으면 그림 1)에서 크게 동그라미 친 "NPLT"의 N(정수). 적힌 게 전혀 없으면 "empty". 읽을 수 없으면 null,
+ "addToExisting": '기존에 추가'·'기존 추가'·'합산'처럼 같은 날 이미 잡힌 출고 건에 더한다는 뜻의 손글씨가 있으면 true, 없으면 false,
+ "handNote": 위 손글씨 원문(없으면 null),
+ "uncertain": 값을 확신하지 못하는 키 이름 배열(예: ["wanbox"])
+}
+주의: 날짜(10/23 등)·시간·피킹/검수 칸의 서명·이니셜, 펜으로 그은 동그라미·체크·계산 메모는 값이 아니다. 완박스·혼재박스 칸에는 숫자만 쓰이며, 숫자 1은 짧은 세로선, 7은 위에 가로선이 있는 꼴일 수 있다. 칸이 비었으면 반드시 "empty".`;
+
+async function rereadHandwriting(imgs, mime, fetchFn, apiKey) {
+  const list = (Array.isArray(imgs) ? imgs : []).filter((x) => typeof x === "string" && x.length > 200).slice(0, 2);
+  if (!list.length) return { ok: false, err: "그림이 없습니다" };
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), GEMINI_TIMEOUT_MS);
+  try {
+    const parts = [{ text: REREAD_PROMPT }];
+    list.forEach((b64, i) => { parts.push({ text: `그림 ${i + 1}:` }); parts.push({ inline_data: { mime_type: mime || "image/jpeg", data: b64 } }); });
+    const r = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.0, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } } }),
+      signal: ctl.signal,
+    });
+    const j = await r.json();
+    const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
+    if (!txt) return { ok: false, err: (j.error && j.error.message) || "AI 응답 없음" };
+    const obj = JSON.parse(String(txt).replace(/```json/gi, "").replace(/```/g, "").trim());
+    return { ok: true, data: normReread(Array.isArray(obj) ? obj[0] : obj) };
+  } catch (e) {
+    return { ok: false, err: e.name === "AbortError" ? "2차 판독 시간 초과" : "2차 판독 오류" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+// 2차 판독 결과를 화면이 쓰기 쉬운 꼴로: 숫자 | "empty" | null
+function normReread(o) {
+  o = o && typeof o === "object" ? o : {};
+  const one = (v) => {
+    if (v === "empty") return "empty";
+    const n = toInt(v);
+    return n !== null && n >= 0 && n <= 9999 ? n : null;
+  };
+  return {
+    plt: one(o.plt), wanbox: one(o.wanbox), honjae: one(o.honjae),
+    addToExisting: o.addToExisting === true || String(o.addToExisting).toLowerCase() === "true",
+    handNote: typeof o.handNote === "string" ? o.handNote.slice(0, 40) : null,
+    uncertain: Array.isArray(o.uncertain) ? o.uncertain.filter((k) => ["plt", "wanbox", "honjae"].includes(k)) : [],
+  };
+}
+
+// ───────────────────────── 판독 정확도 집계 ─────────────────────────
+// rows: [{ order_no, parsed:{...}, reread:{...}|null, final:{...}|null }]  — 등록까지 끝난(final 있는) 행만 정확도에 쓴다.
+// 필드값: 숫자 | "empty" | null. 완박스·혼재박스·PLT 의 'empty' 는 0 으로 본다(등록 때 빈칸=0).
+function computePickStats(rows) {
+  const zero = (v) => (v === "empty" ? 0 : v);
+  const FIELDS = [["plt", "plt", "PLT"], ["wanbox", "wan", "완박스"], ["honjae", "hon", "혼재박스"]];
+  const out = { parses: rows.length, registered: 0, fields: {}, company: { n: 0, ok: 0 }, mismatches: [], reread: { n: 0, used: 0, errors: 0 } };
+  FIELDS.forEach(([k, , lab]) => { out.fields[k] = { label: lab, n: 0, first: 0, second: 0, secondN: 0, agreeN: 0, agreeOk: 0, diffN: 0, diffFirstOk: 0, diffSecondOk: 0, diffNeither: 0 }; });
+  for (const r of rows) {
+    const P = r.parsed || {}, S = r.reread || null, F = r.final || null;
+    if (S && S.error) out.reread.errors++;
+    if (S && !S.error) out.reread.used++;
+    if (!F) continue;
+    out.registered++;
+    if (P.company && F.company) { out.company.n++; if (String(P.company) === String(F.company)) out.company.ok++; }
+    for (const [k, fk, lab] of FIELDS) {
+      const fin = F[fk];
+      if (fin === undefined || fin === null || fin === "") continue;
+      const f = out.fields[k];
+      const p = zero(P[k]), s = S && !S.error ? zero(S[k]) : undefined;
+      const fnum = Number(fin);
+      f.n++;
+      const pOk = p !== null && p !== undefined && Number(p) === fnum;
+      if (pOk) f.first++;
+      if (s !== undefined) {
+        f.secondN++;
+        const sOk = s !== null && Number(s) === fnum;
+        if (sOk) f.second++;
+        const agree = p !== null && p !== undefined && s !== null && Number(p) === Number(s);
+        if (agree) { f.agreeN++; if (pOk) f.agreeOk++; }
+        else { f.diffN++; if (pOk) f.diffFirstOk++; else if (sOk) f.diffSecondOk++; else f.diffNeither++; }
+      }
+      if (!pOk && out.mismatches.length < 30) out.mismatches.push({ orderNo: r.order_no || "", field: lab, parsed: p === undefined ? null : p, reread: s === undefined ? null : s, final: fnum });
+    }
+  }
+  return out;
+}
 
 // ───────────────────────── 인쇄값 추출 (Vision) ─────────────────────────
 function extractPrinted(vr) {
@@ -560,8 +687,9 @@ async function parsePicking(b64, mime, opts) {
   const printed = v.ok ? extractPrinted(v.data) : {};
   const hw = v.ok ? extractHandwritingVision(v.data) : {};
   const out = reconcile(printed, hw, g.ok ? g.data : {}, errs);
+  try { out.hwRegions = v.ok ? handRegions(v.data) : null; } catch (_) { out.hwRegions = null; }
   out.ok = true;
   return out;
 }
 
-module.exports = { canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };
+module.exports = { handRegions, rereadHandwriting, normReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };

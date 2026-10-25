@@ -174,6 +174,47 @@ function pickSameCompanyT(a, b, compDb) {
 async function pickEnsureTable() {
   await pool.query(`CREATE TABLE IF NOT EXISTS pick_registered (order_no VARCHAR(40) PRIMARY KEY, outbound_id BIGINT NOT NULL DEFAULT 0, mode VARCHAR(8), hist VARCHAR(80), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
 }
+// ───────── 피킹지 판독 정확도 기록 ─────────
+//  pick_parse_log: 사진 판독 결과(parsed) · 2차 판독(reread) · 사람이 등록 때 최종 입력한 값(final) 을 나란히 남겨 정확도를 잰다.
+//  사진은 저장하지 않는다 — 숫자·업체명·번호 같은 값만. 기록 실패는 판독·등록 자체를 막지 않는다.
+let _pickLogReady = false;
+async function pickLogEnsure() {
+  if (_pickLogReady) return;
+  await pool.query(`CREATE TABLE IF NOT EXISTS pick_parse_log (id BIGINT AUTO_INCREMENT PRIMARY KEY, admin_id VARCHAR(60), order_no VARCHAR(40), parsed TEXT, reread TEXT, final TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, registered_at TIMESTAMP NULL, KEY idx_created (created_at), KEY idx_order (order_no))`);
+  _pickLogReady = true;
+}
+function pickParsedSnapshot(parsed, comp) {
+  const f = parsed.flags || {};
+  const lv = (k) => (f[k] ? f[k].level : null);
+  return {
+    orderNo: parsed.orderNo || null, customer: parsed.customer || null, company: comp && comp.company ? comp.company : null,
+    shipDate: parsed.shipDate || null, plt: parsed.plt === undefined ? null : parsed.plt, wanbox: parsed.wanbox === undefined ? null : parsed.wanbox, honjae: parsed.honjae === undefined ? null : parsed.honjae,
+    addExisting: !!parsed.addExisting, mergeHint: !!parsed.mergeHint, ai: parsed.ai || null,
+    flags: { plt: lv("plt"), wanbox: lv("wanbox"), honjae: lv("honjae"), customer: lv("customer"), shipDate: lv("shipDate") },
+    tilt: parsed.hwRegions ? parsed.hwRegions.tilt : null,
+  };
+}
+async function pickLogInsert(adminId, snap) {
+  try {
+    await pickLogEnsure();
+    const [r] = await pool.query(`INSERT INTO pick_parse_log (admin_id, order_no, parsed) VALUES (?, ?, ?)`, [String(adminId || "").slice(0, 60), snap.orderNo || null, JSON.stringify(snap)]);
+    return r && r.insertId ? r.insertId : null;
+  } catch (e) {
+    console.error("[PICK] 판독 기록 실패(무시):", e.sqlMessage || e.message);
+    return null;
+  }
+}
+async function pickLogSet(id, col, obj, adminId) {
+  try {
+    const n = parseInt(id, 10);
+    if (!isFinite(n) || n <= 0 || !["reread", "final"].includes(col)) return;
+    await pickLogEnsure();
+    if (col === "final") await pool.query(`UPDATE pick_parse_log SET final = ?, registered_at = NOW() WHERE id = ? AND admin_id = ?`, [JSON.stringify(obj), n, String(adminId || "").slice(0, 60)]);
+    else await pool.query(`UPDATE pick_parse_log SET reread = ? WHERE id = ? AND admin_id = ?`, [JSON.stringify(obj), n, String(adminId || "").slice(0, 60)]); // 남의 기록은 못 고침
+  } catch (e) {
+    console.error("[PICK] 판독 기록 갱신 실패(무시):", e.sqlMessage || e.message);
+  }
+}
 // ───────── 출고지시번호 (일정 ↔ 번호 1:N) ─────────
 //  outbound_orders: 한 일정에 번호가 여러 개. slot 0 = 원래 일정, slot k = k번째 수량추가(수량추가 이력 순서와 같음).
 //  중복 방지용 pick_registered 와는 별개(조회·검색용).
@@ -430,7 +471,7 @@ const SYSTEM_ONLY_ACTIONS = new Set([
   "CREATE_ADMIN", "DELETE_ADMIN", "REACTIVATE_ADMIN", "HARD_DELETE_ADMIN", "RESET_ADMIN_PW",
   "GET_ADMIN_LIST", "GET_ADMIN_CONN_LOGS", "GET_AUDIT_LOGS", "GET_ALL_CONN_LOGS",
   "GET_RAW_DB_ROWS", "UPDATE_RAW_ROW_FULL", "UPDATE_RAW_ROW_DIRECT", "ADD_RAW_ROW_DIRECT", "DELETE_RAW_ROW_DIRECT",
-  "SAVE_OCR_INFO", "SAVE_OCR_FILTERS", "SET_ADMIN_PERMS",
+  "SAVE_OCR_INFO", "SAVE_OCR_FILTERS", "SET_ADMIN_PERMS", "PICK_STATS",
 ]);
 // 위임 권한이 필요한 액션 (시스템 관리자는 항상 통과)
 const PERM_ACTIONS = { OCR_UPLOAD: "ocr_upload", APPLY_OCR_DATA: "ocr_compare" };
@@ -682,6 +723,8 @@ module.exports = async function (req, res) {
         "APPLY_OCR_DATA",
         "OCR_UPLOAD",
         "PICK_PARSE",
+        "PICK_REREAD",
+        "PICK_STATS",
         "PICK_REGISTER",
         "PICK_FIND_ROWS",
         "FIND_INBOUND_DUPES",
@@ -2664,7 +2707,31 @@ if (action === "VERIFY_SESSION") {
           }
         } catch (_) {}
 
-        return res.status(200).json({ success: true, result: parsed, company: comp, duplicate, dupInfo, legacy });
+        const parseId = await pickLogInsert(currentAdmin, pickParsedSnapshot(parsed, comp));
+        return res.status(200).json({ success: true, result: parsed, company: comp, duplicate, dupInfo, legacy, parseId });
+      } else if (action === "PICK_REREAD") {
+        // 🔍 손글씨 2차 판독: 앱이 1차 판독이 알려준 손글씨 영역만 잘라 보낸 그림(1~2장)을 한 번 더 읽는다 (등록은 하지 않음)
+        const imgs = Array.isArray(data?.images) ? data.images.slice(0, 2) : [];
+        const clean = imgs.map((x) => (typeof x === "string" ? x.replace(/^data:[^,]+,/, "") : ""));
+        if (!clean.length || clean.some((b) => b.length < 200 || b.length > 1800000 || !/^[A-Za-z0-9+\/]+={0,2}$/.test(b)))
+          return res.status(200).json({ success: false, msg: "그림 형식이 올바르지 않습니다." });
+        if (!process.env.GEMINI_API_KEY) return res.status(200).json({ success: false, msg: "AI 키가 설정되어 있지 않습니다." });
+        const mimeR = /^image\/(jpeg|png|webp)$/.test(String(data?.mime || "")) ? data.mime : "image/jpeg";
+        const rr = await pickLib.rereadHandwriting(clean, mimeR, fetch, process.env.GEMINI_API_KEY);
+        if (!rr.ok) {
+          await pickLogSet(data?.parseId, "reread", { error: String(rr.err || "").slice(0, 80) }, currentAdmin);
+          return res.status(200).json({ success: false, msg: "2차 판독 실패: " + (rr.err || "알 수 없는 오류") });
+        }
+        await pickLogSet(data?.parseId, "reread", rr.data, currentAdmin);
+        return res.status(200).json({ success: true, hw: rr.data });
+      } else if (action === "PICK_STATS") {
+        // 📊 판독 정확도 (시스템 관리자 전용): 최근 N일, 등록까지 끝난 건 기준
+        await pickLogEnsure();
+        const days = Math.min(365, Math.max(1, parseInt(data?.days, 10) || 90));
+        const [lr] = await pool.query(`SELECT order_no, parsed, reread, final, created_at FROM pick_parse_log WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY) ORDER BY id DESC LIMIT 2000`, [days]);
+        const jp = (t) => { try { return t ? JSON.parse(t) : null; } catch (_) { return null; } };
+        const stats = pickLib.computePickStats(lr.map((r) => ({ order_no: r.order_no, parsed: jp(r.parsed), reread: jp(r.reread), final: jp(r.final) })));
+        return res.status(200).json({ success: true, days, stats });
       } else if (action === "PICK_FIND_ROWS") {
         // 같은 업체의 '완료되지 않은' 출고 일정 찾기 (수량 추가 대상 후보). 날짜가 있으면 그 날짜만, 없으면 미정 + 오늘 이후
         const fCompany = String(data?.company || "").trim().slice(0, 100);
@@ -2785,6 +2852,10 @@ if (action === "VERIFY_SESSION") {
           console.error("[PICK] 업체 연결 저장 실패(무시):", aliasErr.sqlMessage || aliasErr.message);
         }
 
+        if (data?.parseId) { // 판독 정확도 기록: 사람이 최종으로 입력한 값
+          const toN = (v) => { const n = parseInt(v, 10); return isFinite(n) && n >= 0 && n <= 9999 ? n : null; };
+          await pickLogSet(data.parseId, "final", { company, plt: mode === "append" && pal === 0 ? null : pal, wan: toN(data?.wan), hon: toN(data?.hon), date: outDate, mode }, currentAdmin);
+        }
         await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, ?, ?)", [currentAdmin, mode === "append" ? "CAL_EDIT" : "CAL_ADD", logDesc]);
         notifyCalendarChange(logDesc, currentAdmin);
         return res.status(200).json({ success: true, mode });

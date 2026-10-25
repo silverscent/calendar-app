@@ -6573,10 +6573,11 @@ function _pickChooser() {
   const body = document.getElementById("pickBody");
   if (!body) return;
   _pickState = null;
+  _pickSentCv = null;
   body.innerHTML = `<div class="pk-choose">
     <button type="button" onclick="pickChoose('cam')"><span class="ic">📷</span><span>지금 촬영하기<small>카메라로 피킹지 마지막 장을 찍어요</small></span></button>
     <button type="button" onclick="pickChoose('lib')"><span class="ic">🖼️</span><span>사진첩에서 선택<small>이미 찍어 둔 사진·스캔 이미지를 불러와요</small></span></button>
-  </div>`;
+  </div>${typeof isSystemUser === "function" && isSystemUser() ? `<div style="text-align:center;margin-top:14px"><button type="button" onclick="pickStatsOpen()" style="background:none;border:none;color:var(--text-sub);font-size:0.82em;font-weight:800;cursor:pointer;text-decoration:underline">📊 판독 정확도 보기</button></div>` : ""}`;
 }
 
 function pickChoose(kind) {
@@ -6589,6 +6590,7 @@ function pickChoose(kind) {
 function closePickModal() {
   _pickReq++; // 진행 중이던 판독 응답은 무시
   _dsEd = null;
+  _pickSentCv = null;
   const m = document.getElementById("pickModal");
   if (m) m.style.display = "none";
   _pickState = null;
@@ -6744,6 +6746,7 @@ function _dsWarp(src, sw, sh, Q, ow, oh) {
 // ───────── 📄 모서리 맞추기 화면 ─────────
 // 사진 → (자동으로 종이 모서리 찾기) → 사람이 점을 끌어 확인 → 반듯하게 펴서 서버로.
 let _dsEd = null; // { cv(원본 캔버스), quad, disp(표시 캔버스), sc, drag }
+let _pickSentCv = null; // 서버로 보낸 바로 그 그림(손글씨 2차 판독 때 같은 좌표로 자르기 위해 판독이 끝날 때까지 보관)
 function _dsLoad(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -6925,12 +6928,15 @@ async function pickEditSend(flatten) {
       oc.width = o.w; oc.height = o.h;
       oc.getContext("2d").putImageData(new ImageData(px, o.w, o.h), 0, 0);
       b64 = _dsToB64(oc);
+      _pickSentCv = oc;
     } else {
       b64 = _dsToB64(E.cv);
+      _pickSentCv = E.cv;
     }
   } catch (e) {
     // 펴기에 실패하면 원본 그대로 읽는다
     b64 = _dsToB64(E.cv);
+    _pickSentCv = E.cv;
   }
   _dsEd = null;
   await _pickSend(b64);
@@ -6970,6 +6976,148 @@ function _pickResize(file) {
     };
     img.src = url;
   });
+}
+
+
+// ───────── ✍️ 손글씨 2차 판독 ─────────
+//  1차 판독이 알려준 손글씨 영역(hwRegions: 보낸 그림 기준 사각형)을 같은 그림에서 잘라 확대해 한 번 더 읽고, 1차와 다르면 표시한다.
+//  값을 사람 몰래 바꾸지 않는다: 칸이 비어 있을 때만 채우고, 이미 값이 있으면 표시와 [바꾸기] 버튼만 둔다.
+function _pickDirty(id) {
+  if (_pickState) (_pickState.dirty = _pickState.dirty || {})[id] = 1;
+}
+function _pickCrop(cv, rg, tall) {
+  if (!cv || !rg) return null;
+  const x = Math.max(0, Math.min(cv.width - 2, Math.round(rg.x))), y = Math.max(0, Math.min(cv.height - 2, Math.round(rg.y)));
+  const w = Math.min(cv.width - x, Math.round(rg.w)), h = Math.min(cv.height - y, Math.round(rg.h));
+  if (w < 60 || h < (tall ? 40 : 18)) return null;
+  const sc = Math.max(1, Math.min(3, 1800 / w, 1800 / h));
+  const c = document.createElement("canvas");
+  c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+  const x2 = c.getContext("2d");
+  x2.imageSmoothingEnabled = true; x2.imageSmoothingQuality = "high";
+  x2.fillStyle = "#fff"; x2.fillRect(0, 0, c.width, c.height);
+  x2.drawImage(cv, x, y, w, h, 0, 0, c.width, c.height);
+  let q = 0.9, d = c.toDataURL("image/jpeg", q);
+  while (d.length > 1500000 && q > 0.5) { q -= 0.1; d = c.toDataURL("image/jpeg", q); }
+  return d.replace(/^data:[^,]+,/, "");
+}
+async function _pickStartReread(st, myReq) {
+  const r = st && st.result, cv = _pickSentCv;
+  if (!r || !r.hwRegions || !cv || !st.parseId) return; // 손글씨 줄 머리글을 못 찾았으면 2차 판독 없이 1차 값만
+  const imgs = [];
+  try {
+    const a = _pickCrop(cv, r.hwRegions.A, false);
+    const b = _pickCrop(cv, r.hwRegions.B, true);
+    if (a) imgs.push(a);
+    if (a && b) imgs.push(b);
+  } catch (_) {}
+  if (!imgs.length) return;
+  st.reread = { state: "wait" };
+  _pickShowReread(st, st.reread);
+  const token = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 40000);
+  let d = null;
+  try {
+    const resp = await fetch(VERCEL_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ source: "vercel", domain: "system", action: "PICK_REREAD", admin_id: localStorage.getItem("admin_id"), session_token: token, data: { images: imgs, mime: "image/jpeg", parseId: st.parseId } }),
+      signal: ctl.signal,
+    });
+    const raw = await resp.json();
+    d = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch (_) { d = null; }
+  clearTimeout(timer);
+  if (_pickState !== st || myReq !== _pickReq) return; // 그 사이 창을 닫았거나 다른 사진으로 바뀜
+  if (!d || !d.success || !d.hw) { st.reread = { state: "err" }; _pickShowReread(st, st.reread); return; }
+  _pickApplyReread(st, d.hw);
+}
+function _pickApplyReread(st, hw) {
+  const F = [["plt", "pick-pal", "PLT"], ["wanbox", "pick-wan", "완박스"], ["honjae", "pick-hon", "혼재박스"]];
+  const items = [];
+  F.forEach(([k, id, lab]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const s = hw[k] === "empty" ? 0 : hw[k];
+    if (s === null || s === undefined) { items.push({ k, id, lab, kind: "unread" }); return; }
+    const cur = _pickInt(id);
+    const edited = !!(st.dirty && st.dirty[id]);
+    if (cur === null && !edited) { el.value = String(s); el.style.borderColor = _PICK_ORANGE; items.push({ k, id, lab, s, kind: "filled" }); }
+    else if (cur === s) items.push({ k, id, lab, s, kind: "ok" });
+    else { if (!edited) el.style.borderColor = _PICK_ORANGE; items.push({ k, id, lab, s, cur, kind: "diff", edited }); }
+  });
+  _pickRecalc();
+  const r = st.result || {};
+  st.reread = { state: "done", items, addHint: !!(hw.addToExisting && !r.addExisting && !r.mergeHint && st.mode !== "append"), handNote: hw.handNote || null };
+  _pickShowReread(st, st.reread);
+}
+function _pickTakeReread(id, v) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = String(v);
+  el.style.borderColor = "";
+  _pickDirty(id);
+  _pickRecalc();
+  const st = _pickState;
+  if (st && st.reread && Array.isArray(st.reread.items)) {
+    const it = st.reread.items.find((x) => x.id === id);
+    if (it) { it.kind = "ok"; it.cur = undefined; }
+    _pickShowReread(st, st.reread);
+  }
+}
+function _pickShowReread(st, info) {
+  const box = document.getElementById("pick-reread");
+  if (!box) return;
+  const sty = "margin-top:10px;font-size:0.82em;line-height:1.55;";
+  if (!info) { box.style.display = "none"; return; }
+  box.style.display = "";
+  if (info.state === "wait") { box.innerHTML = `<div style="${sty}color:var(--text-sub)">✍️ 손글씨를 한 번 더 확인하는 중… (등록은 지금도 할 수 있어요)</div>`; return; }
+  if (info.state === "err") { box.innerHTML = `<div style="${sty}color:var(--text-sub)">✍️ 손글씨 2차 확인은 하지 못했어요. 위 값을 직접 한 번 확인해 주세요.</div>`; return; }
+  const its = info.items || [];
+  const bad = its.filter((x) => x.kind === "diff" || x.kind === "filled");
+  let html = "";
+  if (!bad.length && its.some((x) => x.kind === "ok")) {
+    html += `<div style="${sty}color:#30d158;font-weight:800">✍️ 손글씨를 두 번 읽어 결과가 같아요 ✓</div>`;
+  }
+  bad.forEach((x) => {
+    if (x.kind === "filled") html += `<div style="${sty}color:${_PICK_ORANGE};font-weight:800">🟠 ${_esc(x.lab)}: 1차에서 못 읽어 2차 판독 값 ${x.s} 로 채웠어요 — 확인하세요</div>`;
+    else html += `<div style="${sty}color:${_PICK_ORANGE};font-weight:800">🟠 ${_esc(x.lab)}: 2차 판독은 <b>${x.s}</b>, 지금 입력은 <b>${x.cur}</b> ${x.edited ? "(직접 고친 값)" : ""} <button type="button" onclick="_pickTakeReread('${x.id}', ${x.s})" style="margin-left:6px;border:1px solid ${_PICK_ORANGE};background:none;color:${_PICK_ORANGE};border-radius:8px;padding:2px 9px;font-weight:800;font-size:0.95em;cursor:pointer">${x.s} 로 바꾸기</button></div>`;
+  });
+  const un = its.filter((x) => x.kind === "unread");
+  if (un.length) html += `<div style="${sty}color:var(--text-sub)">✍️ 2차에서 읽지 못한 칸: ${un.map((x) => _esc(x.lab)).join(", ")}</div>`;
+  if (info.addHint) html += `<div style="${sty}color:#0a84ff;font-weight:800">✍️ 2차 판독에서 "${_esc(info.handNote || "기존에 추가")}" 글씨를 봤어요 <button type="button" onclick="pickSetMode('append')" style="margin-left:6px;border:1px solid #0a84ff;background:none;color:#0a84ff;border-radius:8px;padding:2px 9px;font-weight:800;font-size:0.95em;cursor:pointer">기존 일정에 추가로 바꾸기</button></div>`;
+  box.innerHTML = html || "";
+  if (!html) box.style.display = "none";
+}
+
+// ───────── 📊 판독 정확도 보기 (시스템 관리자) ─────────
+async function pickStatsOpen(days) {
+  const body = document.getElementById("pickBody");
+  if (!body) return;
+  _pickState = null;
+  const D = days || 90;
+  body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)">📊 집계하는 중…</div>`;
+  let res = null;
+  try { res = await apiCall({ source: "vercel", domain: "system", action: "PICK_STATS", admin_id: localStorage.getItem("admin_id"), data: { days: D } }); } catch (e) {}
+  if (!document.getElementById("pickBody") || !body.isConnected) return;
+  if (!(res && res.success && res.stats)) { _pickShowError((res && res.msg) || "집계를 불러오지 못했습니다."); return; }
+  const S = res.stats;
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) + "%" : "–");
+  const rowsHtml = Object.keys(S.fields).map((k) => {
+    const f = S.fields[k];
+    const sub = f.secondN ? `${pct(f.second, f.secondN)} <small style="color:var(--text-sub)">(${f.second}/${f.secondN})</small>` : "–";
+    const agree = f.agreeN ? `${pct(f.agreeOk, f.agreeN)} <small style="color:var(--text-sub)">(${f.agreeOk}/${f.agreeN})</small>` : "–";
+    const diff = f.diffN ? `1차 ${f.diffFirstOk} · 2차 ${f.diffSecondOk} · 둘 다 틀림 ${f.diffNeither}` : "–";
+    return `<tr><td style="font-weight:900">${_esc(f.label)}</td><td>${pct(f.first, f.n)} <small style="color:var(--text-sub)">(${f.first}/${f.n})</small></td><td>${sub}</td><td>${agree}</td><td style="font-size:0.85em">${diff}</td></tr>`;
+  }).join("");
+  const mm = (S.mismatches || []).map((m) => `<div style="padding:6px 0;border-top:1px solid var(--border-color);font-size:0.85em"><b>${_esc(m.orderNo || "-")}</b> · ${_esc(m.field)} — 1차 <b>${m.parsed === null ? "못 읽음" : m.parsed}</b>${m.reread === null ? "" : ` / 2차 <b>${m.reread}</b>`} → 최종 <b>${m.final}</b></div>`).join("");
+  body.innerHTML = `<div style="font-weight:900;font-size:1.05em;margin-bottom:4px">📊 피킹지 판독 정확도</div>
+    <div style="font-size:0.82em;color:var(--text-sub);margin-bottom:10px">최근 ${D}일 · 판독 ${S.parses}건 · 등록까지 끝난 건 ${S.registered}건 (사진은 저장하지 않고 값만 기록)</div>
+    <div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:6px">업체 자동 연결 정확도: ${pct(S.company.ok, S.company.n)} <small style="color:var(--text-sub)">(${S.company.ok}/${S.company.n})</small></div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.88em;text-align:left"><thead><tr style="color:var(--text-sub);font-size:0.85em"><th>칸</th><th>1차 정확</th><th>2차 정확</th><th>두 판독이 같을 때</th><th>다를 때 누가 맞았나</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    <div style="font-size:0.78em;color:var(--text-sub);margin-top:8px">정확 = 등록 때 사람이 최종으로 넣은 값과 같은 비율. 2차 판독은 손글씨 줄만 잘라 다시 읽은 결과입니다. 건수가 적을 때는 참고만 하세요.</div></div>
+    ${mm ? `<div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:4px">1차가 틀렸던 건 (최근 ${Math.min(30, S.mismatches.length)}개)</div>${mm}</div>` : ""}
+    <div class="pk-foot"><button class="pk-btn ghost" type="button" onclick="pickStatsOpen(${D === 90 ? 30 : 90})">${D === 90 ? "30일" : "90일"}로 보기</button><button class="pk-btn primary" type="button" onclick="_pickChooser()">닫기</button></div>`;
 }
 
 async function pickOnFile(inp) {
@@ -7039,9 +7187,11 @@ async function _pickSend(b64) {
       result: d.result, company: d.company, duplicate: !!d.duplicate, dupInfo: d.dupInfo || null, legacy: !!d.legacy,
       busy: false, mode: d.result && (d.result.addExisting || d.result.mergeHint) ? "append" : "new", targetId: null, rows: null, seq: 0,
       autoMerge: !!(d.result && d.result.mergeHint && !d.result.addExisting), mergeMiss: false,
+      parseId: d.parseId || null, dirty: {}, reread: null,
     };
     _pickRender();
     _pickLoadRows();
+    _pickStartReread(_pickState, myReq); // 손글씨 2차 판독(화면은 먼저 보여주고 뒤에서 확인)
   } catch (e) {
     if (myReq !== _pickReq) return;
     _pickShowError(e && e.name === "AbortError" ? "판독 시간이 초과되었습니다. 다시 시도해주세요." : "판독 중 오류가 발생했습니다: " + (e.message || e));
@@ -7101,7 +7251,7 @@ function _pickRender() {
     : `인쇄된 출고처명: ${_esc(r.customer || "(읽지 못함)")}`;
   const chips = cands.map((n) => `<button type="button" class="pk-chip" data-name="${_esc(n)}">${_esc(n)}</button>`).join("");
   const numIn = (id, v, f, lab) =>
-    `<div class="pk-field"><label class="pk-label" for="${id}">${lab}</label><input type="number" inputmode="numeric" min="0" id="${id}" class="pk-input pk-num" style="${_pickBorder(f)}" value="${v === null || v === undefined ? "" : v}" oninput="_pickRecalc()" />${_pickFlagHtml(f)}</div>`;
+    `<div class="pk-field"><label class="pk-label" for="${id}">${lab}</label><input type="number" inputmode="numeric" min="0" id="${id}" class="pk-input pk-num" style="${_pickBorder(f)}" value="${v === null || v === undefined ? "" : v}" oninput="_pickRecalc(); _pickDirty('${id}')" />${_pickFlagHtml(f)}</div>`;
   const dateHint = r.shipDate ? (_pickFlagHtml("shipDate") || `<div class="pk-hint">문서에 인쇄된 출고일</div>`) : `<div class="pk-hint">문서에서 출고일을 찾지 못해 미정으로 둡니다. 날짜를 고르면 같은 날 일정과 합산도 할 수 있어요.</div>`;
   body.innerHTML = `
     ${banners}
@@ -7115,6 +7265,7 @@ function _pickRender() {
         ${numIn("pick-pal", r.plt, "plt", "PLT")}${numIn("pick-wan", r.wanbox, "wanbox", "완박스")}${numIn("pick-hon", r.honjae, "honjae", "혼재박스")}
       </div>
       <div class="pk-sum" id="pick-box-line"></div>
+      <div id="pick-reread" style="display:none"></div>
     </div>
     <div class="pk-card" id="pick-mode-box"></div>
     <div class="pk-card" id="pick-newonly">
@@ -7147,6 +7298,7 @@ function _pickRender() {
   compEl.addEventListener("change", later);
   compEl.addEventListener("blur", () => setTimeout(_pickLoadRows, 300)); // 자동완성 선택 후 값이 채워진 뒤
   _pickRecalc();
+  if (st.reread) _pickShowReread(st, st.reread); // 화면을 다시 그려도 2차 판독 안내 유지
   _pickRenderMode();
 }
 
@@ -7304,7 +7456,7 @@ async function _submitPickInner(btn) {
   const res = await apiCall({
     source: "vercel", domain: "system", action: "PICK_REGISTER",
     admin_id: localStorage.getItem("admin_id"),
-    data: { company, pal, box, date, etc, orderNo: st.result.orderNo || "", printedName: st.result.customer || "", mode: app ? "append" : "new", targetId: app ? target.id : undefined },
+    data: { company, pal, box, date, etc, orderNo: st.result.orderNo || "", printedName: st.result.customer || "", mode: app ? "append" : "new", targetId: app ? target.id : undefined, wan, hon, parseId: st.parseId || undefined },
   });
   st.busy = false;
   if (res && res.success) {
