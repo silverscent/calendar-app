@@ -6738,6 +6738,36 @@ function _dsDraw() {
     x.fill();
     x.lineWidth = 3; x.strokeStyle = "#0a84ff"; x.stroke();
   });
+  if (E.drag != null && E.drag >= 0) _dsLoupe(x, c, E);
+}
+// 🔍 점을 끄는 동안 손가락에 가려지는 부분을 확대해서 보여줌 (스캔 앱처럼). 손가락 반대쪽 모서리에 띄움.
+function _dsLoupe(x, c, E) {
+  const rect = c.getBoundingClientRect();
+  const k = c.width / Math.max(1, rect.width); // 화면 1px 당 캔버스 px
+  const Rr = Math.min(62, rect.width * 0.17) * k; // 돋보기 반지름(캔버스 px) ≈ 화면 62px
+  const q = E.quad[E.drag];
+  const hx = q.x * E.sc, hy = q.y * E.sc;
+  const m = 8 * k;
+  const cx = hx < c.width / 2 ? c.width - Rr - m : Rr + m;
+  const cy = hy > c.height * 0.4 ? Rr + m : c.height - Rr - m;
+  const ZOOM = 3; // 화면에 보이는 크기의 3배
+  const srcR = (Rr / k) / (ZOOM * (rect.width / E.cv.width)); // 원본 사진에서 돋보기에 담길 반지름(px)
+  const f = Rr / srcR; // 원본 1px → 돋보기 캔버스 px
+  x.save();
+  x.beginPath(); x.arc(cx, cy, Rr, 0, Math.PI * 2); x.clip();
+  x.fillStyle = "#000"; x.fillRect(cx - Rr, cy - Rr, Rr * 2, Rr * 2);
+  x.drawImage(E.cv, q.x - srcR, q.y - srcR, srcR * 2, srcR * 2, cx - Rr, cy - Rr, Rr * 2, Rr * 2);
+  // 사각형의 변도 같이 그려서 어느 방향으로 맞춰야 하는지 보이게
+  x.strokeStyle = "#0a84ff"; x.lineWidth = 2 * k;
+  x.beginPath();
+  E.quad.forEach((p, i) => { const px = cx + (p.x - q.x) * f, py = cy + (p.y - q.y) * f; i ? x.lineTo(px, py) : x.moveTo(px, py); });
+  x.closePath(); x.stroke();
+  x.restore();
+  // 십자선 = 점의 정확한 위치
+  x.strokeStyle = "#ff453a"; x.lineWidth = 1.5 * k;
+  x.beginPath(); x.moveTo(cx - 12 * k, cy); x.lineTo(cx + 12 * k, cy); x.moveTo(cx, cy - 12 * k); x.lineTo(cx, cy + 12 * k); x.stroke();
+  x.beginPath(); x.arc(cx, cy, Rr, 0, Math.PI * 2); x.lineWidth = 3 * k; x.strokeStyle = "#fff"; x.stroke();
+  x.beginPath(); x.arc(cx, cy, Rr + 1.5 * k, 0, Math.PI * 2); x.lineWidth = 1 * k; x.strokeStyle = "rgba(0,0,0,0.5)"; x.stroke();
 }
 function _dsPtr(ev) {
   const c = _dsEd.disp, r = c.getBoundingClientRect();
@@ -6751,6 +6781,7 @@ function _dsDown(ev) {
   E.quad.forEach((q, i) => { const d = Math.hypot(q.x * E.sc - p.x, q.y * E.sc - p.y); if (d < bd) { bd = d; bi = i; } });
   if (bi < 0) return;
   E.drag = bi;
+  E.off = { x: E.quad[bi].x * E.sc - p.x, y: E.quad[bi].y * E.sc - p.y }; // 잡은 위치와 점 사이 간격 유지(점이 튀지 않게)
   try { E.disp.setPointerCapture(ev.pointerId); } catch (_) {}
   ev.preventDefault();
   _dsDraw();
@@ -6759,7 +6790,8 @@ function _dsMove(ev) {
   const E = _dsEd;
   if (!E || E.drag == null || E.drag < 0) return;
   const p = _dsPtr(ev);
-  E.quad[E.drag] = { x: Math.min(E.cv.width - 1, Math.max(0, p.x / E.sc)), y: Math.min(E.cv.height - 1, Math.max(0, p.y / E.sc)) };
+  const o = E.off || { x: 0, y: 0 };
+  E.quad[E.drag] = { x: Math.min(E.cv.width - 1, Math.max(0, (p.x + o.x) / E.sc)), y: Math.min(E.cv.height - 1, Math.max(0, (p.y + o.y) / E.sc)) };
   ev.preventDefault();
   _dsDraw();
 }
