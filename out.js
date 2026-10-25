@@ -2278,8 +2278,9 @@ function _shipSelectHtml(id, cur, cls) {
     .ship-badge{position:absolute;top:0;right:0;width:19px;height:19px;clip-path:polygon(0 0,100% 0,100% 100%);color:#fff;z-index:3;pointer-events:none;display:block}
     .ship-badge svg{position:absolute;top:2px;right:2px;width:9px;height:9px;display:block;filter:drop-shadow(0 0 1px rgba(0,0,0,.35))}
     .item-tag-slim .ship-badge{display:none}
-    .ship-ym{background:linear-gradient(135deg,#ffb340,#ff8a00)}
-    .ship-cj{background:linear-gradient(135deg,#ff5e7e,#e5174a)}
+    .ship-ym{background:linear-gradient(135deg,#ff5e7e,#e5174a)}
+    .ship-cj{background:linear-gradient(135deg,#c6f24e,#7bd63a)}
+    .ship-badge.ship-cj,.ship-pill.ship-cj{color:#1d4d12}
     .ship-pill{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 8px 2px 6px;border-radius:999px;font-size:.78em;font-weight:900;color:#fff;letter-spacing:-.2px;vertical-align:middle}
     .ship-pill svg{width:12px;height:12px;display:block}
     .ship-dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-left:2px;vertical-align:middle;text-decoration:none;box-shadow:0 0 0 1px rgba(255,255,255,.85)}
@@ -3590,10 +3591,13 @@ function _shipEnsureAddField() {
     const anchor = document.getElementById("add-orders");
     const lab = anchor && anchor.previousElementSibling;
     if (!lab) return;
-    const wrap = document.createElement("div");
-    wrap.id = "add-ship-wrap";
-    wrap.innerHTML = `<div class="form-label">배송 구분</div>${_shipSelectHtml("add-ship", "")}`;
-    lab.parentNode.insertBefore(wrap, lab);
+    // 감싸는 상자 없이 다른 칸처럼 라벨·선택칸을 형제로 끼워 넣음(이 창은 라벨 아래 여백을 음수로 쓰는 간격 규칙이라 상자로 묶으면 글자가 입력칸에 가려짐)
+    const l2 = document.createElement("div");
+    l2.className = "form-label";
+    l2.id = "add-ship-label";
+    l2.textContent = "배송 구분";
+    lab.parentNode.insertBefore(l2, lab);
+    lab.insertAdjacentHTML("beforebegin", _shipSelectHtml("add-ship", ""));
     sel = document.getElementById("add-ship");
   }
   if (sel) sel.value = ""; // 기본은 용차
@@ -7313,8 +7317,11 @@ function _pickRender() {
   if (!body || !st || !st.result) return;
   const r = st.result;
   const c = st.company || {};
-  // 업체 초기값: 자동 연결된 마스터 이름만 채움(후보만 있으면 비워 두고 선택하게 함)
-  const compVal = c.company || "";
+  // 업체 초기값: ① 기존 업체 목록과 확실히 연결되면 그 이름 ② 연결이 안 되면(목록에 없는 이름) 문서에 인쇄된 이름을 읽은 그대로
+  //   (후보가 있으면 아래 후보 버튼으로 바꿀 수 있고, 후보가 있는데 읽은 이름 그대로 등록하려 하면 한 번 더 물음)
+  const printedName = String(r.customer || "").trim();
+  const compVal = c.company || printedName;
+  st.compPrefilled = !c.company && !!printedName ? printedName : null;
   const cands = !c.company && Array.isArray(c.candidates) ? c.candidates : [];
   let banners = "";
   if (r.unfinished)
@@ -7334,7 +7341,9 @@ function _pickRender() {
   const metaHtml = (metaRows.length ? `<div class="pk-meta">${metaRows.join("<br>")}</div>` : "") + (!r.orderNo ? _pickFlagHtml("orderNo") : "");
   const matchNote = c.company
     ? `인쇄된 출고처명 "${_esc(r.customer || "")}" → 자동 연결`
-    : `인쇄된 출고처명: ${_esc(r.customer || "(읽지 못함)")}`;
+    : printedName
+      ? `인쇄된 출고처명 "${_esc(printedName)}" — ${cands.length ? "목록과 확실히 맞는 업체가 없어 읽은 그대로 넣었어요. 아래 후보가 맞다면 눌러 바꾸세요" : "기존 업체 목록에 없어 읽은 그대로 넣었어요"}`
+      : `인쇄된 출고처명: (읽지 못함)`;
   const chips = cands.map((n) => `<button type="button" class="pk-chip" data-name="${_esc(n)}">${_esc(n)}</button>`).join("");
   const numIn = (id, v, f, lab) =>
     `<div class="pk-field"><label class="pk-label" for="${id}">${lab}</label><input type="number" inputmode="numeric" min="0" id="${id}" class="pk-input pk-num" style="${_pickBorder(f)}" value="${v === null || v === undefined ? "" : v}" oninput="_pickRecalc(); _pickDirty('${id}')" />${_pickFlagHtml(f)}</div>`;
@@ -7528,6 +7537,9 @@ async function _submitPickInner(btn) {
   let pal = _pickInt("pick-pal");
   const wan = _pickInt("pick-wan"), hon = _pickInt("pick-hon");
   if (!rawComp) { showToast("⚠️ 업체를 선택해주세요.", 2500); return; }
+  if (st.compPrefilled && rawComp === st.compPrefilled && st.company && !st.company.company && Array.isArray(st.company.candidates) && st.company.candidates.length) {
+    if (!(await uiConfirm(`업체 "${rawComp}" 은(는) 기존 업체 목록에 정확히 연결되지 않았습니다.\n비슷한 후보: ${st.company.candidates.slice(0, 3).join(", ")}\n\n읽은 이름 그대로 등록할까요?`, { okText: "그대로 등록" }))) return;
+  }
   // 기존 일정에 추가할 때는 PLT 를 비워도 됨(박스 수량만 더함). 새 일정은 PLT 필수
   if (pal === null && st.mode === "append") pal = 0;
   if (pal === null) { showToast("⚠️ PLT 수를 입력해주세요. (없으면 0)", 2500); return; }

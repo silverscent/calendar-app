@@ -42,7 +42,7 @@ const GEMINI_PROMPT = `이 이미지는 물류센터 '피킹 리스트'(출고 �
 - customer: '출고처명' 값 전체(예: "(주)백년가게국제의료기", "메디맥 주식회사"). 없으면 null
 - address: '주의사항' 줄의 전체 텍스트(주소·호수 포함). 없으면 null
 - buyerNote: '구매처 비고' 칸의 텍스트 전체(예: "10월발주) 10/21(수) 부탁드립니다."). 비어 있으면 null
-- shipType: '택배유형' 아래 인쇄된 값(예: "용차", "CJ택배"). 없으면 null
+- shipType: '택배유형' 머리글 아래 인쇄된 값(예: "용차", "용마택배", "CJ택배"). 표 아래쪽 '비고 | 택배유형' 두 칸 중 오른쪽 칸이고, 값이 칸 왼쪽 끝에 붙어 있어 '비고' 칸 쪽에 가깝게 보일 수 있다. '용마택배' 처럼 택배 회사 이름이 보이면 그대로 적어라. 없으면 null
 - printedAt: 맨 위 '출력일시' (YYYY-MM-DD HH:MM:SS). 없으면 null
 - sbox: 표 맨 아래 Sum 줄에서 'SBOX' 열의 인쇄된 숫자(소수 가능). 펜으로 덧쓴 숫자·동그라미는 무시. 없으면 null
 - rbox: Sum 줄에서 'RBOX' 열의 인쇄된 숫자. 없으면 null
@@ -255,7 +255,7 @@ function computePickStats(rows) {
 function extractPrinted(vr) {
   const words = visionWords(vr);
   const text = fullText(vr);
-  const res = { orderNo: null, customer: null, address: null, buyerNote: null, shipType: null, printedAt: null, shipDate: null, sbox: null, rbox: null };
+  const res = { orderNo: null, customer: null, address: null, buyerNote: null, shipType: null, shipScan: null, printedAt: null, shipDate: null, sbox: null, rbox: null };
 
   const m = text.match(/\b([A-Z]{2,3}\d{9,12})\b/);
   if (m) res.orderNo = m[1];
@@ -289,6 +289,14 @@ function extractPrinted(vr) {
       const line = below.filter((w) => sameRow(w, first)).sort((a, b) => a.x0 - b.x0);
       res.shipType = joinW(line) || null;
     }
+  }
+
+  // 택배유형 칸 위치를 못 잡았거나 값이 어긋난 경우를 위한 보조: 문서 전체 글자에서 '용마택배·CJ택배…' 를 직접 찾음
+  //   (문서에는 택배 회사명 + '택배' 가 택배유형 칸 말고는 거의 나오지 않음)
+  {
+    const flat = text.replace(/\s+/g, "");
+    const sm = flat.match(/(용마|CJ대한통운|CJ|씨제이|대한통운|한진|롯데|로젠|우체국)택배/i);
+    if (sm) res.shipScan = sm[0];
   }
 
   // 출고일 라벨이 따로 있으면(드묾) 그 오른쪽 날짜
@@ -609,7 +617,9 @@ function reconcile(printed, hw, g, errs) {
     setFlag("customer", { level: "orange", msg: `문자인식 "${printed.customer}" / AI "${g.customer}" 불일치` });
   const address = clean(printed.address) || clean(g.address);
   const buyerNote = clean(printed.buyerNote) || clean(g.buyerNote);
-  const shipType = clean(printed.shipType) || clean(g.shipType);
+  // 택배유형: ① 문서의 택배유형 칸에서 읽은 값(용차·택배 종류처럼 그럴듯할 때만) ② 문서 전체 글자에서 찾은 '○○택배' ③ AI 판독 값
+  const _shipOk = (v) => /용차|택배|CJ|씨제이|대한통운|직송|퀵|화물/i.test(String(v || ""));
+  const shipType = (_shipOk(printed.shipType) ? clean(printed.shipType) : null) || clean(printed.shipScan) || clean(g.shipType) || clean(printed.shipType);
   const printedAt = validDate(printed.printedAt) || validDate(String(g.printedAt || "").slice(0, 10)) || null;
 
   // 출고일: 인쇄된 '출고일' 라벨 > 구매처 비고 속 날짜 > 미정
