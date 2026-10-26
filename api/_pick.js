@@ -102,10 +102,11 @@ async function geminiPost(fetchFn, keys, models, body, signal) {
     const pref = _modelGood[k];
     const mlist = (pref && ms.includes(pref) ? [pref].concat(ms.filter((x) => x !== pref)) : ms).filter((m) => (_modelBadUntil[k + "|" + m] || 0) <= Date.now());
     for (const m of mlist.length ? mlist : ms) {
-      const r = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${k}`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: typeof body === "function" ? body(m) : body, signal,
+      const send = (opts) => fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${k}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: typeof body === "function" ? body(m, opts) : body, signal,
       });
-      const j = await r.json();
+      let r = await send(), j = await r.json();
+      if (typeof body === "function" && j && j.error && Number(j.error.code || r.status) === 400 && /thinking/i.test(errText(j))) { r = await send({ noThink: true }); j = await r.json(); } // 이 모델이 생각 설정을 모르면 설정 없이
       const hasErr = !!(j && j.error);
       const gone = hasErr && isModelGone(j, r.status);
       const quota = hasErr && !gone && isQuotaErr(j, r.status);
@@ -131,21 +132,23 @@ function geminiWhy(g) {
 }
 const GEMINI_MODELS = () => modelList([process.env.GEMINI_MODEL].concat(DEFAULT_MODELS));
 // 2.5 계열만 thinkingBudget 설정을 알고 있다. 다른 계열은 설정을 빼서 모델이 정한 기본값을 쓴다(알 수 없는 옵션으로 400 이 나는 것을 막음)
-const genCfg = (m) => Object.assign({ temperature: 0.0, responseMimeType: "application/json" }, /^gemini-2\.5/.test(m) ? { thinkingConfig: { thinkingBudget: 0 } } : {});
+//   3.x 계열은 생각을 끌 수 없고(공식 문서상 gemini-3.8-flash 는 low 가 가장 낮음) 기본값(medium)이면 느려지므로 thinkingLevel "low" 로 줄인다.
+//   그 설정을 서버가 거부하면(thinking 관련 400) geminiPost 가 설정 없이 한 번 더 보낸다(opts.noThink).
+const genCfg = (m, opts) => Object.assign({ temperature: 0.0, responseMimeType: "application/json" }, /^gemini-2\.5/.test(m) ? { thinkingConfig: { thinkingBudget: 0 } } : opts && opts.noThink ? {} : { thinkingConfig: { thinkingLevel: "low" } });
 async function callGemini(b64, mime, fetchFn, apiKey) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), GEMINI_TIMEOUT_MS);
   try {
-    const g = await geminiPost(fetchFn, apiKey, GEMINI_MODELS(), (m) => JSON.stringify({
+    const g = await geminiPost(fetchFn, apiKey, GEMINI_MODELS(), (m, o) => JSON.stringify({
       contents: [{ parts: [{ text: GEMINI_PROMPT }, { inline_data: { mime_type: mime || "image/jpeg", data: b64 } }] }],
-      generationConfig: genCfg(m),
+      generationConfig: genCfg(m, o),
     }), ctl.signal);
     const j = g.j;
     const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
     if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음" };
     const obj = JSON.parse(String(txt).replace(/```json/gi, "").replace(/```/g, "").trim());
     const o = Array.isArray(obj) ? obj[0] || {} : obj;
-    return { ok: true, data: o && typeof o === "object" ? o : {} };
+    return { ok: true, data: o && typeof o === "object" ? o : {}, model: g.model, keyNo: g.keyNo };
   } catch (e) {
     return { ok: false, err: e.name === "AbortError" ? "AI 판독 시간 초과" : "AI 판독 오류" };
   } finally {
@@ -263,7 +266,7 @@ async function rereadHandwriting(imgs, mime, fetchFn, apiKey) {
   try {
     const parts = [{ text: REREAD_PROMPT }];
     list.forEach((b64, i) => { parts.push({ text: `그림 ${i + 1}:` }); parts.push({ inline_data: { mime_type: mime || "image/jpeg", data: b64 } }); });
-    const g = await geminiPost(fetchFn, apiKey, GEMINI_MODELS(), (m) => JSON.stringify({ contents: [{ parts }], generationConfig: genCfg(m) }), ctl.signal);
+    const g = await geminiPost(fetchFn, apiKey, GEMINI_MODELS(), (m, o) => JSON.stringify({ contents: [{ parts }], generationConfig: genCfg(m, o) }), ctl.signal);
     const j = g.j;
     const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
     if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음" };
@@ -299,10 +302,10 @@ function computePickStats(rows) {
   const FIELDS = [["plt", "plt", "PLT"], ["wanbox", "wan", "완박스"], ["honjae", "hon", "혼재박스"]];
   const out = { parses: rows.length, registered: 0, fields: {}, company: { n: 0, ok: 0 }, mismatches: [], reread: { n: 0, used: 0, errors: 0 }, timing: null, retries: { rot: 0, enh: 0 }, hw: { n: 0, found: 0 } };
   FIELDS.forEach(([k, , lab]) => { out.fields[k] = { label: lab, n: 0, first: 0, second: 0, secondN: 0, agreeN: 0, agreeOk: 0, diffN: 0, diffFirstOk: 0, diffSecondOk: 0, diffNeither: 0 }; });
-  const tt = [], tv = [], tg = [], kb = [];
+  const tt = [], tv = [], tg = [], kb = [], byModel = {};
   for (const r of rows) {
     const P = r.parsed || {}, S = r.reread || null, F = r.final || null;
-    if (P.timing && Number(P.timing.total) > 0) { tt.push(Number(P.timing.total)); if (Number(P.timing.vision) > 0) tv.push(Number(P.timing.vision)); if (Number(P.timing.gemini) > 0) tg.push(Number(P.timing.gemini)); }
+    if (P.timing && Number(P.timing.total) > 0) { tt.push(Number(P.timing.total)); if (Number(P.timing.vision) > 0) tv.push(Number(P.timing.vision)); if (Number(P.timing.gemini) > 0) { tg.push(Number(P.timing.gemini)); if (P.timing.model) { const mm = (byModel[P.timing.model] = byModel[P.timing.model] || []); mm.push(Number(P.timing.gemini)); } } }
     if (Number(P.kb) > 0) kb.push(Number(P.kb));
     if (P.hwFound === true || P.hwFound === false) { out.hw.n++; if (P.hwFound) out.hw.found++; }
     if (P.meta && P.meta.rot) out.retries.rot++;
@@ -335,7 +338,7 @@ function computePickStats(rows) {
     }
   }
   const avg = (a) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
-  if (tt.length) out.timing = { n: tt.length, avg: avg(tt), max: Math.max(...tt), over20: tt.filter((x) => x > 20000).length, visionAvg: avg(tv), geminiAvg: avg(tg), kbAvg: avg(kb) };
+  if (tt.length) out.timing = { n: tt.length, avg: avg(tt), max: Math.max(...tt), over20: tt.filter((x) => x > 20000).length, visionAvg: avg(tv), geminiAvg: avg(tg), kbAvg: avg(kb), models: Object.keys(byModel).map((m) => ({ model: m, n: byModel[m].length, avg: avg(byModel[m]) })) };
   return out;
 }
 
@@ -812,7 +815,7 @@ async function parsePicking(b64, mime, opts) {
   try { out.hwDiag = out.hwRegions ? null : handDiag(v.ok ? v.data : null); } catch (_) { out.hwDiag = null; }
   // 사진이 옆으로·거꾸로 찍혔는지(도): 화면이 이 값으로 사진을 바로 세워 다시 보낸다. 0 이면 바른 방향
   try { const th = v.ok ? visionWords(v.data).theta || 0 : 0; out.pageTilt = Math.round((th * 180) / Math.PI); } catch (_) { out.pageTilt = 0; }
-  out.timing = { total: Date.now() - t0, vision: v.ms || null, gemini: g.ms || null };
+  out.timing = { total: Date.now() - t0, vision: v.ms || null, gemini: g.ms || null, model: g.ok ? g.model || null : null, keyNo: g.ok ? g.keyNo || null : null };
   out.ok = true;
   return out;
 }
