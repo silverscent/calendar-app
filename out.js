@@ -7206,6 +7206,7 @@ async function pickStatsOpen(days) {
     <div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:6px">업체 자동 연결 정확도: ${pct(S.company.ok, S.company.n)} <small style="color:var(--text-sub)">(${S.company.ok}/${S.company.n})</small></div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.88em;text-align:left"><thead><tr style="color:var(--text-sub);font-size:0.85em"><th>칸</th><th>1차 정확</th><th>2차 정확</th><th>두 판독이 같을 때</th><th>다를 때 누가 맞았나</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
     <div style="font-size:0.78em;color:var(--text-sub);margin-top:8px">정확 = 등록 때 사람이 최종으로 넣은 값과 같은 비율. 2차 판독은 손글씨 줄만 잘라 다시 읽은 결과입니다. 건수가 적을 때는 참고만 하세요.</div></div>
+    ${S.timing ? `<div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:4px">⏱ 판독 걸린 시간 (서버 기준, ${S.timing.n}건)</div><div style="font-size:0.85em;line-height:1.6">평균 <b>${(S.timing.avg / 1000).toFixed(1)}초</b> · 가장 오래 <b>${(S.timing.max / 1000).toFixed(1)}초</b> · 20초 넘은 건 <b>${S.timing.over20}</b>건<br>문자인식(구글) 평균 ${S.timing.visionAvg ? (S.timing.visionAvg / 1000).toFixed(1) + "초" : "–"} · AI(Gemini) 평균 ${S.timing.geminiAvg ? (S.timing.geminiAvg / 1000).toFixed(1) + "초" : "–"}${S.timing.kbAvg ? ` · 사진 평균 ${S.timing.kbAvg}KB` : ""}${S.retries && (S.retries.rot || S.retries.enh) ? `<br>바로 세워 다시 읽은 건 ${S.retries.rot}건 · 보정해 다시 읽은 건 ${S.retries.enh}건` : ""}</div><div style="font-size:0.78em;color:var(--text-sub);margin-top:6px">서버 처리 시간만이라 폰 통신 시간은 빠져 있습니다. 앱에서 더 오래 걸렸다면 통신이나 사진 크기 쪽을 의심해 보세요.</div></div>` : ""}
     ${mm ? `<div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:4px">1차가 틀렸던 건 (최근 ${Math.min(30, S.mismatches.length)}개)</div>${mm}</div>` : ""}
     <div class="pk-foot"><button class="pk-btn ghost" type="button" onclick="pickStatsOpen(${D === 90 ? 30 : 90})">${D === 90 ? "30일" : "90일"}로 보기</button><button class="pk-btn primary" type="button" onclick="_pickChooser()">닫기</button></div>`;
 }
@@ -7231,6 +7232,89 @@ async function pickOnFile(inp) {
   }
 }
 
+// 인쇄된 필수값(주문번호·출고처명) 중 못 읽은 것
+function _pickMissing(r) {
+  const m = [];
+  if (!r || !String(r.orderNo || "").trim()) m.push("출고지시번호");
+  if (!r || !String(r.customer || "").trim()) m.push("출고처명");
+  return m;
+}
+// 어느 판독이 더 많이 읽었는지 비교하는 점수
+function _pickScore(r) {
+  if (!r) return -1;
+  let n = 0;
+  if (String(r.orderNo || "").trim()) n += 2;
+  if (String(r.customer || "").trim()) n += 2;
+  if (r.hwRegions) n += 1;
+  ["plt", "wanbox", "honjae"].forEach((k) => { if (r[k] !== null && r[k] !== undefined) n += 0.5; });
+  return n;
+}
+// 밝기·대비 보정: 가장 어두운/밝은 1% 를 잘라 0~255 로 늘림(색은 유지 — 빨강·파랑 펜 구분이 필요해서 흑백으로 만들지 않음)
+function _pickEnhance(cv) {
+  const c = document.createElement("canvas");
+  c.width = cv.width; c.height = cv.height;
+  const x = c.getContext("2d");
+  x.drawImage(cv, 0, 0);
+  const im = x.getImageData(0, 0, c.width, c.height), px = im.data;
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < px.length; i += 4) hist[(px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114) | 0]++;
+  const tot = px.length / 4;
+  let lo = 0, hi = 255, acc = 0;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= tot * 0.01) { lo = v; break; } }
+  acc = 0;
+  for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= tot * 0.01) { hi = v; break; } }
+  if (hi - lo < 40) { lo = Math.max(0, lo - 20); hi = Math.min(255, lo + 120); }
+  const k = 255 / (hi - lo);
+  const lut = new Uint8ClampedArray(256);
+  for (let v = 0; v < 256; v++) lut[v] = Math.pow(Math.max(0, Math.min(1, (v - lo) / (hi - lo))), 1.15) * 255; // 감마 1.15: 글씨가 조금 더 진해지게
+  for (let i = 0; i < px.length; i += 4) { px[i] = lut[px[i]]; px[i + 1] = lut[px[i + 1]]; px[i + 2] = lut[px[i + 2]]; }
+  x.putImageData(im, 0, 0);
+  return c;
+}
+function _pickToB64(cv) {
+  let q = 0.85, nd = cv.toDataURL("image/jpeg", q);
+  while (nd.length > 3800000 && q > 0.4) { q -= 0.1; nd = cv.toDataURL("image/jpeg", q); }
+  return nd.replace(/^data:[^,]+,/, "");
+}
+// 판독 요청 한 번만 보내고 결과(또는 null)를 돌려줌 — 보정 재판독처럼 실패해도 처음 결과를 지켜야 할 때 사용
+async function _pickPostParse(b64, meta) {
+  const token = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 40000);
+  try {
+    const r = await fetch(VERCEL_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ source: "vercel", domain: "system", action: "PICK_PARSE", admin_id: localStorage.getItem("admin_id"), session_token: token, data: { image: b64, mime: "image/jpeg", meta } }),
+      signal: ctl.signal,
+    });
+    const raw = await r.json();
+    return typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch (_) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+// 확인창에 보여줄 손글씨 사진 조각(원본 색 그대로, 가로 최대 900px)
+function _pickThumb(cv, rg) {
+  if (!cv || !rg) return null;
+  const x = Math.max(0, Math.min(cv.width - 2, Math.round(rg.x))), y = Math.max(0, Math.min(cv.height - 2, Math.round(rg.y)));
+  const w = Math.min(cv.width - x, Math.round(rg.w)), h = Math.min(cv.height - y, Math.round(rg.h));
+  if (w < 60 || h < 18) return null;
+  const sc = Math.min(1, 900 / w);
+  const c = document.createElement("canvas");
+  c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+  g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(cv, x, y, w, h, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.8);
+}
+function _pickMakeCrops(cv, hw) {
+  if (!cv || !hw) return null;
+  const a = _pickThumb(cv, hw.A), b = _pickThumb(cv, hw.B);
+  return a || b ? { a, b } : null;
+}
 // 캔버스를 시계 방향으로 deg(90의 배수)만큼 돌린 새 캔버스
 function _pickRotateCv(cv, deg) {
   const d = ((Math.round(deg / 90) * 90) % 360 + 360) % 360;
@@ -7244,7 +7328,7 @@ function _pickRotateCv(cv, deg) {
   x.drawImage(cv, -cv.width / 2, -cv.height / 2);
   return c;
 }
-async function _pickSend(b64, _rotated) {
+async function _pickSend(b64, _rotated, _enh) {
   const modal = document.getElementById("pickModal");
   const body = document.getElementById("pickBody");
   if (!modal || !body) return;
@@ -7266,7 +7350,7 @@ async function _pickSend(b64, _rotated) {
         body: JSON.stringify({
           source: "vercel", domain: "system", action: "PICK_PARSE",
           admin_id: localStorage.getItem("admin_id"), session_token: token,
-          data: { image: b64, mime: "image/jpeg" },
+          data: { image: b64, mime: "image/jpeg", meta: { rot: _rotated === true, enh: _enh === true } },
         }),
         signal: ctl.signal,
       });
@@ -7287,7 +7371,7 @@ async function _pickSend(b64, _rotated) {
       return;
     }
     // 사진이 옆으로·거꾸로 찍혔으면(서버가 알려 줌) 바로 세워서 한 번 더 읽는다 — 글자가 눕거나 뒤집혀 있으면 손글씨·업체명이 부정확하다
-    if (!_rotated && _pickSentCv && d.result && Math.abs(Number(d.result.pageTilt) || 0) >= 45) {
+    if (!_rotated && !_enh && _pickSentCv && d.result && Math.abs(Number(d.result.pageTilt) || 0) >= 45) {
       try {
         const fix = -Math.round((Number(d.result.pageTilt) || 0) / 90) * 90;
         const rc = _pickRotateCv(_pickSentCv, fix);
@@ -7300,11 +7384,24 @@ async function _pickSend(b64, _rotated) {
         }
       } catch (_) { /* 돌리기에 실패하면 지금 결과 그대로 사용 */ }
     }
+    // 주문번호·출고처명처럼 인쇄된 값을 못 읽었으면(흐림·그림자·반사) 밝기·대비를 보정해 한 번만 다시 읽고, 더 많이 읽은 쪽을 쓴다
+    let lowQ = null;
+    if (d.result && !_enh && _pickSentCv && _pickMissing(d.result).length) {
+      try {
+        body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)"><div style="font-size:2em">✨</div><div style="margin-top:10px;font-weight:800;color:var(--text-main)">읽기 어려운 부분이 있어 사진을 선명하게 보정해 다시 읽습니다</div><div style="margin-top:6px;font-size:0.85em">잠시만 기다려 주세요.</div></div>`;
+        const d2 = await _pickPostParse(_pickToB64(_pickEnhance(_pickSentCv)), { rot: _rotated === true, enh: true });
+        if (myReq !== _pickReq) return;
+        if (d2 && d2.success && d2.result && _pickScore(d2.result) > _pickScore(d.result)) d = d2;
+      } catch (_) { /* 보정 재판독이 실패하면 처음 결과 그대로 사용 */ }
+    }
+    if (d.result) { const miss = _pickMissing(d.result); if (miss.length) lowQ = miss; }
+    let crops = null;
+    try { crops = _pickMakeCrops(_pickSentCv, d.result && d.result.hwRegions); } catch (_) {}
     _pickState = {
       result: d.result, company: d.company, duplicate: !!d.duplicate, dupInfo: d.dupInfo || null, legacy: !!d.legacy,
       busy: false, mode: d.result && (d.result.addExisting || d.result.mergeHint) ? "append" : "new", targetId: null, rows: null, seq: 0,
       autoMerge: !!(d.result && d.result.mergeHint && !d.result.addExisting), mergeMiss: false,
-      parseId: d.parseId || null, dirty: {}, reread: null,
+      parseId: d.parseId || null, dirty: {}, reread: null, lowQ, crops,
     };
     _pickRender();
     _pickLoadRows();
@@ -7338,6 +7435,19 @@ function _pickBorder(f) {
   return fl ? `border-color:${fl.level === "red" ? _PICK_RED : _PICK_ORANGE};` : "";
 }
 
+function _pickCropsHtml(st) {
+  const c = st && st.crops;
+  if (!c) return "";
+  const img = (src, id, cap, maxH) => src ? `<div style="margin-top:8px"><div style="font-size:0.74em;color:var(--text-sub);margin-bottom:3px">${cap}</div><img id="${id}" src="${src}" alt="" onclick="_pickCropToggle('${id}')" style="display:block;width:100%;border:1px solid var(--border-color);border-radius:8px;${maxH ? "max-height:" + maxH + "px;object-fit:cover;object-position:top;" : ""}background:#fff" data-max="${maxH || 0}" /></div>` : "";
+  return `<div id="pick-crops"><div class="pk-hint" style="margin-top:10px">📄 사진 속 손글씨 — 위 숫자와 맞는지 눈으로 확인하세요 (아래 사진은 탭하면 크게 보여요)</div>${img(c.a, "pk-crop-a", "손글씨 칸 (완박스·혼재박스)", 0)}${img(c.b, "pk-crop-b", "아래 여백 (PLT·메모)", 110)}</div>`;
+}
+function _pickCropToggle(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const mx = Number(el.getAttribute("data-max")) || 0;
+  if (!mx) return;
+  el.style.maxHeight = el.style.maxHeight ? "" : mx + "px";
+}
 function _pickRender() {
   const body = document.getElementById("pickBody");
   const st = _pickState;
@@ -7353,6 +7463,8 @@ function _pickRender() {
   let banners = "";
   if (r.unfinished)
     banners += `<div class="pk-banner err" id="pick-unfin">🚫 작성 전 피킹지로 보입니다<br><span style="font-weight:600">PLT·완박스·혼재박스가 모두 비어 있어요. 손글씨가 있는데 못 읽은 거라면 아래 칸에 직접 입력하면 등록할 수 있어요. 아니면 작업이 끝난 마지막 장을 다시 찍어주세요.</span></div>`;
+  if (st.lowQ && st.lowQ.length)
+    banners += `<div class="pk-banner warn">📷 ${st.lowQ.map(_esc).join("·")}을(를) 읽지 못했습니다<br><span style="font-weight:600">사진이 흐리거나 그림자·빛 반사가 있을 수 있어요. 종이 전체가 밝고 선명하게 나오게 다시 찍으면 더 정확합니다. <button type="button" onclick="_pickChooser()" style="margin-left:4px;border:1px solid ${_PICK_ORANGE};background:none;color:${_PICK_ORANGE};border-radius:8px;padding:2px 9px;font-weight:800;cursor:pointer">다시 촬영</button></span></div>`;
   if (st.duplicate) {
     const di = st.dupInfo;
     banners += `<div class="pk-banner err">🚫 이미 등록된 피킹지입니다<br><span style="font-weight:600">${_esc(r.orderNo || "")}${di ? ` → ${_esc(di.company)} · ${_esc(di.date || "미정")} 일정` : ""}<br>그 일정을 지웠다면 다시 등록할 수 있어요. 일정이 남아 있으면 중복 등록을 막기 위해 등록되지 않습니다.</span></div>`;
@@ -7387,6 +7499,7 @@ function _pickRender() {
         ${numIn("pick-pal", r.plt, "plt", "PLT")}${numIn("pick-wan", r.wanbox, "wanbox", "완박스")}${numIn("pick-hon", r.honjae, "honjae", "혼재박스")}
       </div>
       <div class="pk-sum" id="pick-box-line"></div>
+      ${_pickCropsHtml(st)}
       <div id="pick-reread" style="display:none"></div>
     </div>
     <div class="pk-card" id="pick-mode-box"></div>

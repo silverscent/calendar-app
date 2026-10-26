@@ -183,7 +183,7 @@ async function pickLogEnsure() {
   await pool.query(`CREATE TABLE IF NOT EXISTS pick_parse_log (id BIGINT AUTO_INCREMENT PRIMARY KEY, admin_id VARCHAR(60), order_no VARCHAR(40), parsed TEXT, reread TEXT, final TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, registered_at TIMESTAMP NULL, KEY idx_created (created_at), KEY idx_order (order_no))`);
   _pickLogReady = true;
 }
-function pickParsedSnapshot(parsed, comp) {
+function pickParsedSnapshot(parsed, comp, extra) {
   const f = parsed.flags || {};
   const lv = (k) => (f[k] ? f[k].level : null);
   return {
@@ -192,6 +192,7 @@ function pickParsedSnapshot(parsed, comp) {
     addExisting: !!parsed.addExisting, mergeHint: !!parsed.mergeHint, ai: parsed.ai || null,
     flags: { plt: lv("plt"), wanbox: lv("wanbox"), honjae: lv("honjae"), customer: lv("customer"), shipDate: lv("shipDate") },
     tilt: parsed.hwRegions ? parsed.hwRegions.tilt : null,
+    timing: parsed.timing || null, kb: extra && extra.kb ? extra.kb : null, meta: extra && extra.meta ? extra.meta : null, // 소요시간·사진 크기(KB)·화면이 돌리거나 보정해 다시 보냈는지
   };
 }
 async function pickLogInsert(adminId, snap) {
@@ -2746,7 +2747,7 @@ if (action === "VERIFY_SESSION") {
           }
         } catch (_) {}
 
-        const parseId = await pickLogInsert(currentAdmin, pickParsedSnapshot(parsed, comp));
+        const parseId = await pickLogInsert(currentAdmin, pickParsedSnapshot(parsed, comp, { kb: Math.round((b64.length * 3) / 4 / 1024), meta: { rot: data?.meta?.rot === true, enh: data?.meta?.enh === true } }));
         return res.status(200).json({ success: true, result: parsed, company: comp, duplicate, dupInfo, legacy, parseId });
       } else if (action === "PICK_REREAD") {
         // 🔍 손글씨 2차 판독: 앱이 1차 판독이 알려준 손글씨 영역만 잘라 보낸 그림(1~2장)을 한 번 더 읽는다 (등록은 하지 않음)

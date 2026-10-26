@@ -219,10 +219,15 @@ function normReread(o) {
 function computePickStats(rows) {
   const zero = (v) => (v === "empty" ? 0 : v);
   const FIELDS = [["plt", "plt", "PLT"], ["wanbox", "wan", "완박스"], ["honjae", "hon", "혼재박스"]];
-  const out = { parses: rows.length, registered: 0, fields: {}, company: { n: 0, ok: 0 }, mismatches: [], reread: { n: 0, used: 0, errors: 0 } };
+  const out = { parses: rows.length, registered: 0, fields: {}, company: { n: 0, ok: 0 }, mismatches: [], reread: { n: 0, used: 0, errors: 0 }, timing: null, retries: { rot: 0, enh: 0 } };
   FIELDS.forEach(([k, , lab]) => { out.fields[k] = { label: lab, n: 0, first: 0, second: 0, secondN: 0, agreeN: 0, agreeOk: 0, diffN: 0, diffFirstOk: 0, diffSecondOk: 0, diffNeither: 0 }; });
+  const tt = [], tv = [], tg = [], kb = [];
   for (const r of rows) {
     const P = r.parsed || {}, S = r.reread || null, F = r.final || null;
+    if (P.timing && Number(P.timing.total) > 0) { tt.push(Number(P.timing.total)); if (Number(P.timing.vision) > 0) tv.push(Number(P.timing.vision)); if (Number(P.timing.gemini) > 0) tg.push(Number(P.timing.gemini)); }
+    if (Number(P.kb) > 0) kb.push(Number(P.kb));
+    if (P.meta && P.meta.rot) out.retries.rot++;
+    if (P.meta && P.meta.enh) out.retries.enh++;
     if (S && S.error) out.reread.errors++;
     if (S && !S.error) out.reread.used++;
     if (!F) continue;
@@ -250,6 +255,8 @@ function computePickStats(rows) {
       if (!pOk && out.mismatches.length < 30) out.mismatches.push({ orderNo: r.order_no || "", field: lab, parsed: p === undefined ? null : p, reread: s === undefined ? null : s, final: fnum });
     }
   }
+  const avg = (a) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
+  if (tt.length) out.timing = { n: tt.length, avg: avg(tt), max: Math.max(...tt), over20: tt.filter((x) => x > 20000).length, visionAvg: avg(tv), geminiAvg: avg(tg), kbAvg: avg(kb) };
   return out;
 }
 
@@ -709,9 +716,11 @@ function reconcile(printed, hw, g, errs) {
 async function parsePicking(b64, mime, opts) {
   const fetchFn = (opts && opts.fetch) || fetch;
   const errs = [];
+  const t0 = Date.now();
+  const timed = async (p) => { const r = await p; r.ms = Date.now() - t0; return r; }; // 단계별 소요시간(ms) — 어디서 느려지는지 통계로 보기 위함
   const [v, g] = await Promise.all([
-    callVision(b64, fetchFn, opts.visionKey),
-    callGemini(b64, mime, fetchFn, opts.geminiKey),
+    timed(callVision(b64, fetchFn, opts.visionKey)),
+    timed(callGemini(b64, mime, fetchFn, opts.geminiKey)),
   ]);
   if (!v.ok) errs.push(v.err);
   if (!g.ok) errs.push(g.err);
@@ -722,6 +731,7 @@ async function parsePicking(b64, mime, opts) {
   try { out.hwRegions = v.ok ? handRegions(v.data) : null; } catch (_) { out.hwRegions = null; }
   // 사진이 옆으로·거꾸로 찍혔는지(도): 화면이 이 값으로 사진을 바로 세워 다시 보낸다. 0 이면 바른 방향
   try { const th = v.ok ? visionWords(v.data).theta || 0 : 0; out.pageTilt = Math.round((th * 180) / Math.PI); } catch (_) { out.pageTilt = 0; }
+  out.timing = { total: Date.now() - t0, vision: v.ms || null, gemini: g.ms || null };
   out.ok = true;
   return out;
 }
