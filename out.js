@@ -7206,7 +7206,7 @@ async function pickStatsOpen(days) {
     <div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:6px">업체 자동 연결 정확도: ${pct(S.company.ok, S.company.n)} <small style="color:var(--text-sub)">(${S.company.ok}/${S.company.n})</small></div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.88em;text-align:left"><thead><tr style="color:var(--text-sub);font-size:0.85em"><th>칸</th><th>1차 정확</th><th>2차 정확</th><th>두 판독이 같을 때</th><th>다를 때 누가 맞았나</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
     <div style="font-size:0.78em;color:var(--text-sub);margin-top:8px">정확 = 등록 때 사람이 최종으로 넣은 값과 같은 비율. 2차 판독은 손글씨 줄만 잘라 다시 읽은 결과입니다. 건수가 적을 때는 참고만 하세요.</div></div>
-    ${S.timing ? `<div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:4px">⏱ 판독 걸린 시간 (서버 기준, ${S.timing.n}건)</div><div style="font-size:0.85em;line-height:1.6">평균 <b>${(S.timing.avg / 1000).toFixed(1)}초</b> · 가장 오래 <b>${(S.timing.max / 1000).toFixed(1)}초</b> · 20초 넘은 건 <b>${S.timing.over20}</b>건<br>문자인식(구글) 평균 ${S.timing.visionAvg ? (S.timing.visionAvg / 1000).toFixed(1) + "초" : "–"} · AI(Gemini) 평균 ${S.timing.geminiAvg ? (S.timing.geminiAvg / 1000).toFixed(1) + "초" : "–"}${S.timing.kbAvg ? ` · 사진 평균 ${S.timing.kbAvg}KB` : ""}${S.retries && (S.retries.rot || S.retries.enh) ? `<br>바로 세워 다시 읽은 건 ${S.retries.rot}건 · 보정해 다시 읽은 건 ${S.retries.enh}건` : ""}</div><div style="font-size:0.78em;color:var(--text-sub);margin-top:6px">서버 처리 시간만이라 폰 통신 시간은 빠져 있습니다. 앱에서 더 오래 걸렸다면 통신이나 사진 크기 쪽을 의심해 보세요.</div></div>` : ""}
+    ${S.timing ? `<div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:4px">⏱ 판독 걸린 시간 (서버 기준, ${S.timing.n}건)</div><div style="font-size:0.85em;line-height:1.6">${S.hw && S.hw.n ? `손글씨 칸 위치를 찾은 비율 <b>${Math.round((S.hw.found / S.hw.n) * 100)}%</b> (${S.hw.found}/${S.hw.n})<br>` : ""}평균 <b>${(S.timing.avg / 1000).toFixed(1)}초</b> · 가장 오래 <b>${(S.timing.max / 1000).toFixed(1)}초</b> · 20초 넘은 건 <b>${S.timing.over20}</b>건<br>문자인식(구글) 평균 ${S.timing.visionAvg ? (S.timing.visionAvg / 1000).toFixed(1) + "초" : "–"} · AI(Gemini) 평균 ${S.timing.geminiAvg ? (S.timing.geminiAvg / 1000).toFixed(1) + "초" : "–"}${S.timing.kbAvg ? ` · 사진 평균 ${S.timing.kbAvg}KB` : ""}${S.retries && (S.retries.rot || S.retries.enh) ? `<br>바로 세워 다시 읽은 건 ${S.retries.rot}건 · 보정해 다시 읽은 건 ${S.retries.enh}건` : ""}</div><div style="font-size:0.78em;color:var(--text-sub);margin-top:6px">서버 처리 시간만이라 폰 통신 시간은 빠져 있습니다. 앱에서 더 오래 걸렸다면 통신이나 사진 크기 쪽을 의심해 보세요.</div></div>` : ""}
     ${mm ? `<div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:4px">1차가 틀렸던 건 (최근 ${Math.min(30, S.mismatches.length)}개)</div>${mm}</div>` : ""}
     <div class="pk-foot"><button class="pk-btn ghost" type="button" onclick="pickStatsOpen(${D === 90 ? 30 : 90})">${D === 90 ? "30일" : "90일"}로 보기</button><button class="pk-btn primary" type="button" onclick="_pickChooser()">닫기</button></div>`;
 }
@@ -7310,10 +7310,13 @@ function _pickThumb(cv, rg) {
   g.drawImage(cv, x, y, w, h, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.8);
 }
-function _pickMakeCrops(cv, hw) {
-  if (!cv || !hw) return null;
-  const a = _pickThumb(cv, hw.A), b = _pickThumb(cv, hw.B);
-  return a || b ? { a, b } : null;
+function _pickMakeCrops(cv, hw, diag) {
+  if (!cv) return null;
+  const a = hw ? _pickThumb(cv, hw.A) : null, b = hw ? _pickThumb(cv, hw.B) : null;
+  if (a || b) return { a, b };
+  // 손글씨 칸 위치를 못 찾았으면 사진 전체를 대신 보여 준다(그래도 눈으로 대조할 수 있게)
+  const whole = _pickThumb(cv, { x: 0, y: 0, w: cv.width, h: cv.height });
+  return whole ? { whole, diag: diag || null } : null;
 }
 // 캔버스를 시계 방향으로 deg(90의 배수)만큼 돌린 새 캔버스
 function _pickRotateCv(cv, deg) {
@@ -7396,7 +7399,7 @@ async function _pickSend(b64, _rotated, _enh) {
     }
     if (d.result) { const miss = _pickMissing(d.result); if (miss.length) lowQ = miss; }
     let crops = null;
-    try { crops = _pickMakeCrops(_pickSentCv, d.result && d.result.hwRegions); } catch (_) {}
+    try { crops = _pickMakeCrops(_pickSentCv, d.result && d.result.hwRegions, d.result && d.result.hwDiag); } catch (_) {}
     _pickState = {
       result: d.result, company: d.company, duplicate: !!d.duplicate, dupInfo: d.dupInfo || null, legacy: !!d.legacy,
       busy: false, mode: d.result && (d.result.addExisting || d.result.mergeHint) ? "append" : "new", targetId: null, rows: null, seq: 0,
@@ -7439,6 +7442,7 @@ function _pickCropsHtml(st) {
   const c = st && st.crops;
   if (!c) return "";
   const img = (src, id, cap, maxH) => src ? `<div style="margin-top:8px"><div style="font-size:0.74em;color:var(--text-sub);margin-bottom:3px">${cap}</div><img id="${id}" src="${src}" alt="" onclick="_pickCropToggle('${id}')" style="display:block;width:100%;border:1px solid var(--border-color);border-radius:8px;${maxH ? "max-height:" + maxH + "px;object-fit:cover;object-position:top;" : ""}background:#fff" data-max="${maxH || 0}" /></div>` : "";
+  if (c.whole) return `<div id="pick-crops"><div class="pk-hint" style="margin-top:10px">📄 사진에서 손글씨 칸 위치를 찾지 못해 사진 전체를 보여드려요 — 위 숫자와 맞는지 눈으로 확인하세요 (탭하면 펼침/접힘)${c.diag ? `<br><span style="opacity:.75">진단: 문자인식 ${c.diag.words}글자 · 머리글 비슷한 글자 [${(c.diag.seen || []).map(_esc).join(", ") || "없음"}]${c.diag.note ? " · " + _esc(c.diag.note) : ""}</span>` : ""}</div>${img(c.whole, "pk-crop-w", "찍은 사진", 220)}</div>`;
   return `<div id="pick-crops"><div class="pk-hint" style="margin-top:10px">📄 사진 속 손글씨 — 위 숫자와 맞는지 눈으로 확인하세요 (아래 사진은 탭하면 크게 보여요)</div>${img(c.a, "pk-crop-a", "손글씨 칸 (완박스·혼재박스)", 0)}${img(c.b, "pk-crop-b", "아래 여백 (PLT·메모)", 110)}</div>`;
 }
 function _pickCropToggle(id) {

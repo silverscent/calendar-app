@@ -191,7 +191,7 @@ function pickParsedSnapshot(parsed, comp, extra) {
     shipDate: parsed.shipDate || null, plt: parsed.plt === undefined ? null : parsed.plt, wanbox: parsed.wanbox === undefined ? null : parsed.wanbox, honjae: parsed.honjae === undefined ? null : parsed.honjae,
     addExisting: !!parsed.addExisting, mergeHint: !!parsed.mergeHint, ai: parsed.ai || null,
     flags: { plt: lv("plt"), wanbox: lv("wanbox"), honjae: lv("honjae"), customer: lv("customer"), shipDate: lv("shipDate") },
-    tilt: parsed.hwRegions ? parsed.hwRegions.tilt : null,
+    tilt: parsed.hwRegions ? parsed.hwRegions.tilt : null, hwFound: !!parsed.hwRegions,
     timing: parsed.timing || null, kb: extra && extra.kb ? extra.kb : null, meta: extra && extra.meta ? extra.meta : null, // 소요시간·사진 크기(KB)·화면이 돌리거나 보정해 다시 보냈는지
   };
 }

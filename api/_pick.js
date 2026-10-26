@@ -129,13 +129,28 @@ const joinW = (ws) => ws.map((w) => w.t.replace(/^[:：]/, "")).filter((t) => t 
 // ───────────────────────── 손글씨 영역 좌표 (2차 판독용) ─────────────────────────
 // 표 머리글('완박스'·'혼재박스' …) 위치를 기준으로 A=머리글 바로 아래 손글씨 줄, B=그 아래 여백(PLT·'기존에추가' 메모)을 잡는다.
 // 돌려 놓은 좌표(기울기·옆으로 누운 사진 보정 후)에서 계산한 뒤, 원래 사진 좌표의 사각형으로 되돌려 돌려준다. 못 찾으면 null.
+// 같은 줄에서 바로 이어진 두 낱말(예: "혼재" + "박스")을 하나의 머리글처럼 합쳐 돌려줌
+function findSplit(words, a, b) {
+  for (const x of words.filter((w) => w.t === a)) {
+    const y = words.find((w) => w.t === b && sameRow(w, x) && w.cx > x.cx && w.x0 - x.x1 < Math.max(x.h, 30) * 2);
+    if (y) return { t: a + b, cx: (x.x0 + y.x1) / 2, cy: (x.cy + y.cy) / 2, w: y.x1 - x.x0, h: Math.max(x.h, y.h), x0: x.x0, x1: y.x1, y0: Math.min(x.y0, y.y0), y1: Math.max(x.y1, y.y1) };
+  }
+  return null;
+}
+function handDiag(vr) {
+  if (!vr) return { words: 0, note: "문자인식 실패", seen: [] };
+  const words = visionWords(vr);
+  const seen = words.filter((w) => /박스|완|혼재|날짜|피킹|검수|PLT/i.test(w.t)).slice(0, 14).map((w) => w.t);
+  return { words: words.length, seen, tilt: Math.round(((words.theta || 0) * 180) / Math.PI) };
+}
 function handRegions(vr) {
   const words = visionWords(vr);
-  const hW = findWord(words, /^완박스$/)[0];
-  const hH = findWord(words, /^혼재박스$/)[0];
+  // 머리글이 "완 박스"·"혼재 박스"처럼 쪼개지거나 다른 글자와 붙어 읽혀도 찾는다
+  const hW = findWord(words, /^완박스$/)[0] || findWord(words, /완박스/)[0] || findSplit(words, "완", "박스");
+  const hH = findWord(words, /^혼재박스$/)[0] || findWord(words, /혼재박스/)[0] || findSplit(words, "혼재", "박스");
   const anchor = hW || hH;
   if (!anchor) return null;
-  const hdr = words.filter((w) => /^(날짜|피킹|검수|완박스|혼재박스)$/.test(w.t) && sameRow(w, anchor));
+  const hdr = words.filter((w) => /^(날짜|피킹|검수|완박스|혼재박스)$/.test(w.t) && sameRow(w, anchor)).concat([hW, hH].filter((w) => w && !words.includes(w) || (w && !/^(완박스|혼재박스)$/.test(w.t))).filter((w) => sameRow(w, anchor)));
   const left = Math.min(...hdr.map((w) => w.x0)), right = Math.max(...hdr.map((w) => w.x1));
   const width = right - left;
   if (!(width > 80)) return null;
@@ -219,13 +234,14 @@ function normReread(o) {
 function computePickStats(rows) {
   const zero = (v) => (v === "empty" ? 0 : v);
   const FIELDS = [["plt", "plt", "PLT"], ["wanbox", "wan", "완박스"], ["honjae", "hon", "혼재박스"]];
-  const out = { parses: rows.length, registered: 0, fields: {}, company: { n: 0, ok: 0 }, mismatches: [], reread: { n: 0, used: 0, errors: 0 }, timing: null, retries: { rot: 0, enh: 0 } };
+  const out = { parses: rows.length, registered: 0, fields: {}, company: { n: 0, ok: 0 }, mismatches: [], reread: { n: 0, used: 0, errors: 0 }, timing: null, retries: { rot: 0, enh: 0 }, hw: { n: 0, found: 0 } };
   FIELDS.forEach(([k, , lab]) => { out.fields[k] = { label: lab, n: 0, first: 0, second: 0, secondN: 0, agreeN: 0, agreeOk: 0, diffN: 0, diffFirstOk: 0, diffSecondOk: 0, diffNeither: 0 }; });
   const tt = [], tv = [], tg = [], kb = [];
   for (const r of rows) {
     const P = r.parsed || {}, S = r.reread || null, F = r.final || null;
     if (P.timing && Number(P.timing.total) > 0) { tt.push(Number(P.timing.total)); if (Number(P.timing.vision) > 0) tv.push(Number(P.timing.vision)); if (Number(P.timing.gemini) > 0) tg.push(Number(P.timing.gemini)); }
     if (Number(P.kb) > 0) kb.push(Number(P.kb));
+    if (P.hwFound === true || P.hwFound === false) { out.hw.n++; if (P.hwFound) out.hw.found++; }
     if (P.meta && P.meta.rot) out.retries.rot++;
     if (P.meta && P.meta.enh) out.retries.enh++;
     if (S && S.error) out.reread.errors++;
@@ -729,6 +745,8 @@ async function parsePicking(b64, mime, opts) {
   const hw = v.ok ? extractHandwritingVision(v.data) : {};
   const out = reconcile(printed, hw, g.ok ? g.data : {}, errs);
   try { out.hwRegions = v.ok ? handRegions(v.data) : null; } catch (_) { out.hwRegions = null; }
+  // 손글씨 칸 위치를 못 찾았을 때 이유를 볼 수 있게: 문자인식이 읽은 글자 수와 머리글 비슷한 글자들
+  try { out.hwDiag = out.hwRegions ? null : handDiag(v.ok ? v.data : null); } catch (_) { out.hwDiag = null; }
   // 사진이 옆으로·거꾸로 찍혔는지(도): 화면이 이 값으로 사진을 바로 세워 다시 보낸다. 0 이면 바른 방향
   try { const th = v.ok ? visionWords(v.data).theta || 0 : 0; out.pageTilt = Math.round((th * 180) / Math.PI); } catch (_) { out.pageTilt = 0; }
   out.timing = { total: Date.now() - t0, vision: v.ms || null, gemini: g.ms || null };
