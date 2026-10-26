@@ -59,48 +59,90 @@ const GEMINI_PROMPT = `이 이미지는 물류센터 '피킹 리스트'(출고 �
 
 날짜(10/15 등)·시간(13:05 등)·피킹/검수 칸의 서명, 빨강·파랑 펜으로 그은 동그라미·체크·계산 메모(예: "145,116,24,+2,+1")는 모두 무시해. 숫자 1 은 짧은 세로선이나 약간 기울어진 선("/" 처럼 사선 한 줄만 그어진 것도 1)으로, 숫자 7 은 윗줄이 구부러져 "ㄱ"처럼 보일 수 있다. 완박스·혼재박스 칸에 사선(/)이나 세로선 한 줄이라도 있으면 빈칸이 아니라 1 이다 — 세 칸을 모두 empty 로 답하기 전에 칸마다 선이 있는지 한 번 더 확인해. PLT 는 읽을 수 없으면 null 로 두되, 완박스·혼재박스는 위 규칙대로 숫자(또는 empty)로만 답해. 두 자리 숫자도 있다: 세로선·사선이 나란히 두 개면 11, 세 개면 111 이니 한 개로 합쳐 읽지 말고 선의 개수를 하나씩 세어서 답한다(예: "11" 을 "1" 로 읽는 것이 가장 흔한 실수).`;
 
-// ── Gemini 키 여러 개: 첫 키가 한도 초과·과부하면 다음 키로 넘어간다(서로 다른 프로젝트의 키여야 한도가 따로 계산됨) ──
-// keys: 문자열 하나 또는 배열. 한도·과부하로 막힌 키는 잠깐(60초) 건너뛰어 매번 실패를 겪지 않게 한다.
-const _keyBadUntil = {};
+// ── Gemini 키·모델 여러 개 ──
+// 키: 첫 키가 한도 초과·과부하·키 오류면 다음 키로(서로 다른 프로젝트의 키여야 한도가 따로 계산됨). 막힌 키는 60초 건너뜀.
+// 모델: 새 계정은 옛 모델(gemini-2.5-flash)을 더는 못 쓰는 경우가 있어("no longer available to new users") 그러면 다음 모델로 넘어간다.
+//   환경변수 GEMINI_MODEL 로 첫 번째로 쓸 모델을 정할 수 있다. 어느 모델이 되는지는 키마다 기억해 다음부터 바로 쓴다.
+const _keyBadUntil = {}, _modelBadUntil = {}, _modelGood = {};
 const toKeyList = (k) => (Array.isArray(k) ? k : [k]).map((x) => String(x || "").trim()).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
+const DEFAULT_MODELS = ["gemini-2.5-flash", "gemini-3.8-flash"];
+const modelList = (m) => (Array.isArray(m) ? m : [m]).map((x) => String(x || "").trim()).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
+const errText = (j) => String((j && j.error && (j.error.status + " " + j.error.message)) || "");
+function isModelGone(j, status) {
+  const e = j && j.error;
+  if (!e) return false;
+  const code = Number(e.code || status || 0);
+  return /no longer available|not found|NOT_FOUND|is not supported for generateContent|has been deprecated|decommission/i.test(errText(j)) && (code === 404 || code === 400 || code === 403 || /NOT_FOUND|no longer available/i.test(errText(j)));
+}
 function isQuotaErr(j, status) {
   const e = j && j.error;
   const code = Number((e && e.code) || status || 0);
-  const st = String((e && e.status) || "");
-  const msg = String((e && e.message) || "");
-  const keyBad = /API_KEY_INVALID|PERMISSION_DENIED/i.test(st) || /api key (not valid|expired)|invalid api key/i.test(msg); // 키가 잘못·만료·정지된 경우도 다음 키로
-  return code === 429 || code === 503 || keyBad || /RESOURCE_EXHAUSTED|UNAVAILABLE/i.test(st) || /quota|exhausted|overloaded|rate.?limit|try again later/i.test(msg);
+  const t = errText(j);
+  const keyBad = /API_KEY_INVALID|PERMISSION_DENIED/i.test(t) || /api key (not valid|expired)|invalid api key/i.test(t); // 키가 잘못·만료·정지된 경우도 다음 키로
+  return code === 429 || code === 503 || keyBad || /RESOURCE_EXHAUSTED|UNAVAILABLE/i.test(t) || /quota|exhausted|overloaded|rate.?limit|try again later/i.test(t);
 }
-const quotaMsg = (j) => (/API_KEY_INVALID|PERMISSION_DENIED|api key (not valid|expired)/i.test(String((j && j.error && (j.error.status + " " + j.error.message)) || "")) ? "AI 키 오류(확인 필요)" : Number(j && j.error && j.error.code) === 503 || /UNAVAILABLE|overloaded/i.test(String((j && j.error && (j.error.status + " " + j.error.message)) || "")) ? "AI 서버 과부하" : "AI 호출 한도 초과");
-// body 를 보내 응답 json 을 돌려준다. 한도·과부하면 다음 키로. 반환: { j, status, keyNo, quota }
-async function geminiPost(fetchFn, keys, model, body, signal) {
+function failLabel(j, status) {
+  const t = errText(j);
+  if (isModelGone(j, status)) return "모델 사용 불가";
+  if (/API_KEY_INVALID|PERMISSION_DENIED|api key (not valid|expired)|invalid api key/i.test(t)) return "키 오류";
+  if (Number(j && j.error && j.error.code) === 503 || /UNAVAILABLE|overloaded/i.test(t)) return "서버 과부하";
+  if (isQuotaErr(j, status)) return "한도 초과";
+  return String((j && j.error && j.error.message) || "응답 없음").slice(0, 60);
+}
+// body: 문자열 또는 (model)=>문자열. models: 모델 이름 하나 또는 배열(앞에 있는 것부터).
+// 반환 { j, status, keyNo, model, quota, trail } — 모두 실패하면 마지막 실패와 시도 내역(trail)을 돌려줌
+async function geminiPost(fetchFn, keys, models, body, signal) {
   const list = toKeyList(keys);
+  const ms = modelList(models);
   const now = Date.now();
   const order = list.map((k, i) => ({ k, i })).sort((a, b) => ((_keyBadUntil[a.k] || 0) > now ? 1 : 0) - ((_keyBadUntil[b.k] || 0) > now ? 1 : 0)); // 막힌 키는 뒤로
-  let last = { j: { error: { message: "AI 키 없음" } }, status: 0, keyNo: 0, quota: false };
+  let last = { j: { error: { message: "AI 키 없음" } }, status: 0, keyNo: 0, model: null, quota: false, trail: [] };
+  const trail = [];
   for (const { k, i } of order) {
-    const r = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${k}`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body, signal,
-    });
-    const j = await r.json();
-    const quota = !!(j && j.error) && isQuotaErr(j, r.status);
-    last = { j, status: r.status, keyNo: i + 1, quota };
-    if (!quota) { if (!(j && j.error)) _keyBadUntil[k] = 0; return last; }
-    _keyBadUntil[k] = Date.now() + 60000;
+    const pref = _modelGood[k];
+    const mlist = (pref && ms.includes(pref) ? [pref].concat(ms.filter((x) => x !== pref)) : ms).filter((m) => (_modelBadUntil[k + "|" + m] || 0) <= Date.now());
+    for (const m of mlist.length ? mlist : ms) {
+      const r = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${k}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: typeof body === "function" ? body(m) : body, signal,
+      });
+      const j = await r.json();
+      const hasErr = !!(j && j.error);
+      const gone = hasErr && isModelGone(j, r.status);
+      const quota = hasErr && !gone && isQuotaErr(j, r.status);
+      last = { j, status: r.status, keyNo: i + 1, model: m, quota, trail };
+      if (!hasErr) { _keyBadUntil[k] = 0; _modelGood[k] = m; return last; }
+      trail.push({ keyNo: i + 1, model: m, why: failLabel(j, r.status) });
+      if (gone) { _modelBadUntil[k + "|" + m] = Date.now() + 3600000; continue; } // 이 키로는 이 모델을 못 씀 → 다음 모델
+      if (quota) { _keyBadUntil[k] = Date.now() + 60000; break; } // 이 키는 막힘 → 다음 키
+      return last; // 요청 자체 오류 등은 키·모델을 바꿔도 소용없음
+    }
   }
   return last;
 }
+// 실패 사유 문장: 키가 여러 개면 "키1: 한도 초과 / 키2: 모델 사용 불가" 처럼 키별로
+function geminiWhy(g) {
+  const t = (g && g.trail) || [];
+  if (!t.length) return (g && g.j && g.j.error && g.j.error.message) || "AI 응답 없음";
+  const by = {};
+  t.forEach((x) => { (by[x.keyNo] = by[x.keyNo] || []).push(x.why); });
+  const keys = Object.keys(by);
+  const one = (w) => w.filter((x, i, a) => a.indexOf(x) === i).join("·");
+  return ("AI " + (keys.length > 1 ? keys.map((k) => `키${k} ${one(by[k])}`).join(" / ") : one(by[keys[0]]))).slice(0, 120);
+}
+const GEMINI_MODELS = () => modelList([process.env.GEMINI_MODEL].concat(DEFAULT_MODELS));
+// 2.5 계열만 thinkingBudget 설정을 알고 있다. 다른 계열은 설정을 빼서 모델이 정한 기본값을 쓴다(알 수 없는 옵션으로 400 이 나는 것을 막음)
+const genCfg = (m) => Object.assign({ temperature: 0.0, responseMimeType: "application/json" }, /^gemini-2\.5/.test(m) ? { thinkingConfig: { thinkingBudget: 0 } } : {});
 async function callGemini(b64, mime, fetchFn, apiKey) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), GEMINI_TIMEOUT_MS);
   try {
-    const g = await geminiPost(fetchFn, apiKey, "gemini-2.5-flash", JSON.stringify({
+    const g = await geminiPost(fetchFn, apiKey, GEMINI_MODELS(), (m) => JSON.stringify({
       contents: [{ parts: [{ text: GEMINI_PROMPT }, { inline_data: { mime_type: mime || "image/jpeg", data: b64 } }] }],
-      generationConfig: { temperature: 0.0, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } },
+      generationConfig: genCfg(m),
     }), ctl.signal);
     const j = g.j;
     const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
-    if (!txt) return { ok: false, err: g.quota ? quotaMsg(j) : (j.error && j.error.message) || "AI 응답 없음" };
+    if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음" };
     const obj = JSON.parse(String(txt).replace(/```json/gi, "").replace(/```/g, "").trim());
     const o = Array.isArray(obj) ? obj[0] || {} : obj;
     return { ok: true, data: o && typeof o === "object" ? o : {} };
@@ -221,10 +263,10 @@ async function rereadHandwriting(imgs, mime, fetchFn, apiKey) {
   try {
     const parts = [{ text: REREAD_PROMPT }];
     list.forEach((b64, i) => { parts.push({ text: `그림 ${i + 1}:` }); parts.push({ inline_data: { mime_type: mime || "image/jpeg", data: b64 } }); });
-    const g = await geminiPost(fetchFn, apiKey, "gemini-2.5-flash", JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.0, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } } }), ctl.signal);
+    const g = await geminiPost(fetchFn, apiKey, GEMINI_MODELS(), (m) => JSON.stringify({ contents: [{ parts }], generationConfig: genCfg(m) }), ctl.signal);
     const j = g.j;
     const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
-    if (!txt) return { ok: false, err: g.quota ? quotaMsg(j) : (j.error && j.error.message) || "AI 응답 없음" };
+    if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음" };
     const obj = JSON.parse(String(txt).replace(/```json/gi, "").replace(/```/g, "").trim());
     return { ok: true, data: normReread(Array.isArray(obj) ? obj[0] : obj) };
   } catch (e) {
@@ -775,4 +817,4 @@ async function parsePicking(b64, mime, opts) {
   return out;
 }
 
-module.exports = { geminiPost, toKeyList, handRegions, rereadHandwriting, normReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };
+module.exports = { geminiPost, geminiWhy, genCfg, toKeyList, handRegions, rereadHandwriting, normReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };
