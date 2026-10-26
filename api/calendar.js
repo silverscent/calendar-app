@@ -2712,13 +2712,13 @@ if (action === "VERIFY_SESSION") {
         if (!b64 || b64.length < 1000) return res.status(200).json({ success: false, msg: "이미지가 비어 있습니다." });
         if (b64.length > 4200000) return res.status(200).json({ success: false, msg: "이미지가 너무 큽니다. 다시 촬영해주세요." });
         if (!/^[A-Za-z0-9+\/]+={0,2}$/.test(b64)) return res.status(200).json({ success: false, msg: "이미지 형식이 올바르지 않습니다." });
-        if (!process.env.GOOGLE_VISION_API_KEY && !process.env.GEMINI_API_KEY)
+        if (!process.env.GOOGLE_VISION_API_KEY && !process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY_2)
           return res.status(200).json({ success: false, msg: "OCR API 키가 설정되어 있지 않습니다." });
 
         const parsed = await pickLib.parsePicking(b64, mime, {
           fetch,
           visionKey: process.env.GOOGLE_VISION_API_KEY,
-          geminiKey: process.env.GEMINI_API_KEY,
+          geminiKey: [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2], // 두 번째 키(다른 프로젝트)가 있으면 한도·과부하 때 자동 전환
         });
         if (!parsed.ok) return res.status(200).json({ success: false, msg: "판독 실패: " + (parsed.err || "알 수 없는 오류") });
 
@@ -2755,9 +2755,9 @@ if (action === "VERIFY_SESSION") {
         const clean = imgs.map((x) => (typeof x === "string" ? x.replace(/^data:[^,]+,/, "") : ""));
         if (!clean.length || clean.some((b) => b.length < 200 || b.length > 1800000 || !/^[A-Za-z0-9+\/]+={0,2}$/.test(b)))
           return res.status(200).json({ success: false, msg: "그림 형식이 올바르지 않습니다." });
-        if (!process.env.GEMINI_API_KEY) return res.status(200).json({ success: false, msg: "AI 키가 설정되어 있지 않습니다." });
+        if (!process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY_2) return res.status(200).json({ success: false, msg: "AI 키가 설정되어 있지 않습니다." });
         const mimeR = /^image\/(jpeg|png|webp)$/.test(String(data?.mime || "")) ? data.mime : "image/jpeg";
-        const rr = await pickLib.rereadHandwriting(clean, mimeR, fetch, process.env.GEMINI_API_KEY);
+        const rr = await pickLib.rereadHandwriting(clean, mimeR, fetch, [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2]);
         if (!rr.ok) {
           await pickLogSet(data?.parseId, "reread", { error: String(rr.err || "").slice(0, 80) }, currentAdmin);
           return res.status(200).json({ success: false, msg: "2차 판독 실패: " + (rr.err || "알 수 없는 오류") });

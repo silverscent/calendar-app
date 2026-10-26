@@ -6679,6 +6679,7 @@ function pickChoose(kind) {
 
 function closePickModal() {
   _pickReq++; // 진행 중이던 판독 응답은 무시
+  try { _pickLightboxClose(); } catch (_) {}
   _dsEd = null;
   _pickSentCv = null;
   const m = document.getElementById("pickModal");
@@ -7105,21 +7106,27 @@ async function _pickStartReread(st, myReq) {
   st.reread = { state: "wait" };
   _pickShowReread(st, st.reread);
   const token = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 40000);
-  let d = null;
-  try {
-    const resp = await fetch(VERCEL_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ source: "vercel", domain: "system", action: "PICK_REREAD", admin_id: localStorage.getItem("admin_id"), session_token: token, data: { images: imgs, mime: "image/jpeg", parseId: st.parseId } }),
-      signal: ctl.signal,
-    });
-    const raw = await resp.json();
-    d = typeof raw === "string" ? JSON.parse(raw) : raw;
-  } catch (_) { d = null; }
-  clearTimeout(timer);
-  if (_pickState !== st || myReq !== _pickReq) return; // 그 사이 창을 닫았거나 다른 사진으로 바뀜
-  if (!d || !d.success || !d.hw) { st.reread = { state: "err" }; _pickShowReread(st, st.reread); return; }
+  let d = null, why = "";
+  for (let attempt = 0; attempt < 2; attempt++) { // 일시적인 통신·AI 오류에 대비해 실패하면 한 번 더 시도
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 40000);
+    d = null; why = "";
+    try {
+      const resp = await fetch(VERCEL_API_URL, {
+        method: "POST",
+        body: JSON.stringify({ source: "vercel", domain: "system", action: "PICK_REREAD", admin_id: localStorage.getItem("admin_id"), session_token: token, data: { images: imgs, mime: "image/jpeg", parseId: st.parseId } }),
+        signal: ctl.signal,
+      });
+      const raw = await resp.json();
+      d = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (!d || !d.success || !d.hw) why = (d && d.msg) || "응답 이상";
+    } catch (e) { d = null; why = e && e.name === "AbortError" ? "시간 초과" : "통신 실패"; }
+    clearTimeout(timer);
+    if (_pickState !== st || myReq !== _pickReq) return; // 그 사이 창을 닫았거나 다른 사진으로 바뀜
+    if (!why) break;
+    if (d && d.forceLogout) break;
+  }
+  if (!d || !d.success || !d.hw) { st.reread = { state: "err", why }; _pickShowReread(st, st.reread); return; }
   _pickApplyReread(st, d.hw);
 }
 function _pickApplyReread(st, hw) {
@@ -7162,7 +7169,7 @@ function _pickShowReread(st, info) {
   if (!info) { box.style.display = "none"; return; }
   box.style.display = "";
   if (info.state === "wait") { box.innerHTML = `<div style="${sty}color:var(--text-sub)">✍️ 손글씨를 한 번 더 확인하는 중… (등록은 지금도 할 수 있어요)</div>`; return; }
-  if (info.state === "err") { box.innerHTML = `<div style="${sty}color:var(--text-sub)">✍️ 손글씨 2차 확인은 하지 못했어요. 위 값을 직접 한 번 확인해 주세요.</div>`; return; }
+  if (info.state === "err") { box.innerHTML = `<div style="${sty}color:var(--text-sub)">✍️ 손글씨 2차 확인은 하지 못했어요${info.why ? " (" + _esc(String(info.why).replace(/^2차 판독 실패:\s*/, "")) + ")" : ""}. 위 값을 직접 한 번 확인해 주세요.</div>`; return; }
   const its = info.items || [];
   const bad = its.filter((x) => x.kind === "diff" || x.kind === "filled");
   let html = "";
@@ -7331,7 +7338,7 @@ function _pickRotateCv(cv, deg) {
   x.drawImage(cv, -cv.width / 2, -cv.height / 2);
   return c;
 }
-async function _pickSend(b64, _rotated, _enh) {
+async function _pickSend(b64, _rotated, _enh, _opt) {
   const modal = document.getElementById("pickModal");
   const body = document.getElementById("pickBody");
   if (!modal || !body) return;
@@ -7374,7 +7381,7 @@ async function _pickSend(b64, _rotated, _enh) {
       return;
     }
     // 사진이 옆으로·거꾸로 찍혔으면(서버가 알려 줌) 바로 세워서 한 번 더 읽는다 — 글자가 눕거나 뒤집혀 있으면 손글씨·업체명이 부정확하다
-    if (!_rotated && !_enh && _pickSentCv && d.result && Math.abs(Number(d.result.pageTilt) || 0) >= 45) {
+    if (!_rotated && !_enh && !(_opt && _opt.skipTilt) && _pickSentCv && d.result && Math.abs(Number(d.result.pageTilt) || 0) >= 45) {
       try {
         const fix = -Math.round((Number(d.result.pageTilt) || 0) / 90) * 90;
         const rc = _pickRotateCv(_pickSentCv, fix);
@@ -7383,13 +7390,24 @@ async function _pickSend(b64, _rotated, _enh) {
           let q = 0.85, nd = rc.toDataURL("image/jpeg", q);
           while (nd.length > 3800000 && q > 0.4) { q -= 0.1; nd = rc.toDataURL("image/jpeg", q); }
           body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)"><div style="font-size:2em">🔄</div><div style="margin-top:10px;font-weight:800;color:var(--text-main)">사진이 돌아가 있어 바로 세워서 다시 읽습니다</div><div style="margin-top:6px;font-size:0.85em">잠시만 기다려 주세요.</div></div>`;
-          return _pickSend(nd.replace(/^data:[^,]+,/, ""), true);
+          return _pickSend(nd.replace(/^data:[^,]+,/, ""), true, false, { retried: !!(_opt && _opt.retried) });
         }
       } catch (_) { /* 돌리기에 실패하면 지금 결과 그대로 사용 */ }
     }
+    // AI(Gemini) 판독만 실패한 경우(과부하·시간 초과 등 일시 오류가 많음) — 같은 사진으로 한 번만 더 시도한다
+    if (d.result && d.result.ai === "fail" && !(_opt && _opt.retried)) {
+      try {
+        body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)"><div style="font-size:2em">🔁</div><div style="margin-top:10px;font-weight:800;color:var(--text-main)">AI 판독이 잠시 실패해 한 번 더 읽습니다</div><div style="margin-top:6px;font-size:0.85em">잠시만 기다려 주세요.</div></div>`;
+        await new Promise((r) => setTimeout(r, 2500));
+        const d3 = await _pickPostParse(b64, { rot: _rotated === true, enh: _enh === true });
+        if (myReq !== _pickReq) return;
+        if (d3 && d3.success && d3.result && d3.result.ai !== "fail") d = d3;
+        else if (d3 && d3.success && d3.result && _pickScore(d3.result) > _pickScore(d.result)) d = d3;
+      } catch (_) { /* 실패하면 처음 결과 그대로 */ }
+    }
     // 주문번호·출고처명처럼 인쇄된 값을 못 읽었으면(흐림·그림자·반사) 밝기·대비를 보정해 한 번만 다시 읽고, 더 많이 읽은 쪽을 쓴다
     let lowQ = null;
-    if (d.result && !_enh && _pickSentCv && _pickMissing(d.result).length) {
+    if (d.result && !_enh && d.result.ai !== "fail" && _pickSentCv && _pickMissing(d.result).length) {
       try {
         body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)"><div style="font-size:2em">✨</div><div style="margin-top:10px;font-weight:800;color:var(--text-main)">읽기 어려운 부분이 있어 사진을 선명하게 보정해 다시 읽습니다</div><div style="margin-top:6px;font-size:0.85em">잠시만 기다려 주세요.</div></div>`;
         const d2 = await _pickPostParse(_pickToB64(_pickEnhance(_pickSentCv)), { rot: _rotated === true, enh: true });
@@ -7397,7 +7415,7 @@ async function _pickSend(b64, _rotated, _enh) {
         if (d2 && d2.success && d2.result && _pickScore(d2.result) > _pickScore(d.result)) d = d2;
       } catch (_) { /* 보정 재판독이 실패하면 처음 결과 그대로 사용 */ }
     }
-    if (d.result) { const miss = _pickMissing(d.result); if (miss.length) lowQ = miss; }
+    if (d.result && d.result.ai !== "fail") { const miss = _pickMissing(d.result); if (miss.length) lowQ = miss; } // AI 실패일 땐 사진 탓이 아니므로 '다시 촬영' 대신 아래 AI 안내를 보여 준다
     let crops = null;
     try { crops = _pickMakeCrops(_pickSentCv, d.result && d.result.hwRegions, d.result && d.result.hwDiag); } catch (_) {}
     _pickState = {
@@ -7438,19 +7456,35 @@ function _pickBorder(f) {
   return fl ? `border-color:${fl.level === "red" ? _PICK_RED : _PICK_ORANGE};` : "";
 }
 
+// 화면에 남아 있는 같은 사진(이미 돌리기·펴기가 끝난 것)을 그대로 다시 보내 읽는다
+async function _pickRetrySame() {
+  if (!_pickSentCv) { showToast("사진이 남아 있지 않아요. 다시 선택해 주세요.", 2500); return; }
+  const cv = _pickSentCv;
+  await _pickSend(_pickToB64(cv), false, false, { skipTilt: true, retried: true });
+}
 function _pickCropsHtml(st) {
   const c = st && st.crops;
   if (!c) return "";
-  const img = (src, id, cap, maxH) => src ? `<div style="margin-top:8px"><div style="font-size:0.74em;color:var(--text-sub);margin-bottom:3px">${cap}</div><img id="${id}" src="${src}" alt="" onclick="_pickCropToggle('${id}')" style="display:block;width:100%;border:1px solid var(--border-color);border-radius:8px;${maxH ? "max-height:" + maxH + "px;object-fit:cover;object-position:top;" : ""}background:#fff" data-max="${maxH || 0}" /></div>` : "";
-  if (c.whole) return `<div id="pick-crops"><div class="pk-hint" style="margin-top:10px">📄 사진에서 손글씨 칸 위치를 찾지 못해 사진 전체를 보여드려요 — 위 숫자와 맞는지 눈으로 확인하세요 (탭하면 펼침/접힘)${c.diag ? `<br><span style="opacity:.75">진단: 문자인식 ${c.diag.words}글자 · 머리글 비슷한 글자 [${(c.diag.seen || []).map(_esc).join(", ") || "없음"}]${c.diag.note ? " · " + _esc(c.diag.note) : ""}</span>` : ""}</div>${img(c.whole, "pk-crop-w", "찍은 사진", 220)}</div>`;
-  return `<div id="pick-crops"><div class="pk-hint" style="margin-top:10px">📄 사진 속 손글씨 — 위 숫자와 맞는지 눈으로 확인하세요 (아래 사진은 탭하면 크게 보여요)</div>${img(c.a, "pk-crop-a", "손글씨 칸 (완박스·혼재박스)", 0)}${img(c.b, "pk-crop-b", "아래 여백 (PLT·메모)", 110)}</div>`;
+  const img = (src, id, cap) => src ? `<div style="margin-top:8px"><div style="font-size:0.74em;color:var(--text-sub);margin-bottom:3px">${cap}</div><img id="${id}" src="${src}" alt="" onclick="_pickLightbox('${id}')" style="display:block;width:100%;border:1px solid var(--border-color);border-radius:8px;background:#fff;cursor:zoom-in" /></div>` : "";
+  if (c.whole) return `<div id="pick-crops"><div class="pk-hint" style="margin-top:10px">📄 사진에서 손글씨 칸 위치를 찾지 못해 사진 전체를 보여드려요 — 위 숫자와 맞는지 눈으로 확인하세요 (탭하면 크게 볼 수 있어요)${c.diag ? `<br><span style="opacity:.75">진단: 문자인식 ${c.diag.words}글자 · 머리글 비슷한 글자 [${(c.diag.seen || []).map(_esc).join(", ") || "없음"}]${c.diag.note ? " · " + _esc(c.diag.note) : ""}</span>` : ""}</div>${img(c.whole, "pk-crop-w", "찍은 사진")}</div>`;
+  return `<div id="pick-crops"><div class="pk-hint" style="margin-top:10px">📄 사진 속 손글씨 — 위 숫자와 맞는지 눈으로 확인하세요 (사진을 탭하면 크게 볼 수 있어요)</div>${img(c.a, "pk-crop-a", "손글씨 칸 (완박스·혼재박스)")}${img(c.b, "pk-crop-b", "아래 여백 (PLT·메모)")}</div>`;
 }
-function _pickCropToggle(id) {
+// 사진 조각을 탭하면 화면을 꽉 채워 크게 보여 준다(좌우·상하로 밀어 볼 수 있고, 닫기 버튼이나 바깥을 탭하면 닫힘)
+function _pickLightbox(id) {
   const el = document.getElementById(id);
-  if (!el) return;
-  const mx = Number(el.getAttribute("data-max")) || 0;
-  if (!mx) return;
-  el.style.maxHeight = el.style.maxHeight ? "" : mx + "px";
+  if (!el || !el.src) return;
+  _pickLightboxClose();
+  const ov = document.createElement("div");
+  ov.id = "pickLightbox";
+  ov.style.cssText = "position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.92);display:flex;flex-direction:column";
+  ov.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 8px;color:#fff;font-size:0.85em"><span style="opacity:.8">밀어서 이동 · 두 손가락으로 확대</span><button type="button" id="pickLightboxX" style="background:rgba(255,255,255,.18);border:0;color:#fff;font-size:1.2em;line-height:1;border-radius:999px;width:36px;height:36px;cursor:pointer">✕</button></div>
+    <div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y pinch-zoom"><img src="${el.src}" alt="" style="display:block;width:220%;max-width:none;margin:0 auto;background:#fff" /></div>`;
+  ov.addEventListener("click", (e) => { if (e.target === ov || e.target.id === "pickLightboxX") _pickLightboxClose(); });
+  document.body.appendChild(ov);
+}
+function _pickLightboxClose() {
+  const o = document.getElementById("pickLightbox");
+  if (o) o.remove();
 }
 function _pickRender() {
   const body = document.getElementById("pickBody");
@@ -7467,6 +7501,10 @@ function _pickRender() {
   let banners = "";
   if (r.unfinished)
     banners += `<div class="pk-banner err" id="pick-unfin">🚫 작성 전 피킹지로 보입니다<br><span style="font-weight:600">PLT·완박스·혼재박스가 모두 비어 있어요. 손글씨가 있는데 못 읽은 거라면 아래 칸에 직접 입력하면 등록할 수 있어요. 아니면 작업이 끝난 마지막 장을 다시 찍어주세요.</span></div>`;
+  if (r.ai === "fail") {
+    const why = Array.isArray(r.errs) && r.errs.length ? r.errs.filter(Boolean).join(" / ").slice(0, 80) : "";
+    banners += `<div class="pk-banner warn">🤖 AI 판독이 실패했습니다${why ? ` (${_esc(why)})` : ""}<br><span style="font-weight:600">업체·PLT·박스 칸이 비어 있을 수 있어요. 사진 문제가 아니라 AI 쪽 일시 오류일 수 있으니 <b>같은 사진으로 다시 읽기</b>를 눌러 보세요. <button type="button" onclick="_pickRetrySame()" style="margin-left:4px;border:1px solid ${_PICK_ORANGE};background:none;color:${_PICK_ORANGE};border-radius:8px;padding:2px 9px;font-weight:800;cursor:pointer">같은 사진으로 다시 읽기</button></span></div>`;
+  }
   if (st.lowQ && st.lowQ.length)
     banners += `<div class="pk-banner warn">📷 ${st.lowQ.map(_esc).join("·")}을(를) 읽지 못했습니다<br><span style="font-weight:600">사진이 흐리거나 그림자·빛 반사가 있을 수 있어요. 종이 전체가 밝고 선명하게 나오게 다시 찍으면 더 정확합니다. <button type="button" onclick="_pickChooser()" style="margin-left:4px;border:1px solid ${_PICK_ORANGE};background:none;color:${_PICK_ORANGE};border-radius:8px;padding:2px 9px;font-weight:800;cursor:pointer">다시 촬영</button></span></div>`;
   if (st.duplicate) {
@@ -7519,7 +7557,6 @@ function _pickRender() {
       <input type="text" id="pick-etc" class="pk-input" placeholder="(선택)" /></div>
     </div>
     ${metaHtml}
-    ${r.ai === "fail" ? `<div class="pk-banner warn">🟠 AI 판독이 실패해 문자인식 값만 사용했습니다. 손글씨 값을 꼭 확인하세요.</div>` : ""}
     <div class="pk-foot">
       <button class="pk-btn ghost" type="button" onclick="_pickChooser()">다시 선택</button>
       <button id="pick-submit" class="pk-btn primary" type="button" onclick="submitPick(this)">등록</button>
