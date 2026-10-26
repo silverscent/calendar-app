@@ -427,7 +427,13 @@ const normName = (s) =>
   String(s || "")
     .toLowerCase()
     .replace(/㈜|\(주\)|\(유\)|\(재\)|\(사\)|주식회사|유한회사/g, "")
-    .replace(/[\s()\[\]{}·.,\-_/\\:：]/g, "");
+    // 끝에 붙은 "(II)" "(Ⅱ)" 같은 로마자 구분 표시는 같은 업체로 본다 (인쇄본에만 붙는 경우가 많음)
+    .replace(/\(\s*[ivxⅰ-ⅹⅠ-Ⅹl1|]{1,4}\s*\)\s*$/i, "")
+    .replace(/[\s()\[\]{}·.,\-_/\\:：]/g, "")
+    // 앤/엔 같이 자주 헷갈리는 글자는 같은 글자로 본다
+    .replace(/앤/g, "엔")
+    // 메디칼/메디컬, 메디맥/메디멕, 써/서 처럼 인쇄·손글씨에서 자주 바뀌는 글자도 같은 글자로 본다
+    .replace(/컬/g, "칼").replace(/멕/g, "맥").replace(/캐/g, "케").replace(/써/g, "서").replace(/쎄/g, "세");
 // ── 업체 약어·옛 이름 사전 (출고 화면 out.js 의 compFullMap 과 같은 내용 — 한쪽을 고치면 다른 쪽도 고칠 것) ──
 // 화면은 약어를 정식명으로 바꿔 저장하지만, 옛 데이터·손으로 쓴 이름에는 약어/옛 이름이 남아 있을 수 있어 서버도 같은 사전으로 맞춘다.
 const LEGACY_COMP_MAP = {
@@ -543,6 +549,20 @@ function matchCompany(printed, compDb, alias, opts) {
     if (byFloor.length === 1) return { status: "floor", company: byFloor[0], candidates: byFloor };
   }
   if (contain.length === 1) return { status: "contain", company: contain[0], candidates: contain };
+  const rankedS = names
+    .map((n) => ({ n, s: similarity(p, normName(n)) }))
+    .filter((x) => x.s >= 0.35)
+    .sort((a, b) => b.s - a.s);
+  // 철자가 한두 글자 다른 정도(유사도 0.5 이상)이고 2등과 충분히 차이 나며, 층 구분 업체가 아니거나 호수로 층이 맞을 때만 자동 연결
+  if (!contain.length && rankedS.length && p.length >= 4) {
+    const t = rankedS[0], sec = rankedS[1];
+    const tf = floorOfName(t.n);
+    const floorOk = tf === null ? true : !!floor && tf === floor;
+    const siblings = rankedS.filter((x) => floorOfName(x.n) !== null && normName(x.n).replace(/\d+층/, "") === normName(t.n).replace(/\d+층/, ""));
+    if (t.s >= 0.5 && (!sec || t.s - sec.s >= 0.2) && floorOk && (tf === null || siblings.length < 2 || floor)) {
+      return { status: "fuzzy", company: t.n, candidates: [t.n] };
+    }
+  }
   const ranked = names
     .map((n) => ({ n, s: Math.max(similarity(p, normName(n)), compDb[n] && compDb[n].shortName ? similarity(p, normName(compDb[n].shortName)) : 0) }))
     .filter((x) => x.s >= 0.35)
