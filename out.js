@@ -7231,7 +7231,20 @@ async function pickOnFile(inp) {
   }
 }
 
-async function _pickSend(b64) {
+// 캔버스를 시계 방향으로 deg(90의 배수)만큼 돌린 새 캔버스
+function _pickRotateCv(cv, deg) {
+  const d = ((Math.round(deg / 90) * 90) % 360 + 360) % 360;
+  if (!d) return cv;
+  const c = document.createElement("canvas");
+  const swap = d === 90 || d === 270;
+  c.width = swap ? cv.height : cv.width; c.height = swap ? cv.width : cv.height;
+  const x = c.getContext("2d");
+  x.translate(c.width / 2, c.height / 2);
+  x.rotate((d * Math.PI) / 180);
+  x.drawImage(cv, -cv.width / 2, -cv.height / 2);
+  return c;
+}
+async function _pickSend(b64, _rotated) {
   const modal = document.getElementById("pickModal");
   const body = document.getElementById("pickBody");
   if (!modal || !body) return;
@@ -7272,6 +7285,20 @@ async function _pickSend(b64) {
     if (!d || !d.success) {
       _pickShowError((d && d.msg) || "판독에 실패했습니다. 다시 시도해주세요.");
       return;
+    }
+    // 사진이 옆으로·거꾸로 찍혔으면(서버가 알려 줌) 바로 세워서 한 번 더 읽는다 — 글자가 눕거나 뒤집혀 있으면 손글씨·업체명이 부정확하다
+    if (!_rotated && _pickSentCv && d.result && Math.abs(Number(d.result.pageTilt) || 0) >= 45) {
+      try {
+        const fix = -Math.round((Number(d.result.pageTilt) || 0) / 90) * 90;
+        const rc = _pickRotateCv(_pickSentCv, fix);
+        if (rc !== _pickSentCv) {
+          _pickSentCv = rc;
+          let q = 0.85, nd = rc.toDataURL("image/jpeg", q);
+          while (nd.length > 3800000 && q > 0.4) { q -= 0.1; nd = rc.toDataURL("image/jpeg", q); }
+          body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)"><div style="font-size:2em">🔄</div><div style="margin-top:10px;font-weight:800;color:var(--text-main)">사진이 돌아가 있어 바로 세워서 다시 읽습니다</div><div style="margin-top:6px;font-size:0.85em">잠시만 기다려 주세요.</div></div>`;
+          return _pickSend(nd.replace(/^data:[^,]+,/, ""), true);
+        }
+      } catch (_) { /* 돌리기에 실패하면 지금 결과 그대로 사용 */ }
     }
     _pickState = {
       result: d.result, company: d.company, duplicate: !!d.duplicate, dupInfo: d.dupInfo || null, legacy: !!d.legacy,

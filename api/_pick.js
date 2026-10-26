@@ -57,7 +57,7 @@ const GEMINI_PROMPT = `이 이미지는 물류센터 '피킹 리스트'(출고 �
 - handNote: 위 뜻의 손글씨 원문(예: "기존에추가"). 없으면 null
 - uncertain: 값을 확신하지 못하는 키 이름 배열
 
-날짜(10/15 등)·시간(13:05 등)·피킹/검수 칸의 서명, 빨강·파랑 펜으로 그은 동그라미·체크·계산 메모(예: "145,116,24,+2,+1")는 모두 무시해. 숫자 1 은 짧은 세로선이나 약간 기울어진 선("/" 처럼 사선 한 줄만 그어진 것도 1)으로, 숫자 7 은 윗줄이 구부러져 "ㄱ"처럼 보일 수 있다. 완박스·혼재박스 칸에 사선(/)이나 세로선 한 줄이라도 있으면 빈칸이 아니라 1 이다 — 세 칸을 모두 empty 로 답하기 전에 칸마다 선이 있는지 한 번 더 확인해. PLT 는 읽을 수 없으면 null 로 두되, 완박스·혼재박스는 위 규칙대로 숫자(또는 empty)로만 답해.`;
+날짜(10/15 등)·시간(13:05 등)·피킹/검수 칸의 서명, 빨강·파랑 펜으로 그은 동그라미·체크·계산 메모(예: "145,116,24,+2,+1")는 모두 무시해. 숫자 1 은 짧은 세로선이나 약간 기울어진 선("/" 처럼 사선 한 줄만 그어진 것도 1)으로, 숫자 7 은 윗줄이 구부러져 "ㄱ"처럼 보일 수 있다. 완박스·혼재박스 칸에 사선(/)이나 세로선 한 줄이라도 있으면 빈칸이 아니라 1 이다 — 세 칸을 모두 empty 로 답하기 전에 칸마다 선이 있는지 한 번 더 확인해. PLT 는 읽을 수 없으면 null 로 두되, 완박스·혼재박스는 위 규칙대로 숫자(또는 empty)로만 답해. 두 자리 숫자도 있다: 세로선·사선이 나란히 두 개면 11, 세 개면 111 이니 한 개로 합쳐 읽지 말고 선의 개수를 하나씩 세어서 답한다(예: "11" 을 "1" 로 읽는 것이 가장 흔한 실수).`;
 
 async function callGemini(b64, mime, fetchFn, apiKey) {
   const ctl = new AbortController();
@@ -170,7 +170,7 @@ const REREAD_PROMPT = `아래 그림은 물류 '피킹 리스트'를 찍은 사�
  "handNote": 위 손글씨 원문(없으면 null),
  "uncertain": 값을 확신하지 못하는 키 이름 배열(예: ["wanbox"])
 }
-주의: 날짜(10/23 등)·시간·피킹/검수 칸의 서명·이니셜, 펜으로 그은 동그라미·체크·계산 메모는 값이 아니다. 완박스·혼재박스 칸에는 숫자만 쓰이며, 숫자 1은 짧은 세로선, 7은 위에 가로선이 있는 꼴일 수 있다. 칸이 비었으면 반드시 "empty". 단 칸 안에 사선(/)·세로선(|) 한 줄이라도 그어져 있으면 비어 있는 게 아니라 숫자 1 이다(글자 모양이 단순해서 빈칸으로 착각하기 쉬우니, 완박스·혼재박스 칸에 선이 있는지 꼭 확인). 세 칸이 모두 "empty" 라고 답하기 전에 칸마다 작은 선이라도 없는지 한 번 더 본다.`;
+주의: 날짜(10/23 등)·시간·피킹/검수 칸의 서명·이니셜, 펜으로 그은 동그라미·체크·계산 메모는 값이 아니다. 완박스·혼재박스 칸에는 숫자만 쓰이며, 숫자 1은 짧은 세로선, 7은 위에 가로선이 있는 꼴일 수 있다. 칸이 비었으면 반드시 "empty". 단 칸 안에 사선(/)·세로선(|) 한 줄이라도 그어져 있으면 비어 있는 게 아니라 숫자 1 이다(글자 모양이 단순해서 빈칸으로 착각하기 쉬우니, 완박스·혼재박스 칸에 선이 있는지 꼭 확인). 세 칸이 모두 "empty" 라고 답하기 전에 칸마다 작은 선이라도 없는지 한 번 더 본다. 두 자리 숫자도 있다: 세로선·사선이 나란히 두 개면 11, 세 개면 111 이니 한 개로 합쳐 읽지 말고 선의 개수를 하나씩 세어서 답한다(예: "11" 을 "1" 로 읽는 것이 가장 흔한 실수).`;
 
 async function rereadHandwriting(imgs, mime, fetchFn, apiKey) {
   const list = (Array.isArray(imgs) ? imgs : []).filter((x) => typeof x === "string" && x.length > 200).slice(0, 2);
@@ -235,13 +235,15 @@ function computePickStats(rows) {
       const p = zero(P[k]), s = S && !S.error ? zero(S[k]) : undefined;
       const fnum = Number(fin);
       f.n++;
-      const pOk = p !== null && p !== undefined && Number(p) === fnum;
+      // 종이에 아무것도 안 적힌 칸(실제 0)을 판독기가 "못 읽음(null)"로 돌려준 뒤 사람이 0을 넣은 경우는 틀린 판독이 아니라 맞은 것으로 센다
+      const blankOk = (v) => (v === null || v === undefined) && fnum === 0;
+      const pOk = (p !== null && p !== undefined && Number(p) === fnum) || blankOk(p);
       if (pOk) f.first++;
       if (s !== undefined) {
         f.secondN++;
-        const sOk = s !== null && Number(s) === fnum;
+        const sOk = (s !== null && Number(s) === fnum) || blankOk(s);
         if (sOk) f.second++;
-        const agree = p !== null && p !== undefined && s !== null && Number(p) === Number(s);
+        const agree = (p !== null && p !== undefined && s !== null && Number(p) === Number(s)) || (blankOk(p) && blankOk(s));
         if (agree) { f.agreeN++; if (pOk) f.agreeOk++; }
         else { f.diffN++; if (pOk) f.diffFirstOk++; else if (sOk) f.diffSecondOk++; else f.diffNeither++; }
       }
@@ -718,6 +720,8 @@ async function parsePicking(b64, mime, opts) {
   const hw = v.ok ? extractHandwritingVision(v.data) : {};
   const out = reconcile(printed, hw, g.ok ? g.data : {}, errs);
   try { out.hwRegions = v.ok ? handRegions(v.data) : null; } catch (_) { out.hwRegions = null; }
+  // 사진이 옆으로·거꾸로 찍혔는지(도): 화면이 이 값으로 사진을 바로 세워 다시 보낸다. 0 이면 바른 방향
+  try { const th = v.ok ? visionWords(v.data).theta || 0 : 0; out.pageTilt = Math.round((th * 180) / Math.PI); } catch (_) { out.pageTilt = 0; }
   out.ok = true;
   return out;
 }
