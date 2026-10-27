@@ -7452,12 +7452,12 @@ function _pickProgStart(body) {
   _pickTr.ui = { steps: [{ id: "prep", label: _PICK_PROG_LABELS.prep, state: "done", ms: _pickTr.prepMs || null, t: now }, { id: "read", label: _PICK_PROG_LABELS.read, state: "run", t: now }], pct: 4, startPct: 4, cap: 88, stageStart: now, finished: false, dirty: true };
   body.innerHTML = `<div id="pk-prog" style="padding:26px 4px 8px">
     <div style="text-align:center"><div style="font-size:1.9em">⏳</div><div style="margin-top:8px;font-weight:800;color:var(--text-main)">피킹지를 읽는 중입니다</div><div style="margin-top:4px;font-size:0.82em;color:var(--text-sub)">보통 10~20초 걸려요. 창을 닫지 마세요.</div></div>
-    <div style="margin:18px 2px 5px;height:12px;border-radius:99px;background:var(--border-color);overflow:hidden"><div id="pk-prog-bar" style="height:100%;width:4%;border-radius:99px;transition:width .25s linear;background-size:28px 28px,100% 100%;background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.28) 0 7px,transparent 7px 14px),linear-gradient(90deg,#0a84ff,#5ac8fa)"></div></div>
+    <div style="margin:18px 2px 5px;height:12px;border-radius:99px;background:var(--border-color);overflow:hidden"><div id="pk-prog-bar" style="position:relative;overflow:hidden;height:100%;width:4%;border-radius:99px;transition:width .16s linear;background:linear-gradient(90deg,#0a84ff,#5ac8fa)"><div id="pk-prog-shine" style="position:absolute;top:0;bottom:0;left:-40%;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent)"></div></div></div>
     <div style="display:flex;justify-content:space-between;font-size:0.78em;color:var(--text-sub);margin:0 2px"><span id="pk-prog-pct">4%</span><span id="pk-prog-el">0초 경과</span></div>
     <div id="pk-prog-steps" style="margin-top:14px;font-size:0.86em;line-height:1.85"></div>
     <div id="pk-prog-hint" style="margin-top:8px;font-size:0.78em;color:var(--text-sub);min-height:2.4em"></div></div>`;
   if (_pickProgTimer) clearInterval(_pickProgTimer);
-  _pickProgTimer = setInterval(() => _pickProgPaint(false), 250);
+  _pickProgTimer = setInterval(() => _pickProgPaint(false), 100);
   _pickProgPaint(true);
 }
 function _pickProgStage(id) {
@@ -7467,7 +7467,7 @@ function _pickProgStage(id) {
   const cur = ui.steps.find((x) => x.state === "run");
   if (cur) { cur.state = "done"; cur.ms = now - cur.t; }
   ui.steps.push({ id, label: _PICK_PROG_LABELS[id] || id, state: "run", t: now });
-  ui.stageStart = now; ui.startPct = Math.max(ui.pct, 80); ui.cap = 97; ui.dirty = true; // 다시 읽는 단계는 막대를 되돌리지 않고 끝쪽에서 천천히 이어 간다
+  ui.stageStart = now; ui.startPct = ui.pct; ui.cap = 97; ui.dirty = true; // 다시 읽는 단계는 지금 위치에서 끊김 없이 이어서 천천히 채운다(뛰어오르지 않음)
   _pickProgPaint(true);
 }
 function _pickProgPaint(full) {
@@ -7477,7 +7477,8 @@ function _pickProgPaint(full) {
   if (!ui.finished) ui.pct = Math.max(ui.pct, ui.startPct + (ui.cap - ui.startPct) * (1 - Math.exp(-(now - ui.stageStart) / 9000)));
   const pct = ui.finished ? 100 : Math.min(99, ui.pct);
   bar.style.width = Math.max(3, pct).toFixed(1) + "%";
-  bar.style.backgroundPosition = ((now / 25) % 28).toFixed(1) + "px 0, 0 0";
+  const sh = document.getElementById("pk-prog-shine");
+  if (sh && !ui.finished) sh.style.left = (((now / 14) % 180) - 40).toFixed(1) + "%"; // 반짝이는 빛이 부드럽게 지나가며 '진행 중'임을 보여 줌(막대를 끊어 보이게 하는 줄무늬는 쓰지 않음)
   const sec = Math.round((now - _pickTr.t0) / 1000);
   const pe = document.getElementById("pk-prog-pct"), ee = document.getElementById("pk-prog-el"), he = document.getElementById("pk-prog-hint");
   if (pe) pe.textContent = Math.round(pct) + "%";
