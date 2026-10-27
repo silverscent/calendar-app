@@ -63,9 +63,80 @@ const GEMINI_PROMPT = `이 이미지는 물류센터 '피킹 리스트'(출고 �
 // 키: 첫 키가 한도 초과·과부하·키 오류면 다음 키로(서로 다른 프로젝트의 키여야 한도가 따로 계산됨). 막힌 키는 60초 건너뜀.
 // 모델: 새 계정은 옛 모델(gemini-2.5-flash)을 더는 못 쓰는 경우가 있어("no longer available to new users") 그러면 다음 모델로 넘어간다.
 //   환경변수 GEMINI_MODEL 로 첫 번째로 쓸 모델을 정할 수 있다. 어느 모델이 되는지는 키마다 기억해 다음부터 바로 쓴다.
-const _keyBadUntil = {}, _modelBadUntil = {}, _modelGood = {};
+// 키는 해시 앞 8자리(kid)로만 기억한다(키 자체를 저장·표시하지 않음). 막힘 상태는 calendar.js 가 DB 에 저장해 서버 인스턴스끼리 공유한다.
+let _keyBadUntil = {}, _modelBadUntil = {}, _modelGood = {}, _badWhy = {};
+let _rr = Math.floor(Math.random() * 1000); // 키 돌려쓰기 시작점 — 서버 인스턴스마다 무작위
+let _lastProbe = 0; // 모든 키가 막혀 있을 때 '혹시 풀렸나' 확인용으로 한 번 시도한 시각
+const PROBE_MS = 3 * 60 * 1000; // 전부 막혔을 땐 이 간격으로만 한 번씩 확인(그 사이 요청은 AI 호출 없이 바로 실패 처리 → 한도·시간 절약)
+const _crypto = require("crypto");
+const kid = (k) => _crypto.createHash("sha256").update(String(k)).digest("hex").slice(0, 8);
+// 미국 서부(태평양) 시간 자정까지 남은 밀리초 — 구글의 일일 한도는 이때 초기화된다
+function msToPacificMidnight(now) {
+  try {
+    const p = new Date(now).toLocaleString("en-US", { timeZone: "America/Los_Angeles", hour12: false }).match(/(\d+):(\d+):(\d+)/);
+    const h = Number(p[1]) % 24;
+    return (24 * 3600 - (h * 3600 + Number(p[2]) * 60 + Number(p[3]))) * 1000;
+  } catch (_) { return 6 * 3600 * 1000; }
+}
+// 한도 오류가 알려 주는 정보로 '언제까지 쉬게 할지' 계산: 하루 한도면 초기화 시각까지, 분당 한도면 안내된 대기 시간(없으면 60초)
+function coolMs(j, status, now) {
+  const t = errText(j);
+  const det = JSON.stringify((j && j.error && j.error.details) || "");
+  if (/API_KEY_INVALID|PERMISSION_DENIED|api key (not valid|expired)|invalid api key/i.test(t)) return 10 * 60 * 1000;
+  if (Number((j && j.error && j.error.code) || status) === 503 || /UNAVAILABLE|overloaded/i.test(t)) return 30 * 1000; // 과부하는 금방 풀림
+  if (/PerDay|per day|daily/i.test(det + " " + t)) return Math.max(60 * 1000, msToPacificMidnight(now || Date.now()) + 60 * 1000);
+  const d = det.match(/"retryDelay"\s*:\s*"([\d.]+)s"/);
+  if (d) return Math.min(15 * 60 * 1000, Math.max(10 * 1000, Math.round(Number(d[1]) * 1000) + 1000));
+  return 60 * 1000;
+}
+// 막힘 상태 내보내기/불러오기(DB 공유용). 지난 항목은 버린다.
+function exportKeyState(now) {
+  const n = now || Date.now(), cut = (o) => Object.keys(o).filter((x) => o[x] > n).reduce((a, x) => ((a[x] = o[x]), a), {});
+  const mb = cut(_modelBadUntil), kb = cut(_keyBadUntil);
+  const why = {}; Object.keys(mb).concat(Object.keys(kb)).forEach((x) => { if (_badWhy[x]) why[x] = _badWhy[x]; });
+  return { keyBad: kb, modelBad: mb, why };
+}
+function importKeyState(o) {
+  if (!o || typeof o !== "object") return;
+  const n = Date.now();
+  const merge = (dst, src) => Object.keys(src || {}).forEach((k) => { const v = Number(src[k]); if (v > n && v > (dst[k] || 0)) dst[k] = v; });
+  merge(_keyBadUntil, o.keyBad); merge(_modelBadUntil, o.modelBad);
+  Object.keys(o.why || {}).forEach((k) => { if (!_badWhy[k]) _badWhy[k] = String(o.why[k]).slice(0, 20); });
+}
+function resetKeyState(onlyRotation) { _rr = 0; _lastProbe = 0; if (onlyRotation) return; _keyBadUntil = {}; _modelBadUntil = {}; _modelGood = {}; _badWhy = {}; } // (시험용)
+// 화면 표시용: 키별로 쓸 수 있는지, 막혔다면 어떤 모델이 언제까지 왜
+function keyStatus(keys, models, now) {
+  const n = now || Date.now();
+  const ms = modelList(models && models.length ? models : DEFAULT_MODELS);
+  return toKeyList(keys).map((k, i) => {
+    const id = kid(k);
+    const items = ms.map((m) => ({ model: m, until: _modelBadUntil[id + "|" + m] || 0, why: _badWhy[id + "|" + m] || "" })).filter((x) => x.until > n);
+    const kb = _keyBadUntil[id] > n ? _keyBadUntil[id] : 0;
+    return { no: i + 1, blocked: !!kb || items.length >= ms.length, keyUntil: kb, keyWhy: kb ? _badWhy[id] || "" : "", items };
+  });
+}
+// 키 하나가 다시 쓸 수 있게 되는 시각(ms). 지금 쓸 수 있으면 0
+function recoverAtOf(k, ms, n) {
+  const id = kid(k);
+  if ((_keyBadUntil[id] || 0) > n) return _keyBadUntil[id];
+  const ts = ms.map((m) => _modelBadUntil[id + "|" + m] || 0);
+  if (ts.some((t) => t <= n)) return 0;
+  return Math.min.apply(null, ts);
+}
+// 키 여유 정도: ok = 쓸 수 있는 키가 충분 / tight = 키가 여러 개인데 쓸 수 있는 것이 1개 이하 / none = 전부 쉬는 중(retryAt = 가장 먼저 풀리는 시각)
+//  화면은 이 값으로 '꼭 필요하지 않은 추가 AI 호출'(보정 재판독·2차 확인·자동 재시도)을 줄인다.
+function keyPressure(keys, models, now) {
+  const n = now || Date.now();
+  const ms = modelList(models && models.length ? models : DEFAULT_MODELS);
+  const list = toKeyList(keys);
+  const at = list.map((k) => recoverAtOf(k, ms, n));
+  const usable = at.filter((t) => t === 0).length;
+  const level = !list.length || usable === 0 ? "none" : list.length > 1 && usable <= 1 ? "tight" : "ok";
+  const wait = at.filter((t) => t > n);
+  return { total: list.length, usable, level, retryAt: usable === 0 && wait.length ? Math.min.apply(null, wait) : 0 };
+}
 const toKeyList = (k) => (Array.isArray(k) ? k : [k]).map((x) => String(x || "").trim()).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
-const DEFAULT_MODELS = ["gemini-2.5-flash", "gemini-3.8-flash"];
+const DEFAULT_MODELS = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-3.6-flash"];
 const modelList = (m) => (Array.isArray(m) ? m : [m]).map((x) => String(x || "").trim()).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
 const errText = (j) => String((j && j.error && (j.error.status + " " + j.error.message)) || "");
 function isModelGone(j, status) {
@@ -86,22 +157,56 @@ function failLabel(j, status) {
   if (isModelGone(j, status)) return "모델 사용 불가";
   if (/API_KEY_INVALID|PERMISSION_DENIED|api key (not valid|expired)|invalid api key/i.test(t)) return "키 오류";
   if (Number(j && j.error && j.error.code) === 503 || /UNAVAILABLE|overloaded/i.test(t)) return "서버 과부하";
-  if (isQuotaErr(j, status)) return "한도 초과";
+  if (isQuotaErr(j, status)) return /PerDay|per day|daily/i.test(JSON.stringify((j && j.error && j.error.details) || "") + " " + t) ? "하루 한도 초과" : "한도 초과";
   return String((j && j.error && j.error.message) || "응답 없음").slice(0, 60);
 }
-// body: 문자열 또는 (model)=>문자열. models: 모델 이름 하나 또는 배열(앞에 있는 것부터).
+// body: 문자열 또는 (model, opts)=>문자열. models: 모델 이름 하나 또는 배열(앞에 있는 것부터).
+// 한도(429)·과부하(503)는 모델마다 따로 계산되므로 같은 키에서 다음 모델을 먼저 시도하고, 그래도 안 되면 다음 키로 간다.
 // 반환 { j, status, keyNo, model, quota, trail } — 모두 실패하면 마지막 실패와 시도 내역(trail)을 돌려줌
 async function geminiPost(fetchFn, keys, models, body, signal) {
   const list = toKeyList(keys);
   const ms = modelList(models);
   const now = Date.now();
-  const order = list.map((k, i) => ({ k, i })).sort((a, b) => ((_keyBadUntil[a.k] || 0) > now ? 1 : 0) - ((_keyBadUntil[b.k] || 0) > now ? 1 : 0)); // 막힌 키는 뒤로
+  const bad = (k, m) => (_modelBadUntil[kid(k) + "|" + m] || 0) > Date.now();
+  const keyBadNow = (k) => (_keyBadUntil[kid(k)] || 0) > now;
+  const usable = (k) => !keyBadNow(k) && ms.some((m) => !bad(k, m));
+  let order = list.map((k, i) => ({ k, i }));
+  const live = order.filter((x) => usable(x.k));
+  if (live.length) order = live; // 쓸 수 있는 키만(막힌 키·모델은 건너뜀)
+  let probe = null;
+  if (!live.length && list.length) {
+    // 전부 막혀 있음: PROBE_MS 안에는 AI 를 부르지 않고 바로 실패 처리한다(한도를 더 쓰지 않고, 사용자가 35초씩 기다리지도 않게).
+    // 그 뒤에는 '혹시 풀렸나' 확인으로 가장 먼저 풀릴 키·모델 하나만 시도한다.
+    const nowT = Date.now();
+    const press = keyPressure(list, ms, nowT);
+    if (nowT - _lastProbe < PROBE_MS) {
+      const bl = [];
+      list.forEach((k, i) => {
+        const id = kid(k);
+        if ((_keyBadUntil[id] || 0) > nowT) bl.push({ keyNo: i + 1, model: null, why: _badWhy[id] || "키 오류" });
+        else ms.forEach((m) => { if (bad(k, m)) bl.push({ keyNo: i + 1, model: m, why: _badWhy[id + "|" + m] || "한도 초과" }); });
+      });
+      return { j: { error: { message: "AI 키가 모두 한도에 걸려 쉬는 중" } }, status: 429, keyNo: 0, model: null, quota: true, anyQuota: true, skipped: true, retryAt: press.retryAt, trail: bl };
+    }
+    _lastProbe = nowT;
+    let bi = 0, bt = Infinity;
+    list.forEach((k, i) => { const t = recoverAtOf(k, ms, nowT); if (t < bt) { bt = t; bi = i; } });
+    const pk = list[bi], pid = kid(pk);
+    const pm = ms.slice().sort((x, y) => (_modelBadUntil[pid + "|" + x] || 0) - (_modelBadUntil[pid + "|" + y] || 0))[0];
+    order = [{ k: pk, i: bi }];
+    probe = pm;
+  }
+  if (order.length > 1) { const st = _rr++ % order.length; order = order.slice(st).concat(order.slice(0, st)); } // 쓸 수 있는 키들을 번갈아 먼저 쓴다(한 키에 몰리지 않게)
   let last = { j: { error: { message: "AI 키 없음" } }, status: 0, keyNo: 0, model: null, quota: false, trail: [] };
   const trail = [];
+  let anyQuota = false;
+  const fin = () => { const pr = keyPressure(list, ms); if (pr.level === "none") _lastProbe = Date.now(); return Object.assign(last, { anyQuota, retryAt: pr.retryAt }); }; // retryAt: 전부 막혔을 때 가장 먼저 풀리는 시각. 방금 전부 막힌 걸 알았으니 확인 시도 간격도 지금부터 셈
   for (const { k, i } of order) {
-    const pref = _modelGood[k];
-    const mlist = (pref && ms.includes(pref) ? [pref].concat(ms.filter((x) => x !== pref)) : ms).filter((m) => (_modelBadUntil[k + "|" + m] || 0) <= Date.now());
-    for (const m of mlist.length ? mlist : ms) {
+    const id = kid(k);
+    const pref = _modelGood[id];
+    const base = pref && ms.includes(pref) ? [pref].concat(ms.filter((x) => x !== pref)) : ms;
+    const mlist = base.filter((m) => !bad(k, m)); // 막힌 모델은 건너뜀
+    for (const m of probe ? [probe] : mlist) {
       const send = (opts) => fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${k}`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: typeof body === "function" ? body(m, opts) : body, signal,
       });
@@ -111,14 +216,21 @@ async function geminiPost(fetchFn, keys, models, body, signal) {
       const gone = hasErr && isModelGone(j, r.status);
       const quota = hasErr && !gone && isQuotaErr(j, r.status);
       last = { j, status: r.status, keyNo: i + 1, model: m, quota, trail };
-      if (!hasErr) { _keyBadUntil[k] = 0; _modelGood[k] = m; return last; }
-      trail.push({ keyNo: i + 1, model: m, why: failLabel(j, r.status) });
-      if (gone) { _modelBadUntil[k + "|" + m] = Date.now() + 3600000; continue; } // 이 키로는 이 모델을 못 씀 → 다음 모델
-      if (quota) { _keyBadUntil[k] = Date.now() + 60000; break; } // 이 키는 막힘 → 다음 키
-      return last; // 요청 자체 오류 등은 키·모델을 바꿔도 소용없음
+      if (!hasErr) { _keyBadUntil[id] = 0; delete _modelBadUntil[id + "|" + m]; delete _badWhy[id + "|" + m]; _modelGood[id] = m; return Object.assign(last, { anyQuota: false, retryAt: 0 }); }
+      const why = failLabel(j, r.status);
+      trail.push({ keyNo: i + 1, model: m, why });
+      if (gone) { _modelBadUntil[id + "|" + m] = Date.now() + 6 * 3600 * 1000; _badWhy[id + "|" + m] = why; continue; } // 이 키로는 이 모델을 못 씀 → 다음 모델
+      if (quota) {
+        anyQuota = true;
+        const until = Date.now() + coolMs(j, r.status, Date.now());
+        if (/API_KEY_INVALID|PERMISSION_DENIED|api key (not valid|expired)|invalid api key/i.test(errText(j))) { _keyBadUntil[id] = until; _badWhy[id] = why; break; } // 키 자체 문제 → 다음 키
+        _modelBadUntil[id + "|" + m] = until; _badWhy[id + "|" + m] = why; // 이 모델만 한도·과부하 → 같은 키의 다음 모델
+        continue;
+      }
+      return fin(); // 요청 자체 오류 등은 키·모델을 바꿔도 소용없음
     }
   }
-  return last;
+  return fin();
 }
 // 실패 사유 문장: 키가 여러 개면 "키1: 한도 초과 / 키2: 모델 사용 불가" 처럼 키별로
 function geminiWhy(g) {
@@ -145,7 +257,7 @@ async function callGemini(b64, mime, fetchFn, apiKey) {
     }), ctl.signal);
     const j = g.j;
     const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
-    if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음" };
+    if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음", quota: !!g.anyQuota, retryAt: g.retryAt || 0 };
     const obj = JSON.parse(String(txt).replace(/```json/gi, "").replace(/```/g, "").trim());
     const o = Array.isArray(obj) ? obj[0] || {} : obj;
     return { ok: true, data: o && typeof o === "object" ? o : {}, model: g.model, keyNo: g.keyNo };
@@ -269,7 +381,7 @@ async function rereadHandwriting(imgs, mime, fetchFn, apiKey) {
     const g = await geminiPost(fetchFn, apiKey, GEMINI_MODELS(), (m, o) => JSON.stringify({ contents: [{ parts }], generationConfig: genCfg(m, o) }), ctl.signal);
     const j = g.j;
     const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
-    if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음" };
+    if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음", quota: !!g.anyQuota, retryAt: g.retryAt || 0 };
     const obj = JSON.parse(String(txt).replace(/```json/gi, "").replace(/```/g, "").trim());
     return { ok: true, data: normReread(Array.isArray(obj) ? obj[0] : obj) };
   } catch (e) {
@@ -815,9 +927,18 @@ async function parsePicking(b64, mime, opts) {
   try { out.hwDiag = out.hwRegions ? null : handDiag(v.ok ? v.data : null); } catch (_) { out.hwDiag = null; }
   // 사진이 옆으로·거꾸로 찍혔는지(도): 화면이 이 값으로 사진을 바로 세워 다시 보낸다. 0 이면 바른 방향
   try { const th = v.ok ? visionWords(v.data).theta || 0 : 0; out.pageTilt = Math.round((th * 180) / Math.PI); } catch (_) { out.pageTilt = 0; }
+  // 이 키 여유 정도와 AI 실패 원인(한도 때문인지) — 화면이 '꼭 필요하지 않은 추가 AI 호출'을 줄이고 안내 문구를 고르는 데 쓴다
+  out.aiQuota = !g.ok && !!g.quota;
+  out.aiRetryAt = !g.ok && g.retryAt ? g.retryAt : 0;
+  try { out.pressure = keyPressure(opts.geminiKey, GEMINI_MODELS()); } catch (_) { out.pressure = null; }
+  // 손글씨 세 칸을 AI 와 문자인식이 서로 따로 읽어 모두 같은 숫자로 맞으면 2차 확인(AI 한 번 더)을 건너뛸 수 있다
+  try {
+    const gd = g.ok ? g.data || {} : {};
+    out.hwAgree = !!(g.ok && ["plt", "wanbox", "honjae"].every((k) => { const G = toInt(gd[k]); return G !== null && hw[k] !== undefined && hw[k] === G && !(Array.isArray(gd.uncertain) && gd.uncertain.includes(k)); }));
+  } catch (_) { out.hwAgree = false; }
   out.timing = { total: Date.now() - t0, vision: v.ms || null, gemini: g.ms || null, model: g.ok ? g.model || null : null, keyNo: g.ok ? g.keyNo || null : null };
   out.ok = true;
   return out;
 }
 
-module.exports = { geminiPost, geminiWhy, genCfg, toKeyList, handRegions, rereadHandwriting, normReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };
+module.exports = { keyPressure, geminiPost, geminiWhy, exportKeyState, importKeyState, resetKeyState, keyStatus, coolMs, msToPacificMidnight, DEFAULT_MODELS, GEMINI_MODELS, genCfg, toKeyList, handRegions, rereadHandwriting, normReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };

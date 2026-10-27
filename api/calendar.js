@@ -145,6 +145,45 @@ async function appendQtyAtomic(id, company, pal, box, extraEtc) {
 }
 
 // 업체명이 조금 달라도(㈜ 유무·공백·약어) 같은 업체로 볼지 — 피킹지에서 '기존 일정'을 찾을 때 사용. 층(2층/3층)처럼 구분 글자는 유지됨
+// ── Gemini 키 막힘 상태를 서버 인스턴스끼리 공유(DB). 한도로 막힌 키·모델과 풀리는 시각만 저장하고 키 자체는 저장하지 않는다 ──
+const pickGeminiKeys = () => [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2, process.env.GEMINI_API_KEY_3].filter(Boolean);
+let _gkLoadedAt = 0, _gkJson = "";
+async function geminiStateLoad(force) {
+  if (!force && Date.now() - _gkLoadedAt < 5000) return;
+  _gkLoadedAt = Date.now();
+  try {
+    const [r] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'GEMINI_KEY_STATE'`);
+    if (r.length) {
+      const v = typeof r[0].setting_value === "object" ? r[0].setting_value : JSON.parse(r[0].setting_value);
+      pickLib.importKeyState(v);
+      _gkJson = JSON.stringify(v);
+    }
+  } catch (_) {}
+}
+async function geminiStateSave() {
+  try {
+    const cur = JSON.stringify(pickLib.exportKeyState());
+    if (cur === _gkJson) return;
+    _gkJson = cur;
+    await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('GEMINI_KEY_STATE', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`, [cur]);
+  } catch (_) {}
+}
+// 모든 AI 키가 한도로 막히면 관리자 텔레그램으로 알림 — 30분에 한 번만(DB 로 서버 인스턴스끼리 공유, 인스턴스 안에서는 10분에 한 번)
+let _gkAlertMem = 0;
+async function geminiAlertAllBlocked(retryAt) {
+  try {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.ADMIN_TELEGRAM_USER_ID;
+    if (!botToken || !chatId) return;
+    const nowT = Date.now();
+    if (nowT - _gkAlertMem < 10 * 60 * 1000) return;
+    _gkAlertMem = nowT;
+    await pool.query(`INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES ('GEMINI_ALERT_AT', '0')`);
+    const [u] = await pool.query(`UPDATE system_settings SET setting_value = ? WHERE setting_key = 'GEMINI_ALERT_AT' AND setting_value < ?`, [String(nowT), String(nowT - 30 * 60 * 1000)]);
+    if (!u || u.affectedRows !== 1) return;
+    const when = retryAt ? new Date(retryAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "알 수 없음";
+    await _tgSend(botToken, chatId, `⚠️ [피킹지 판독] AI 키가 모두 한도에 걸렸습니다.\n가장 빨리 풀리는 시각: ${when}\n그때까지는 문자인식 결과만 채워지고 손글씨(PLT·박스)는 직접 입력해야 합니다.\n(앱 > 📊 판독 정확도 > AI 키 상태에서 확인)`);
+  } catch (_) {}
+}
 async function pickLoadCompDb() {
   try {
     const [cr] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_INFO_DB'`);
@@ -2712,14 +2751,17 @@ if (action === "VERIFY_SESSION") {
         if (!b64 || b64.length < 1000) return res.status(200).json({ success: false, msg: "이미지가 비어 있습니다." });
         if (b64.length > 4200000) return res.status(200).json({ success: false, msg: "이미지가 너무 큽니다. 다시 촬영해주세요." });
         if (!/^[A-Za-z0-9+\/]+={0,2}$/.test(b64)) return res.status(200).json({ success: false, msg: "이미지 형식이 올바르지 않습니다." });
-        if (!process.env.GOOGLE_VISION_API_KEY && !process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY_2)
+        if (!process.env.GOOGLE_VISION_API_KEY && !pickGeminiKeys().length)
           return res.status(200).json({ success: false, msg: "OCR API 키가 설정되어 있지 않습니다." });
 
+        await geminiStateLoad();
         const parsed = await pickLib.parsePicking(b64, mime, {
           fetch,
           visionKey: process.env.GOOGLE_VISION_API_KEY,
-          geminiKey: [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2], // 두 번째 키(다른 프로젝트)가 있으면 한도·과부하 때 자동 전환
+          geminiKey: pickGeminiKeys(), // 키가 여러 개(다른 프로젝트)면 번갈아 쓰고, 한도·과부하로 막힌 키는 풀릴 때까지 건너뜀
         });
+        await geminiStateSave();
+        if (parsed.ok && parsed.aiQuota && parsed.pressure && parsed.pressure.level === "none") await geminiAlertAllBlocked(parsed.aiRetryAt || parsed.pressure.retryAt);
         if (!parsed.ok) return res.status(200).json({ success: false, msg: "판독 실패: " + (parsed.err || "알 수 없는 오류") });
 
         // 업체 매칭: 업체정보 DB + 이전에 직접 고른 연결
@@ -2755,12 +2797,14 @@ if (action === "VERIFY_SESSION") {
         const clean = imgs.map((x) => (typeof x === "string" ? x.replace(/^data:[^,]+,/, "") : ""));
         if (!clean.length || clean.some((b) => b.length < 200 || b.length > 1800000 || !/^[A-Za-z0-9+\/]+={0,2}$/.test(b)))
           return res.status(200).json({ success: false, msg: "그림 형식이 올바르지 않습니다." });
-        if (!process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY_2) return res.status(200).json({ success: false, msg: "AI 키가 설정되어 있지 않습니다." });
+        if (!pickGeminiKeys().length) return res.status(200).json({ success: false, msg: "AI 키가 설정되어 있지 않습니다." });
         const mimeR = /^image\/(jpeg|png|webp)$/.test(String(data?.mime || "")) ? data.mime : "image/jpeg";
-        const rr = await pickLib.rereadHandwriting(clean, mimeR, fetch, [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2]);
+        await geminiStateLoad();
+        const rr = await pickLib.rereadHandwriting(clean, mimeR, fetch, pickGeminiKeys());
+        await geminiStateSave();
         if (!rr.ok) {
           await pickLogSet(data?.parseId, "reread", { error: String(rr.err || "").slice(0, 80) }, currentAdmin);
-          return res.status(200).json({ success: false, msg: "2차 판독 실패: " + (rr.err || "알 수 없는 오류") });
+          return res.status(200).json({ success: false, msg: "2차 판독 실패: " + (rr.err || "알 수 없는 오류"), quota: !!rr.quota, retryAt: rr.retryAt || 0 });
         }
         await pickLogSet(data?.parseId, "reread", rr.data, currentAdmin);
         return res.status(200).json({ success: true, hw: rr.data });
@@ -2771,7 +2815,9 @@ if (action === "VERIFY_SESSION") {
         const [lr] = await pool.query(`SELECT order_no, parsed, reread, final, created_at FROM pick_parse_log WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY) ORDER BY id DESC LIMIT 2000`, [days]);
         const jp = (t) => { try { return t ? JSON.parse(t) : null; } catch (_) { return null; } };
         const stats = pickLib.computePickStats(lr.map((r) => ({ order_no: r.order_no, parsed: jp(r.parsed), reread: jp(r.reread), final: jp(r.final) })));
-        return res.status(200).json({ success: true, days, stats });
+        await geminiStateLoad(true);
+        const keys = pickLib.keyStatus(pickGeminiKeys(), pickLib.GEMINI_MODELS());
+        return res.status(200).json({ success: true, days, stats, keys });
       } else if (action === "PICK_FIND_ROWS") {
         // 같은 업체의 '완료되지 않은' 출고 일정 찾기 (수량 추가 대상 후보). 날짜가 있으면 그 날짜만, 없으면 미정 + 오늘 이후
         const fCompany = String(data?.company || "").trim().slice(0, 100);

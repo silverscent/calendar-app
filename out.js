@@ -7095,6 +7095,9 @@ function _pickCrop(cv, rg, tall) {
 async function _pickStartReread(st, myReq) {
   const r = st && st.result, cv = _pickSentCv;
   if (!r || !r.hwRegions || !cv || !st.parseId) return; // 손글씨 줄 머리글을 못 찾았으면 2차 판독 없이 1차 값만
+  // AI 호출을 아끼는 경우: ① AI·문자인식이 세 칸을 서로 따로 읽어 모두 같은 값 ② AI 키가 한도로 막혀 있음(불러도 실패)
+  if (r.hwAgree) { st.reread = { state: "skip", why: "agree" }; _pickShowReread(st, st.reread); return; }
+  if (r.aiQuota || (r.pressure && r.pressure.level === "none")) { st.reread = { state: "skip", why: "quota", retryAt: r.aiRetryAt || (r.pressure && r.pressure.retryAt) || 0 }; _pickShowReread(st, st.reread); return; }
   const imgs = [];
   try {
     const a = _pickCrop(cv, r.hwRegions.A, false);
@@ -7124,9 +7127,9 @@ async function _pickStartReread(st, myReq) {
     clearTimeout(timer);
     if (_pickState !== st || myReq !== _pickReq) return; // 그 사이 창을 닫았거나 다른 사진으로 바뀜
     if (!why) break;
-    if (d && d.forceLogout) break;
+    if (d && (d.forceLogout || d.quota)) break; // 한도 때문이면 바로 다시 불러도 소용없음
   }
-  if (!d || !d.success || !d.hw) { st.reread = { state: "err", why }; _pickShowReread(st, st.reread); return; }
+  if (!d || !d.success || !d.hw) { st.reread = { state: "err", why, retryAt: d && d.retryAt ? d.retryAt : 0 }; _pickShowReread(st, st.reread); return; }
   _pickApplyReread(st, d.hw);
 }
 function _pickApplyReread(st, hw) {
@@ -7169,6 +7172,12 @@ function _pickShowReread(st, info) {
   if (!info) { box.style.display = "none"; return; }
   box.style.display = "";
   if (info.state === "wait") { box.innerHTML = `<div style="${sty}color:var(--text-sub)">✍️ 손글씨를 한 번 더 확인하는 중… (등록은 지금도 할 수 있어요)</div>`; return; }
+  if (info.state === "skip") {
+    box.innerHTML = info.why === "agree"
+      ? `<div style="${sty}color:#30d158;font-weight:800">✍️ 손글씨를 AI와 문자인식이 따로 읽어 같은 값이에요 ✓ (2차 확인은 생략)</div>`
+      : `<div style="${sty}color:var(--text-sub)">✍️ AI 한도 때문에 손글씨 2차 확인은 하지 않았어요${info.retryAt ? " (" + _esc(_pickWhen(info.retryAt)) + "쯤 다시 가능)" : ""}. 위 값을 직접 한 번 확인해 주세요.</div>`;
+    return;
+  }
   if (info.state === "err") { box.innerHTML = `<div style="${sty}color:var(--text-sub)">✍️ 손글씨 2차 확인은 하지 못했어요${info.why ? " (" + _esc(String(info.why).replace(/^2차 판독 실패:\s*/, "")) + ")" : ""}. 위 값을 직접 한 번 확인해 주세요.</div>`; return; }
   const its = info.items || [];
   const bad = its.filter((x) => x.kind === "diff" || x.kind === "filled");
@@ -7199,6 +7208,20 @@ async function pickStatsOpen(days) {
   if (!document.getElementById("pickBody") || !body.isConnected) return;
   if (!(res && res.success && res.stats)) { _pickShowError((res && res.msg) || "집계를 불러오지 못했습니다."); return; }
   const S = res.stats;
+  const K = Array.isArray(res.keys) ? res.keys : [];
+  const fmtUntil = (t) => {
+    const d = new Date(t), now = new Date();
+    const hm = d.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true });
+    return d.toDateString() === now.toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+  };
+  const keyHtml = K.length
+    ? `<div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:6px">🔑 AI 키 상태 (등록된 키 ${K.length}개)</div>${K.map((k) => {
+      const lines = [];
+      if (k.keyUntil) lines.push(`키 문제${k.keyWhy ? "(" + _esc(k.keyWhy) + ")" : ""} — ${fmtUntil(k.keyUntil)}까지 건너뜀`);
+      (k.items || []).forEach((it) => lines.push(`${_esc(it.model)} ${_esc(it.why || "막힘")} — ${fmtUntil(it.until)}쯤 풀림`));
+      return `<div style="font-size:0.85em;line-height:1.55;padding:3px 0">키${k.no} ${k.blocked ? "⏳ <b>지금은 쉬는 중</b>" : lines.length ? "🟡 일부 모델만 쉬는 중" : "✅ 사용 가능"}${lines.length ? `<div style="font-size:0.9em;color:var(--text-sub);padding-left:14px">${lines.join("<br>")}</div>` : ""}</div>`;
+    }).join("")}<div style="font-size:0.78em;color:var(--text-sub);margin-top:6px">한도·과부하로 막힌 키와 모델은 풀릴 때까지 건너뛰고, 쓸 수 있는 키는 번갈아 사용합니다. 하루 한도는 한국 시간 오후 4시쯤(여름 시간 해제 뒤엔 오후 5시쯤) 초기화됩니다.</div></div>`
+    : "";
   const pct = (a, b) => (b ? Math.round((a / b) * 100) + "%" : "–");
   const rowsHtml = Object.keys(S.fields).map((k) => {
     const f = S.fields[k];
@@ -7213,6 +7236,7 @@ async function pickStatsOpen(days) {
     <div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:6px">업체 자동 연결 정확도: ${pct(S.company.ok, S.company.n)} <small style="color:var(--text-sub)">(${S.company.ok}/${S.company.n})</small></div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.88em;text-align:left"><thead><tr style="color:var(--text-sub);font-size:0.85em"><th>칸</th><th>1차 정확</th><th>2차 정확</th><th>두 판독이 같을 때</th><th>다를 때 누가 맞았나</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
     <div style="font-size:0.78em;color:var(--text-sub);margin-top:8px">정확 = 등록 때 사람이 최종으로 넣은 값과 같은 비율. 2차 판독은 손글씨 줄만 잘라 다시 읽은 결과입니다. 건수가 적을 때는 참고만 하세요.</div></div>
+    ${keyHtml}
     ${S.timing ? `<div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:4px">⏱ 판독 걸린 시간 (서버 기준, ${S.timing.n}건)</div><div style="font-size:0.85em;line-height:1.6">${S.hw && S.hw.n ? `손글씨 칸 위치를 찾은 비율 <b>${Math.round((S.hw.found / S.hw.n) * 100)}%</b> (${S.hw.found}/${S.hw.n})<br>` : ""}평균 <b>${(S.timing.avg / 1000).toFixed(1)}초</b> · 가장 오래 <b>${(S.timing.max / 1000).toFixed(1)}초</b> · 20초 넘은 건 <b>${S.timing.over20}</b>건<br>문자인식(구글) 평균 ${S.timing.visionAvg ? (S.timing.visionAvg / 1000).toFixed(1) + "초" : "–"} · AI(Gemini) 평균 ${S.timing.geminiAvg ? (S.timing.geminiAvg / 1000).toFixed(1) + "초" : "–"}${S.timing.kbAvg ? ` · 사진 평균 ${S.timing.kbAvg}KB` : ""}${S.timing.models && S.timing.models.length ? `<br>AI 모델별 평균: ${S.timing.models.map((m) => `${_esc(m.model)} ${(m.avg / 1000).toFixed(1)}초(${m.n}건)`).join(" · ")}` : ""}${S.retries && (S.retries.rot || S.retries.enh) ? `<br>바로 세워 다시 읽은 건 ${S.retries.rot}건 · 보정해 다시 읽은 건 ${S.retries.enh}건` : ""}</div><div style="font-size:0.78em;color:var(--text-sub);margin-top:6px">서버 처리 시간만이라 폰 통신 시간은 빠져 있습니다. 앱에서 더 오래 걸렸다면 통신이나 사진 크기 쪽을 의심해 보세요.</div></div>` : ""}
     ${mm ? `<div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:4px">1차가 틀렸던 건 (최근 ${Math.min(30, S.mismatches.length)}개)</div>${mm}</div>` : ""}
     <div class="pk-foot"><button class="pk-btn ghost" type="button" onclick="pickStatsOpen(${D === 90 ? 30 : 90})">${D === 90 ? "30일" : "90일"}로 보기</button><button class="pk-btn primary" type="button" onclick="_pickChooser()">닫기</button></div>`;
@@ -7282,6 +7306,15 @@ function _pickToB64(cv) {
   let q = 0.85, nd = cv.toDataURL("image/jpeg", q);
   while (nd.length > 3800000 && q > 0.4) { q -= 0.1; nd = cv.toDataURL("image/jpeg", q); }
   return nd.replace(/^data:[^,]+,/, "");
+}
+// 한도가 풀리는 시각을 사람이 읽기 쉽게: "약 12분 뒤(오후 4:50)" · "오후 4:01" · "10/28 오후 4:01"
+function _pickWhen(t) {
+  if (!t) return "";
+  const ms = t - Date.now(), d = new Date(t), now = new Date();
+  const hm = d.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true });
+  if (ms <= 0) return "곧";
+  if (ms < 90 * 60000) return `약 ${Math.max(1, Math.round(ms / 60000))}분 뒤(${hm})`;
+  return d.toDateString() === now.toDateString() ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
 }
 // 판독 요청 한 번만 보내고 결과(또는 null)를 돌려줌 — 보정 재판독처럼 실패해도 처음 결과를 지켜야 할 때 사용
 async function _pickPostParse(b64, meta) {
@@ -7381,7 +7414,7 @@ async function _pickSend(b64, _rotated, _enh, _opt) {
       return;
     }
     // 사진이 옆으로·거꾸로 찍혔으면(서버가 알려 줌) 바로 세워서 한 번 더 읽는다 — 글자가 눕거나 뒤집혀 있으면 손글씨·업체명이 부정확하다
-    if (!_rotated && !_enh && !(_opt && _opt.skipTilt) && _pickSentCv && d.result && Math.abs(Number(d.result.pageTilt) || 0) >= 45) {
+    if (!_rotated && !_enh && !(_opt && _opt.skipTilt) && _pickSentCv && d.result && !d.result.aiQuota && Math.abs(Number(d.result.pageTilt) || 0) >= 45) { // (AI 한도로 막혔을 땐 다시 보내도 소용없어 생략)
       try {
         const fix = -Math.round((Number(d.result.pageTilt) || 0) / 90) * 90;
         const rc = _pickRotateCv(_pickSentCv, fix);
@@ -7395,7 +7428,7 @@ async function _pickSend(b64, _rotated, _enh, _opt) {
       } catch (_) { /* 돌리기에 실패하면 지금 결과 그대로 사용 */ }
     }
     // AI(Gemini) 판독만 실패한 경우(과부하·시간 초과 등 일시 오류가 많음) — 같은 사진으로 한 번만 더 시도한다
-    if (d.result && d.result.ai === "fail" && !(_opt && _opt.retried)) {
+    if (d.result && d.result.ai === "fail" && !d.result.aiQuota && !(_opt && _opt.retried)) { // 한도 때문인 실패는 바로 다시 보내면 한도만 더 쓰므로 자동 재시도 안 함
       try {
         body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)"><div style="font-size:2em">🔁</div><div style="margin-top:10px;font-weight:800;color:var(--text-main)">AI 판독이 잠시 실패해 한 번 더 읽습니다</div><div style="margin-top:6px;font-size:0.85em">잠시만 기다려 주세요.</div></div>`;
         await new Promise((r) => setTimeout(r, 2500));
@@ -7407,7 +7440,7 @@ async function _pickSend(b64, _rotated, _enh, _opt) {
     }
     // 주문번호·출고처명처럼 인쇄된 값을 못 읽었으면(흐림·그림자·반사) 밝기·대비를 보정해 한 번만 다시 읽고, 더 많이 읽은 쪽을 쓴다
     let lowQ = null;
-    if (d.result && !_enh && d.result.ai !== "fail" && _pickSentCv && _pickMissing(d.result).length) {
+    if (d.result && !_enh && d.result.ai !== "fail" && _pickSentCv && (!d.result.pressure || d.result.pressure.level === "ok") && _pickMissing(d.result).length) { // 키 여유가 빠듯하면(tight) 보정 재판독으로 호출을 늘리지 않음
       try {
         body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)"><div style="font-size:2em">✨</div><div style="margin-top:10px;font-weight:800;color:var(--text-main)">읽기 어려운 부분이 있어 사진을 선명하게 보정해 다시 읽습니다</div><div style="margin-top:6px;font-size:0.85em">잠시만 기다려 주세요.</div></div>`;
         const d2 = await _pickPostParse(_pickToB64(_pickEnhance(_pickSentCv)), { rot: _rotated === true, enh: true });
@@ -7501,7 +7534,10 @@ function _pickRender() {
   let banners = "";
   if (r.unfinished)
     banners += `<div class="pk-banner err" id="pick-unfin">🚫 작성 전 피킹지로 보입니다<br><span style="font-weight:600">PLT·완박스·혼재박스가 모두 비어 있어요. 손글씨가 있는데 못 읽은 거라면 아래 칸에 직접 입력하면 등록할 수 있어요. 아니면 작업이 끝난 마지막 장을 다시 찍어주세요.</span></div>`;
-  if (r.ai === "fail") {
+  if (r.ai === "fail" && r.aiQuota) {
+    const when = _pickWhen(r.aiRetryAt || (r.pressure && r.pressure.retryAt) || 0);
+    banners += `<div class="pk-banner warn">🤖 AI 한도 때문에 이번엔 AI 판독을 못 했어요<br><span style="font-weight:600">문자인식으로 읽은 값(업체·주문번호 등)만 채웠고, 손글씨(PLT·완박스·혼재박스)는 비어 있을 수 있어요. 직접 입력해 등록하거나${when ? ` <b>${_esc(when)}</b>쯤 한도가 풀린 뒤` : " 잠시 뒤"} 다시 읽어 보세요. <button type="button" onclick="_pickRetrySame()" style="margin-left:4px;border:1px solid ${_PICK_ORANGE};background:none;color:${_PICK_ORANGE};border-radius:8px;padding:2px 9px;font-weight:800;cursor:pointer">다시 읽기</button></span></div>`;
+  } else if (r.ai === "fail") {
     const why = Array.isArray(r.errs) && r.errs.length ? r.errs.filter(Boolean).join(" / ").slice(0, 80) : "";
     banners += `<div class="pk-banner warn">🤖 AI 판독이 실패했습니다${why ? ` (${_esc(why)})` : ""}<br><span style="font-weight:600">업체·PLT·박스 칸이 비어 있을 수 있어요. 사진 문제가 아니라 AI 쪽 일시 오류일 수 있으니 <b>같은 사진으로 다시 읽기</b>를 눌러 보세요. <button type="button" onclick="_pickRetrySame()" style="margin-left:4px;border:1px solid ${_PICK_ORANGE};background:none;color:${_PICK_ORANGE};border-radius:8px;padding:2px 9px;font-weight:800;cursor:pointer">같은 사진으로 다시 읽기</button></span></div>`;
   }
