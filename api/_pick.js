@@ -242,6 +242,46 @@ function geminiWhy(g) {
   const one = (w) => w.filter((x, i, a) => a.indexOf(x) === i).join("·");
   return ("AI " + (keys.length > 1 ? keys.map((k) => `키${k} ${one(by[k])}`).join(" / ") : one(by[keys[0]]))).slice(0, 120);
 }
+// 🔑 키·모델 점검(시스템 관리자가 버튼으로 실행): 키마다 ① 구글에 '쓸 수 있는 모델 목록'을 묻고(호출 한도를 쓰지 않음) ② 모델마다 아주 작은 글자 요청을 한 번씩 보내 실제로 되는지 본다.
+//  막힘 상태(쉬는 키·모델 기록)는 건드리지 않는다. 키 자체는 결과에 넣지 않는다(번호만).
+async function testKeys(fetchFn, keys, models, extra) {
+  const ks = toKeyList(keys), main = modelList(models), ex = modelList(extra).filter((m) => !main.includes(m));
+  const tmo = () => { const c = new AbortController(); const t = setTimeout(() => c.abort(), 20000); return { signal: c.signal, done: () => clearTimeout(t) }; };
+  const one = async (k, i) => {
+    const out = { no: i + 1, listed: null, listErr: null, models: [] };
+    try {
+      const ids = []; let tok = "";
+      for (let pg = 0; pg < 3; pg++) {
+        const tm = tmo();
+        let r, j;
+        try { r = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${k}${tok ? "&pageToken=" + encodeURIComponent(tok) : ""}`, { signal: tm.signal }); j = await r.json(); } finally { tm.done(); }
+        if (j && j.error) { out.listErr = failLabel(j, r.status); break; }
+        ((j && j.models) || []).forEach((x) => ids.push(String(x.name || "").replace(/^models\//, "")));
+        tok = (j && j.nextPageToken) || "";
+        if (!tok) break;
+      }
+      if (!out.listErr) out.listed = ids;
+    } catch (e) { out.listErr = e && e.name === "AbortError" ? "목록 조회 시간 초과" : "목록 조회 실패"; }
+    out.models = await Promise.all(main.concat(ex).map(async (m) => {
+      const row = { model: m, extra: ex.includes(m), ok: false, ms: 0, why: "", until: 0, listed: out.listed ? out.listed.includes(m) : null };
+      const t0 = Date.now(), tm = tmo();
+      try {
+        const send = (opts) => fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${k}`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, signal: tm.signal,
+          body: JSON.stringify({ contents: [{ parts: [{ text: "숫자 1만 답해." }] }], generationConfig: Object.assign({ maxOutputTokens: 64 }, genCfg(m, opts)) }),
+        });
+        let r = await send(), j = await r.json();
+        if (j && j.error && Number(j.error.code || r.status) === 400 && /thinking/i.test(errText(j))) { r = await send({ noThink: true }); j = await r.json(); }
+        if (j && j.error) { row.why = failLabel(j, r.status); if (isQuotaErr(j, r.status) && !isModelGone(j, r.status)) row.until = Date.now() + coolMs(j, r.status, Date.now()); }
+        else row.ok = true;
+      } catch (e) { row.why = e && e.name === "AbortError" ? "시간 초과(20초)" : "통신 실패"; }
+      finally { tm.done(); row.ms = Date.now() - t0; }
+      return row;
+    }));
+    return out;
+  };
+  return Promise.all(ks.map(one));
+}
 const GEMINI_MODELS = () => modelList([process.env.GEMINI_MODEL].concat(DEFAULT_MODELS));
 // 2.5 계열만 thinkingBudget 설정을 알고 있다. 다른 계열은 설정을 빼서 모델이 정한 기본값을 쓴다(알 수 없는 옵션으로 400 이 나는 것을 막음)
 //   3.x 계열은 생각을 끌 수 없고(공식 문서상 gemini-3.8-flash 는 low 가 가장 낮음) 기본값(medium)이면 느려지므로 thinkingLevel "low" 로 줄인다.
@@ -941,4 +981,4 @@ async function parsePicking(b64, mime, opts) {
   return out;
 }
 
-module.exports = { keyPressure, geminiPost, geminiWhy, exportKeyState, importKeyState, resetKeyState, keyStatus, coolMs, msToPacificMidnight, DEFAULT_MODELS, GEMINI_MODELS, genCfg, toKeyList, handRegions, rereadHandwriting, normReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };
+module.exports = { testKeys, keyPressure, geminiPost, geminiWhy, exportKeyState, importKeyState, resetKeyState, keyStatus, coolMs, msToPacificMidnight, DEFAULT_MODELS, GEMINI_MODELS, genCfg, toKeyList, handRegions, rereadHandwriting, normReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };

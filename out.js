@@ -7220,7 +7220,7 @@ async function pickStatsOpen(days) {
       if (k.keyUntil) lines.push(`키 문제${k.keyWhy ? "(" + _esc(k.keyWhy) + ")" : ""} — ${fmtUntil(k.keyUntil)}까지 건너뜀`);
       (k.items || []).forEach((it) => lines.push(`${_esc(it.model)} ${_esc(it.why || "막힘")} — ${fmtUntil(it.until)}쯤 풀림`));
       return `<div style="font-size:0.85em;line-height:1.55;padding:3px 0">키${k.no} ${k.blocked ? "⏳ <b>지금은 쉬는 중</b>" : lines.length ? "🟡 일부 모델만 쉬는 중" : "✅ 사용 가능"}${lines.length ? `<div style="font-size:0.9em;color:var(--text-sub);padding-left:14px">${lines.join("<br>")}</div>` : ""}</div>`;
-    }).join("")}<div style="font-size:0.78em;color:var(--text-sub);margin-top:6px">한도·과부하로 막힌 키와 모델은 풀릴 때까지 건너뛰고, 쓸 수 있는 키는 번갈아 사용합니다. 하루 한도는 한국 시간 오후 4시쯤(여름 시간 해제 뒤엔 오후 5시쯤) 초기화됩니다.</div></div>`
+    }).join("")}<div style="font-size:0.78em;color:var(--text-sub);margin-top:6px">한도·과부하로 막힌 키와 모델은 풀릴 때까지 건너뛰고, 쓸 수 있는 키는 번갈아 사용합니다. 하루 한도는 한국 시간 오후 4시쯤(여름 시간 해제 뒤엔 오후 5시쯤) 초기화됩니다.</div><div style="margin-top:8px"><button type="button" id="pickKeyTestBtn" onclick="pickKeyTest()" style="border:1px solid var(--border-color);background:var(--card-bg);color:var(--text-main);border-radius:10px;padding:7px 12px;font-weight:800;font-size:0.85em;cursor:pointer">🔍 키·모델 점검</button><span style="font-size:0.75em;color:var(--text-sub);margin-left:6px">키마다 모델을 아주 작게 한 번씩 불러 봅니다(약 10~20초)</span></div><div id="pick-keytest"></div></div>`
     : "";
   const pct = (a, b) => (b ? Math.round((a / b) * 100) + "%" : "–");
   const rowsHtml = Object.keys(S.fields).map((k) => {
@@ -7240,6 +7240,35 @@ async function pickStatsOpen(days) {
     ${S.timing ? `<div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:4px">⏱ 판독 걸린 시간 (서버 기준, ${S.timing.n}건)</div><div style="font-size:0.85em;line-height:1.6">${S.hw && S.hw.n ? `손글씨 칸 위치를 찾은 비율 <b>${Math.round((S.hw.found / S.hw.n) * 100)}%</b> (${S.hw.found}/${S.hw.n})<br>` : ""}평균 <b>${(S.timing.avg / 1000).toFixed(1)}초</b> · 가장 오래 <b>${(S.timing.max / 1000).toFixed(1)}초</b> · 20초 넘은 건 <b>${S.timing.over20}</b>건<br>문자인식(구글) 평균 ${S.timing.visionAvg ? (S.timing.visionAvg / 1000).toFixed(1) + "초" : "–"} · AI(Gemini) 평균 ${S.timing.geminiAvg ? (S.timing.geminiAvg / 1000).toFixed(1) + "초" : "–"}${S.timing.kbAvg ? ` · 사진 평균 ${S.timing.kbAvg}KB` : ""}${S.timing.models && S.timing.models.length ? `<br>AI 모델별 평균: ${S.timing.models.map((m) => `${_esc(m.model)} ${(m.avg / 1000).toFixed(1)}초(${m.n}건)`).join(" · ")}` : ""}${S.retries && (S.retries.rot || S.retries.enh) ? `<br>바로 세워 다시 읽은 건 ${S.retries.rot}건 · 보정해 다시 읽은 건 ${S.retries.enh}건` : ""}</div><div style="font-size:0.78em;color:var(--text-sub);margin-top:6px">서버 처리 시간만이라 폰 통신 시간은 빠져 있습니다. 앱에서 더 오래 걸렸다면 통신이나 사진 크기 쪽을 의심해 보세요.</div></div>` : ""}
     ${mm ? `<div class="pk-card"><div style="font-size:0.85em;font-weight:800;margin-bottom:4px">1차가 틀렸던 건 (최근 ${Math.min(30, S.mismatches.length)}개)</div>${mm}</div>` : ""}
     <div class="pk-foot"><button class="pk-btn ghost" type="button" onclick="pickStatsOpen(${D === 90 ? 30 : 90})">${D === 90 ? "30일" : "90일"}로 보기</button><button class="pk-btn primary" type="button" onclick="_pickChooser()">닫기</button></div>`;
+}
+
+// 🔍 키·모델 점검 결과 보여주기 (시스템 관리자) — 키마다 쓸 수 있는 모델과 막힌 사유
+async function pickKeyTest() {
+  const box = document.getElementById("pick-keytest"), btn = document.getElementById("pickKeyTestBtn");
+  if (!box) return;
+  if (btn) btn.disabled = true;
+  box.innerHTML = `<div style="font-size:0.85em;color:var(--text-sub);padding:8px 0">점검하는 중… (최대 20초)</div>`;
+  const token = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 55000);
+  let d = null, why = "";
+  try {
+    const r = await fetch(VERCEL_API_URL, { method: "POST", body: JSON.stringify({ source: "vercel", domain: "system", action: "PICK_KEYTEST", admin_id: localStorage.getItem("admin_id"), session_token: token, data: {} }), signal: ctl.signal });
+    const raw = await r.json();
+    d = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch (e) { why = e && e.name === "AbortError" ? "시간 초과" : "통신 실패"; }
+  clearTimeout(timer);
+  if (btn) btn.disabled = false;
+  if (!document.getElementById("pick-keytest")) return;
+  if (!d || !d.success || !Array.isArray(d.keys)) { box.innerHTML = `<div style="font-size:0.85em;color:${_PICK_ORANGE};padding:8px 0">점검하지 못했어요${_esc((d && d.msg) || why ? " (" + ((d && d.msg) || why) + ")" : "")}</div>`; return; }
+  box.innerHTML = d.keys.map((k) => {
+    const head = k.listErr ? `<span style="color:${_PICK_RED}">모델 목록 조회 실패 (${_esc(k.listErr)})</span>` : `모델 목록 ${(k.listed || []).length}개 조회됨`;
+    const rows = (k.models || []).map((m) => {
+      const st = m.ok ? `<span style="color:#30d158;font-weight:800">✅ 정상</span> ${(m.ms / 1000).toFixed(1)}초` : `<span style="color:${_PICK_RED};font-weight:800">❌ ${_esc(m.why || "실패")}</span>${m.until ? ` — ${_esc(_pickWhen(m.until))}쯤 풀림` : ""}`;
+      return `<div style="padding-left:14px">${_esc(m.model)}${m.extra ? " <small>(참고)</small>" : ""} — ${st}${m.listed === false ? ` <small style="color:var(--text-sub)">· 이 키의 모델 목록엔 없음</small>` : ""}</div>`;
+    }).join("");
+    return `<div style="font-size:0.85em;line-height:1.6;padding:6px 0;border-top:1px solid var(--border-color);margin-top:6px"><b>키${k.no}</b> · ${head}${rows}</div>`;
+  }).join("") + `<div style="font-size:0.75em;color:var(--text-sub);margin-top:4px">✅ 는 이 키로 그 모델이 실제로 응답했다는 뜻입니다. (참고)는 지금 쓰는 목록에 없는 모델입니다.</div>`;
 }
 
 async function pickOnFile(inp) {

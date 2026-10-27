@@ -536,7 +536,7 @@ const SYSTEM_ONLY_ACTIONS = new Set([
   "CREATE_ADMIN", "DELETE_ADMIN", "REACTIVATE_ADMIN", "HARD_DELETE_ADMIN", "RESET_ADMIN_PW",
   "GET_ADMIN_LIST", "GET_ADMIN_CONN_LOGS", "GET_AUDIT_LOGS", "GET_ALL_CONN_LOGS",
   "GET_RAW_DB_ROWS", "UPDATE_RAW_ROW_FULL", "UPDATE_RAW_ROW_DIRECT", "ADD_RAW_ROW_DIRECT", "DELETE_RAW_ROW_DIRECT",
-  "SAVE_OCR_INFO", "SAVE_OCR_FILTERS", "SET_ADMIN_PERMS", "PICK_STATS",
+  "SAVE_OCR_INFO", "SAVE_OCR_FILTERS", "SET_ADMIN_PERMS", "PICK_STATS", "PICK_KEYTEST",
 ]);
 // 위임 권한이 필요한 액션 (시스템 관리자는 항상 통과)
 const PERM_ACTIONS = { OCR_UPLOAD: "ocr_upload", APPLY_OCR_DATA: "ocr_compare" };
@@ -793,6 +793,7 @@ module.exports = async function (req, res) {
         "PICK_PARSE",
         "PICK_REREAD",
         "PICK_STATS",
+        "PICK_KEYTEST",
         "PICK_REGISTER",
         "PICK_FIND_ROWS",
         "FIND_INBOUND_DUPES",
@@ -2808,6 +2809,13 @@ if (action === "VERIFY_SESSION") {
         }
         await pickLogSet(data?.parseId, "reread", rr.data, currentAdmin);
         return res.status(200).json({ success: true, hw: rr.data });
+      } else if (action === "PICK_KEYTEST") {
+        // 🔑 AI 키·모델 점검 (시스템 관리자 전용 — SYSTEM_ONLY_ACTIONS 에서 선차단): 키마다 모델 목록 조회 + 모델별 작은 요청 1회
+        const kk = pickGeminiKeys();
+        if (!kk.length) return res.status(200).json({ success: false, msg: "AI 키가 설정되어 있지 않습니다." });
+        const extraM = ["gemini-3.5-flash-lite"]; // 참고용(지금 쓰는 목록엔 없음): 이 키로 쓸 수 있는지만 확인
+        const tk = await pickLib.testKeys(fetch, kk, pickLib.GEMINI_MODELS(), extraM);
+        return res.status(200).json({ success: true, keys: tk, models: pickLib.GEMINI_MODELS(), extra: extraM });
       } else if (action === "PICK_STATS") {
         // 📊 판독 정확도 (시스템 관리자 전용): 최근 N일, 등록까지 끝난 건 기준
         await pickLogEnsure();
