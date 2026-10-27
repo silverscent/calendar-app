@@ -230,7 +230,7 @@ function pickParsedSnapshot(parsed, comp, extra) {
     shipDate: parsed.shipDate || null, plt: parsed.plt === undefined ? null : parsed.plt, wanbox: parsed.wanbox === undefined ? null : parsed.wanbox, honjae: parsed.honjae === undefined ? null : parsed.honjae,
     addExisting: !!parsed.addExisting, mergeHint: !!parsed.mergeHint, ai: parsed.ai || null,
     flags: { plt: lv("plt"), wanbox: lv("wanbox"), honjae: lv("honjae"), customer: lv("customer"), shipDate: lv("shipDate") },
-    tilt: parsed.hwRegions ? parsed.hwRegions.tilt : null, hwFound: !!parsed.hwRegions,
+    tilt: parsed.hwRegions ? parsed.hwRegions.tilt : null, hwFound: !!parsed.hwRegions, hwAgree: parsed.hwAgree === true,
     timing: parsed.timing || null, kb: extra && extra.kb ? extra.kb : null, meta: extra && extra.meta ? extra.meta : null, // 소요시간·사진 크기(KB)·화면이 돌리거나 보정해 다시 보냈는지
   };
 }
@@ -2805,10 +2805,10 @@ if (action === "VERIFY_SESSION") {
         await geminiStateSave();
         if (!rr.ok) {
           await pickLogSet(data?.parseId, "reread", { error: String(rr.err || "").slice(0, 80) }, currentAdmin);
-          return res.status(200).json({ success: false, msg: "2차 판독 실패: " + (rr.err || "알 수 없는 오류"), quota: !!rr.quota, retryAt: rr.retryAt || 0 });
+          return res.status(200).json({ success: false, msg: "2차 판독 실패: " + (rr.err || "알 수 없는 오류"), quota: !!rr.quota, retryAt: rr.retryAt || 0, timing: { ms: rr.ms || null, attempts: rr.attempts || [] } });
         }
         await pickLogSet(data?.parseId, "reread", rr.data, currentAdmin);
-        return res.status(200).json({ success: true, hw: rr.data });
+        return res.status(200).json({ success: true, hw: rr.data, timing: { ms: rr.ms || null, model: rr.model || null, keyNo: rr.keyNo || null, attempts: rr.attempts || [] } });
       } else if (action === "PICK_KEYTEST") {
         // 🔑 AI 키·모델 점검 (시스템 관리자 전용 — SYSTEM_ONLY_ACTIONS 에서 선차단): 키마다 모델 목록 조회 + 모델별 작은 요청 1회
         const kk = pickGeminiKeys();

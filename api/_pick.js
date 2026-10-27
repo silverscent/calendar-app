@@ -186,7 +186,7 @@ async function geminiPost(fetchFn, keys, models, body, signal) {
         if ((_keyBadUntil[id] || 0) > nowT) bl.push({ keyNo: i + 1, model: null, why: _badWhy[id] || "키 오류" });
         else ms.forEach((m) => { if (bad(k, m)) bl.push({ keyNo: i + 1, model: m, why: _badWhy[id + "|" + m] || "한도 초과" }); });
       });
-      return { j: { error: { message: "AI 키가 모두 한도에 걸려 쉬는 중" } }, status: 429, keyNo: 0, model: null, quota: true, anyQuota: true, skipped: true, retryAt: press.retryAt, trail: bl };
+      return { j: { error: { message: "AI 키가 모두 한도에 걸려 쉬는 중" } }, status: 429, keyNo: 0, model: null, quota: true, anyQuota: true, skipped: true, retryAt: press.retryAt, trail: bl, attempts: [] };
     }
     _lastProbe = nowT;
     let bi = 0, bt = Infinity;
@@ -198,7 +198,7 @@ async function geminiPost(fetchFn, keys, models, body, signal) {
   }
   if (order.length > 1) { const st = _rr++ % order.length; order = order.slice(st).concat(order.slice(0, st)); } // 쓸 수 있는 키들을 번갈아 먼저 쓴다(한 키에 몰리지 않게)
   let last = { j: { error: { message: "AI 키 없음" } }, status: 0, keyNo: 0, model: null, quota: false, trail: [] };
-  const trail = [];
+  const trail = [], attempts = []; // attempts: 이번 호출에서 실제로 보낸 시도 내역(키·모델·성공 여부·걸린 시간) — 화면의 '판독 상세'에 보여 줌
   let anyQuota = false;
   const fin = () => { const pr = keyPressure(list, ms); if (pr.level === "none") _lastProbe = Date.now(); return Object.assign(last, { anyQuota, retryAt: pr.retryAt }); }; // retryAt: 전부 막혔을 때 가장 먼저 풀리는 시각. 방금 전부 막힌 걸 알았으니 확인 시도 간격도 지금부터 셈
   for (const { k, i } of order) {
@@ -210,12 +210,14 @@ async function geminiPost(fetchFn, keys, models, body, signal) {
       const send = (opts) => fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${k}`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: typeof body === "function" ? body(m, opts) : body, signal,
       });
+      const ta = Date.now();
       let r = await send(), j = await r.json();
       if (typeof body === "function" && j && j.error && Number(j.error.code || r.status) === 400 && /thinking/i.test(errText(j))) { r = await send({ noThink: true }); j = await r.json(); } // 이 모델이 생각 설정을 모르면 설정 없이
       const hasErr = !!(j && j.error);
+      attempts.push({ keyNo: i + 1, model: m, ok: !hasErr, why: hasErr ? failLabel(j, r.status) : "", ms: Date.now() - ta });
       const gone = hasErr && isModelGone(j, r.status);
       const quota = hasErr && !gone && isQuotaErr(j, r.status);
-      last = { j, status: r.status, keyNo: i + 1, model: m, quota, trail };
+      last = { j, status: r.status, keyNo: i + 1, model: m, quota, trail, attempts };
       if (!hasErr) { _keyBadUntil[id] = 0; delete _modelBadUntil[id + "|" + m]; delete _badWhy[id + "|" + m]; _modelGood[id] = m; return Object.assign(last, { anyQuota: false, retryAt: 0 }); }
       const why = failLabel(j, r.status);
       trail.push({ keyNo: i + 1, model: m, why });
@@ -297,10 +299,10 @@ async function callGemini(b64, mime, fetchFn, apiKey) {
     }), ctl.signal);
     const j = g.j;
     const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
-    if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음", quota: !!g.anyQuota, retryAt: g.retryAt || 0 };
+    if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음", quota: !!g.anyQuota, retryAt: g.retryAt || 0, attempts: g.attempts || [], skipped: !!g.skipped };
     const obj = JSON.parse(String(txt).replace(/```json/gi, "").replace(/```/g, "").trim());
     const o = Array.isArray(obj) ? obj[0] || {} : obj;
-    return { ok: true, data: o && typeof o === "object" ? o : {}, model: g.model, keyNo: g.keyNo };
+    return { ok: true, data: o && typeof o === "object" ? o : {}, model: g.model, keyNo: g.keyNo, attempts: g.attempts || [] };
   } catch (e) {
     return { ok: false, err: e.name === "AbortError" ? "AI 판독 시간 초과" : "AI 판독 오류" };
   } finally {
@@ -411,6 +413,7 @@ const REREAD_PROMPT = `아래 그림은 물류 '피킹 리스트'를 찍은 사�
 주의: 날짜(10/23 등)·시간·피킹/검수 칸의 서명·이니셜, 펜으로 그은 동그라미·체크·계산 메모는 값이 아니다. 완박스·혼재박스 칸에는 숫자만 쓰이며, 숫자 1은 짧은 세로선, 7은 위에 가로선이 있는 꼴일 수 있다. 칸이 비었으면 반드시 "empty". 단 칸 안에 사선(/)·세로선(|) 한 줄이라도 그어져 있으면 비어 있는 게 아니라 숫자 1 이다(글자 모양이 단순해서 빈칸으로 착각하기 쉬우니, 완박스·혼재박스 칸에 선이 있는지 꼭 확인). 세 칸이 모두 "empty" 라고 답하기 전에 칸마다 작은 선이라도 없는지 한 번 더 본다. 두 자리 숫자도 있다: 세로선·사선이 나란히 두 개면 11, 세 개면 111 이니 한 개로 합쳐 읽지 말고 선의 개수를 하나씩 세어서 답한다(예: "11" 을 "1" 로 읽는 것이 가장 흔한 실수).`;
 
 async function rereadHandwriting(imgs, mime, fetchFn, apiKey) {
+  const t0r = Date.now();
   const list = (Array.isArray(imgs) ? imgs : []).filter((x) => typeof x === "string" && x.length > 200).slice(0, 2);
   if (!list.length) return { ok: false, err: "그림이 없습니다" };
   const ctl = new AbortController();
@@ -421,9 +424,9 @@ async function rereadHandwriting(imgs, mime, fetchFn, apiKey) {
     const g = await geminiPost(fetchFn, apiKey, GEMINI_MODELS(), (m, o) => JSON.stringify({ contents: [{ parts }], generationConfig: genCfg(m, o) }), ctl.signal);
     const j = g.j;
     const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
-    if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음", quota: !!g.anyQuota, retryAt: g.retryAt || 0 };
+    if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음", quota: !!g.anyQuota, retryAt: g.retryAt || 0, ms: Date.now() - t0r, attempts: g.attempts || [] };
     const obj = JSON.parse(String(txt).replace(/```json/gi, "").replace(/```/g, "").trim());
-    return { ok: true, data: normReread(Array.isArray(obj) ? obj[0] : obj) };
+    return { ok: true, data: normReread(Array.isArray(obj) ? obj[0] : obj), ms: Date.now() - t0r, model: g.model, keyNo: g.keyNo, attempts: g.attempts || [] };
   } catch (e) {
     return { ok: false, err: e.name === "AbortError" ? "2차 판독 시간 초과" : "2차 판독 오류" };
   } finally {
@@ -452,7 +455,8 @@ function normReread(o) {
 function computePickStats(rows) {
   const zero = (v) => (v === "empty" ? 0 : v);
   const FIELDS = [["plt", "plt", "PLT"], ["wanbox", "wan", "완박스"], ["honjae", "hon", "혼재박스"]];
-  const out = { parses: rows.length, registered: 0, fields: {}, company: { n: 0, ok: 0 }, mismatches: [], reread: { n: 0, used: 0, errors: 0 }, timing: null, retries: { rot: 0, enh: 0 }, hw: { n: 0, found: 0 } };
+  const out = { parses: rows.length, registered: 0, fields: {}, company: { n: 0, ok: 0 }, mismatches: [], reread: { n: 0, used: 0, errors: 0 }, timing: null, retries: { rot: 0, enh: 0 }, hw: { n: 0, found: 0 }, unreg: 0, cross: { n: 0, same: 0, skipped: 0, fields: {}, diffs: [] } };
+  FIELDS.forEach(([k]) => { out.cross.fields[k] = { n: 0, same: 0 }; });
   FIELDS.forEach(([k, , lab]) => { out.fields[k] = { label: lab, n: 0, first: 0, second: 0, secondN: 0, agreeN: 0, agreeOk: 0, diffN: 0, diffFirstOk: 0, diffSecondOk: 0, diffNeither: 0 }; });
   const tt = [], tv = [], tg = [], kb = [], byModel = {};
   for (const r of rows) {
@@ -464,6 +468,22 @@ function computePickStats(rows) {
     if (P.meta && P.meta.enh) out.retries.enh++;
     if (S && S.error) out.reread.errors++;
     if (S && !S.error) out.reread.used++;
+    // 등록하지 않아도 볼 수 있는 신뢰도: 1차 판독과 2차 판독(손글씨 줄만 잘라 다시 읽기)이 같은 값인지. 정답은 모르지만 서로 다르면 어느 한쪽은 틀린 것이다.
+    //   (한쪽이 '못 읽음' 이고 다른 쪽이 0/빈칸이면 빈칸으로 보고 같은 것으로 센다 — 위 blankOk 와 같은 규칙)
+    if (!F) out.unreg++;
+    if (S && !S.error) {
+      out.cross.n++;
+      let allSame = true; const items = [];
+      for (const [k, , lab] of FIELDS) {
+        const p = zero(P[k]), q = zero(S[k]);
+        const pn = p === null || p === undefined, qn = q === null || q === undefined;
+        const same = (!pn && !qn && Number(p) === Number(q)) || (pn && q === 0) || (qn && p === 0);
+        const cf = out.cross.fields[k]; cf.n++;
+        if (same) cf.same++; else { allSame = false; items.push({ field: lab, first: pn ? null : Number(p), second: qn ? null : Number(q) }); }
+      }
+      if (allSame) out.cross.same++;
+      else if (out.cross.diffs.length < 20) out.cross.diffs.push({ orderNo: r.order_no || "", items });
+    } else if (P.hwAgree === true && !(S && S.error)) out.cross.skipped++; // AI 와 문자인식이 세 칸을 같게 읽어 2차 확인을 생략한 건
     if (!F) continue;
     out.registered++;
     if (P.company && F.company) { out.company.n++; if (String(P.company) === String(F.company)) out.company.ok++; }
@@ -976,7 +996,7 @@ async function parsePicking(b64, mime, opts) {
     const gd = g.ok ? g.data || {} : {};
     out.hwAgree = !!(g.ok && ["plt", "wanbox", "honjae"].every((k) => { const G = toInt(gd[k]); return G !== null && hw[k] !== undefined && hw[k] === G && !(Array.isArray(gd.uncertain) && gd.uncertain.includes(k)); }));
   } catch (_) { out.hwAgree = false; }
-  out.timing = { total: Date.now() - t0, vision: v.ms || null, gemini: g.ms || null, model: g.ok ? g.model || null : null, keyNo: g.ok ? g.keyNo || null : null };
+  out.timing = { total: Date.now() - t0, vision: v.ms || null, gemini: g.ms || null, model: g.ok ? g.model || null : null, keyNo: g.ok ? g.keyNo || null : null, attempts: Array.isArray(g.attempts) ? g.attempts.slice(0, 9) : [], aiSkipped: !!g.skipped, visionOk: !!v.ok };
   out.ok = true;
   return out;
 }
