@@ -141,7 +141,8 @@ function keyPressure(keys, models, now) {
   return { total: list.length, usable, level, retryAt: usable === 0 && wait.length ? Math.min.apply(null, wait) : 0 };
 }
 const toKeyList = (k) => (Array.isArray(k) ? k : [k]).map((x) => String(x || "").trim()).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
-const DEFAULT_MODELS = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-3.6-flash"];
+// 기본 순서: 2.5(가장 빠르고 안정적이나 새 키는 못 씀) → 3.6 → 3.5-lite(마지막 예비: 빠르지만 손글씨 숫자 정확도는 아직 확인 중). 3.8 은 과부하가 잦아 뺐다(시험 버튼으로는 계속 골라 볼 수 있음).
+const DEFAULT_MODELS = ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"];
 const modelList = (m) => (Array.isArray(m) ? m : [m]).map((x) => String(x || "").trim()).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
 const errText = (j) => String((j && j.error && (j.error.status + " " + j.error.message)) || "");
 function isModelGone(j, status) {
