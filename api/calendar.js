@@ -209,6 +209,45 @@ async function pickLoadCompDb() {
   } catch (_) {}
   return {};
 }
+// ───────── 업체명 변경 → 일정·피킹지 연결 이전 ─────────
+//  업체정보에서 이름을 바꾸면 달력 일정(outbound.company)과 피킹지 업체 연결(PICK_ALIAS)도 새 이름으로 옮긴다.
+//  [TASK] 로 시작하는 작업 일정은 업체명이 아니므로 건드리지 않고, 이름이 정확히 같은 행만 옮긴다.
+async function renameCompanyData(oldName, newName) {
+  const [r] = await pool.query(`UPDATE outbound SET company = ? WHERE company = ? AND company NOT LIKE '[TASK]%'`, [newName, oldName]);
+  const moved = r && r.affectedRows ? r.affectedRows : 0;
+  let aliasMoved = 0;
+  try {
+    const [ar] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'PICK_ALIAS'`);
+    if (ar.length) {
+      let am = typeof ar[0].setting_value === "object" ? ar[0].setting_value || {} : JSON.parse(ar[0].setting_value) || {};
+      Object.keys(am).forEach((k) => { if (am[k] === oldName) { am[k] = newName; aliasMoved++; } });
+      if (aliasMoved) { const js = JSON.stringify(am); await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('PICK_ALIAS', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [js, js]); }
+    }
+  } catch (e) { console.error("[업체명 변경] 피킹 연결 이전 실패(무시):", e.sqlMessage || e.message); }
+  return { moved, aliasMoved };
+}
+// 일정에 남아 있는 업체명 중 업체정보(마스터)에 없는 것 — 이름만 바뀐 옛 일정 찾기용. match: 표기만 다른 같은 업체(정규화 비교)
+async function listOrphanCompanies() {
+  const compDb = await pickLoadCompDb();
+  const names = Object.keys(compDb);
+  const [rows] = await pool.query(`SELECT company, COUNT(*) AS n, DATE_FORMAT(MIN(outbound_date), '%Y-%m-%d') AS d1, DATE_FORMAT(MAX(outbound_date), '%Y-%m-%d') AS d2 FROM outbound WHERE company IS NOT NULL AND company <> '' AND company NOT LIKE '[TASK]%' GROUP BY company ORDER BY n DESC LIMIT 300`);
+  const out = [];
+  for (const r of rows) {
+    const nm = String(r.company);
+    if (compDb[nm]) continue; // 업체정보에 있는 이름(대소문자 구분)
+    let match = null;
+    try {
+      const nn = pickLib.normName(nm);
+      match = names.find((f) => pickLib.normName(f) === nn) || null;
+      if (!match) {
+        const c = pickLib.canonCompany(nm, compDb);
+        if (c && compDb[c] && !(pickLib.shortsOf(compDb[c]).includes(nn))) match = c; // 약어로 적힌 일정은 이름 통일 대상 아님
+      }
+    } catch (_) {}
+    out.push({ name: nm, n: Number(r.n) || 0, from: r.d1 || null, to: r.d2 || null, match });
+  }
+  return out;
+}
 function pickSameCompany(a, b, compDb) {
   const na = pickLib.normName(a), nb = pickLib.normName(b);
   if (!na || !nb) return false;
@@ -802,6 +841,8 @@ module.exports = async function (req, res) {
         "GET_ADMIN_CONN_LOGS",
         "SEARCH_SCHEDULES",
         "SAVE_COMP_INFO_DB",
+        "LIST_ORPHAN_COMPANIES",
+        "MOVE_COMPANY_ROWS",
         "GET_CAL_NOTIFY",
         "SET_CAL_NOTIFY",
         "SAVE_GLOBAL_COLOR",
@@ -1987,6 +2028,20 @@ if (action === "VERIFY_SESSION") {
         if (changed.length) parts.push(`수정: ${changed.join(", ")}`);
         // 업체 색상을 함께 바꿨으면 같은 알림 1건에 포함 (SAVE_GLOBAL_COLOR는 별도 알림 없음)
         if (payload.colorNote) parts.push(`색상 변경: ${String(payload.colorNote).replace(/\[TASK\]/gi, "").trim().slice(0, 50)}`);
+        // 🔁 이름 변경이면 달력 일정·피킹지 연결도 새 이름으로 옮긴다 (화면이 '옛 이름 → 새 이름'을 명시해서 보낸 경우만, 업체정보가 실제로 그렇게 바뀐 때만)
+        let renameRes = null;
+        const rn = payload.rename && typeof payload.rename === "object" ? payload.rename : null;
+        if (rn) {
+          const rf = String(rn.from || "").trim(), rt = String(rn.to || "").trim();
+          if (rf && rt && rf !== rt && oldData[rf] && newData[rt] && !newData[rf] && !/^\[TASK\]/i.test(rf)) {
+            try { renameRes = await renameCompanyData(rf, rt); }
+            catch (e) {
+              console.error("[업체명 변경] 일정 이전 실패:", e.sqlMessage || e.message);
+              return res.status(200).json({ success: false, msg: "일정의 업체명을 바꾸지 못해 업체정보도 저장하지 않았습니다. 잠시 뒤 다시 시도해주세요." });
+            }
+            if (renameRes.moved) parts.push(`일정 ${renameRes.moved}건 업체명 변경 (${rf} ➡️ ${rt})`);
+          }
+        }
         const compDesc = parts.length > 0 ? parts.join(" / ") : "변경사항 없음";
         const jsonStr = JSON.stringify(newData);
         await pool.query(
@@ -1998,7 +2053,27 @@ if (action === "VERIFY_SESSION") {
           [currentAdmin, `[업체정보 변경] ${compDesc}`],
         );
         if (parts.length > 0) notifyCalendarChange(`[업체정보 변경] ${compDesc}`, currentAdmin);
-        return res.status(200).json({ success: true });
+        return res.status(200).json(Object.assign({ success: true }, renameRes ? { moved: renameRes.moved, aliasMoved: renameRes.aliasMoved } : {}));
+      } else if (action === "LIST_ORPHAN_COMPANIES") {
+        // 업체정보에 없는 이름으로 남은 일정 목록(이름만 바뀐 옛 일정 정리용, 읽기 전용)
+        try { return res.status(200).json({ success: true, orphans: await listOrphanCompanies() }); }
+        catch (e) { console.error("[업체명] 목록 실패:", e.sqlMessage || e.message); return res.status(200).json({ success: false, msg: "목록을 불러오지 못했습니다." }); }
+      } else if (action === "MOVE_COMPANY_ROWS") {
+        // 이미 이름이 바뀌어 옛 이름으로 남은 일정을 지금 업체명으로 옮김 — 옮길 곳은 업체정보에 있는 이름, 옮길 옛 이름은 업체정보에 없는 이름만
+        const mf = String(data?.from || "").trim(), mt = String(data?.to || "").trim();
+        if (!mf || !mt || mf === mt || /^\[TASK\]/i.test(mf)) return res.status(200).json({ success: false, msg: "옮길 이름이 올바르지 않습니다." });
+        const cdb = await pickLoadCompDb();
+        if (!cdb[mt]) return res.status(200).json({ success: false, msg: "옮길 업체가 업체정보에 없습니다." });
+        if (cdb[mf]) return res.status(200).json({ success: false, msg: "옛 이름이 아니라 현재 등록된 업체입니다." });
+        try {
+          const rr = await renameCompanyData(mf, mt);
+          await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'SYS_COMP', ?)", [currentAdmin, `[업체명 정리] 일정 ${rr.moved}건 ${mf} ➡️ ${mt}`]);
+          if (rr.moved) notifyCalendarChange(`[업체명 정리] 일정 ${rr.moved}건: ${mf} ➡️ ${mt}`, currentAdmin);
+          return res.status(200).json({ success: true, moved: rr.moved, aliasMoved: rr.aliasMoved });
+        } catch (e) {
+          console.error("[업체명] 일정 옮기기 실패:", e.sqlMessage || e.message);
+          return res.status(200).json({ success: false, msg: "일정을 옮기지 못했습니다. 잠시 뒤 다시 시도해주세요." });
+        }
       } else if (action === "GET_CAL_NOTIFY") {
         const [rows] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'CALENDAR_NOTIFY'`);
         const enabled = rows.length === 0 || rows[0].setting_value !== "OFF";

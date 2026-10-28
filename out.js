@@ -6097,6 +6097,7 @@ function renderCompDetail(comp) {
                       <div class="info-row"><span class="info-label">📞 연락처</span><span class="info-value">${info.phone || "-"}</span></div>
                       <div class="info-row"><span class="info-label">🕒 배송 시간</span><span class="info-value">${info.time || "-"}</span></div>
                       <div class="info-row"><span class="info-label">📝 특이사항</span><span class="info-value" style="white-space:pre-wrap; line-height:1.5; background:rgba(255,159,10,0.05); padding:10px; border-radius:10px; border-left:4px solid #ff9f0a;">${info.etc || "-"}</span></div>
+                      <div id="crm-orphan-box"></div>
                       ${isAdmin ? `<button class="edit-toggle-btn" style="margin-top:10px; width:100%; padding:15px; font-size:1em; border-radius:14px; background:var(--btn-bg); color:var(--text-main); font-weight:900;" onclick="swapToEditMode()">✏️ 업체명 및 정보 수정하기</button>` : ""}
                   </div>
                   
@@ -6133,6 +6134,7 @@ function renderCompDetail(comp) {
               </div>
           `;
   document.getElementById("compDetailContainer").innerHTML = html;
+  if (isAdmin) _compOrphanLoad(comp); // 이름만 다른 옛 일정이 남아 있으면 옮기기 안내
 }
 
 function swapToEditMode() {
@@ -6185,7 +6187,7 @@ async function saveCompEdit(oldCompName) {
       showToast(`⚠️ [${newCompName}]은(는) 이미 등록된 업체명입니다.`, 2500);
       return;
     }
-    if (await uiConfirm(`업체 명칭을 [${oldCompName}]에서 [${newCompName}]으로 변경하시겠습니까?`)) {
+    if (await uiConfirm(`업체 명칭을 [${oldCompName}]에서 [${newCompName}]으로 변경하시겠습니까?\n\n※ 달력에 등록된 이 업체의 일정(전체 기간)과 피킹지 업체 연결도 새 이름으로 함께 바뀝니다.`)) {
       delete compInfoDB[oldCompName];
 
       // 기존 색상 정보도 새 이름으로 인계!
@@ -6224,11 +6226,89 @@ async function saveCompEdit(oldCompName) {
   }
 
   localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB));
+  if (oldCompName !== newCompName) {
+    // 이름이 바뀐 저장: 서버가 일정·피킹지 연결까지 새 이름으로 옮긴 결과를 받아야 하므로 응답을 기다린다
+    const rr = await apiCall({ source: "vercel", action: "SAVE_COMP_INFO_DB", data: compInfoDB, colorNote: _crmColorNote, rename: { from: oldCompName, to: newCompName } });
+    if (!(rr && rr.success)) {
+      showToast("⚠️ " + ((rr && rr.msg) || "저장하지 못했습니다. 잠시 뒤 다시 시도해주세요."), 3500);
+      try { const db = await apiCall({ source: "vercel", action: "GET_COMP_INFO_DB" }); if (db) { compInfoDB = db; localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB)); } } catch (_) {} // 서버에 저장된 모습으로 되돌림
+      selectedCrmComp = oldCompName;
+      renderCompList();
+      return;
+    }
+    _compOrphanCache = null;
+    _compRenameLocal(oldCompName, newCompName);
+    showToast(rr.moved ? `💾 저장됨 — 달력 일정 ${rr.moved}건도 새 이름으로 바뀌었어요` : "💾 업체 정보 및 색상이 저장되었습니다.", 2500);
+    renderCompList();
+    renderCalendar();
+    _compRefreshMonth(); // 다른 달·통계 캐시는 비우고 이번 달은 서버에서 다시 받아 확인
+    return;
+  }
   apiCall({ source: "vercel", action: "SAVE_COMP_INFO_DB", data: compInfoDB, colorNote: _crmColorNote });
 
   showToast("💾 업체 정보 및 색상이 저장되었습니다.", 1500);
   renderCompList();
   renderCalendar(); // 달력 즉시 새로고침 (색상 완벽 반영됨!)
+}
+
+// 🔁 업체명이 바뀐 뒤: 화면에 올라와 있는 일정의 업체명을 즉시 새 이름으로(서버는 이미 전체 기간을 바꿨음)
+function _compRenameLocal(from, to) {
+  try {
+    const fix = (it) => { if (it && it.company === from) it.company = to; };
+    if (serverData) {
+      Object.keys(serverData.monthData || {}).forEach((d) => (serverData.monthData[d] || []).forEach(fix));
+      (serverData.pendingItems || []).forEach(fix);
+    }
+  } catch (_) {}
+}
+// 다른 달·연간 통계 캐시를 비우고, 이번 달은 서버에서 다시 받아 화면과 서버가 같은지 확인
+function _compRefreshMonth() {
+  try {
+    Object.keys(localStorage).filter((k) => k.indexOf("cal_cache_") === 0 || k.indexOf("yearly_stats_cache_") === 0).forEach((k) => localStorage.removeItem(k));
+    if (typeof yearlyCache !== "undefined") yearlyCache = {};
+  } catch (_) {}
+  const y = serverData.year, m = serverData.month, nav = window.currentNavId;
+  apiGet({ type: currentType, year: y, month: m }).then((res) => {
+    if (!res || y !== serverData.year || m !== serverData.month || nav !== window.currentNavId) return;
+    res.year = y; res.month = m;
+    res.firstDay = new Date(y, m - 1, 1).getDay();
+    res.daysInMonth = new Date(y, m, 0).getDate();
+    if (typeof preserveCustomOrder === "function") res = preserveCustomOrder(res);
+    serverData = res;
+    try { localStorage.setItem(`cal_cache_${currentType}_${y}_${m}`, JSON.stringify(res)); } catch (_) {}
+    renderCalendar();
+  });
+}
+
+// 🧹 업체정보에 없는 옛 이름으로 남은 일정 — 이 업체의 상세 화면에 '옮기기' 안내를 보여 준다
+let _compOrphanReq = 0, _compOrphanCache = null; // 목록은 1분간 재사용(업체를 누를 때마다 서버를 부르지 않게). 옮기기·이름 변경 뒤에는 비움
+async function _compOrphanLoad(comp) {
+  const box = document.getElementById("crm-orphan-box");
+  if (!box) return;
+  const my = ++_compOrphanReq;
+  let res = _compOrphanCache && Date.now() - _compOrphanCache.t < 60000 ? _compOrphanCache.res : null;
+  if (!res) { res = await apiCall({ source: "vercel", action: "LIST_ORPHAN_COMPANIES" }); if (res && res.success) _compOrphanCache = { t: Date.now(), res }; }
+  const b2 = document.getElementById("crm-orphan-box");
+  if (my !== _compOrphanReq || !b2 || !res || !res.success || !Array.isArray(res.orphans)) return;
+  const like = res.orphans.filter((o) => o.match === comp);
+  const others = res.orphans.filter((o) => !o.match);
+  if (!like.length && !others.length) { b2.innerHTML = ""; return; }
+  const row = (o) => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border-color);font-size:0.88em"><div style="flex:1;min-width:0"><b style="word-break:break-all">${_esc(o.name)}</b><div style="color:var(--text-sub);font-size:0.85em">일정 ${o.n}건${o.from ? " · " + _esc(o.from) + (o.to && o.to !== o.from ? " ~ " + _esc(o.to) : "") : ""}</div></div><button type="button" onclick="_compMoveRows('${_argq(o.name)}', '${_argq(comp)}')" style="flex:none;padding:8px 12px;border-radius:10px;border:1px solid rgba(10,132,255,0.35);background:rgba(10,132,255,0.1);color:#0a84ff;font-weight:800;cursor:pointer">이 업체로 옮기기</button></div>`;
+  b2.innerHTML = `<div style="margin-top:6px;padding:10px 12px;border-radius:12px;background:rgba(255,159,10,0.08);border:1px solid rgba(255,159,10,0.35)">
+    ${like.length ? `<div style="font-weight:900;font-size:0.9em">🔁 이름만 다른 옛 일정이 남아 있어요</div><div style="font-size:0.78em;color:var(--text-sub);margin:2px 0 4px">업체명을 바꾸기 전 이름으로 등록된 일정입니다. 옮기면 전체 기간의 해당 일정이 [${_esc(comp)}]로 바뀝니다.</div>${like.map(row).join("")}` : ""}
+    ${others.length ? `<details style="margin-top:${like.length ? 8 : 0}px"><summary style="cursor:pointer;font-weight:800;font-size:0.85em;color:var(--text-sub)">업체정보에 없는 이름의 일정 ${others.length}종 (다른 업체 이름일 수도 있어요)</summary>${others.map(row).join("")}</details>` : ""}
+  </div>`;
+}
+async function _compMoveRows(from, to) {
+  if (!(await uiConfirm(`[${from}]로 등록된 일정을 모두 [${to}]로 바꿀까요?\n\n전체 기간의 일정이 바뀌며 되돌리려면 다시 이름을 바꿔야 합니다.`))) return;
+  const rr = await apiCall({ source: "vercel", action: "MOVE_COMPANY_ROWS", data: { from, to } });
+  if (!(rr && rr.success)) { showToast("⚠️ " + ((rr && rr.msg) || "옮기지 못했습니다."), 3000); return; }
+  _compOrphanCache = null;
+  _compRenameLocal(from, to);
+  showToast(`✅ 일정 ${rr.moved || 0}건을 [${to}]로 옮겼어요`, 2500);
+  renderCalendar();
+  _compRefreshMonth();
+  _compOrphanLoad(to);
 }
 
 async function deleteCompInfo(comp) {
