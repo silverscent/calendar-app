@@ -1966,6 +1966,20 @@ function loadOcrSplitData() {
       _ocr: r._ocr && typeof r._ocr === "object" ? r._ocr : null, // OCR 당시 파싱값 (이후 고친 값 구분용)
     }));
     ocrOrigRows = JSON.parse(JSON.stringify(ocrEditRows)); // 변경 비교 기준
+    // 🔁 이번 사진에서 새로 읽힌 값(서버가 _pend 로 내려줌)을 표에 미리 채움 — 기준(ocrOrigRows)은 현재 DB 값이라 [확정] 때 '변경'으로 잡혀 반영됨
+    let _pendN = 0;
+    parsed.forEach((r, i) => {
+      const pd = r && r._pend && typeof r._pend === "object" ? r._pend : null;
+      if (!pd || !ocrEditRows[i]) return;
+      const fs = [];
+      Object.keys(pd).forEach((f) => {
+        if (["pal", "eta", "inDate", "fwd", "sType"].indexOf(f) < 0) return;
+        ocrEditRows[i][f] = String(pd[f]);
+        fs.push(f);
+      });
+      if (fs.length) { ocrEditRows[i]._pend = fs; _pendN++; }
+    });
+    if (_pendN) setTimeout(() => showToast(`🟣 사진에서 바뀐 일정 ${_pendN}건을 표에 채워 뒀어요 — 보라색 칸 확인 후 [확정]`, 5000), 300);
 
     if (ocrEditRows.length === 0) {
       innerNow.innerHTML = `<div style="padding:20px; text-align:center; color:#888; font-size:12px;">저장된 파싱 데이터가 없습니다.</div>`;
@@ -1992,7 +2006,10 @@ function renderOcrTable() {
     OCR_COLS.forEach((c) => {
       const v = row[c.key] != null ? String(row[c.key]) : "";
       const wrap = c.key === "etc" ? "white-space:normal; max-width:200px;" : "";
-      html += `<td onclick="onOcrCellTap(this)" data-idx="${idx}" data-field="${c.key}" data-bg="${bg}" style="padding:7px 8px; border:1px solid #ddd; text-align:${c.align}; cursor:pointer; background:${bg}; ${wrap}">${_esc(v)}</td>`;
+      const pf = Array.isArray(row._pend) && row._pend.indexOf(c.key) >= 0; // 사진에서 새로 바뀐 칸(현재 DB 값과 다름)
+      const pTip = pf && ocrOrigRows[idx] ? ` title="사진 새 값 — 현재 DB: ${_esc(String(ocrOrigRows[idx][c.key] == null ? "" : ocrOrigRows[idx][c.key]))}"` : "";
+      const pSty = pf ? " box-shadow:inset 0 0 0 2px #8e44ad; font-weight:bold;" : "";
+      html += `<td onclick="onOcrCellTap(this)" data-idx="${idx}" data-field="${c.key}" data-bg="${bg}"${pTip} style="padding:7px 8px; border:1px solid #ddd; text-align:${c.align}; cursor:pointer; background:${bg}; ${wrap}${pSty}">${_esc(v)}</td>`;
     });
     html += `</tr>`;
   });

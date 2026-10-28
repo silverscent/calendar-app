@@ -12,7 +12,12 @@
 "use strict";
 
 const VISION_TIMEOUT_MS = 15000;
-const GEMINI_TIMEOUT_MS = 35000;
+let GEMINI_TIMEOUT_MS = 45000; // 판독 한 번에 AI 가 쓸 수 있는 전체 시간(서버 한도 60초·앱 대기 55초 안)
+let REREAD_TIMEOUT_MS = 35000; // 2차 판독(앱은 40초까지 기다림)
+let ATTEMPT_MS = 20000; // AI 한 번 시도(키·모델 하나)가 이 시간 안에 응답하지 않으면 그 시도를 끊고 다음 모델·키로 넘어감
+const SLOW_COOL_MS = 3 * 60 * 1000; // 응답이 없던 키·모델은 이 시간 동안 맨 뒤 순서로 미룸(건너뛰지는 않음 — 한도와 달리 일시적으로 느린 것일 수 있어서)
+const _slowUntil = {}; // "키id|모델" → 이 시각까지 순서만 뒤로
+function _setTimeouts(o) { o = o || {}; if (o.attempt) ATTEMPT_MS = o.attempt; if (o.total) GEMINI_TIMEOUT_MS = o.total; if (o.reread) REREAD_TIMEOUT_MS = o.reread; } // (시험용)
 
 // ───────────────────────── 외부 호출 ─────────────────────────
 async function callVision(b64, fetchFn, apiKey) {
@@ -103,7 +108,7 @@ function importKeyState(o) {
   merge(_keyBadUntil, o.keyBad); merge(_modelBadUntil, o.modelBad);
   Object.keys(o.why || {}).forEach((k) => { if (!_badWhy[k]) _badWhy[k] = String(o.why[k]).slice(0, 20); });
 }
-function resetKeyState(onlyRotation) { _rr = 0; _lastProbe = 0; if (onlyRotation) return; _keyBadUntil = {}; _modelBadUntil = {}; _modelGood = {}; _badWhy = {}; } // (시험용)
+function resetKeyState(onlyRotation) { _rr = 0; _lastProbe = 0; if (onlyRotation) return; _keyBadUntil = {}; _modelBadUntil = {}; _modelGood = {}; _badWhy = {}; for (const k in _slowUntil) delete _slowUntil[k]; } // (시험용)
 // 화면 표시용: 키별로 쓸 수 있는지, 막혔다면 어떤 모델이 언제까지 왜
 function keyStatus(keys, models, now) {
   const n = now || Date.now();
@@ -163,17 +168,23 @@ function failLabel(j, status) {
 // body: 문자열 또는 (model, opts)=>문자열. models: 모델 이름 하나 또는 배열(앞에 있는 것부터).
 // 한도(429)·과부하(503)는 모델마다 따로 계산되므로 같은 키에서 다음 모델을 먼저 시도하고, 그래도 안 되면 다음 키로 간다.
 // 반환 { j, status, keyNo, model, quota, trail } — 모두 실패하면 마지막 실패와 시도 내역(trail)을 돌려줌
-async function geminiPost(fetchFn, keys, models, body, signal) {
+async function geminiPost(fetchFn, keys, models, body, signal, opt) {
+  // opt.side: 곁가지 호출(모델 지정 시험·비교용) — 기본 흐름의 '마지막으로 잘 된 모델' 기억과 전부-막힘 확인 시각을 건드리지 않고, 쓸 수 있는 곳이 없으면 확인 시도 없이 바로 실패
+  // opt.force: 쉬는 중으로 표시된 키·모델도 무시하고 시도(모델 지정 시험 — 지정한 모델을 반드시 그 모델로 써 봄)
+  opt = opt || {};
   const list = toKeyList(keys);
   const ms = modelList(models);
   const now = Date.now();
-  const bad = (k, m) => (_modelBadUntil[kid(k) + "|" + m] || 0) > Date.now();
-  const keyBadNow = (k) => (_keyBadUntil[kid(k)] || 0) > now;
+  const bad = (k, m) => !opt.force && (_modelBadUntil[kid(k) + "|" + m] || 0) > Date.now();
+  const keyBadNow = (k) => !opt.force && (_keyBadUntil[kid(k)] || 0) > now;
   const usable = (k) => !keyBadNow(k) && ms.some((m) => !bad(k, m));
   let order = list.map((k, i) => ({ k, i }));
   const live = order.filter((x) => usable(x.k));
   if (live.length) order = live; // 쓸 수 있는 키만(막힌 키·모델은 건너뜀)
   let probe = null;
+  if (!live.length && list.length && opt.side) {
+    return { j: { error: { message: "이 모델은 모든 키에서 한도·과부하로 쉬는 중" } }, status: 429, keyNo: 0, model: null, quota: true, anyQuota: true, skipped: true, retryAt: 0, trail: [], attempts: [] };
+  }
   if (!live.length && list.length) {
     // 전부 막혀 있음: PROBE_MS 안에는 AI 를 부르지 않고 바로 실패 처리한다(한도를 더 쓰지 않고, 사용자가 35초씩 기다리지도 않게).
     // 그 뒤에는 '혹시 풀렸나' 확인으로 가장 먼저 풀릴 키·모델 하나만 시도한다.
@@ -196,29 +207,62 @@ async function geminiPost(fetchFn, keys, models, body, signal) {
     order = [{ k: pk, i: bi }];
     probe = pm;
   }
-  if (order.length > 1) { const st = _rr++ % order.length; order = order.slice(st).concat(order.slice(0, st)); } // 쓸 수 있는 키들을 번갈아 먼저 쓴다(한 키에 몰리지 않게)
+  if (order.length > 1) { const st = (opt.side && !opt.force ? _rr : _rr++) % order.length; order = order.slice(st).concat(order.slice(0, st)); }
+  if (order.length > 1) { // 최근 응답이 없던 모델이 첫 순서인 키는 뒤로(건너뛰지는 않음)
+    const slowFirst = (x) => { const id = kid(x.k), pf = _modelGood[id], f = pf && ms.includes(pf) ? pf : ms.find((m) => !bad(x.k, m)); return f && (_slowUntil[id + "|" + f] || 0) > Date.now() ? 1 : 0; };
+    order = order.map((x, n) => ({ x, n, s: slowFirst(x) })).sort((a, b) => a.s - b.s || a.n - b.n).map((o) => o.x);
+  } // 쓸 수 있는 키들을 번갈아 먼저 쓴다(한 키에 몰리지 않게)
   let last = { j: { error: { message: "AI 키 없음" } }, status: 0, keyNo: 0, model: null, quota: false, trail: [] };
   const trail = [], attempts = []; // attempts: 이번 호출에서 실제로 보낸 시도 내역(키·모델·성공 여부·걸린 시간) — 화면의 '판독 상세'에 보여 줌
   let anyQuota = false;
-  const fin = () => { const pr = keyPressure(list, ms); if (pr.level === "none") _lastProbe = Date.now(); return Object.assign(last, { anyQuota, retryAt: pr.retryAt }); }; // retryAt: 전부 막혔을 때 가장 먼저 풀리는 시각. 방금 전부 막힌 걸 알았으니 확인 시도 간격도 지금부터 셈
+  const fin = () => { const pr = keyPressure(list, ms); if (pr.level === "none" && !opt.side) _lastProbe = Date.now(); return Object.assign(last, { anyQuota, retryAt: pr.retryAt }); }; // retryAt: 전부 막혔을 때 가장 먼저 풀리는 시각. 방금 전부 막힌 걸 알았으니 확인 시도 간격도 지금부터 셈
   for (const { k, i } of order) {
     const id = kid(k);
     const pref = _modelGood[id];
     const base = pref && ms.includes(pref) ? [pref].concat(ms.filter((x) => x !== pref)) : ms;
-    const mlist = base.filter((m) => !bad(k, m)); // 막힌 모델은 건너뜀
+    const isSlow = (m) => (_slowUntil[id + "|" + m] || 0) > Date.now();
+    const mlist = base.filter((m) => !bad(k, m)).sort((a, b) => (isSlow(a) ? 1 : 0) - (isSlow(b) ? 1 : 0)); // 막힌 모델은 건너뛰고, 최근 응답이 없던 모델은 맨 뒤로(안정 정렬)
     for (const m of probe ? [probe] : mlist) {
+      // 시도 하나마다 제한 시간을 둔다: 응답이 없는 키·모델에 전체 시간(45초)을 다 쓰지 않고 곧바로 다음으로 넘어가기 위함
+      const ac = new AbortController();
+      let slow = false;
+      const tid = setTimeout(() => { slow = true; ac.abort(); }, ATTEMPT_MS);
+      const relay = () => ac.abort();
+      if (signal) { if (signal.aborted) ac.abort(); else signal.addEventListener("abort", relay); }
       const send = (opts) => fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${k}`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: typeof body === "function" ? body(m, opts) : body, signal,
+        method: "POST", headers: { "Content-Type": "application/json" }, body: typeof body === "function" ? body(m, opts) : body, signal: ac.signal,
       });
       const ta = Date.now();
-      let r = await send(), j = await r.json();
-      if (typeof body === "function" && j && j.error && Number(j.error.code || r.status) === 400 && /thinking/i.test(errText(j))) { r = await send({ noThink: true }); j = await r.json(); } // 이 모델이 생각 설정을 모르면 설정 없이
+      let r, j;
+      try {
+        r = await send(); j = await r.json();
+        if (typeof body === "function" && j && j.error && Number(j.error.code || r.status) === 400 && /thinking/i.test(errText(j))) { r = await send({ noThink: true }); j = await r.json(); } // 이 모델이 생각 설정을 모르면 설정 없이
+      } catch (e) {
+        clearTimeout(tid); if (signal) signal.removeEventListener("abort", relay);
+        if (slow && !(signal && signal.aborted)) { // 이 시도만 응답이 없었음(전체 제한 시간은 아직 남음) → 기록하고 잠시 건너뛴 뒤 다음 모델·키로
+          const why0 = "시간 초과";
+          attempts.push({ keyNo: i + 1, model: m, ok: false, why: why0, ms: Date.now() - ta });
+          trail.push({ keyNo: i + 1, model: m, why: why0 });
+          _slowUntil[id + "|" + m] = Date.now() + SLOW_COOL_MS;
+          last = { j: { error: { message: "AI 응답 시간 초과" } }, status: 0, keyNo: i + 1, model: m, quota: false, trail, attempts };
+          continue;
+        }
+        if (signal && signal.aborted) { // 전체 제한 시간이 다 됨: 어느 키·모델에서 멈췄는지 남기고(다음 요청이 같은 곳에서 또 멈추지 않게 잠시 건너뜀) 바로 실패로 돌려줌
+          attempts.push({ keyNo: i + 1, model: m, ok: false, why: "시간 초과", ms: Date.now() - ta });
+          trail.push({ keyNo: i + 1, model: m, why: "시간 초과" });
+          _slowUntil[id + "|" + m] = Date.now() + SLOW_COOL_MS;
+          last = { j: { error: { message: "AI 판독 시간 초과" } }, status: 0, keyNo: i + 1, model: m, quota: false, trail, attempts };
+          return fin();
+        }
+        throw e; // 그 밖의 오류(통신 실패 등) → 호출한 쪽이 처리
+      }
+      clearTimeout(tid); if (signal) signal.removeEventListener("abort", relay);
       const hasErr = !!(j && j.error);
       attempts.push({ keyNo: i + 1, model: m, ok: !hasErr, why: hasErr ? failLabel(j, r.status) : "", ms: Date.now() - ta });
       const gone = hasErr && isModelGone(j, r.status);
       const quota = hasErr && !gone && isQuotaErr(j, r.status);
       last = { j, status: r.status, keyNo: i + 1, model: m, quota, trail, attempts };
-      if (!hasErr) { _keyBadUntil[id] = 0; delete _modelBadUntil[id + "|" + m]; delete _badWhy[id + "|" + m]; _modelGood[id] = m; return Object.assign(last, { anyQuota: false, retryAt: 0 }); }
+      if (!hasErr) { delete _slowUntil[id + "|" + m]; _keyBadUntil[id] = 0; delete _modelBadUntil[id + "|" + m]; delete _badWhy[id + "|" + m]; if (!opt.side) _modelGood[id] = m; return Object.assign(last, { anyQuota: false, retryAt: 0 }); }
       const why = failLabel(j, r.status);
       trail.push({ keyNo: i + 1, model: m, why });
       if (gone) { _modelBadUntil[id + "|" + m] = Date.now() + 6 * 3600 * 1000; _badWhy[id + "|" + m] = why; continue; } // 이 키로는 이 모델을 못 씀 → 다음 모델
@@ -284,19 +328,23 @@ async function testKeys(fetchFn, keys, models, extra) {
   };
   return Promise.all(ks.map(one));
 }
+// 시스템 관리자가 시험용으로 고를 수 있는 모델(화면 버튼 이름 → 모델 id). 이 목록 밖의 값은 무시한다
+const PIN_MODELS = { "2.5": "gemini-2.5-flash", "3.8": "gemini-3.8-flash", "3.6": "gemini-3.6-flash", "lite": "gemini-3.5-flash-lite" };
+const SHADOW_MODEL = PIN_MODELS.lite; // 비교 기록용으로 뒤에서 한 번 더 읽어 볼 모델
+const resolvePin = (v) => { const t = String(v == null ? "" : v).trim(); if (PIN_MODELS[t]) return PIN_MODELS[t]; return Object.values(PIN_MODELS).includes(t) ? t : null; };
 const GEMINI_MODELS = () => modelList([process.env.GEMINI_MODEL].concat(DEFAULT_MODELS));
 // 2.5 계열만 thinkingBudget 설정을 알고 있다. 다른 계열은 설정을 빼서 모델이 정한 기본값을 쓴다(알 수 없는 옵션으로 400 이 나는 것을 막음)
 //   3.x 계열은 생각을 끌 수 없고(공식 문서상 gemini-3.8-flash 는 low 가 가장 낮음) 기본값(medium)이면 느려지므로 thinkingLevel "low" 로 줄인다.
 //   그 설정을 서버가 거부하면(thinking 관련 400) geminiPost 가 설정 없이 한 번 더 보낸다(opts.noThink).
 const genCfg = (m, opts) => Object.assign({ temperature: 0.0, responseMimeType: "application/json" }, /^gemini-2\.5/.test(m) ? { thinkingConfig: { thinkingBudget: 0 } } : opts && opts.noThink ? {} : { thinkingConfig: { thinkingLevel: "low" } });
-async function callGemini(b64, mime, fetchFn, apiKey) {
+async function callGemini(b64, mime, fetchFn, apiKey, pin, side) { // pin: 이 모델 하나만 사용(시험) / side: 곁가지 호출(비교 기록)
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), GEMINI_TIMEOUT_MS);
   try {
-    const g = await geminiPost(fetchFn, apiKey, GEMINI_MODELS(), (m, o) => JSON.stringify({
+    const g = await geminiPost(fetchFn, apiKey, pin ? [pin] : GEMINI_MODELS(), (m, o) => JSON.stringify({
       contents: [{ parts: [{ text: GEMINI_PROMPT }, { inline_data: { mime_type: mime || "image/jpeg", data: b64 } }] }],
       generationConfig: genCfg(m, o),
-    }), ctl.signal);
+    }), ctl.signal, pin ? { side: true, force: !side } : undefined);
     const j = g.j;
     const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
     if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음", quota: !!g.anyQuota, retryAt: g.retryAt || 0, attempts: g.attempts || [], skipped: !!g.skipped };
@@ -412,16 +460,16 @@ const REREAD_PROMPT = `아래 그림은 물류 '피킹 리스트'를 찍은 사�
 }
 주의: 날짜(10/23 등)·시간·피킹/검수 칸의 서명·이니셜, 펜으로 그은 동그라미·체크·계산 메모는 값이 아니다. 완박스·혼재박스 칸에는 숫자만 쓰이며, 숫자 1은 짧은 세로선, 7은 위에 가로선이 있는 꼴일 수 있다. 칸이 비었으면 반드시 "empty". 단 칸 안에 사선(/)·세로선(|) 한 줄이라도 그어져 있으면 비어 있는 게 아니라 숫자 1 이다(글자 모양이 단순해서 빈칸으로 착각하기 쉬우니, 완박스·혼재박스 칸에 선이 있는지 꼭 확인). 세 칸이 모두 "empty" 라고 답하기 전에 칸마다 작은 선이라도 없는지 한 번 더 본다. 두 자리 숫자도 있다: 세로선·사선이 나란히 두 개면 11, 세 개면 111 이니 한 개로 합쳐 읽지 말고 선의 개수를 하나씩 세어서 답한다(예: "11" 을 "1" 로 읽는 것이 가장 흔한 실수).`;
 
-async function rereadHandwriting(imgs, mime, fetchFn, apiKey) {
+async function rereadHandwriting(imgs, mime, fetchFn, apiKey, pin) {
   const t0r = Date.now();
   const list = (Array.isArray(imgs) ? imgs : []).filter((x) => typeof x === "string" && x.length > 200).slice(0, 2);
   if (!list.length) return { ok: false, err: "그림이 없습니다" };
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), GEMINI_TIMEOUT_MS);
+  const timer = setTimeout(() => ctl.abort(), REREAD_TIMEOUT_MS);
   try {
     const parts = [{ text: REREAD_PROMPT }];
     list.forEach((b64, i) => { parts.push({ text: `그림 ${i + 1}:` }); parts.push({ inline_data: { mime_type: mime || "image/jpeg", data: b64 } }); });
-    const g = await geminiPost(fetchFn, apiKey, GEMINI_MODELS(), (m, o) => JSON.stringify({ contents: [{ parts }], generationConfig: genCfg(m, o) }), ctl.signal);
+    const g = await geminiPost(fetchFn, apiKey, pin ? [pin] : GEMINI_MODELS(), (m, o) => JSON.stringify({ contents: [{ parts }], generationConfig: genCfg(m, o) }), ctl.signal, pin ? { side: true, force: true } : undefined);
     const j = g.j;
     const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
     if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음", quota: !!g.anyQuota, retryAt: g.retryAt || 0, ms: Date.now() - t0r, attempts: g.attempts || [] };
@@ -455,10 +503,13 @@ function normReread(o) {
 function computePickStats(rows) {
   const zero = (v) => (v === "empty" ? 0 : v);
   const FIELDS = [["plt", "plt", "PLT"], ["wanbox", "wan", "완박스"], ["honjae", "hon", "혼재박스"]];
-  const out = { parses: rows.length, registered: 0, fields: {}, company: { n: 0, ok: 0 }, mismatches: [], reread: { n: 0, used: 0, errors: 0 }, timing: null, retries: { rot: 0, enh: 0 }, hw: { n: 0, found: 0 }, unreg: 0, cross: { n: 0, same: 0, skipped: 0, fields: {}, diffs: [] } };
+  const out = { parses: rows.length, registered: 0, fields: {}, company: { n: 0, ok: 0 }, mismatches: [], reread: { n: 0, used: 0, errors: 0 }, timing: null, retries: { rot: 0, enh: 0 }, hw: { n: 0, found: 0 }, unreg: 0, cross: { n: 0, same: 0, skipped: 0, fields: {}, diffs: [] }, models: [], shadow: { n: 0, fail: 0, agreeN: 0, agree: 0, diffs: [] } };
   FIELDS.forEach(([k]) => { out.cross.fields[k] = { n: 0, same: 0 }; });
   FIELDS.forEach(([k, , lab]) => { out.fields[k] = { label: lab, n: 0, first: 0, second: 0, secondN: 0, agreeN: 0, agreeOk: 0, diffN: 0, diffFirstOk: 0, diffSecondOk: 0, diffNeither: 0 }; });
   const tt = [], tv = [], tg = [], kb = [], byModel = {};
+  const mstat = {}; // 모델별 정확도(AI 가 직접 읽은 값 기준): { n: 읽은 건수, nf: 사람이 확정한 건수, ok: {필드: 맞은 수}, pinned: 지정 시험 건수, ms: [걸린 시간] }
+  const mget = (m) => (mstat[m] = mstat[m] || { model: m, n: 0, nf: 0, ok: { plt: 0, wanbox: 0, honjae: 0 }, allOk: 0, pinned: 0, ms: [] });
+  const rawNum = (v) => (v === "empty" ? 0 : v === undefined ? null : v);
   for (const r of rows) {
     const P = r.parsed || {}, S = r.reread || null, F = r.final || null;
     if (P.timing && Number(P.timing.total) > 0) { tt.push(Number(P.timing.total)); if (Number(P.timing.vision) > 0) tv.push(Number(P.timing.vision)); if (Number(P.timing.gemini) > 0) { tg.push(Number(P.timing.gemini)); if (P.timing.model) { const mm = (byModel[P.timing.model] = byModel[P.timing.model] || []); mm.push(Number(P.timing.gemini)); } } }
@@ -471,6 +522,39 @@ function computePickStats(rows) {
     // 등록하지 않아도 볼 수 있는 신뢰도: 1차 판독과 2차 판독(손글씨 줄만 잘라 다시 읽기)이 같은 값인지. 정답은 모르지만 서로 다르면 어느 한쪽은 틀린 것이다.
     //   (한쪽이 '못 읽음' 이고 다른 쪽이 0/빈칸이면 빈칸으로 보고 같은 것으로 센다 — 위 blankOk 와 같은 규칙)
     if (!F) out.unreg++;
+    // 모델별 비교: 주 판독(AI 가 직접 읽은 값)과 곁가지 lite 판독 각각을 사람이 확정한 값과 견줌
+    for (const [src, isShadow] of [[P.aiRaw, false], [P.shadow && P.shadow.ok ? P.shadow : null, true]]) {
+      if (!src || !src.model) continue;
+      const ms = mget(src.model);
+      ms.n++;
+      if (!isShadow && P.pinned) ms.pinned++;
+      const tm = isShadow ? src.ms : P.timing && P.timing.gemini;
+      if (Number(tm) > 0) ms.ms.push(Number(tm));
+      if (F) {
+        ms.nf++;
+        let all = true, any = false;
+        for (const [k, fk] of FIELDS) {
+          const fin = F[fk];
+          if (fin === undefined || fin === null || fin === "") continue;
+          any = true;
+          const fnum = Number(fin), v = rawNum(src[k]);
+          const ok = (v !== null && Number(v) === fnum) || (v === null && fnum === 0);
+          if (ok) ms.ok[k]++; else all = false;
+        }
+        if (any && all) ms.allOk++;
+      }
+    }
+    if (P.shadow) {
+      if (P.shadow.ok) {
+        out.shadow.n++;
+        if (P.aiRaw && P.aiRaw.model !== P.shadow.model) {
+          out.shadow.agreeN++;
+          const same = FIELDS.every(([k]) => { const a = rawNum(P.aiRaw[k]), b = rawNum(P.shadow[k]); return (a !== null && b !== null && Number(a) === Number(b)) || (a === null && b === 0) || (b === null && a === 0); });
+          if (same) out.shadow.agree++;
+          else if (out.shadow.diffs.length < 20) out.shadow.diffs.push({ orderNo: r.order_no || "", main: { model: P.aiRaw.model, plt: P.aiRaw.plt, wanbox: P.aiRaw.wanbox, honjae: P.aiRaw.honjae }, lite: { plt: P.shadow.plt, wanbox: P.shadow.wanbox, honjae: P.shadow.honjae }, final: F ? { plt: F.plt, wan: F.wan, hon: F.hon } : null });
+        }
+      } else out.shadow.fail++;
+    }
     if (S && !S.error) {
       out.cross.n++;
       let allSame = true; const items = [];
@@ -510,6 +594,7 @@ function computePickStats(rows) {
     }
   }
   const avg = (a) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
+  out.models = Object.keys(mstat).map((m) => { const x = mstat[m]; return { model: x.model, n: x.n, nf: x.nf, ok: x.ok, allOk: x.allOk, pinned: x.pinned, msAvg: avg(x.ms) }; }).sort((a, b) => b.n - a.n);
   if (tt.length) out.timing = { n: tt.length, avg: avg(tt), max: Math.max(...tt), over20: tt.filter((x) => x > 20000).length, visionAvg: avg(tv), geminiAvg: avg(tg), kbAvg: avg(kb), models: Object.keys(byModel).map((m) => ({ model: m, n: byModel[m].length, avg: avg(byModel[m]) })) };
   return out;
 }
@@ -972,10 +1057,19 @@ async function parsePicking(b64, mime, opts) {
   const errs = [];
   const t0 = Date.now();
   const timed = async (p) => { const r = await p; r.ms = Date.now() - t0; return r; }; // 단계별 소요시간(ms) — 어디서 느려지는지 통계로 보기 위함
-  const [v, g] = await Promise.all([
-    timed(callVision(b64, fetchFn, opts.visionKey)),
-    timed(callGemini(b64, mime, fetchFn, opts.geminiKey)),
-  ]);
+  const pin = resolvePin(opts && opts.model); // 시스템 관리자가 모델을 지정한 시험 판독이면 그 모델만 사용(기본 흐름·기억에는 영향 없음)
+  // 비교 기록: 기본 판독 중이고 키 여유가 충분하면(ok) lite 모델로 같은 사진을 뒤에서 한 번 더 읽어 결과만 남긴다(화면·등록에는 쓰지 않음)
+  //   본 판독을 먼저 시작해 키 돌려쓰기·모델 순서가 곁가지 때문에 달라지지 않게 한다
+  const pVision = timed(callVision(b64, fetchFn, opts.visionKey));
+  const pMain = timed(callGemini(b64, mime, fetchFn, opts.geminiKey, pin, false));
+  let shadowP = null;
+  try {
+    if (!pin && !(opts && opts.shadow === false) && keyPressure(opts.geminiKey, GEMINI_MODELS()).level === "ok") {
+      const ts = Date.now();
+      shadowP = callGemini(b64, mime, fetchFn, opts.geminiKey, SHADOW_MODEL, true).then((r) => { r.ms = Date.now() - ts; return r; });
+    }
+  } catch (_) { shadowP = null; }
+  const [v, g] = await Promise.all([pVision, pMain]);
   if (!v.ok) errs.push(v.err);
   if (!g.ok) errs.push(g.err);
   if (!v.ok && !g.ok) return { ok: false, err: errs.join(" / ") };
@@ -996,9 +1090,21 @@ async function parsePicking(b64, mime, opts) {
     const gd = g.ok ? g.data || {} : {};
     out.hwAgree = !!(g.ok && ["plt", "wanbox", "honjae"].every((k) => { const G = toInt(gd[k]); return G !== null && hw[k] !== undefined && hw[k] === G && !(Array.isArray(gd.uncertain) && gd.uncertain.includes(k)); }));
   } catch (_) { out.hwAgree = false; }
-  out.timing = { total: Date.now() - t0, vision: v.ms || null, gemini: g.ms || null, model: g.ok ? g.model || null : null, keyNo: g.ok ? g.keyNo || null : null, attempts: Array.isArray(g.attempts) ? g.attempts.slice(0, 9) : [], aiSkipped: !!g.skipped, visionOk: !!v.ok };
+  // 모델별 정확도 비교용: 합치기 전 AI 가 직접 읽은 값(모델 이름 포함)과, 곁가지로 읽은 lite 결과
+  try {
+    const pickRaw = (d) => { const o = {}; ["plt", "wanbox", "honjae"].forEach((k) => { const x = d ? d[k] : undefined; o[k] = x === undefined ? null : x === "empty" ? "empty" : toInt(x); }); return o; };
+    out.aiRaw = g.ok ? Object.assign({ model: g.model || null, keyNo: g.keyNo || null }, pickRaw(g.data)) : null;
+    out.pinned = pin || null;
+    out.shadow = null;
+    if (shadowP) {
+      const sr = await Promise.race([shadowP, new Promise((r) => setTimeout(() => r({ ok: false, err: "대기 시간 초과", timeout: true }), 3000))]); // 본 판독이 끝난 뒤 최대 3초만 더 기다림
+      out.shadow = sr.ok ? Object.assign({ model: SHADOW_MODEL, ok: true, ms: sr.ms || null }, pickRaw(sr.data)) : { model: SHADOW_MODEL, ok: false, err: String(sr.err || "실패").slice(0, 40), ms: sr.ms || null };
+      if (sr.skipped) out.shadow = null; // 쉬는 중이라 부르지도 않았으면 기록하지 않음
+    }
+  } catch (_) { out.shadow = null; }
+  out.timing = { total: Date.now() - t0, vision: v.ms || null, gemini: g.ms || null, model: g.ok ? g.model || null : null, keyNo: g.ok ? g.keyNo || null : null, attempts: Array.isArray(g.attempts) ? g.attempts.slice(0, 9) : [], aiSkipped: !!g.skipped, visionOk: !!v.ok, pinned: pin || null };
   out.ok = true;
   return out;
 }
 
-module.exports = { testKeys, keyPressure, geminiPost, geminiWhy, exportKeyState, importKeyState, resetKeyState, keyStatus, coolMs, msToPacificMidnight, DEFAULT_MODELS, GEMINI_MODELS, genCfg, toKeyList, handRegions, rereadHandwriting, normReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };
+module.exports = { PIN_MODELS, SHADOW_MODEL, resolvePin, _setTimeouts, testKeys, keyPressure, geminiPost, geminiWhy, exportKeyState, importKeyState, resetKeyState, keyStatus, coolMs, msToPacificMidnight, DEFAULT_MODELS, GEMINI_MODELS, genCfg, toKeyList, handRegions, rereadHandwriting, normReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };

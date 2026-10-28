@@ -29,6 +29,24 @@ const crypto = require("crypto");
 const pickLib = require("./_pick.js"); // 출고 피킹지 사진 판독 (api/_pick.js)
 const ocrLib = require("./_ocr.js"); // 입고 OCR 읽기 엔진 — 앱에서 사진 업로드용 (api/_ocr.js)
 
+// 🔁 입고 OCR 대조용: 값 비교 도우미 — 날짜는 YYYY-MM-DD 로 맞추고 미정/빈값/비정상은 ""
+const _ocrNd = (v) => {
+  const m = String(v == null ? "" : v).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return "";
+  const y = +m[1];
+  if (y < 2000 || y > 2100) return "";
+  return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+};
+const _ocrCmpField = {
+  eta: _ocrNd,
+  inDate: _ocrNd,
+  pal: (v) => { const n = parseInt(String(v == null ? "" : v).replace(/\D/g, ""), 10); return n > 0 ? String(n) : ""; },
+  fwd: (v) => String(v == null ? "" : v).replace(/\s+/g, "").toUpperCase(),
+  sType: (v) => String(v == null ? "" : v).replace(/\s+/g, "").toUpperCase(),
+};
+const _OCR_PEND_FIELDS = ["pal", "eta", "inDate", "fwd", "sType"]; // 새 OCR 값을 '반영 제안'으로 보여 줄 칸 (B/L·인보이스·비고는 제외)
+const _ocrDbVal = (d, f) => (f === "pal" ? d.pallets : f === "inDate" ? d.receive_date : f === "eta" ? d.eta : f === "sType" ? d.s_type : d[f]);
+
 // 📲 달력 변경 텔레그램 알림
 // 1:1 DM 전송: ADMIN_TELEGRAM_USER_ID = 봇과 1:1 대화 chat_id (사용자 개인 ID)
 // 본인이 직접 한 변경은 알림 제외: TELEGRAM_OWNER_ID 환경변수에 본인 admin_id 설정
@@ -231,6 +249,7 @@ function pickParsedSnapshot(parsed, comp, extra) {
     addExisting: !!parsed.addExisting, mergeHint: !!parsed.mergeHint, ai: parsed.ai || null,
     flags: { plt: lv("plt"), wanbox: lv("wanbox"), honjae: lv("honjae"), customer: lv("customer"), shipDate: lv("shipDate") },
     tilt: parsed.hwRegions ? parsed.hwRegions.tilt : null, hwFound: !!parsed.hwRegions, hwAgree: parsed.hwAgree === true,
+    aiRaw: parsed.aiRaw || null, shadow: parsed.shadow || null, pinned: parsed.pinned || null, // 모델별 비교용: AI 가 합치기 전에 직접 읽은 값 / lite 곁가지 결과 / 모델 지정 시험 여부
     timing: parsed.timing || null, kb: extra && extra.kb ? extra.kb : null, meta: extra && extra.meta ? extra.meta : null, // 소요시간·사진 크기(KB)·화면이 돌리거나 보정해 다시 보냈는지
   };
 }
@@ -2573,6 +2592,20 @@ if (action === "VERIFY_SESSION") {
                   continue;
                 }
                 if (d.status === "완료") continue; // 입고 완료 → 대조창에서 제외
+                // 🔁 이번 사진에서 새로 읽힌 값(OCR) ≠ 현재 DB 이고, DB 가 OCR 시점(_base) 이후 안 고쳐졌다면 → '반영 제안'(_pend)
+                //    사람이 OCR 이후 고친 값(DB ≠ _base)은 그대로 DB 값 유지. OCR 이 날짜를 못 읽은 경우(미정/비정상)는 제안하지 않음.
+                let pend = null;
+                if (r._base && typeof r._base === "object") {
+                  for (const f of _OCR_PEND_FIELDS) {
+                    const cmp = _ocrCmpField[f];
+                    const ov = cmp(r[f]);
+                    if (!ov) continue;
+                    const cur = cmp(_ocrDbVal(d, f));
+                    if (ov === cur) continue;
+                    if (cmp(r._base[f]) !== cur) continue;
+                    (pend = pend || {})[f] = f === "pal" ? String(parseInt(r[f], 10)) : (f === "eta" || f === "inDate") ? ov : String(r[f]).trim();
+                  }
+                }
                 merged.push({
                   ...r, // iy/ih/cx 등 좌표 유지
                   _ocr: { bl: r.bl || "", eta: r.eta || "", inDate: r.inDate || "", invoice: r.invoice || "", pal: r.pal != null ? String(r.pal) : "", fwd: r.fwd || "", sType: r.sType || "", etc: r.etc || "" }, // OCR 당시 파싱값 (대조창에서 '이후 사람이 고친 값' 구분용)
@@ -2584,6 +2617,7 @@ if (action === "VERIFY_SESSION") {
                   sType: d.s_type || "",
                   invoice: d.invoice || "",
                   etc: d.remarks || "",
+                  _pend: pend, // {필드: OCR 새 값} — 클라가 표에 미리 채우고 보라색으로 표시(확정해야 DB 반영)
                 });
               }
               parsedData = merged;
@@ -2726,6 +2760,29 @@ if (action === "VERIFY_SESSION") {
           } catch (fe) { customFilters = []; }
           out.rows.forEach((r) => { r.etc = ocrLib.cleanEtcText(r.etc, customFilters); });
 
+          // 🔁 OCR 시점의 DB 값을 행마다 기록(_base) — 대조창이 '그 뒤 달력에서 사람이 고친 값'과 '이번 사진에서 새로 바뀐 값'을 구분하기 위함
+          //    (이게 없으면 기존 일정의 날짜가 사진에서 바뀌어도 대조창엔 옛 DB 값만 보여 변경을 못 읽은 것처럼 보였음)
+          try {
+            const _cb = (v) => String(v || "").replace(/[\s•·\-\*]/g, "");
+            const _inv = out.rows.map((r) => String(r.invoice || "").trim()).filter(Boolean);
+            const _bls = out.rows.map((r) => _cb(r.bl)).filter((b) => b && b !== "발행전");
+            const _wp = [], _wa = [];
+            if (_inv.length) { _wp.push("invoice IN (?)"); _wa.push(_inv); }
+            if (_bls.length) { _wp.push("bl_number IN (?)"); _wa.push(_bls); }
+            if (_wp.length) {
+              const [dbr] = await pool.query("SELECT bl_number, pallets, DATE_FORMAT(eta,'%Y-%m-%d') AS eta, DATE_FORMAT(receive_date,'%Y-%m-%d') AS receive_date, fwd, s_type, invoice, status FROM inbound WHERE " + _wp.join(" OR "), _wa);
+              const bi = {}, bb = {};
+              dbr.forEach((d) => { if (d.invoice) bi[String(d.invoice).trim()] = d; if (d.bl_number) bb[_cb(d.bl_number)] = d; });
+              out.rows.forEach((r) => {
+                const inv = String(r.invoice || "").trim(), blc = _cb(r.bl);
+                const d = (inv && bi[inv]) || (blc && blc !== "발행전" && bb[blc]) || null;
+                if (!d || d.status === "완료") return;
+                r._base = {};
+                _OCR_PEND_FIELDS.forEach((f) => { r._base[f] = _ocrDbVal(d, f) == null ? "" : String(_ocrDbVal(d, f)); });
+              });
+            }
+          } catch (baseErr) { console.error("OCR 기준값(_base) 기록 실패(무시):", baseErr.message); }
+
           // 최근 OCR 로 저장 (이미지는 앱에서 올린 사진 자체를 data URL 로 보관 — 대조창이 그대로 표시)
           const KST = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
           const timeStr = `${KST.getMonth() + 1}월${KST.getDate()}일 ${String(KST.getHours()).padStart(2, "0")}:${String(KST.getMinutes()).padStart(2, "0")}`;
@@ -2760,6 +2817,8 @@ if (action === "VERIFY_SESSION") {
           fetch,
           visionKey: process.env.GOOGLE_VISION_API_KEY,
           geminiKey: pickGeminiKeys(), // 키가 여러 개(다른 프로젝트)면 번갈아 쓰고, 한도·과부하로 막힌 키는 풀릴 때까지 건너뜀
+          model: _ctx && _ctx.isSystem ? pickLib.resolvePin(data?.model) : null, // 🧪 모델 지정 시험 — 시스템 관리자만(그 외 사용자가 보내도 무시)
+          shadow: process.env.PICK_SHADOW !== "0", // lite 비교 기록(끄려면 환경변수 PICK_SHADOW=0)
         });
         await geminiStateSave();
         if (parsed.ok && parsed.aiQuota && parsed.pressure && parsed.pressure.level === "none") await geminiAlertAllBlocked(parsed.aiRetryAt || parsed.pressure.retryAt);
@@ -2790,7 +2849,7 @@ if (action === "VERIFY_SESSION") {
           }
         } catch (_) {}
 
-        const parseId = await pickLogInsert(currentAdmin, pickParsedSnapshot(parsed, comp, { kb: Math.round((b64.length * 3) / 4 / 1024), meta: { rot: data?.meta?.rot === true, enh: data?.meta?.enh === true } }));
+        const parseId = await pickLogInsert(currentAdmin, pickParsedSnapshot(parsed, comp, { kb: Math.round((b64.length * 3) / 4 / 1024), meta: { rot: data?.meta?.rot === true, enh: data?.meta?.enh === true, pin: parsed.pinned || null } }));
         return res.status(200).json({ success: true, result: parsed, company: comp, duplicate, dupInfo, legacy, parseId });
       } else if (action === "PICK_REREAD") {
         // 🔍 손글씨 2차 판독: 앱이 1차 판독이 알려준 손글씨 영역만 잘라 보낸 그림(1~2장)을 한 번 더 읽는다 (등록은 하지 않음)
@@ -2801,13 +2860,14 @@ if (action === "VERIFY_SESSION") {
         if (!pickGeminiKeys().length) return res.status(200).json({ success: false, msg: "AI 키가 설정되어 있지 않습니다." });
         const mimeR = /^image\/(jpeg|png|webp)$/.test(String(data?.mime || "")) ? data.mime : "image/jpeg";
         await geminiStateLoad();
-        const rr = await pickLib.rereadHandwriting(clean, mimeR, fetch, pickGeminiKeys());
+        const pinR = _ctx && _ctx.isSystem ? pickLib.resolvePin(data?.model) : null; // 🧪 모델 지정 시험(시스템 관리자만)
+        const rr = await pickLib.rereadHandwriting(clean, mimeR, fetch, pickGeminiKeys(), pinR);
         await geminiStateSave();
         if (!rr.ok) {
           await pickLogSet(data?.parseId, "reread", { error: String(rr.err || "").slice(0, 80) }, currentAdmin);
           return res.status(200).json({ success: false, msg: "2차 판독 실패: " + (rr.err || "알 수 없는 오류"), quota: !!rr.quota, retryAt: rr.retryAt || 0, timing: { ms: rr.ms || null, attempts: rr.attempts || [] } });
         }
-        await pickLogSet(data?.parseId, "reread", rr.data, currentAdmin);
+        await pickLogSet(data?.parseId, "reread", Object.assign({}, rr.data, { _m: rr.model || null }), currentAdmin);
         return res.status(200).json({ success: true, hw: rr.data, timing: { ms: rr.ms || null, model: rr.model || null, keyNo: rr.keyNo || null, attempts: rr.attempts || [] } });
       } else if (action === "PICK_KEYTEST") {
         // 🔑 AI 키·모델 점검 (시스템 관리자 전용 — SYSTEM_ONLY_ACTIONS 에서 선차단): 키마다 모델 목록 조회 + 모델별 작은 요청 1회
