@@ -2954,15 +2954,35 @@ function alignOcrTableToImage() {
     if (typeof r.iy === "number" && !r._fromDb && trs[i]) pts.push({ i, y: pane.clientHeight / 2 + (r.iy / img.naturalHeight - 0.5) * dispH + ocrTransform.y }); // 줄의 세로 중심(패널 위쪽 기준)
   });
   if (!pts.length || !(scale > 0)) return false;
-  // 이미지의 줄 간격은 일정하다고 보고, 줄 좌표(iy)에 섞인 오차(보간·외삽·겹침)에 흔들리지 않게 '중앙값'으로 줄 간격과 시작 위치를 구함
+  // 이미지의 줄 간격은 일정하다고 보고(표 사진), 줄 좌표(iy)에 섞인 오차(보간·외삽·겹침)에 흔들리지 않게 모든 줄을 쓴 최소제곱 직선(y = base + i × 줄 간격)으로 구함.
+  //  크게 벗어난 줄(잔차가 중앙값의 3배·6px 초과)은 빼고 한 번 더 구한다. 직선이 이상하면 중앙값 방식으로 대체.
   const med = (a) => { const t = a.slice().sort((x, y) => x - y); return t.length ? (t.length % 2 ? t[(t.length - 1) / 2] : (t[t.length / 2 - 1] + t[t.length / 2]) / 2) : NaN; };
-  const slopes = [];
-  for (let k = 1; k < pts.length; k++) { const d = (pts[k].y - pts[k - 1].y) / (pts[k].i - pts[k - 1].i); if (isFinite(d) && d > 0) slopes.push(d); }
+  const lsq = (P) => {
+    const n = P.length; let sx = 0, sy = 0, sxx = 0, sxy = 0;
+    P.forEach((q) => { sx += q.i; sy += q.y; sxx += q.i * q.i; sxy += q.i * q.y; });
+    const den = n * sxx - sx * sx;
+    if (n < 2 || den === 0) return { a: NaN, b: NaN };
+    const b = (n * sxy - sx * sy) / den;
+    return { a: (sy - b * sx) / n, b };
+  };
+  let use = pts, L = lsq(use);
+  if (use.length >= 4 && isFinite(L.b)) {
+    const res = use.map((q) => Math.abs(q.y - (L.a + L.b * q.i)));
+    const lim = Math.max(3 * med(res), 6);
+    const keep = use.filter((q, k) => res[k] <= lim);
+    if (keep.length >= 3 && keep.length < use.length) { use = keep; L = lsq(use); }
+  }
   const rawFirst = pts.length > 1 ? pts[1].y - pts[0].y : NaN; // (진단용) 첫 두 줄의 간격
   const natH = trs[pts[0].i].getBoundingClientRect().height;
-  let pitch = med(slopes);
-  if (!(pitch >= 12 && pitch <= 90)) pitch = Math.max(natH, 24); // 줄 간격을 못 믿겠으면 기본 줄 높이
-  const base = med(pts.map((q) => q.y - q.i * pitch)); // 0번 줄의 중심
+  let pitch = L.b, base = L.a; // base = 0번 줄의 중심
+  if (!(pitch >= 12 && pitch <= 90) || !isFinite(base)) {
+    const slopes = [];
+    for (let k = 1; k < pts.length; k++) { const d = (pts[k].y - pts[k - 1].y) / (pts[k].i - pts[k - 1].i); if (isFinite(d) && d > 0) slopes.push(d); }
+    pitch = med(slopes);
+    if (!(pitch >= 12 && pitch <= 90)) pitch = Math.max(natH, 24); // 줄 간격을 못 믿겠으면 기본 줄 높이
+    base = med(pts.map((q) => q.y - q.i * pitch));
+  }
+  const rawDev = Math.max.apply(null, pts.map((q) => Math.abs(q.y - (base + q.i * pitch)))); // (진단용) 줄 좌표가 직선에서 벗어난 최대치
   const idxs = [], Y = [];
   const lastI = pts[pts.length - 1].i;
   for (let i = 0; i <= lastI; i++) if (trs[i] && !(ocrEditRows[i] && ocrEditRows[i]._fromDb)) { idxs.push(i); Y.push(base + i * pitch); }
@@ -3007,7 +3027,7 @@ function alignOcrTableToImage() {
     const sp = document.createElement("div");
     sp.id = "ocrAlignDiag";
     sp.style.cssText = "font-size:10px;opacity:0.7";
-    sp.textContent = `표↔이미지 맞춤 v4 · 이미지 줄 ${pitch.toFixed(1)}px(첫 간격 ${isFinite(rawFirst) ? rawFirst.toFixed(1) : "-"}) · 표 줄 ${trs[idxs[0]].getBoundingClientRect().height.toFixed(1)}px · 어긋남 최대 ${worst.toFixed(1)}px`;
+    sp.textContent = `표↔이미지 맞춤 v5 · 이미지 줄 ${pitch.toFixed(1)}px(첫 간격 ${isFinite(rawFirst) ? rawFirst.toFixed(1) : "-"}) · 줄 좌표 오차 최대 ${rawDev.toFixed(1)}px · 표 줄 ${trs[idxs[0]].getBoundingClientRect().height.toFixed(1)}px · 어긋남 최대 ${worst.toFixed(1)}px`;
     hint.appendChild(sp);
   }
   _ocrTblAlign = true;
