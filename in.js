@@ -2946,16 +2946,14 @@ function alignOcrTableToImage() {
   trs.forEach((tr) => { tr.style.height = ""; Array.from(tr.children).forEach((td) => (td.style.padding = "")); }); // 이전 맞춤 제거 후 다시 계산
   table.style.marginTop = "";
   tpane.scrollTop = 0;
-  const ir = img.getBoundingClientRect();
-  const scale = ir.height / img.naturalHeight; // 이미지 1px 이 화면에서 차지하는 높이(지금 보이는 상태 그대로)
-  const top0 = pane.getBoundingClientRect().top;
+  // 이미지 위 각 줄의 세로 위치 — 왼쪽 노란 밴드(positionOcrHilite)와 같은 계산식(화면에 그려지는 중인 값이 아니라 현재 상태값으로 계산)
+  const dispH = ocrImgFit.h * ocrTransform.scale; // 화면상 이미지 높이
+  const scale = dispH / img.naturalHeight; // 이미지 1px 이 화면에서 차지하는 높이
   const idxs = [];
   (ocrEditRows || []).forEach((r, i) => { if (typeof r.iy === "number" && !r._fromDb && trs[i]) idxs.push(i); });
-  if (!idxs.length || !scale) return false;
-  const Y = idxs.map((i) => ir.top - top0 + ocrEditRows[i].iy * scale); // 각 줄의 이미지 위 세로 중심
+  if (!idxs.length || !(scale > 0)) return false;
+  const Y = idxs.map((i) => pane.clientHeight / 2 + (ocrEditRows[i].iy / img.naturalHeight - 0.5) * dispH + ocrTransform.y); // 각 줄의 세로 중심(패널 위쪽 기준)
   const pitchAt = (k) => (Y.length < 2 ? 24 : k < Y.length - 1 ? Y[k + 1] - Y[k] : Y[k] - Y[k - 1]);
-  const head = table.querySelector("thead");
-  const headH = head ? head.getBoundingClientRect().height : 0;
   const nat = trs[idxs[0]].getBoundingClientRect().height; // 손대지 않은 한 줄 높이
   const tight = idxs.some((_, k) => pitchAt(k) > 0 && pitchAt(k) < nat); // 이미지 줄 간격이 표 기본 줄 높이보다 좁으면 칸 여백을 줄여서 맞춤
   idxs.forEach((i, k) => {
@@ -2963,7 +2961,10 @@ function alignOcrTableToImage() {
     trs[i].style.height = h + "px";
     if (tight) Array.from(trs[i].children).forEach((td) => (td.style.padding = "2px 8px"));
   });
-  const off = Y[0] - pitchAt(0) / 2 - (headH + 2); // 첫 줄의 윗선을 이미지 첫 줄 윗선에 맞추는 데 필요한 여백
+  // 첫 줄이 실제로 놓인 자리를 재서(머리글·여백 높이를 추정하지 않고) 이미지 첫 줄의 윗선까지 필요한 만큼만 아래로 내림
+  const want = Y[0] - pitchAt(0) / 2; // 이미지 첫 줄의 윗선
+  const have = trs[idxs[0]].getBoundingClientRect().top - tpane.getBoundingClientRect().top; // 표 첫 줄의 윗선(여백 0일 때)
+  const off = want - have;
   if (off >= 0) table.style.marginTop = off + "px";
   else tpane.scrollTop = -off; // 이미지 첫 줄이 맨 위에 가까우면 표를 살짝 올려서 맞춤
   _ocrTblAlign = true;
