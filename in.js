@@ -2132,7 +2132,8 @@ function positionOcrHilite() {
   band.style.display = "block";
 }
 
-// 셀 탭 시 → 왼쪽 이미지를 그 행(+탭한 열)으로 확대(4.5배) + 정렬(가장자리 클램프)
+// 셀 탭 시 → 왼쪽 이미지를 그 행(+탭한 열)으로 정렬(확대 없음, 이미 확대해 둔 경우 그 배율 유지)(가장자리 클램프)
+const OCR_TAP_SCALE = 1; // 셀 탭 시 최소 배율(1 = 확대 없음, 줄 하이라이트만 이동)
 const OCR_LEFT_COLS = new Set(["bl", "pal", "eta", "inDate"]); // 좌측 영역 열
 function locateOcrImage(idx, field) {
   const r = ocrEditRows[idx];
@@ -2140,7 +2141,8 @@ function locateOcrImage(idx, field) {
   const pane = document.getElementById("ocrPaneImg");
   if (!img || !pane || !r || typeof r.iy !== "number" || !img.naturalHeight || !ocrImgFit.w) return false;
   const f = Math.max(0, Math.min(r.iy / img.naturalHeight, 1)); // 이미지 세로 비율(0~1)
-  const targetScale = 4.5;
+  // 탭해도 이미지를 따로 확대하지 않음(표와 크기가 어긋나므로). 사용자가 직접 핀치로 확대해 둔 상태면 그 배율 유지.
+  const targetScale = Math.max(ocrTransform.scale || 1, OCR_TAP_SCALE);
   ocrTransform.scale = targetScale;
   const dispH = ocrImgFit.h * targetScale;
   const dispW = ocrImgFit.w * targetScale;
@@ -2407,6 +2409,7 @@ function _ocrFitModalAboveKeyboard(td) {
       if (_ocrSelectedCell && typeof locateOcrImage === "function")
         locateOcrImage(_ocrSelectedCell.idx, _ocrSelectedCell.field);
       else if (typeof bakeOcr === "function") bakeOcr();
+      if (_ocrTblAlign && ocrTransform.scale === 1 && typeof alignOcrTableToImage === "function") alignOcrTableToImage();
     });
   };
   const fit = () => {
@@ -2473,7 +2476,10 @@ function startEditOcrCell(td, idx, field, initial) {
   const cur = ocrEditRows[idx][field] != null ? String(ocrEditRows[idx][field]) : "";
   const align = (OCR_COLS.find((c) => c.key === field) || {}).align || "center";
   const startVal = initial != null ? initial : cur;
-  td.innerHTML = `<input type="text" value="${_esc(startVal)}" style="width:100%; box-sizing:border-box; border:2px solid #4a90e2; border-radius:3px; padding:3px 2px; font-size:11px; text-align:${align}; outline:none;">`;
+  // 칸 크기가 변하지 않도록: 원래 글자는 보이지 않게 남겨 칸 크기를 유지하고, 입력칸은 그 위에 겹쳐 올림(레이아웃 영향 없음).
+  //  글자 크기 16px → iOS 가 입력칸 포커스 때 화면을 따로 확대하지 않음.
+  td.style.position = "relative";
+  td.innerHTML = `<span style="visibility:hidden">${_esc(cur) || "&nbsp;"}</span><input type="text" value="${_esc(startVal)}" style="position:absolute; left:0; top:50%; transform:translateY(-50%); width:100%; min-width:48px; height:26px; box-sizing:border-box; border:2px solid #4a90e2; border-radius:3px; padding:0 3px; margin:0; font-size:16px; line-height:20px; background:#fff; text-align:${align}; outline:none; z-index:5;">`;
   const input = td.querySelector("input");
   input.focus();
   if (initial != null) {
