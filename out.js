@@ -6044,8 +6044,10 @@ function renderCompList() {
     });
     cont._bound = true;
   }
+  _orphanPillPaint(); // 업체정보에 없는 이름이 있으면 목록 끝에 '📭 등록X' 알약
+  if (isAdmin) _orphanPillRefresh(false);
 
-  if (!selectedCrmComp || !allComps.includes(selectedCrmComp)) {
+  if (!selectedCrmComp || (selectedCrmComp !== _ORPH && !allComps.includes(selectedCrmComp))) {
     if (allComps.length > 0) selectCrmComp(allComps[0]);
   } else {
     renderCompDetail(selectedCrmComp);
@@ -6067,6 +6069,13 @@ function renderCompDetail(comp) {
   // 🚨 수정창 열 때마다 이전에 고르다 만 임시 색상 리셋!
   tempEditColorObj = null;
   tempEditColorIdx = null;
+
+  // '📭 등록X' 알약: 업체정보에 없는 이름 정리 화면
+  if (comp === _ORPH) {
+    _orphanPanelPaint(true);
+    _orphanPillRefresh(true); // 열 때마다 서버에서 최신 목록 확인
+    return;
+  }
 
   let info = compInfoDB[comp] || {
     shortName: "",
@@ -6236,7 +6245,7 @@ async function saveCompEdit(oldCompName) {
       renderCompList();
       return;
     }
-    _compOrphanCache = null;
+    _compOrphanInvalidate();
     _compRenameLocal(oldCompName, newCompName);
     showToast(rr.moved ? `💾 저장됨 — 달력 일정 ${rr.moved}건도 새 이름으로 바뀌었어요` : "💾 업체 정보 및 색상이 저장되었습니다.", 2500);
     renderCompList();
@@ -6280,35 +6289,153 @@ function _compRefreshMonth() {
   });
 }
 
-// 🧹 업체정보에 없는 옛 이름으로 남은 일정 — 이 업체의 상세 화면에 '옮기기' 안내를 보여 준다
-let _compOrphanReq = 0, _compOrphanCache = null; // 목록은 1분간 재사용(업체를 누를 때마다 서버를 부르지 않게). 옮기기·이름 변경 뒤에는 비움
+// 🧹 업체정보에 없는 이름으로 남은 일정 ('등록X')
+//  - 거래처 목록 맨 끝의 '📭 등록X' 알약에서 한곳에 모아 보고, 이름마다 [기존 업체로 지정] [신규 업체로 등록] [그냥 두기] 중 고른다.
+//  - 이름만 다른 같은 업체(표기만 다른 옛 이름)는 그 업체 상세에도 '옮기기' 안내를 보여 준다.
+const _ORPH = "__ORPHAN__"; // 거래처 목록의 '등록X' 알약을 가리키는 값(업체 이름이 아님)
+let _compOrphanReq = 0, _compOrphanCache = null, _compOrphanGen = 0, _compOrphanInflight = null; // 목록은 1분간 재사용. 옮기기·이름 변경·등록·삭제 뒤에는 비움
+let _orphanState = null, _orphanSig = ""; // 알약/패널이 마지막으로 그린 목록 {orphans, ignored}
+function _compOrphanInvalidate() { _compOrphanCache = null; _compOrphanGen++; _compOrphanInflight = null; }
+async function _compOrphanFetch(force) {
+  if (!force && _compOrphanCache && Date.now() - _compOrphanCache.t < 60000) return _compOrphanCache.res;
+  if (_compOrphanInflight) return _compOrphanInflight;
+  const gen = _compOrphanGen;
+  const pr = (async () => {
+    try {
+      const r = await apiCall({ source: "vercel", action: "LIST_ORPHAN_COMPANIES" });
+      if (r && r.success && gen === _compOrphanGen) _compOrphanCache = { t: Date.now(), res: r };
+      return r;
+    } finally { if (_compOrphanInflight === pr) _compOrphanInflight = null; }
+  })();
+  _compOrphanInflight = pr;
+  return pr;
+}
+// 알약을 그린다(없으면 지우고, 있으면 목록 끝에 붙임). 관리자에게만 보임
+function _orphanPillPaint() {
+  const cont = document.getElementById("compTagsContainer");
+  if (!cont) return;
+  const old = document.getElementById("comp-orphan-pill");
+  if (old) old.remove();
+  const st = _orphanState;
+  if (!isAdmin || !st || !st.orphans.length) return;
+  const n = st.orphans.filter((o) => st.ignored.indexOf(o.name) < 0).length;
+  const b = document.createElement("button");
+  b.id = "comp-orphan-pill";
+  b.className = "comp-tag-btn" + (selectedCrmComp === _ORPH ? " active" : "");
+  b.dataset.comp = _ORPH;
+  b.style.cssText = "background:transparent;border:1.5px dashed #ff9f0a;color:#ff9f0a;";
+  b.textContent = "📭 등록X" + (n ? " " + n : "");
+  cont.appendChild(b);
+}
+// 서버에서 목록을 받아(1분 캐시) 알약·열려 있는 패널을 갱신
+async function _orphanPillRefresh(force) {
+  if (!isAdmin) return;
+  const res = await _compOrphanFetch(force);
+  if (!res || !res.success || !Array.isArray(res.orphans)) return;
+  _orphanState = { orphans: res.orphans, ignored: Array.isArray(res.ignored) ? res.ignored : [] };
+  _orphanPillPaint();
+  if (selectedCrmComp === _ORPH) _orphanPanelPaint(false);
+}
+function _orphanRange(o) { return o.from ? _esc(o.from) + (o.to && o.to !== o.from ? " ~ " + _esc(o.to) : "") : ""; }
+// '등록X' 상세 패널
+function _orphanPanelPaint(force) {
+  const box = document.getElementById("compDetailContainer");
+  if (!box || selectedCrmComp !== _ORPH) return;
+  const st = _orphanState;
+  const sig = st ? JSON.stringify(st) + "#" + Object.keys(compInfoDB).join("|") : "";
+  if (!force && sig === _orphanSig) return; // 바뀐 게 없으면 다시 그리지 않음(고르던 업체 선택이 풀리지 않게)
+  _orphanSig = sig;
+  const head = `<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;padding:0 5px;">
+      <span style="font-size:0.75em;font-weight:800;color:#ff9f0a;">UNREGISTERED</span>
+      <div style="font-size:1.4em;font-weight:900;letter-spacing:-0.5px;color:var(--text-main);">📭 등록X · 거래처정보 없음</div>
+      <div style="font-size:0.82em;color:var(--text-sub);line-height:1.45;">일정에는 있지만 거래처정보에 없는 업체 이름입니다. 이름마다 기존 업체로 지정하거나, 새 업체로 등록하거나, 일시적인 일정이면 그냥 둘 수 있어요.</div>
+    </div>`;
+  let body;
+  if (!st) body = `<div style="padding:18px;text-align:center;color:var(--text-sub);">불러오는 중…</div>`;
+  else {
+    const todo = [], held = [];
+    st.orphans.forEach((o, i) => (st.ignored.indexOf(o.name) < 0 ? todo : held).push(i));
+    const names = Object.keys(compInfoDB).sort((a, b) => a.localeCompare(b));
+    const row = (i) => {
+      const o = st.orphans[i];
+      const opts = names.map((c) => `<option value="${_esc(c)}"${c === o.match ? " selected" : ""}>${_esc(c)}</option>`).join("");
+      const btn = "padding:9px 12px;border-radius:10px;font-weight:800;cursor:pointer;font-size:0.88em;";
+      return `<div style="padding:12px 0;border-top:1px solid var(--border-color);">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;"><b style="word-break:break-all;">${_esc(o.name)}</b><span style="flex:none;font-size:0.82em;color:var(--text-sub);">일정 ${o.n}건</span></div>
+        <div style="color:var(--text-sub);font-size:0.8em;margin:2px 0 8px;">${_orphanRange(o)}${o.match ? ` · 💡 비슷한 업체: ${_esc(o.match)}` : ""}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <select id="orph-sel-${i}" style="flex:1;min-width:140px;padding:9px;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-color);color:var(--text-main);"><option value="">업체 선택…</option>${opts}</select>
+          <button type="button" onclick="_orphanAct('move',${i})" style="${btn}flex:none;border:1px solid rgba(10,132,255,0.35);background:rgba(10,132,255,0.1);color:#0a84ff;">이 업체로 지정</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button type="button" onclick="_orphanAct('reg',${i})" style="${btn}flex:1;border:1px solid var(--border-color);background:var(--btn-bg);color:var(--text-main);">➕ 신규 업체로 등록</button>
+          <button type="button" onclick="_orphanAct('ign',${i})" style="${btn}flex:1;border:1px solid var(--border-color);background:transparent;color:var(--text-sub);">그냥 두기</button>
+        </div>
+      </div>`;
+    };
+    const heldRow = (i) => {
+      const o = st.orphans[i];
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border-color);font-size:0.88em;"><div style="flex:1;min-width:0;"><b style="word-break:break-all;">${_esc(o.name)}</b><div style="color:var(--text-sub);font-size:0.85em;">일정 ${o.n}건${o.from ? " · " + _orphanRange(o) : ""}</div></div><button type="button" onclick="_orphanAct('unign',${i})" style="flex:none;padding:8px 12px;border-radius:10px;border:1px solid var(--border-color);background:var(--btn-bg);color:var(--text-main);font-weight:800;cursor:pointer;">다시 보기</button></div>`;
+    };
+    body = (todo.length
+      ? `<div style="font-weight:900;font-size:0.9em;margin-bottom:2px;">정리할 이름 ${todo.length}종</div>${todo.map(row).join("")}`
+      : `<div style="padding:16px;text-align:center;color:var(--text-sub);">🎉 정리할 이름이 없어요</div>`) +
+      (held.length ? `<details style="margin-top:12px;"><summary style="cursor:pointer;font-weight:800;font-size:0.88em;color:var(--text-sub);">그냥 두는 이름 ${held.length}종</summary>${held.map(heldRow).join("")}</details>` : "");
+  }
+  box.innerHTML = `${head}<div class="comp-detail-wrapper" style="display:block;"><div style="padding:4px 2px;">${body}</div></div>`;
+}
+async function _orphanAct(kind, i) {
+  const st = _orphanState, o = st && st.orphans[i];
+  if (!o) return;
+  if (kind === "move") {
+    const sel = document.getElementById("orph-sel-" + i);
+    const to = sel ? sel.value : "";
+    if (!to) { showToast("옮길 업체를 먼저 선택하세요.", 2000); return; }
+    return _compMoveRows(o.name, to);
+  }
+  if (kind === "reg") {
+    openNewCompModal();
+    document.getElementById("nc-full").value = o.name; // 이름이 같으니 등록만 하면 기존 일정이 그대로 이 업체의 일정이 됨
+    return;
+  }
+  if (kind === "ign" || kind === "unign") {
+    const rr = await apiCall({ source: "vercel", action: "SET_ORPHAN_IGNORE", data: { name: o.name, ignore: kind === "ign" } });
+    if (!(rr && rr.success)) { showToast("⚠️ " + ((rr && rr.msg) || "저장하지 못했습니다."), 3000); return; }
+    const ig = Array.isArray(rr.ignored) ? rr.ignored : [];
+    _orphanState = { orphans: st.orphans, ignored: ig };
+    if (_compOrphanCache) _compOrphanCache.res.ignored = ig;
+    _orphanPillPaint();
+    _orphanPanelPaint(false);
+    showToast(kind === "ign" ? `👌 [${o.name}]은(는) 그냥 두기로 했어요 (일정은 그대로)` : `↩️ [${o.name}]을(를) 정리할 이름에 다시 올렸어요`, 2200);
+  }
+}
+
+// 이름만 다른 옛 일정이 있는 업체의 상세 화면에는 '옮기기' 안내를 보여 준다(다른 이름들은 '등록X'에서 정리)
 async function _compOrphanLoad(comp) {
   const box = document.getElementById("crm-orphan-box");
   if (!box) return;
   const my = ++_compOrphanReq;
-  let res = _compOrphanCache && Date.now() - _compOrphanCache.t < 60000 ? _compOrphanCache.res : null;
-  if (!res) { res = await apiCall({ source: "vercel", action: "LIST_ORPHAN_COMPANIES" }); if (res && res.success) _compOrphanCache = { t: Date.now(), res }; }
+  const res = await _compOrphanFetch(false);
   const b2 = document.getElementById("crm-orphan-box");
   if (my !== _compOrphanReq || !b2 || !res || !res.success || !Array.isArray(res.orphans)) return;
   const like = res.orphans.filter((o) => o.match === comp);
-  const others = res.orphans.filter((o) => !o.match);
-  if (!like.length && !others.length) { b2.innerHTML = ""; return; }
-  const row = (o) => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border-color);font-size:0.88em"><div style="flex:1;min-width:0"><b style="word-break:break-all">${_esc(o.name)}</b><div style="color:var(--text-sub);font-size:0.85em">일정 ${o.n}건${o.from ? " · " + _esc(o.from) + (o.to && o.to !== o.from ? " ~ " + _esc(o.to) : "") : ""}</div></div><button type="button" onclick="_compMoveRows('${_argq(o.name)}', '${_argq(comp)}')" style="flex:none;padding:8px 12px;border-radius:10px;border:1px solid rgba(10,132,255,0.35);background:rgba(10,132,255,0.1);color:#0a84ff;font-weight:800;cursor:pointer">이 업체로 옮기기</button></div>`;
+  if (!like.length) { b2.innerHTML = ""; return; }
+  const row = (o) => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border-color);font-size:0.88em"><div style="flex:1;min-width:0"><b style="word-break:break-all">${_esc(o.name)}</b><div style="color:var(--text-sub);font-size:0.85em">일정 ${o.n}건${o.from ? " · " + _orphanRange(o) : ""}</div></div><button type="button" onclick="_compMoveRows('${_argq(o.name)}', '${_argq(comp)}')" style="flex:none;padding:8px 12px;border-radius:10px;border:1px solid rgba(10,132,255,0.35);background:rgba(10,132,255,0.1);color:#0a84ff;font-weight:800;cursor:pointer">이 업체로 옮기기</button></div>`;
   b2.innerHTML = `<div style="margin-top:6px;padding:10px 12px;border-radius:12px;background:rgba(255,159,10,0.08);border:1px solid rgba(255,159,10,0.35)">
-    ${like.length ? `<div style="font-weight:900;font-size:0.9em">🔁 이름만 다른 옛 일정이 남아 있어요</div><div style="font-size:0.78em;color:var(--text-sub);margin:2px 0 4px">업체명을 바꾸기 전 이름으로 등록된 일정입니다. 옮기면 전체 기간의 해당 일정이 [${_esc(comp)}]로 바뀝니다.</div>${like.map(row).join("")}` : ""}
-    ${others.length ? `<details style="margin-top:${like.length ? 8 : 0}px"><summary style="cursor:pointer;font-weight:800;font-size:0.85em;color:var(--text-sub)">업체정보에 없는 이름의 일정 ${others.length}종 (다른 업체 이름일 수도 있어요)</summary>${others.map(row).join("")}</details>` : ""}
+    <div style="font-weight:900;font-size:0.9em">🔁 이름만 다른 옛 일정이 남아 있어요</div><div style="font-size:0.78em;color:var(--text-sub);margin:2px 0 4px">업체명을 바꾸기 전 이름으로 등록된 일정입니다. 옮기면 전체 기간의 해당 일정이 [${_esc(comp)}]로 바뀝니다.</div>${like.map(row).join("")}
   </div>`;
 }
 async function _compMoveRows(from, to) {
   if (!(await uiConfirm(`[${from}]로 등록된 일정을 모두 [${to}]로 바꿀까요?\n\n전체 기간의 일정이 바뀌며 되돌리려면 다시 이름을 바꿔야 합니다.`))) return;
   const rr = await apiCall({ source: "vercel", action: "MOVE_COMPANY_ROWS", data: { from, to } });
   if (!(rr && rr.success)) { showToast("⚠️ " + ((rr && rr.msg) || "옮기지 못했습니다."), 3000); return; }
-  _compOrphanCache = null;
+  _compOrphanInvalidate();
   _compRenameLocal(from, to);
   showToast(`✅ 일정 ${rr.moved || 0}건을 [${to}]로 옮겼어요`, 2500);
   renderCalendar();
   _compRefreshMonth();
   _compOrphanLoad(to);
+  _orphanPillRefresh(true); // '등록X' 목록도 바로 갱신
 }
 
 async function deleteCompInfo(comp) {
@@ -6322,6 +6449,7 @@ async function deleteCompInfo(comp) {
   delete compInfoDB[comp];
   localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB));
   apiCall({ source: "vercel", action: "SAVE_COMP_INFO_DB", data: compInfoDB });
+  _compOrphanInvalidate(); // 삭제한 업체의 일정은 '등록X'로 나타나므로 목록 다시 받기
   // 색상 슬롯도 함께 해제
   if (customColors[comp] !== undefined) {
     delete customColors[comp];
@@ -6415,6 +6543,7 @@ function saveNewComp() {
   };
   localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB));
   apiCall({ source: "vercel", action: "SAVE_COMP_INFO_DB", data: compInfoDB });
+  _compOrphanInvalidate(); // 등록X 목록에서 방금 등록한 이름이 빠지도록
 
   // 색상 선택됐으면 저장, 아니면 자동 배정
   if (_ncColorIdx !== null) {

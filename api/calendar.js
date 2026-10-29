@@ -248,6 +248,14 @@ async function listOrphanCompanies() {
   }
   return out;
 }
+// '그냥 두기'로 표시한 미등록 이름 목록(이름 배열)
+async function orphanIgnoreLoad() {
+  try {
+    const [r] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = 'COMP_ORPHAN_IGNORE'`);
+    if (r.length) { const v = typeof r[0].setting_value === "object" ? r[0].setting_value : JSON.parse(r[0].setting_value); if (Array.isArray(v)) return v.map(String); }
+  } catch (_) {}
+  return [];
+}
 function pickSameCompany(a, b, compDb) {
   const na = pickLib.normName(a), nb = pickLib.normName(b);
   if (!na || !nb) return false;
@@ -843,6 +851,7 @@ module.exports = async function (req, res) {
         "SAVE_COMP_INFO_DB",
         "LIST_ORPHAN_COMPANIES",
         "MOVE_COMPANY_ROWS",
+        "SET_ORPHAN_IGNORE",
         "GET_CAL_NOTIFY",
         "SET_CAL_NOTIFY",
         "SAVE_GLOBAL_COLOR",
@@ -2056,8 +2065,20 @@ if (action === "VERIFY_SESSION") {
         return res.status(200).json(Object.assign({ success: true }, renameRes ? { moved: renameRes.moved, aliasMoved: renameRes.aliasMoved } : {}));
       } else if (action === "LIST_ORPHAN_COMPANIES") {
         // 업체정보에 없는 이름으로 남은 일정 목록(이름만 바뀐 옛 일정 정리용, 읽기 전용)
-        try { return res.status(200).json({ success: true, orphans: await listOrphanCompanies() }); }
+        try { return res.status(200).json({ success: true, orphans: await listOrphanCompanies(), ignored: await orphanIgnoreLoad() }); }
         catch (e) { console.error("[업체명] 목록 실패:", e.sqlMessage || e.message); return res.status(200).json({ success: false, msg: "목록을 불러오지 못했습니다." }); }
+      } else if (action === "SET_ORPHAN_IGNORE") {
+        // 업체정보에 등록하지 않고 그냥 두기로 한 이름 표시/해제 (일시적 일정 등) — 일정은 건드리지 않고 이름만 기억
+        const ig = String(data?.name || "").trim();
+        if (!ig || /^\[TASK\]/i.test(ig)) return res.status(200).json({ success: false, msg: "이름이 올바르지 않습니다." });
+        try {
+          const cur = await orphanIgnoreLoad();
+          const next = data?.ignore === false ? cur.filter((x) => x !== ig) : (cur.includes(ig) ? cur : cur.concat(ig));
+          if (next.length > 500) return res.status(200).json({ success: false, msg: "그냥 두기 목록이 너무 많습니다." });
+          const js = JSON.stringify(next);
+          await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('COMP_ORPHAN_IGNORE', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [js, js]);
+          return res.status(200).json({ success: true, ignored: next });
+        } catch (e) { console.error("[업체명] 그냥 두기 저장 실패:", e.sqlMessage || e.message); return res.status(200).json({ success: false, msg: "저장하지 못했습니다. 잠시 뒤 다시 시도해주세요." }); }
       } else if (action === "MOVE_COMPANY_ROWS") {
         // 이미 이름이 바뀌어 옛 이름으로 남은 일정을 지금 업체명으로 옮김 — 옮길 곳은 업체정보에 있는 이름, 옮길 옛 이름은 업체정보에 없는 이름만
         const mf = String(data?.from || "").trim(), mt = String(data?.to || "").trim();

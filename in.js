@@ -1703,6 +1703,7 @@ async function openEditForm(day, idx, bl, dateStr, pal, etc) {
 // =====================================================
 let ocrTransform = { scale: 1, x: 0, y: 0 };
 let ocrImgFit = { w: 0, h: 0 }; // 패널에 맞춘 기준 크기(scale=1 기준) — 크기 기반 줌으로 선명도 유지
+let _ocrAlignNext = false; // 대조·수정을 막 켠 뒤 첫 표 로드에서 표를 이미지의 줄 위치에 맞추기
 let ocrBakedScale = 1; // 현재 width/height 로 구워진(crisp) 배율. 제스처 중엔 transform 으로 그 위에 덧씌움
 let _ocrBakeTimer = null;
 let ocrEditRows = []; // 대조창에서 수정 중인 행 데이터(확정 시 서버로 전송)
@@ -1857,6 +1858,7 @@ function toggleOcrCompare(btn) {
     btn.style.background = "#4a90e2";
     if (hint) hint.innerHTML = "두 손가락=확대 · 한 손가락=이동";
     ocrHiliteIdx = null; // 이미지만 보기로 돌아가면 선택했던 줄 표시도 지움
+    _ocrTblAlign = false;
     resetOcrTransform();
     positionOcrHilite(); // 선택 줄이 없으니 밴드 숨김
   } else {
@@ -1876,6 +1878,7 @@ function toggleOcrCompare(btn) {
     if (hint)
       hint.innerHTML = "오른쪽 <b style='color:#4a90e2;'>셀 탭=수정</b> + 왼쪽 이미지에 그 줄 표시 · 왼쪽 핀치=확대";
     resetOcrTransform();
+    _ocrAlignNext = true;
     loadOcrSplitData();
   }
 }
@@ -1940,6 +1943,8 @@ function _normOcrDate(v) {
 //  → 직접 추가분도 보이되, 새 이미지로 OCR하면 _fromDb 범위가 리셋되어 자동으로 빠짐(무한 누적 방지)
 function loadOcrSplitData() {
   ocrHiliteIdx = null;
+  const _doAlign = _ocrAlignNext; // 켠 직후 첫 로드만 이미지를 표에 맞춤(확정 뒤 새로고침 때는 보던 화면을 그대로 둠)
+  _ocrAlignNext = false;
   const inner = document.getElementById("ocrTableInner");
   if (!inner) return;
   inner.innerHTML = `<div style="padding:20px; text-align:center; color:#888; font-size:12px;">데이터 불러오는 중... ⏳</div>`;
@@ -1986,6 +1991,7 @@ function loadOcrSplitData() {
       return;
     }
     renderOcrTable();
+    if (_doAlign) requestAnimationFrame(alignOcrTableToImage);
   });
 }
 
@@ -2015,6 +2021,7 @@ function renderOcrTable() {
   });
   html += `</tbody></table>`;
   inner.innerHTML = html;
+  if (_ocrTblAlign && ocrTransform.scale === 1) alignOcrTableToImage(); // 줄을 추가·수정해 다시 그려도 이미지와 맞춘 상태 유지
   // PC 키보드(엑셀형 이동/편집/복사) 핸들러 1회 바인딩
   if (!_ocrKbBound) {
     document.addEventListener("keydown", _onOcrKeydown);
@@ -2921,6 +2928,46 @@ function resetOcrTransform() {
   ocrBakedScale = 1;
   computeOcrFit();
   bakeOcr();
+  alignOcrTableToImage(); // 대조·수정 중이면 ↺ 도 표를 이미지의 줄 위치에 맞춤(꺼져 있으면 아무 일 없음)
+}
+
+// 오른쪽 표를 왼쪽 이미지에 맞춤 — 이미지는 그대로 두고, 표의 각 줄을 이미지의 같은 줄(iy) 높이에 오도록
+//  이미지는 패널 높이 가운데에 놓여(가로로 넓은 사진은 위쪽 여백) 표가 맨 위부터 시작하면 위로 떠 보이므로,
+//  표 위에 여백을 넣어 첫 줄을 이미지 첫 줄 높이로 내리고, 줄 높이는 이미지의 줄 간격과 같게 한다.
+//  대조·수정을 켠 직후 첫 로드, ↺, 표를 다시 그릴 때(이미지가 원위치 상태일 때만) 실행. 확대한 상태에서는 하지 않는다.
+let _ocrTblAlign = false;
+function alignOcrTableToImage() {
+  const pane = document.getElementById("ocrPaneImg");
+  const tpane = document.getElementById("ocrPaneTable");
+  const img = document.getElementById("ocrImgElement");
+  const table = document.querySelector("#ocrTableInner table");
+  if (!pane || !tpane || !img || !table || tpane.style.display === "none" || !img.naturalHeight) return false;
+  const trs = Array.from(table.querySelectorAll("tbody tr"));
+  trs.forEach((tr) => { tr.style.height = ""; Array.from(tr.children).forEach((td) => (td.style.padding = "")); }); // 이전 맞춤 제거 후 다시 계산
+  table.style.marginTop = "";
+  tpane.scrollTop = 0;
+  const ir = img.getBoundingClientRect();
+  const scale = ir.height / img.naturalHeight; // 이미지 1px 이 화면에서 차지하는 높이(지금 보이는 상태 그대로)
+  const top0 = pane.getBoundingClientRect().top;
+  const idxs = [];
+  (ocrEditRows || []).forEach((r, i) => { if (typeof r.iy === "number" && !r._fromDb && trs[i]) idxs.push(i); });
+  if (!idxs.length || !scale) return false;
+  const Y = idxs.map((i) => ir.top - top0 + ocrEditRows[i].iy * scale); // 각 줄의 이미지 위 세로 중심
+  const pitchAt = (k) => (Y.length < 2 ? 24 : k < Y.length - 1 ? Y[k + 1] - Y[k] : Y[k] - Y[k - 1]);
+  const head = table.querySelector("thead");
+  const headH = head ? head.getBoundingClientRect().height : 0;
+  const nat = trs[idxs[0]].getBoundingClientRect().height; // 손대지 않은 한 줄 높이
+  const tight = idxs.some((_, k) => pitchAt(k) > 0 && pitchAt(k) < nat); // 이미지 줄 간격이 표 기본 줄 높이보다 좁으면 칸 여백을 줄여서 맞춤
+  idxs.forEach((i, k) => {
+    const h = Math.max(pitchAt(k), 12);
+    trs[i].style.height = h + "px";
+    if (tight) Array.from(trs[i].children).forEach((td) => (td.style.padding = "2px 8px"));
+  });
+  const off = Y[0] - pitchAt(0) / 2 - (headH + 2); // 첫 줄의 윗선을 이미지 첫 줄 윗선에 맞추는 데 필요한 여백
+  if (off >= 0) table.style.marginTop = off + "px";
+  else tpane.scrollTop = -off; // 이미지 첫 줄이 맨 위에 가까우면 표를 살짝 올려서 맞춤
+  _ocrTblAlign = true;
+  return true;
 }
 
 // '수정 확정' → 서버 upsert
