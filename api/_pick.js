@@ -559,15 +559,33 @@ function computePickStats(rows) {
     if (S && !S.error) {
       out.cross.n++;
       let allSame = true; const items = [];
+      const shOk = !!(P.shadow && P.shadow.ok); // 곁가지 lite 판독이 있으면 세 번째 의견으로 같이 보여준다
+      const FIN = { plt: "plt", wanbox: "wan", honjae: "hon" };
       for (const [k, , lab] of FIELDS) {
         const p = zero(P[k]), q = zero(S[k]);
         const pn = p === null || p === undefined, qn = q === null || q === undefined;
         const same = (!pn && !qn && Number(p) === Number(q)) || (pn && q === 0) || (qn && p === 0);
         const cf = out.cross.fields[k]; cf.n++;
-        if (same) cf.same++; else { allSame = false; items.push({ field: lab, first: pn ? null : Number(p), second: qn ? null : Number(q) }); }
+        if (same) cf.same++; else {
+          allSame = false;
+          const it = { field: lab, first: pn ? null : Number(p), second: qn ? null : Number(q) };
+          if (shOk) { const l = zero(P.shadow[k]); it.lite = l === null || l === undefined ? null : Number(l); }
+          // 다수결: 1차·2차·lite 중 두 곳 이상이 같은 값(못 읽음=빈칸=0)이면 그 값
+          const votes = [pn ? 0 : Number(p), qn ? 0 : Number(q)].concat(shOk ? [it.lite === null ? 0 : it.lite] : []);
+          const cnt = {}; votes.forEach((v) => { cnt[v] = (cnt[v] || 0) + 1; });
+          const top = Object.keys(cnt).filter((v) => cnt[v] >= 2)[0];
+          if (top !== undefined) it.major = Number(top);
+          if (F && F[FIN[k]] !== undefined && F[FIN[k]] !== null && F[FIN[k]] !== "") it.final = Number(F[FIN[k]]); // 등록한 건이면 사람이 확정한 값
+          items.push(it);
+        }
       }
       if (allSame) out.cross.same++;
-      else if (out.cross.diffs.length < 20) out.cross.diffs.push({ orderNo: r.order_no || "", items });
+      else {
+        // 같은 출고지시번호를 여러 번 시험한 건은 한 줄로 합침(최신 기록 기준, ×횟수 표시)
+        const ex = out.cross.diffs.find((d) => d.orderNo && d.orderNo === (r.order_no || ""));
+        if (ex) ex.n++;
+        else if (out.cross.diffs.length < 20) out.cross.diffs.push({ orderNo: r.order_no || "", n: 1, m1: (P.aiRaw && P.aiRaw.model) || (P.timing && P.timing.model) || null, m2: S._m || null, items });
+      }
     } else if (P.hwAgree === true && !(S && S.error)) out.cross.skipped++; // AI 와 문자인식이 세 칸을 같게 읽어 2차 확인을 생략한 건
     if (!F) continue;
     out.registered++;

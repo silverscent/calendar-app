@@ -2956,17 +2956,47 @@ function alignOcrTableToImage() {
   const pitchAt = (k) => (Y.length < 2 ? 24 : k < Y.length - 1 ? Y[k + 1] - Y[k] : Y[k] - Y[k - 1]);
   const nat = trs[idxs[0]].getBoundingClientRect().height; // 손대지 않은 한 줄 높이
   const tight = idxs.some((_, k) => pitchAt(k) > 0 && pitchAt(k) < nat); // 이미지 줄 간격이 표 기본 줄 높이보다 좁으면 칸 여백을 줄여서 맞춤
-  idxs.forEach((i, k) => {
-    const h = Math.max(pitchAt(k), 12);
+  // 줄 높이를 tr 높이만이 아니라 칸의 줄 높이(line-height)로도 고정 — 브라우저가 tr 높이를 무시해도 줄 높이가 정해진 대로 나오게
+  const setH = (i, h) => {
     trs[i].style.height = h + "px";
-    if (tight) Array.from(trs[i].children).forEach((td) => (td.style.padding = "2px 8px"));
-  });
-  // 첫 줄이 실제로 놓인 자리를 재서(머리글·여백 높이를 추정하지 않고) 이미지 첫 줄의 윗선까지 필요한 만큼만 아래로 내림
-  const want = Y[0] - pitchAt(0) / 2; // 이미지 첫 줄의 윗선
-  const have = trs[idxs[0]].getBoundingClientRect().top - tpane.getBoundingClientRect().top; // 표 첫 줄의 윗선(여백 0일 때)
+    Array.from(trs[i].children).forEach((td) => { td.style.padding = tight ? "2px 8px" : ""; td.style.lineHeight = Math.max(h - (tight ? 4 : 14) - 2, 10) + "px"; });
+  };
+  const hs = idxs.map((_, k) => Math.max(pitchAt(k), 12));
+  idxs.forEach((i, k) => setH(i, hs[k]));
+  // 표 첫 줄의 윗선을 이미지 첫 줄의 윗선에 맞춤 — 첫 줄이 실제로 놓인 자리를 재서 필요한 만큼만 아래로 내림
+  const want = Y[0] - pitchAt(0) / 2; // 이미지 첫 줄의 윗선(패널 위쪽 기준)
+  const tTop = () => tpane.getBoundingClientRect().top;
+  const have = trs[idxs[0]].getBoundingClientRect().top - tTop(); // 표 첫 줄의 윗선(여백 0일 때)
   const off = want - have;
   if (off >= 0) table.style.marginTop = off + "px";
   else tpane.scrollTop = -off; // 이미지 첫 줄이 맨 위에 가까우면 표를 살짝 올려서 맞춤
+  // 실제로 그려진 줄 중심을 재서 이미지 줄 중심(Y)과 어긋난 만큼 줄 높이를 보정(최대 3번) — 브라우저마다 테두리·반올림이 달라도 맞도록
+  let worst = 0;
+  for (let pass = 0; pass < 3; pass++) {
+    const act = idxs.map((i) => { const b = trs[i].getBoundingClientRect(); return b.top - tTop() + b.height / 2 + tpane.scrollTop; });
+    worst = Math.max.apply(null, act.map((c, k) => Math.abs(c - Y[k])));
+    if (worst <= 1) break;
+    // 위에서부터: 각 줄의 윗선이 목표(이전 줄 중심과 이 줄 중심의 가운데)가 되도록 이전 줄 높이를 보정
+    for (let k = 0; k < idxs.length - 1; k++) {
+      const b = trs[idxs[k]].getBoundingClientRect(), n = trs[idxs[k + 1]].getBoundingClientRect();
+      const wantTop = (Y[k] + Y[k + 1]) / 2, nowTop = n.top - tTop() + tpane.scrollTop;
+      hs[k] = Math.max(hs[k] + (wantTop - nowTop), 12);
+      setH(idxs[k], hs[k]);
+    }
+    const f0 = trs[idxs[0]].getBoundingClientRect().top - tTop() + tpane.scrollTop, mt = parseFloat(table.style.marginTop) || 0;
+    table.style.marginTop = Math.max(mt + (want - f0), 0) + "px";
+  }
+  // 맞춤 결과를 안내 줄에 작게 표시(어긋나면 이 숫자를 알려주면 원인을 바로 찾을 수 있음)
+  const hint = document.getElementById("ocrHint");
+  if (hint) {
+    const old = document.getElementById("ocrAlignDiag");
+    if (old) old.remove();
+    const sp = document.createElement("div");
+    sp.id = "ocrAlignDiag";
+    sp.style.cssText = "font-size:10px;opacity:0.7";
+    sp.textContent = `표↔이미지 맞춤 v3 · 이미지 줄 ${pitchAt(0).toFixed(1)}px · 표 줄 ${trs[idxs[0]].getBoundingClientRect().height.toFixed(1)}px · 어긋남 최대 ${worst.toFixed(1)}px`;
+    hint.appendChild(sp);
+  }
   _ocrTblAlign = true;
   return true;
 }
