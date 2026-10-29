@@ -2949,13 +2949,26 @@ function alignOcrTableToImage() {
   // 이미지 위 각 줄의 세로 위치 — 왼쪽 노란 밴드(positionOcrHilite)와 같은 계산식(화면에 그려지는 중인 값이 아니라 현재 상태값으로 계산)
   const dispH = ocrImgFit.h * ocrTransform.scale; // 화면상 이미지 높이
   const scale = dispH / img.naturalHeight; // 이미지 1px 이 화면에서 차지하는 높이
-  const idxs = [];
-  (ocrEditRows || []).forEach((r, i) => { if (typeof r.iy === "number" && !r._fromDb && trs[i]) idxs.push(i); });
-  if (!idxs.length || !(scale > 0)) return false;
-  const Y = idxs.map((i) => pane.clientHeight / 2 + (ocrEditRows[i].iy / img.naturalHeight - 0.5) * dispH + ocrTransform.y); // 각 줄의 세로 중심(패널 위쪽 기준)
-  const pitchAt = (k) => (Y.length < 2 ? 24 : k < Y.length - 1 ? Y[k + 1] - Y[k] : Y[k] - Y[k - 1]);
-  const nat = trs[idxs[0]].getBoundingClientRect().height; // 손대지 않은 한 줄 높이
-  const tight = idxs.some((_, k) => pitchAt(k) > 0 && pitchAt(k) < nat); // 이미지 줄 간격이 표 기본 줄 높이보다 좁으면 칸 여백을 줄여서 맞춤
+  const pts = [];
+  (ocrEditRows || []).forEach((r, i) => {
+    if (typeof r.iy === "number" && !r._fromDb && trs[i]) pts.push({ i, y: pane.clientHeight / 2 + (r.iy / img.naturalHeight - 0.5) * dispH + ocrTransform.y }); // 줄의 세로 중심(패널 위쪽 기준)
+  });
+  if (!pts.length || !(scale > 0)) return false;
+  // 이미지의 줄 간격은 일정하다고 보고, 줄 좌표(iy)에 섞인 오차(보간·외삽·겹침)에 흔들리지 않게 '중앙값'으로 줄 간격과 시작 위치를 구함
+  const med = (a) => { const t = a.slice().sort((x, y) => x - y); return t.length ? (t.length % 2 ? t[(t.length - 1) / 2] : (t[t.length / 2 - 1] + t[t.length / 2]) / 2) : NaN; };
+  const slopes = [];
+  for (let k = 1; k < pts.length; k++) { const d = (pts[k].y - pts[k - 1].y) / (pts[k].i - pts[k - 1].i); if (isFinite(d) && d > 0) slopes.push(d); }
+  const rawFirst = pts.length > 1 ? pts[1].y - pts[0].y : NaN; // (진단용) 첫 두 줄의 간격
+  const natH = trs[pts[0].i].getBoundingClientRect().height;
+  let pitch = med(slopes);
+  if (!(pitch >= 12 && pitch <= 90)) pitch = Math.max(natH, 24); // 줄 간격을 못 믿겠으면 기본 줄 높이
+  const base = med(pts.map((q) => q.y - q.i * pitch)); // 0번 줄의 중심
+  const idxs = [], Y = [];
+  const lastI = pts[pts.length - 1].i;
+  for (let i = 0; i <= lastI; i++) if (trs[i] && !(ocrEditRows[i] && ocrEditRows[i]._fromDb)) { idxs.push(i); Y.push(base + i * pitch); }
+  const pitchAt = () => pitch;
+  const nat = natH; // 손대지 않은 한 줄 높이
+  const tight = pitch < nat; // 이미지 줄 간격이 표 기본 줄 높이보다 좁으면 칸 여백을 줄여서 맞춤
   // 줄 높이를 tr 높이만이 아니라 칸의 줄 높이(line-height)로도 고정 — 브라우저가 tr 높이를 무시해도 줄 높이가 정해진 대로 나오게
   const setH = (i, h) => {
     trs[i].style.height = h + "px";
@@ -2994,7 +3007,7 @@ function alignOcrTableToImage() {
     const sp = document.createElement("div");
     sp.id = "ocrAlignDiag";
     sp.style.cssText = "font-size:10px;opacity:0.7";
-    sp.textContent = `표↔이미지 맞춤 v3 · 이미지 줄 ${pitchAt(0).toFixed(1)}px · 표 줄 ${trs[idxs[0]].getBoundingClientRect().height.toFixed(1)}px · 어긋남 최대 ${worst.toFixed(1)}px`;
+    sp.textContent = `표↔이미지 맞춤 v4 · 이미지 줄 ${pitch.toFixed(1)}px(첫 간격 ${isFinite(rawFirst) ? rawFirst.toFixed(1) : "-"}) · 표 줄 ${trs[idxs[0]].getBoundingClientRect().height.toFixed(1)}px · 어긋남 최대 ${worst.toFixed(1)}px`;
     hint.appendChild(sp);
   }
   _ocrTblAlign = true;
