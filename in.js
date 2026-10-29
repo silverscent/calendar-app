@@ -2133,7 +2133,6 @@ function positionOcrHilite() {
 }
 
 // 셀 탭 시 → 왼쪽 이미지를 그 행(+탭한 열)으로 확대(4.5배) + 정렬(가장자리 클램프)
-const OCR_TAP_SCALE = 4.5; // 셀 탭 시 이미지 확대 배율(폰 기준 원래 동작)
 const OCR_LEFT_COLS = new Set(["bl", "pal", "eta", "inDate"]); // 좌측 영역 열
 function locateOcrImage(idx, field) {
   const r = ocrEditRows[idx];
@@ -2141,7 +2140,7 @@ function locateOcrImage(idx, field) {
   const pane = document.getElementById("ocrPaneImg");
   if (!img || !pane || !r || typeof r.iy !== "number" || !img.naturalHeight || !ocrImgFit.w) return false;
   const f = Math.max(0, Math.min(r.iy / img.naturalHeight, 1)); // 이미지 세로 비율(0~1)
-  const targetScale = OCR_TAP_SCALE;
+  const targetScale = 4.5;
   ocrTransform.scale = targetScale;
   const dispH = ocrImgFit.h * targetScale;
   const dispW = ocrImgFit.w * targetScale;
@@ -2408,7 +2407,6 @@ function _ocrFitModalAboveKeyboard(td) {
       if (_ocrSelectedCell && typeof locateOcrImage === "function")
         locateOcrImage(_ocrSelectedCell.idx, _ocrSelectedCell.field);
       else if (typeof bakeOcr === "function") bakeOcr();
-      if (_ocrTblAlign && ocrTransform.scale === 1 && typeof alignOcrTableToImage === "function") alignOcrTableToImage();
     });
   };
   const fit = () => {
@@ -2941,19 +2939,7 @@ function resetOcrTransform() {
 //  표 위에 여백을 넣어 첫 줄을 이미지 첫 줄 높이로 내리고, 줄 높이는 이미지의 줄 간격과 같게 한다.
 //  대조·수정을 켠 직후 첫 로드, ↺, 표를 다시 그릴 때(이미지가 원위치 상태일 때만) 실행. 확대한 상태에서는 하지 않는다.
 let _ocrTblAlign = false;
-const OCR_TBL_ALIGN_ON = false; // 폰에서 표가 아래로 밀리고 잘려 불편 → 끔(표는 원래대로 맨 위부터·기본 줄 높이). true 로 바꾸면 v5 맞춤 재사용
-function _ocrTblAlignClear() {
-  const t = document.querySelector("#ocrTableInner table");
-  if (t) {
-    t.style.marginTop = "";
-    t.querySelectorAll("tbody tr").forEach((tr) => { tr.style.height = ""; Array.from(tr.children).forEach((td) => { td.style.padding = ""; td.style.lineHeight = ""; }); });
-  }
-  const d = document.getElementById("ocrAlignDiag");
-  if (d) d.remove();
-  _ocrTblAlign = false;
-}
 function alignOcrTableToImage() {
-  if (typeof window.OCR_TBL_ALIGN_FORCE !== "undefined" ? !window.OCR_TBL_ALIGN_FORCE : !OCR_TBL_ALIGN_ON) { _ocrTblAlignClear(); return false; }
   const pane = document.getElementById("ocrPaneImg");
   const tpane = document.getElementById("ocrPaneTable");
   const img = document.getElementById("ocrImgElement");
