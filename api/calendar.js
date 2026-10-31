@@ -605,7 +605,7 @@ const SYSTEM_ONLY_ACTIONS = new Set([
   "SAVE_OCR_INFO", "SAVE_OCR_FILTERS", "SET_ADMIN_PERMS", "PICK_STATS", "PICK_KEYTEST",
 ]);
 // 위임 권한이 필요한 액션 (시스템 관리자는 항상 통과)
-const PERM_ACTIONS = { OCR_UPLOAD: "ocr_upload", APPLY_OCR_DATA: "ocr_compare" };
+const PERM_ACTIONS = { OCR_UPLOAD: "ocr_upload", APPLY_OCR_DATA: "ocr_compare", OCR_ROW_REREAD: "ocr_compare", OCR_IMAGE_DATA: "ocr_compare" };
 
 function getMondayOfWeek(dateStr) {
   const d = new Date(dateStr);
@@ -861,6 +861,8 @@ module.exports = async function (req, res) {
         "OCR_UPLOAD",
         "PICK_PARSE",
         "PICK_REREAD",
+        "OCR_ROW_REREAD",
+        "OCR_IMAGE_DATA",
         "PICK_STATS",
         "PICK_KEYTEST",
         "PICK_REGISTER",
@@ -2965,6 +2967,36 @@ if (action === "VERIFY_SESSION") {
         }
         await pickLogSet(data?.parseId, "reread", Object.assign({}, rr.data, { _m: rr.model || null }), currentAdmin);
         return res.status(200).json({ success: true, hw: rr.data, timing: { ms: rr.ms || null, model: rr.model || null, keyNo: rr.keyNo || null, attempts: rr.attempts || [] } });
+      } else if (action === "OCR_ROW_REREAD") {
+        // 🤖 입고 대조창: 앱이 '의심 줄'만 잘라 보낸 그림을 AI 로 다시 읽어 줄별 값만 돌려준다 (DB 는 건드리지 않음 — 제안으로만 쓰임)
+        const itemsIn = Array.isArray(data?.items) ? data.items.slice(0, 8) : [];
+        const itemsClean = itemsIn.map((it) => ({ n: parseInt(it && it.n, 10), img: typeof (it && it.img) === "string" ? it.img.replace(/^data:[^,]+,/, "") : "" }));
+        if (!itemsClean.length || itemsClean.some((it) => !isFinite(it.n) || it.img.length < 200 || it.img.length > 700000 || !/^[A-Za-z0-9+\/]+={0,2}$/.test(it.img)))
+          return res.status(200).json({ success: false, msg: "그림 형식이 올바르지 않습니다." });
+        if (!pickGeminiKeys().length) return res.status(200).json({ success: false, msg: "AI 키가 설정되어 있지 않습니다." });
+        await geminiStateLoad();
+        const rrO = await pickLib.rereadOcrRows(itemsClean, fetch, pickGeminiKeys());
+        await geminiStateSave();
+        if (!rrO.ok) return res.status(200).json({ success: false, msg: "AI 다시 읽기 실패: " + (rrO.err || "알 수 없는 오류"), quota: !!rrO.quota, retryAt: rrO.retryAt || 0 });
+        return res.status(200).json({ success: true, rows: rrO.rows, timing: { ms: rrO.ms || null, model: rrO.model || null, keyNo: rrO.keyNo || null } });
+      } else if (action === "OCR_IMAGE_DATA") {
+        // 텔레그램에 올라간 OCR 사진을 앱이 잘라 쓸 수 있게(교차출처 이미지는 브라우저가 자르기를 막음) 서버가 받아 data URL 로 넘겨준다
+        const u = String(data?.url || "");
+        if (!/^https:\/\/api\.telegram\.org\/file\/bot[^\/]+\/[\w\/.\-]+$/.test(u)) return res.status(200).json({ success: false, msg: "허용되지 않는 주소입니다." });
+        const ctlI = new AbortController();
+        const tmI = setTimeout(() => ctlI.abort(), 15000);
+        try {
+          const ir = await fetch(u, { signal: ctlI.signal });
+          if (!ir.ok) return res.status(200).json({ success: false, msg: "이미지를 받지 못했습니다." });
+          const buf = Buffer.from(await ir.arrayBuffer());
+          if (buf.length > 3000000) return res.status(200).json({ success: false, msg: "이미지가 너무 큽니다." });
+          const mimeI = /png/i.test(u) ? "image/png" : "image/jpeg";
+          return res.status(200).json({ success: true, dataUrl: `data:${mimeI};base64,${buf.toString("base64")}` });
+        } catch (e) {
+          return res.status(200).json({ success: false, msg: "이미지를 받지 못했습니다." });
+        } finally {
+          clearTimeout(tmI);
+        }
       } else if (action === "PICK_KEYTEST") {
         // 🔑 AI 키·모델 점검 (시스템 관리자 전용 — SYSTEM_ONLY_ACTIONS 에서 선차단): 키마다 모델 목록 조회 + 모델별 작은 요청 1회
         const kk = pickGeminiKeys();

@@ -2019,14 +2019,59 @@ function _ocrRvGeometry() {
 // 💡 의심 칸 · 제안값 (검증이 행에 남긴 _vf/_vmsg/_sug 를 읽어 쓰는 공통 도구)
 // =====================================================
 let _ocrOrphans = { bl: [], inv: [], date: [] };
+let _ocrZone = new Set(); // 표가 밀렸을 가능성이 있는 줄(밀림 증거가 있는 줄 + 앞뒤 한 줄) — AI 다시 읽기 대상에 같이 넣음
+// ── 🤖 AI 다시 읽기 결과(r._ai)를 제안에 합치는 도구
+const OCR_AI_REREAD_ON = true; // 끄면(false) AI 다시 읽기 버튼이 사라지고 호출도 0
+const OCR_AI_AUTO = false; // true 면 대조창이 열릴 때 의심 줄을 자동으로 AI 에 보냄(기본: 버튼을 눌렀을 때만)
+const OCR_AI_FIELDS = ["bl", "pal", "eta", "inDate", "fwd", "sType", "invoice"];
+function _ocrAiDate(v) {
+  const m = String(v == null ? "" : v).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const n = m ? m[0] : typeof _normOcrDate === "function" ? _normOcrDate(v) : "";
+  const m2 = String(n || "").match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  return m2 ? `${m2[1]}-${m2[2].padStart(2, "0")}-${m2[3].padStart(2, "0")}` : "";
+}
+// 비교용 모양(공백·대소문자·날짜 자리수 차이 무시)
+function _ocrAiNorm(field, v) {
+  const t = String(v == null ? "" : v).trim();
+  if (field === "bl") return t.replace(/[\s•·\-*]/g, "").toUpperCase();
+  if (field === "eta" || field === "inDate") return _ocrAiDate(t) || "미정";
+  if (field === "invoice") return t.split(/[,\s]+/).filter(Boolean).map((x) => x.toUpperCase()).sort().join(",");
+  return t.replace(/\s+/g, "").toUpperCase();
+}
+// AI 가 읽은 값이 칸 형식에 맞을 때만 제안으로 인정 (엉뚱한 글자는 버림)
+function _ocrAiClean(field, v) {
+  const t = String(v == null ? "" : v).trim();
+  if (!t) return null;
+  if (field === "bl") {
+    const c = t.replace(/[\s•·\-*]/g, "").toUpperCase();
+    return /^[A-Z]{1,8}\d{5,12}$/.test(c) || c === "발행전" ? c : null;
+  }
+  if (field === "pal") return /^\d{1,3}$/.test(t) ? t : null;
+  if (field === "eta" || field === "inDate") return _ocrAiDate(t) || null;
+  if (field === "invoice") {
+    const parts = t.split(/[,\s]+/).filter(Boolean);
+    return parts.length && parts.every((x) => /^\d{7,8}$/.test(x) || /^PI-?\d{4}-?\d{3,4}$/i.test(x)) ? parts.join(", ") : null;
+  }
+  return t.length <= 20 ? t.toUpperCase() : null;
+}
 function _ocrCellInfo(idx, field) {
   const r = ocrEditRows[idx] || {};
-  return {
-    flag: (r._vf && r._vf[field]) || "",
-    msg: (r._vmsg && r._vmsg[field]) || "",
-    sug: (r._sug && r._sug[field]) || null,
-    pend: Array.isArray(r._pend) && r._pend.indexOf(field) >= 0,
-  };
+  let flag = (r._vf && r._vf[field]) || "";
+  let msg = (r._vmsg && r._vmsg[field]) || "";
+  let sug = (r._sug && r._sug[field]) || null;
+  let alt = null, aiSame = false;
+  const ai = r._ai && !r._fromDb ? r._ai[field] : undefined;
+  if (ai !== undefined && ai !== null) {
+    if (_ocrAiNorm(field, ai) === _ocrAiNorm(field, r[field])) aiSame = true;
+    else {
+      const aiWhy = "AI가 줄 이미지를 다시 읽은 값";
+      if (sug && _ocrAiNorm(field, sug.val) === _ocrAiNorm(field, ai)) sug = { val: sug.val, why: sug.why + " · AI도 같게 읽음" };
+      else if (sug) alt = { val: ai, why: aiWhy };
+      else sug = { val: ai, why: aiWhy };
+      if (!flag) { flag = "adv"; msg = msg || "AI가 이 칸을 다르게 읽었어요"; }
+    }
+  }
+  return { flag, msg, sug, alt, aiSame, pend: Array.isArray(r._pend) && r._pend.indexOf(field) >= 0 };
 }
 function _ocrClearFlag(idx, field) {
   const r = ocrEditRows[idx];
@@ -2034,6 +2079,7 @@ function _ocrClearFlag(idx, field) {
   if (r._vf) delete r._vf[field];
   if (r._vmsg) delete r._vmsg[field];
   if (r._sug) delete r._sug[field];
+  if (r._ai) delete r._ai[field]; // 직접 고친 칸은 AI 제안도 걷음
   if (Array.isArray(r._pend)) r._pend = r._pend.filter((f) => f !== field); // 직접 손댄 칸은 '사진에서 바뀐 값' 제안이 아님
 }
 // 확인할 칸 목록(줄 순서 → 열 순서). 빨강·파랑·주황·제안·사진에서 바뀐 값
@@ -2051,12 +2097,13 @@ function _ocrSuspectCells() {
 function _ocrSuspectRows() {
   const set = new Set();
   _ocrSuspectCells().forEach((c) => set.add(c.idx));
+  _ocrZone.forEach((i) => { if (ocrEditRows[i] && !ocrEditRows[i]._fromDb) set.add(i); }); // 밀림 의심 구간도 확인할 줄
   return Array.from(set).sort((a, b) => a - b);
 }
 // 제안값을 그 칸에 바로 적용 (수동 수정과 똑같이 '고친 칸'으로 표시되고, [확정]해야 DB 반영)
 function applyOcrSuggestion(idx, field, valOverride) {
   const r = ocrEditRows[idx];
-  const sug = r && r._sug && r._sug[field];
+  const sug = r && _ocrCellInfo(idx, field).sug;
   const val = valOverride !== undefined ? valOverride : sug && sug.val;
   if (!r || val === undefined || val === null) return false;
   setOcrCellValue(idx, field, String(val));
@@ -2084,11 +2131,12 @@ function _ocrSugBarUpdate() {
   const pane = document.getElementById("ocrPaneTable");
   const open = pane && pane.style.display !== "none" && !_ocrRv.on;
   const list = open ? _ocrSuspectCells() : [];
-  if (!open || !list.length) { bar.style.display = "none"; bar.innerHTML = ""; return; }
+  const zoneOn = Array.from(_ocrZone).some((i) => ocrEditRows[i] && !ocrEditRows[i]._fromDb);
+  if (!open || (!list.length && !zoneOn)) { bar.style.display = "none"; bar.innerHTML = ""; return; }
   const sel = _ocrSelectedCell;
   const cur = sel ? _ocrCellInfo(sel.idx, sel.field) : null;
   const colName = sel ? (OCR_COLS.find((c) => c.key === sel.field) || {}).label || sel.field : "";
-  let mid = `<span style="flex:1 1 auto; min-width:0;">🎯 확인할 칸 <b>${list.length}</b>개 — ◀ ▶ 로 이동</span>`;
+  let mid = `<span style="flex:1 1 auto; min-width:0;">🎯 확인할 칸 <b>${list.length}</b>개${zoneOn ? " · 🧩 밀림 의심 구간 있음" : ""}${_ocrAi.msg ? "<br>" + _esc(_ocrAi.msg) : ""}</span>`;
   if (cur && (cur.flag || cur.sug || cur.pend)) {
     const why = cur.msg || (cur.pend ? "이번 사진에서 바뀐 값" : "");
     mid = `<span style="flex:1 1 auto; min-width:0; line-height:1.35;"><b>${_esc(colName)}</b> ${_esc(why)}${cur.sug ? ` → 💡 <b>${_esc(String(cur.sug.val))}</b>` : ""}</span>`;
@@ -2097,12 +2145,18 @@ function _ocrSugBarUpdate() {
   bar.innerHTML =
     `<button id="sbPrev" style="${btn} background:#dfe6f2; color:#334;">◀</button>${mid}` +
     (cur && cur.sug ? `<button id="sbApply" style="${btn} background:#2b6cd4; color:#fff;">이 값으로 바꾸기</button>` : "") +
+    (cur && cur.alt ? `<button id="sbAlt" style="${btn} background:#6a4bd8; color:#fff;">🤖 AI 값</button>` : "") +
+    (OCR_AI_REREAD_ON && typeof hasPerm === "function" && hasPerm("ocr_compare") ? `<button id="sbAi" ${_ocrAi.busy ? "disabled" : ""} style="${btn} background:${_ocrAi.busy ? "#b9c0cc" : "#e6e0fa"}; color:#43309a;">${_ocrAi.busy ? `🤖 ${_ocrAi.done}/${_ocrAi.total}` : "🤖"}</button>` : "") +
     `<button id="sbNext" style="${btn} background:#dfe6f2; color:#334;">▶</button>`;
   bar.style.display = "flex";
   bar.querySelector("#sbPrev").onclick = () => _ocrGoSuspectCell(-1);
   bar.querySelector("#sbNext").onclick = () => _ocrGoSuspectCell(1);
   const ap = bar.querySelector("#sbApply");
   if (ap) ap.onclick = () => applyOcrSuggestion(sel.idx, sel.field);
+  const al = bar.querySelector("#sbAlt");
+  if (al) al.onclick = () => applyOcrSuggestion(sel.idx, sel.field, cur.alt.val);
+  const sa = bar.querySelector("#sbAi");
+  if (sa) sa.onclick = () => ocrAiReread(false);
 }
 function _ocrGoSuspectCell(dir) {
   const list = _ocrSuspectCells();
@@ -2117,6 +2171,141 @@ function _ocrGoSuspectCell(dir) {
   } else next = list[(pos + dir + list.length) % list.length];
   selectOcrCell(next.idx, next.field);
 }
+// =====================================================
+// 🤖 의심 줄만 AI(Gemini)로 다시 읽기 — 평소엔 호출 0. 버튼을 눌렀을 때만, 걸린 줄(+밀림 구간)의 이미지 조각만 보냄
+//   AI 는 표를 고치지 않고 '이 줄은 이렇게 읽힌다'만 알려줌 → 현재 값과 다르면 제안 버튼으로 나타남 (누르기 전엔 아무것도 안 바뀜)
+// =====================================================
+let _ocrAi = { busy: false, msg: "", done: 0, total: 0, diff: 0 };
+let _ocrAiImgCache = null; // { src, im } — 교차출처 사진을 서버가 받아 준 복사본
+// AI 에 보낼 줄: 의심(빨강·파랑·주황·제안) 줄 + 밀림 구간 줄. all 이면 모든 줄
+function _ocrAiTargets(all) {
+  const set = new Set();
+  if (all) ocrEditRows.forEach((r, i) => { if (r && !r._fromDb && typeof r.iy === "number") set.add(i); });
+  else {
+    _ocrSuspectCells().forEach((c) => { if (c.flag || c.sug) set.add(c.idx); });
+    _ocrZone.forEach((i) => set.add(i));
+  }
+  return Array.from(set).filter((i) => ocrEditRows[i] && !ocrEditRows[i]._fromDb && _ocrRowCenterY(i)).sort((a, b) => a - b);
+}
+async function _ocrAiImage() {
+  const img = document.getElementById("ocrImgElement");
+  if (!img || !img.naturalWidth) return null;
+  const ok = (el) => { try { const c = document.createElement("canvas"); c.width = c.height = 1; c.getContext("2d").drawImage(el, 0, 0, 1, 1); c.toDataURL("image/jpeg", 0.5); return true; } catch (e) { return false; } };
+  if (ok(img)) return img;
+  if (_ocrAiImgCache && _ocrAiImgCache.src === img.src) return _ocrAiImgCache.im;
+  if (!/^https:\/\/api\.telegram\.org\/file\//.test(img.src)) return null;
+  const d = await _ocrAiPost("OCR_IMAGE_DATA", { url: img.src }, 20000);
+  if (!d || !d.success || !d.dataUrl) return null;
+  const im = new Image();
+  await new Promise((res, rej) => { im.onload = res; im.onerror = rej; im.src = d.dataUrl; });
+  _ocrAiImgCache = { src: img.src, im };
+  return im;
+}
+async function _ocrAiPost(action, data, ms) {
+  const token = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms || 45000);
+  try {
+    const r = await fetch(VERCEL_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ source: "vercel", domain: "system", action, admin_id: localStorage.getItem("admin_id"), session_token: token, data }),
+      signal: ctl.signal,
+    });
+    const raw = await r.json();
+    return typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch (e) {
+    return { success: false, msg: e && e.name === "AbortError" ? "시간 초과" : "통신 실패" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+// 한 줄 조각: 가운데가 읽을 줄, 위·아래 이웃 줄이 조금 같이 찍힘 (가로는 표 전체)
+function _ocrAiCrop(im, idx) {
+  const pos = _ocrRowCenterY(idx);
+  if (!pos) return null;
+  const nw = im.naturalWidth || im.width, nh = im.naturalHeight || im.height;
+  const pitch = Math.max(pos.h, 10);
+  let sy = pos.y - pitch * 1.15, sh = pitch * 2.3;
+  if (sy < 0) { sh += sy; sy = 0; }
+  if (sy + sh > nh) sh = nh - sy;
+  const g = _ocrRvGeometry();
+  const sx = g ? Math.max(0, g.left - 6) : 0, sw = g ? Math.min(nw - sx, g.right - g.left + 12) : nw;
+  if (!(sh > 4 && sw > 20)) return null;
+  const scale = Math.min(2, 1500 / sw);
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(sw * scale); cv.height = Math.round(sh * scale);
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(im, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+  let u = cv.toDataURL("image/jpeg", 0.85);
+  if (u.length > 600000) u = cv.toDataURL("image/jpeg", 0.65);
+  return u.replace(/^data:[^,]+,/, "");
+}
+function _ocrAiStore(idx, row) {
+  const r = ocrEditRows[idx];
+  if (!r) return;
+  r._ai = {};
+  OCR_AI_FIELDS.forEach((k) => {
+    if (row && row[k] !== undefined) {
+      const c = _ocrAiClean(k, row[k]);
+      if (c !== null) r._ai[k] = c;
+    }
+  });
+}
+function _ocrAiCountDiff() {
+  let n = 0;
+  ocrEditRows.forEach((r, i) => {
+    if (!r || !r._ai) return;
+    OCR_AI_FIELDS.forEach((k) => { if (r._ai[k] != null && _ocrAiNorm(k, r._ai[k]) !== _ocrAiNorm(k, r[k])) n++; });
+  });
+  return n;
+}
+async function ocrAiReread(all) {
+  if (!OCR_AI_REREAD_ON || _ocrAi.busy) return;
+  if (typeof hasPerm === "function" && !hasPerm("ocr_compare")) return;
+  const targets = _ocrAiTargets(all).slice(0, all ? 60 : 24);
+  if (!targets.length) { showToast("AI로 다시 읽을 줄이 없어요", 1800); return; }
+  _ocrAi = { busy: true, msg: "", done: 0, total: targets.length, diff: 0 };
+  _ocrAfterVerify();
+  try {
+    const im = await _ocrAiImage();
+    if (!im) { _ocrAi.msg = "이 사진은 잘라서 보낼 수 없어요"; return; }
+    for (let k = 0; k < targets.length; k += 6) {
+      const chunk = targets.slice(k, k + 6);
+      const items = [];
+      chunk.forEach((i) => { const img = _ocrAiCrop(im, i); if (img) items.push({ n: i, img }); });
+      if (!items.length) continue;
+      const d = await _ocrAiPost("OCR_ROW_REREAD", { items }, 50000);
+      if (d && d.forceLogout) { showToast(d.msg || "세션이 만료되었습니다. 다시 로그인하세요.", 3000); return; }
+      if (!d || !d.success) {
+        let w = (d && d.msg) || "AI 응답 이상";
+        if (d && d.retryAt) { const t = new Date(d.retryAt); w += ` (${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")} 이후 다시)`; }
+        _ocrAi.msg = (_ocrAi.done ? `${_ocrAi.done}줄까지 읽고 멈춤 — ` : "") + w;
+        return;
+      }
+      items.forEach((it) => { _ocrAiStore(it.n, d.rows && d.rows[it.n]); });
+      _ocrAi.done += items.length;
+      _ocrAfterVerify();
+    }
+  } catch (e) {
+    console.warn("AI 다시 읽기 오류:", e);
+    _ocrAi.msg = "AI 다시 읽기 오류";
+  } finally {
+    _ocrAi.busy = false;
+    _ocrAi.diff = _ocrAiCountDiff();
+    if (!_ocrAi.msg) _ocrAi.msg = _ocrAi.diff ? `다르게 읽힌 칸 ${_ocrAi.diff}곳` : "AI도 모든 칸을 현재 값과 같게 읽었어요 ✅";
+    _ocrAfterVerify();
+  }
+}
+// AI 버튼 글자(요약·제안 바 공용)
+function _ocrAiBtnLabel() {
+  if (_ocrAi.busy) return `🤖 AI가 읽는 중… ${_ocrAi.done}/${_ocrAi.total}`;
+  const n = _ocrAiTargets(false).length;
+  const done = ocrEditRows.some((r) => r && r._ai);
+  return done ? "🤖 AI로 다시 읽기(재확인)" : `🤖 의심 ${n}줄 AI로 읽기`;
+}
+
 function _ocrAfterVerify() {
   if (_ocrRv.on) _ocrRowViewSync(_ocrRv.idx, _ocrRv.field, true);
   _ocrSugBarUpdate();
@@ -2359,15 +2548,26 @@ function _ocrRvRenderIssues(idx) {
       if (c.pend) cnt.pend++;
     });
     const orph = (_ocrOrphans.bl.length + _ocrOrphans.inv.length + _ocrOrphans.date.length);
+    const zoneN = Array.from(_ocrZone).filter((i) => ocrEditRows[i] && !ocrEditRows[i]._fromDb).length;
     if (!rows.length && !orph) {
       sm.innerHTML = `<div style="padding:8px 10px; border-radius:8px; background:#e7f6ec; color:#1d6b3a; font-weight:800; font-size:13px;">✅ 의심되는 곳이 없어요</div>`;
     } else {
       const tag = (n, t) => (n ? ` · ${t} ${n}` : "");
       sm.innerHTML = `<div style="display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; background:#fff4d6; color:#5a4300; font-size:13px;">
-        <span style="flex:1 1 auto; min-width:0;">🎯 확인할 줄 <b>${rows.length}</b>개${tag(cnt.red, "🔴")}${tag(cnt.adv, "🟠")}${tag(cnt.sug, "💡")}${tag(cnt.pend, "🟣")}${orph ? ` · 📌 ${orph}` : ""}</span>
+        <span style="flex:1 1 auto; min-width:0;">🎯 확인할 줄 <b>${rows.length}</b>개${tag(cnt.red, "🔴")}${tag(cnt.adv, "🟠")}${tag(cnt.sug, "💡")}${tag(cnt.pend, "🟣")}${orph ? ` · 📌 ${orph}` : ""}${zoneN ? ` · 🧩 밀림 의심 ${zoneN}줄` : ""}</span>
         <button id="rvOnly" style="flex:0 0 auto; border:none; border-radius:6px; padding:5px 9px; font-weight:800; font-size:12px; cursor:pointer; background:${_ocrRv.only ? "#2b6cd4" : "#e8ecf2"}; color:${_ocrRv.only ? "#fff" : "#334"};">${_ocrRv.only ? "의심 줄만" : "모든 줄"}</button></div>`;
       const ob = sm.querySelector("#rvOnly");
       if (ob) ob.onclick = () => { _ocrRv.only = !_ocrRv.only; _ocrRvRenderIssues(_ocrRv.idx); };
+    }
+    // 🤖 AI 로 다시 읽기 (눌렀을 때만 호출)
+    if (OCR_AI_REREAD_ON && (rows.length || _ocrAi.msg) && typeof hasPerm === "function" && hasPerm("ocr_compare")) {
+      sm.insertAdjacentHTML("beforeend", `<div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
+        <button id="rvAi" ${_ocrAi.busy ? "disabled" : ""} style="flex:1 1 auto; border:none; border-radius:8px; padding:9px 8px; font-weight:800; font-size:13px; background:${_ocrAi.busy ? "#b9c0cc" : "#6a4bd8"}; color:#fff; cursor:pointer;">${_esc(_ocrAiBtnLabel())}</button>
+        <button id="rvAiAll" ${_ocrAi.busy ? "disabled" : ""} title="모든 줄을 AI 로 확인" style="flex:0 0 auto; border:none; border-radius:8px; padding:9px 10px; font-weight:800; font-size:12px; background:#e6e0fa; color:#43309a; cursor:pointer;">전체 줄</button></div>
+        ${_ocrAi.msg ? `<div style="margin-top:4px; font-size:12px; color:#43309a;">${_esc(_ocrAi.msg)}</div>` : ""}`);
+      const b1 = sm.querySelector("#rvAi"), b2 = sm.querySelector("#rvAiAll");
+      if (b1) b1.onclick = () => ocrAiReread(false);
+      if (b2) b2.onclick = () => ocrAiReread(true);
     }
     // 원본에는 있는데 표에 못 들어간 글자
     if (orph) {
@@ -2393,6 +2593,9 @@ function _ocrRvRenderIssues(idx) {
   if (!iss) return;
   let h = "";
   const row = ocrEditRows[idx] || {};
+  if (_ocrZone.has(idx) && !OCR_COLS.some((c) => { const i = _ocrCellInfo(idx, c.key); return i.flag || i.sug; })) {
+    h += `<div style="font-size:12px; padding:7px 9px; margin-top:5px; border-radius:6px; background:#efe8ff; color:#333;">🧩 이 줄 근처에서 표가 밀린 흔적이 있어요 — 원본과 직접 맞는지 보거나 AI로 읽어 보세요</div>`;
+  }
   OCR_COLS.forEach((c) => {
     const info = _ocrCellInfo(idx, c.key);
     if (!info.flag) { // 데이터에 없으면 숨은 표에 칠해진 색(예전 방식)에서 읽음
@@ -2401,14 +2604,16 @@ function _ocrRvRenderIssues(idx) {
     }
     if (!info.flag && !info.sug && !info.pend) return;
     const bg = info.flag === "red" ? "#ffd1d1" : info.flag === "blue" ? "#cfe3ff" : info.flag === "adv" ? "#ffe0b3" : info.pend ? "#ece0f5" : "#eef4ff";
-    const why = info.msg || (info.pend ? "이번 사진에서 바뀐 값" : "");
+    const why = (info.msg || (info.pend ? "이번 사진에서 바뀐 값" : "")) + (info.aiSame ? " · 🤖 AI는 현재 값과 같게 읽음" : "");
     h += `<div style="font-size:12px; padding:7px 9px; margin-top:5px; border-radius:6px; background:${bg}; color:#333;"><div><b>${_esc(c.label)}</b> ${why ? "· " + _esc(why) : ""}</div>`;
     if (info.sug) h += `<button data-sug="${c.key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:9px 8px; font-weight:800; font-size:13px; background:#2b6cd4; color:#fff; cursor:pointer;">💡 '${_esc(String(info.sug.val))}' 로 바꾸기</button>`;
+    if (info.alt) h += `<button data-sug2="${c.key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:8px; font-weight:800; font-size:13px; background:#6a4bd8; color:#fff; cursor:pointer;">🤖 AI가 읽은 '${_esc(String(info.alt.val))}' 로 바꾸기</button>`;
     if (info.pend && ocrOrigRows[idx]) h += `<button data-undo="${c.key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:8px; font-weight:700; font-size:12px; background:#e8ecf2; color:#334; cursor:pointer;">기존 값 '${_esc(String(ocrOrigRows[idx][c.key] == null ? "" : ocrOrigRows[idx][c.key]))}' 으로 되돌리기</button>`;
     h += `</div>`;
   });
   iss.innerHTML = h;
   iss.querySelectorAll("[data-sug]").forEach((b) => { b.onclick = () => applyOcrSuggestion(idx, b.getAttribute("data-sug")); });
+  iss.querySelectorAll("[data-sug2]").forEach((b) => { b.onclick = () => { const f = b.getAttribute("data-sug2"); const a = _ocrCellInfo(idx, f).alt; if (a) applyOcrSuggestion(idx, f, a.val); }; });
   iss.querySelectorAll("[data-undo]").forEach((b) => {
     b.onclick = () => {
       const f = b.getAttribute("data-undo");
@@ -2841,7 +3046,10 @@ function loadOcrSplitData() {
       return;
     }
     renderOcrTable();
+    _ocrAi = { busy: false, msg: "", done: 0, total: 0, diff: 0 }; // 새 이미지·새 표 → 지난 AI 상태·밀림 구간 초기화
+    _ocrZone = new Set();
     try { Promise.resolve(verifyOcrRows(null, true, true)).catch(function () {}); } catch (e) { /* 검증 실패해도 표는 그대로 */ }
+    if (OCR_AI_AUTO) setTimeout(() => ocrAiReread(false), 400);
     if (_ocrWantRowView() && document.getElementById("ocrSplitWrap")) {
       // 폰(또는 선택한 경우): 줄 대조 화면. 확정 뒤 다시 불러올 때는 보던 줄을 유지
       const keep = _ocrRv.on ? Math.min(_ocrRv.idx, ocrEditRows.length - 1) : _ocrSelectedCell ? Math.min(_ocrSelectedCell.idx, ocrEditRows.length - 1) : 0;
@@ -3589,6 +3797,47 @@ async function verifyOcrRows(_btn, _skipFixPrompt, _auto) {
     for (let k = 0; k < big.length && i < small.length; k++) if (big[k] === small[i]) i++;
     return i === small.length;
   };
+  //  1-b) 🧩 밀림 감지 — 표가 한 줄(또는 몇 칸) 어긋났을 때를 잡는다. AI 를 쓰지 않는 검사.
+  //   · 이 줄의 값이 '자기 줄' 좌표 판독값과는 다르고 위/아래 줄의 좌표 판독값과 같으면 → 한 줄 밀림 증거(칸에 주황 + 제안)
+  //   · 좌표 판독에 짝이 없는 줄 / 원본 글자의 위→아래 순서와 표 순서가 뒤집힌 줄 → 구간 후보(표시는 안 하고 AI 확인 대상에만 포함)
+  const shiftNote = new Map(); // idx -> { field: 사유 }
+  const shiftZone = new Set();
+  if (geo) {
+    const gOfIdx = (i) => geoOf.get(i) || null;
+    ocrEditRows.forEach((r, idx) => {
+      if (r._fromDb) return;
+      const g = gOfIdx(idx);
+      if (!g) { if (typeof r.iy === "number") shiftZone.add(idx); return; } // 좌표 판독에 짝이 없는 줄
+      ["bl", "invoice", "eta", "inDate"].forEach((f) => {
+        const gv = g[f];
+        if (gv === undefined || gv === null || String(gv).trim() === "") return;
+        if (editedAfterOcr(idx, r, f)) return;
+        const mine = _geoNorm[f](r[f]);
+        if (!mine || mine === "미정" || mine === _geoNorm[f](gv)) return;
+        [-1, 1].forEach((d) => {
+          const gn = gOfIdx(idx + d);
+          if (!gn || gn[f] === undefined || gn[f] === null || String(gn[f]).trim() === "") return;
+          if (mine === _geoNorm[f](gn[f])) {
+            (shiftNote.get(idx) || shiftNote.set(idx, {}).get(idx))[f] = `표가 ${d < 0 ? "아래로" : "위로"} 한 줄 밀린 듯 (${d < 0 ? "윗" : "아랫"}줄의 글자 위치 판독값과 같음)`;
+            shiftZone.add(idx); shiftZone.add(idx + d);
+          }
+        });
+      });
+    });
+  }
+  {
+    // 원본 글자 순서: B/L 이 원본에 나온 위치가 표 순서와 뒤집히면 그 줄을 구간 후보로
+    const rawU = String(currentRawOcrString || "").toUpperCase().replace(/[\s•·\-*]/g, "");
+    let lastPos = -1;
+    ocrEditRows.forEach((r, idx) => {
+      if (r._fromDb) return;
+      const b = cleanBL(r.bl).toUpperCase();
+      if (!b || b === "발행전" || b.length < 6) return;
+      const pos = rawU.indexOf(b);
+      if (pos < 0) return;
+      if (pos < lastPos) { shiftZone.add(idx); shiftZone.add(idx - 1); } else lastPos = pos;
+    });
+  }
   //  2) 표 안 중복 (같은 인보이스/B/L 이 두 행 이상)
   const _dupMap = { invoice: new Map(), bl: new Map() };
   ocrEditRows.forEach((r, idx) => {
@@ -3697,6 +3946,9 @@ async function verifyOcrRows(_btn, _skipFixPrompt, _auto) {
             }
           }
         }
+        // (a-2) 밀림 증거가 있는 칸은 더 구체적인 사유로 바꿈 (제안값은 위 좌표 판독값 그대로)
+        const _sn = shiftNote.get(idx);
+        if (_sn) Object.keys(_sn).forEach((f) => { adv[f] = _sn[f]; });
         // (b) 인보이스가 원본에서 '다른 숫자의 일부'로만 발견되는 경우 (통째 일치 아님)
         String(r.invoice || "")
           .split(/[,\s]+/)
@@ -3821,6 +4073,11 @@ async function verifyOcrRows(_btn, _skipFixPrompt, _auto) {
   _tryFill("bl", orphans.bl, "원본에 있는데 표에서 빠진 B/L");
   _tryFill("invoice", orphans.inv, "원본에 있는데 표에서 빠진 인보이스");
   _ocrOrphans = orphans;
+  {
+    const z = new Set();
+    shiftZone.forEach((i) => { if (i >= 0 && i < ocrEditRows.length && !ocrEditRows[i]._fromDb) z.add(i); });
+    _ocrZone = z;
+  }
 
   // 행 개수 대조 — 공백 기준 토큰 분리 후 완전 매칭(SEA+인보이스 연결 오매칭 방지)
   const rawTokens = currentRawOcrString.toUpperCase().split(/[\s\n\r•·*/().,\-]+/).filter(Boolean);

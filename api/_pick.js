@@ -482,6 +482,54 @@ async function rereadHandwriting(imgs, mime, fetchFn, apiKey, pin) {
     clearTimeout(timer);
   }
 }
+// ───────────────────────── 입고 OCR 대조: 의심 줄 AI 다시 읽기 ─────────────────────────
+// items: [{ n, img(base64) }] — 앱이 의심 줄만 잘라 보낸 그림(줄마다 1장, 위·아래 이웃 줄이 조금 같이 찍힘). 한 번의 AI 호출로 여러 줄을 읽는다.
+const OCR_ROW_PROMPT = `아래 그림들은 입고 스케줄 표(인쇄된 표)를 찍은 사진에서 '한 줄'씩 잘라 낸 것이다. 각 그림 위에 번호(그림 n)가 붙어 있다.
+그림마다 세로 가운데에 있는 줄이 읽을 대상이고, 위·아래에 살짝 보이는 이웃 줄은 읽지 않는다.
+열 순서(왼쪽→오른쪽): B/L, PAL(숫자), ETA(날짜), 입고일(날짜), FWD(포워더), 유형(SEA/AIR 등), 인보이스(7~8자리 숫자 또는 PI-…), 비고(자유 문장, 없을 수 있음).
+각 칸에 '인쇄된 글자 그대로' 적어라. 날짜는 YYYY-MM-DD 로. 값이 없는 칸은 "" , 글자가 있는데 읽을 수 없으면 null.
+추측해서 채우지 말 것(특히 B/L·인보이스는 한 글자씩 정확히, O/0·I/1·S/5·B/8 을 구별).
+아래 JSON 배열 하나만 답해라:
+[{"n":그림번호,"bl":"","pal":"","eta":"","inDate":"","fwd":"","sType":"","invoice":"","etc":""}, ...]`;
+const OCR_ROW_KEYS = ["bl", "pal", "eta", "inDate", "fwd", "sType", "invoice", "etc"];
+function normOcrRowReread(arr, wantNs) {
+  const out = {};
+  (Array.isArray(arr) ? arr : []).forEach((o) => {
+    if (!o || typeof o !== "object") return;
+    const n = parseInt(o.n, 10);
+    if (!(wantNs || []).includes(n)) return;
+    const r = {};
+    OCR_ROW_KEYS.forEach((k) => {
+      const v = o[k];
+      if (v === null || v === undefined) return; // 읽지 못함 → 비교 안 함
+      r[k] = String(v).replace(/\s+/g, " ").trim().slice(0, 120);
+    });
+    out[n] = r;
+  });
+  return out;
+}
+async function rereadOcrRows(items, fetchFn, apiKey) {
+  const t0 = Date.now();
+  const list = (Array.isArray(items) ? items : []).filter((x) => x && typeof x.img === "string" && x.img.length > 200).slice(0, 8);
+  if (!list.length) return { ok: false, err: "그림이 없습니다" };
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), REREAD_TIMEOUT_MS);
+  try {
+    const parts = [{ text: OCR_ROW_PROMPT }];
+    list.forEach((it) => { parts.push({ text: `그림 ${it.n}:` }); parts.push({ inline_data: { mime_type: "image/jpeg", data: it.img } }); });
+    const g = await geminiPost(fetchFn, apiKey, GEMINI_MODELS(), (m, o) => JSON.stringify({ contents: [{ parts }], generationConfig: genCfg(m, o) }), ctl.signal);
+    const j = g.j;
+    const txt = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
+    if (!txt) return { ok: false, err: j && j.error ? geminiWhy(g) : "AI 응답 없음", quota: !!g.anyQuota, retryAt: g.retryAt || 0, ms: Date.now() - t0, attempts: g.attempts || [] };
+    const obj = JSON.parse(String(txt).replace(/```json/gi, "").replace(/```/g, "").trim());
+    return { ok: true, rows: normOcrRowReread(obj, list.map((x) => x.n)), ms: Date.now() - t0, model: g.model, keyNo: g.keyNo, attempts: g.attempts || [] };
+  } catch (e) {
+    return { ok: false, err: e.name === "AbortError" ? "AI 판독 시간 초과" : "AI 판독 오류" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // 2차 판독 결과를 화면이 쓰기 쉬운 꼴로: 숫자 | "empty" | null
 function normReread(o) {
   o = o && typeof o === "object" ? o : {};
@@ -1126,4 +1174,4 @@ async function parsePicking(b64, mime, opts) {
   return out;
 }
 
-module.exports = { PIN_MODELS, SHADOW_MODEL, resolvePin, _setTimeouts, testKeys, keyPressure, geminiPost, geminiWhy, exportKeyState, importKeyState, resetKeyState, keyStatus, coolMs, msToPacificMidnight, DEFAULT_MODELS, GEMINI_MODELS, genCfg, toKeyList, handRegions, rereadHandwriting, normReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };
+module.exports = { PIN_MODELS, SHADOW_MODEL, resolvePin, _setTimeouts, testKeys, keyPressure, geminiPost, geminiWhy, exportKeyState, importKeyState, resetKeyState, keyStatus, coolMs, msToPacificMidnight, DEFAULT_MODELS, GEMINI_MODELS, genCfg, toKeyList, handRegions, rereadHandwriting, normReread, rereadOcrRows, normOcrRowReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };
