@@ -2019,6 +2019,7 @@ function _ocrRvGeometry() {
 // 💡 의심 칸 · 제안값 (검증이 행에 남긴 _vf/_vmsg/_sug 를 읽어 쓰는 공통 도구)
 // =====================================================
 let _ocrOrphans = { bl: [], inv: [], date: [] };
+let _ocrVerifyInfo = { ran: false, rows: 0, geo: false, geoMatched: 0, why: "" }; // 마지막 검사가 실제로 돌았는지·무엇과 대조했는지 (화면에 '검사함'을 보여주려는 용도)
 let _ocrZone = new Set(); // 표가 밀렸을 가능성이 있는 줄(밀림 증거가 있는 줄 + 앞뒤 한 줄) — AI 다시 읽기 대상에 같이 넣음
 // ── 🤖 AI 다시 읽기 결과(r._ai)를 제안에 합치는 도구
 const OCR_AI_REREAD_ON = true; // 끄면(false) AI 다시 읽기 버튼이 사라지고 호출도 0
@@ -2064,7 +2065,7 @@ function _ocrCellInfo(idx, field) {
   if (ai !== undefined && ai !== null) {
     if (_ocrAiNorm(field, ai) === _ocrAiNorm(field, r[field])) aiSame = true;
     else {
-      const aiWhy = "AI가 줄 이미지를 다시 읽은 값";
+      const aiWhy = "AI가 줄 이미지를 다시 읽은 값" + (r._aiWarn ? " ⚠️ 옆줄을 읽은 듯해요 — 눈으로 확인" : "");
       if (sug && _ocrAiNorm(field, sug.val) === _ocrAiNorm(field, ai)) sug = { val: sug.val, why: sug.why + " · AI도 같게 읽음" };
       else if (sug) alt = { val: ai, why: aiWhy };
       else sug = { val: ai, why: aiWhy };
@@ -2225,7 +2226,9 @@ function _ocrAiCrop(im, idx) {
   if (!pos) return null;
   const nw = im.naturalWidth || im.width, nh = im.naturalHeight || im.height;
   const pitch = Math.max(pos.h, 10);
-  let sy = pos.y - pitch * 1.15, sh = pitch * 2.3;
+  // 읽을 줄 하나만 보이게 바짝 자름 (이웃 줄이 크게 같이 찍히면 AI 가 윗줄을 읽는 일이 있었음). 줄 위치가 덜 정확한 방식일수록 여유를 조금 더 줌
+  const padK = pos.src === "line" ? 0.58 : pos.src === "fit" ? 0.72 : 0.9;
+  let sy = pos.y - pitch * padK, sh = pitch * padK * 2;
   if (sy < 0) { sh += sy; sy = 0; }
   if (sy + sh > nh) sh = nh - sy;
   const g = _ocrRvGeometry();
@@ -2246,12 +2249,18 @@ function _ocrAiStore(idx, row) {
   const r = ocrEditRows[idx];
   if (!r) return;
   r._ai = {};
+  r._aiWarn = false;
   OCR_AI_FIELDS.forEach((k) => {
     if (row && row[k] !== undefined) {
       const c = _ocrAiClean(k, row[k]);
       if (c !== null) r._ai[k] = c;
     }
   });
+  // AI 가 읽은 값이 '이 줄'보다 위·아래 줄의 현재 값과 더 많이 같으면 옆줄을 읽었을 수 있음 → 경고만 붙임(값은 그대로 제안)
+  const same = (o) => OCR_AI_FIELDS.filter((k) => r._ai[k] != null && o && o[k] != null && _ocrAiNorm(k, r._ai[k]) === _ocrAiNorm(k, o[k])).length;
+  const mine = same(r);
+  const nb = Math.max(same(ocrEditRows[idx - 1]), same(ocrEditRows[idx + 1]));
+  if (nb >= 3 && nb > mine) r._aiWarn = true;
 }
 function _ocrAiCountDiff() {
   let n = 0;
@@ -2303,7 +2312,7 @@ function _ocrAiBtnLabel() {
   if (_ocrAi.busy) return `🤖 AI가 읽는 중… ${_ocrAi.done}/${_ocrAi.total}`;
   const n = _ocrAiTargets(false).length;
   const done = ocrEditRows.some((r) => r && r._ai);
-  return done ? "🤖 AI로 다시 읽기(재확인)" : `🤖 의심 ${n}줄 AI로 읽기`;
+  return done ? "🤖 AI로 다시 읽기(재확인)" : n ? `🤖 의심 ${n}줄 AI로 읽기` : "🤖 의심은 없지만 AI로 한 번 더 확인";
 }
 
 function _ocrAfterVerify() {
@@ -2550,7 +2559,10 @@ function _ocrRvRenderIssues(idx) {
     const orph = (_ocrOrphans.bl.length + _ocrOrphans.inv.length + _ocrOrphans.date.length);
     const zoneN = Array.from(_ocrZone).filter((i) => ocrEditRows[i] && !ocrEditRows[i]._fromDb).length;
     if (!rows.length && !orph) {
-      sm.innerHTML = `<div style="padding:8px 10px; border-radius:8px; background:#e7f6ec; color:#1d6b3a; font-weight:800; font-size:13px;">✅ 의심되는 곳이 없어요</div>`;
+      const vi = _ocrVerifyInfo;
+      sm.innerHTML = vi.ran
+        ? `<div style="padding:8px 10px; border-radius:8px; background:#e7f6ec; color:#1d6b3a; font-size:13px;"><div style="font-weight:800;">✅ 의심되는 곳이 없어요</div><div style="margin-top:3px; font-size:11px; font-weight:600; opacity:.85;">${vi.rows}줄 검사 · 형식·원본 글자·입고일 순서${vi.geo ? ` · 글자 위치 판독 대조 ${vi.geoMatched}줄(밀림 감지)` : ""}${vi.geo ? "" : " · ⚠️ 글자 위치 판독이 없어 밀림 감지는 약해요"}</div></div>`
+        : `<div style="padding:8px 10px; border-radius:8px; background:#fdecea; color:#8a2a1d; font-size:13px; font-weight:800;">⚠️ ${_esc(vi.why || "자동 검사가 아직 안 돌았어요 — 아래 [검증] 버튼을 눌러 보세요")}</div>`;
     } else {
       const tag = (n, t) => (n ? ` · ${t} ${n}` : "");
       sm.innerHTML = `<div style="display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; background:#fff4d6; color:#5a4300; font-size:13px;">
@@ -2560,13 +2572,13 @@ function _ocrRvRenderIssues(idx) {
       if (ob) ob.onclick = () => { _ocrRv.only = !_ocrRv.only; _ocrRvRenderIssues(_ocrRv.idx); };
     }
     // 🤖 AI 로 다시 읽기 (눌렀을 때만 호출)
-    if (OCR_AI_REREAD_ON && (rows.length || _ocrAi.msg) && typeof hasPerm === "function" && hasPerm("ocr_compare")) {
+    if (OCR_AI_REREAD_ON && (rows.length || _ocrAi.msg || ocrEditRows.some((r) => r && !r._fromDb)) && typeof hasPerm === "function" && hasPerm("ocr_compare")) {
       sm.insertAdjacentHTML("beforeend", `<div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
         <button id="rvAi" ${_ocrAi.busy ? "disabled" : ""} style="flex:1 1 auto; border:none; border-radius:8px; padding:9px 8px; font-weight:800; font-size:13px; background:${_ocrAi.busy ? "#b9c0cc" : "#6a4bd8"}; color:#fff; cursor:pointer;">${_esc(_ocrAiBtnLabel())}</button>
         <button id="rvAiAll" ${_ocrAi.busy ? "disabled" : ""} title="모든 줄을 AI 로 확인" style="flex:0 0 auto; border:none; border-radius:8px; padding:9px 10px; font-weight:800; font-size:12px; background:#e6e0fa; color:#43309a; cursor:pointer;">전체 줄</button></div>
         ${_ocrAi.msg ? `<div style="margin-top:4px; font-size:12px; color:#43309a;">${_esc(_ocrAi.msg)}</div>` : ""}`);
       const b1 = sm.querySelector("#rvAi"), b2 = sm.querySelector("#rvAiAll");
-      if (b1) b1.onclick = () => ocrAiReread(false);
+      if (b1) b1.onclick = () => ocrAiReread(_ocrAiTargets(false).length === 0); // 의심이 없으면 전체 줄을 확인
       if (b2) b2.onclick = () => ocrAiReread(true);
     }
     // 원본에는 있는데 표에 못 들어간 글자
@@ -3641,6 +3653,7 @@ function startEditOcrCell(td, idx, field, initial) {
 // _btn: onclick="verifyOcrRows(this)" 로 넘어오는 버튼(미사용) / _skipFixPrompt: 자동수정 후 재검증 때 안내창 생략
 async function verifyOcrRows(_btn, _skipFixPrompt, _auto) {
   // _auto: 대조창이 열릴 때 자동으로 도는 검증(안내창·토스트 없이 결과만 칠함)
+  _ocrVerifyInfo = { ran: false, rows: 0, geo: false, geoMatched: 0, why: "" };
   if (!ocrEditRows || ocrEditRows.length === 0) {
     if (!_auto) showToast("검증할 데이터가 없습니다.", 2000);
     return;
@@ -3651,6 +3664,7 @@ async function verifyOcrRows(_btn, _skipFixPrompt, _auto) {
       .replace(/[\s•·\-\*/().,]/g, "");
   const rawNorm = norm(currentRawOcrString);
   if (!rawNorm || rawNorm.length < 10) {
+    _ocrVerifyInfo.why = "원본 글자가 없어 검사를 못 했어요 (새 OCR 필요)";
     if (!_auto) showToast("원본 OCR 텍스트가 없어 검증할 수 없습니다. (새 OCR 필요)", 3000);
     return;
   }
@@ -4073,6 +4087,7 @@ async function verifyOcrRows(_btn, _skipFixPrompt, _auto) {
   _tryFill("bl", orphans.bl, "원본에 있는데 표에서 빠진 B/L");
   _tryFill("invoice", orphans.inv, "원본에 있는데 표에서 빠진 인보이스");
   _ocrOrphans = orphans;
+  _ocrVerifyInfo = { ran: true, rows: ocrEditRows.filter((r) => r && !r._fromDb).length, geo: !!geo, geoMatched, why: "" };
   {
     const z = new Set();
     shiftZone.forEach((i) => { if (i >= 0 && i < ocrEditRows.length && !ocrEditRows[i]._fromDb) z.add(i); });
@@ -6833,15 +6848,105 @@ function _ocrUpBusy(on, msg) {
     <div style="margin-top:6px;font-size:0.85em;color:var(--text-sub,#a0a0a0)">약 20~40초 걸립니다. 창을 닫지 마세요.</div></div>`;
 }
 
+// 📷 사진을 고른 뒤, OCR 을 시작하기 전에 '이 사진으로 할까요?' 확인창 (핀치로 확대해서 글자가 읽히는지 볼 수 있음)
+const OCR_UP_CONFIRM_ON = true; // false 면 예전처럼 고르자마자 바로 OCR
+function _ocrUpConfirm(b64) {
+  return new Promise((resolve) => {
+    const old = document.getElementById("ocrUpConfirm");
+    if (old) old.remove();
+    const wrap = document.createElement("div");
+    wrap.id = "ocrUpConfirm";
+    wrap.style.cssText = "position:fixed;inset:0;z-index:99998;background:#111;display:flex;flex-direction:column;color:#fff;font-family:inherit;";
+    wrap.innerHTML = `
+      <div style="flex:0 0 auto;padding:calc(env(safe-area-inset-top,0px) + 12px) 14px 8px;text-align:center;">
+        <div style="font-weight:800;font-size:16px;">이 사진으로 OCR 할까요?</div>
+        <div style="font-size:12px;opacity:.75;margin-top:3px;">두 손가락으로 확대 · 한 손가락으로 이동 · 두 번 탭=확대/원래대로</div>
+      </div>
+      <div id="ocrUpStage" style="flex:1 1 auto;min-height:0;position:relative;overflow:hidden;touch-action:none;background:#000;">
+        <img id="ocrUpImg" alt="" draggable="false" style="position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;user-select:none;-webkit-user-drag:none;will-change:transform;">
+      </div>
+      <div style="flex:0 0 auto;display:flex;gap:10px;padding:12px 14px calc(env(safe-area-inset-bottom,0px) + 12px);">
+        <button id="ocrUpNo" style="flex:1 1 0;border:none;border-radius:12px;padding:15px 8px;font-weight:800;font-size:16px;background:#3a3d44;color:#fff;cursor:pointer;">취소</button>
+        <button id="ocrUpYes" style="flex:2 1 0;border:none;border-radius:12px;padding:15px 8px;font-weight:800;font-size:16px;background:#2b6cd4;color:#fff;cursor:pointer;">이 사진으로 OCR</button>
+      </div>`;
+    document.body.appendChild(wrap);
+    const stage = wrap.querySelector("#ocrUpStage");
+    const img = wrap.querySelector("#ocrUpImg");
+    const T = { s: 1, x: 0, y: 0 };
+    let base = 1; // 화면에 꽉 차게 맞춘 배율(= 확대 1배)
+    const apply = () => { img.style.transform = `translate(${T.x}px,${T.y}px) scale(${T.s})`; };
+    const clamp = () => {
+      const W = stage.clientWidth, H = stage.clientHeight, w = img.naturalWidth * T.s, h = img.naturalHeight * T.s;
+      T.x = w <= W ? (W - w) / 2 : Math.min(0, Math.max(W - w, T.x));
+      T.y = h <= H ? (H - h) / 2 : Math.min(0, Math.max(H - h, T.y));
+    };
+    const fit = () => {
+      const W = stage.clientWidth, H = stage.clientHeight;
+      base = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+      T.s = base; clamp(); apply();
+    };
+    const zoomAt = (cx, cy, ns) => {
+      ns = Math.max(base, Math.min(base * 8, ns));
+      const k = ns / T.s;
+      T.x = cx - (cx - T.x) * k; T.y = cy - (cy - T.y) * k; T.s = ns;
+      clamp(); apply();
+    };
+    const pts = new Map();
+    let last = null, lastTap = 0;
+    const rel = (e) => { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    stage.addEventListener("pointerdown", (e) => {
+      try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+      pts.set(e.pointerId, rel(e));
+      last = null;
+      if (pts.size === 1) {
+        const n = Date.now();
+        if (n - lastTap < 300) { const p = rel(e); zoomAt(p.x, p.y, T.s > base * 1.2 ? base : base * 2.5); lastTap = 0; } else lastTap = n;
+      }
+    });
+    stage.addEventListener("pointermove", (e) => {
+      if (!pts.has(e.pointerId)) return;
+      const prev = pts.get(e.pointerId), cur = rel(e);
+      pts.set(e.pointerId, cur);
+      if (pts.size === 1) {
+        T.x += cur.x - prev.x; T.y += cur.y - prev.y; clamp(); apply();
+      } else if (pts.size >= 2) {
+        const [a, b] = Array.from(pts.values());
+        const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        if (last && last.d > 0) {
+          T.x += mx - last.mx; T.y += my - last.my; // 두 손가락 이동
+          zoomAt(mx, my, T.s * (d / last.d));
+        }
+        last = { d, mx, my };
+      }
+    });
+    const up = (e) => { pts.delete(e.pointerId); last = null; };
+    stage.addEventListener("pointerup", up);
+    stage.addEventListener("pointercancel", up);
+    stage.addEventListener("wheel", (e) => { e.preventDefault(); const p = rel(e); zoomAt(p.x, p.y, T.s * (e.deltaY < 0 ? 1.2 : 1 / 1.2)); }, { passive: false });
+    const done = (v) => { wrap.remove(); window.removeEventListener("resize", fit); resolve(v); };
+    wrap.querySelector("#ocrUpNo").onclick = () => done(false);
+    wrap.querySelector("#ocrUpYes").onclick = () => done(true);
+    window.addEventListener("resize", fit);
+    img.onload = fit;
+    img.src = "data:image/jpeg;base64," + b64;
+  });
+}
+
 let _ocrUpRunning = false;
 async function ocrUploadOnFile(inp) {
   const file = inp && inp.files && inp.files[0];
+  if (inp) inp.value = ""; // 같은 사진을 취소했다가 다시 골라도 반응하도록 선택값 비움
   if (!file || _ocrUpRunning) return;
   if (!hasPerm("ocr_upload")) return; // 🔐 화면 숨김을 우회한 호출 방어 (서버도 별도 차단)
   _ocrUpRunning = true;
   try {
     _ocrUpBusy(true, "사진을 준비하는 중...");
     const b64 = await _ocrUpResize(file);
+    if (OCR_UP_CONFIRM_ON) {
+      _ocrUpBusy(false);
+      const go = await _ocrUpConfirm(b64);
+      if (!go) { showToast("취소했어요 — OCR 하지 않았습니다", 1800); return; }
+    }
     _ocrUpBusy(true, "OCR 판독 중...");
     const token = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
     const ctl = new AbortController();
