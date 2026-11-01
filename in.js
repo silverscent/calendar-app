@@ -2375,10 +2375,11 @@ function _ocrRvEnsure() {
       <div id="rvInner" style="width:100%; position:relative; margin-top:2px;">
         <div id="rvBlocks"></div>
       </div>
-      <details id="rvListWrap" style="margin-top:12px;">
-        <summary style="cursor:pointer; font-size:12px; font-weight:800; color:#556; padding:4px 2px;">전체 줄 보기</summary>
-        <div id="rvList" style="margin-top:6px; border:1px solid #dfe3ea; border-radius:6px; background:#fff; overflow:hidden;"></div>
-      </details>
+      <div id="rvOverview" style="margin-top:14px; padding:8px 8px 10px; background:#fff; border:1px solid #dfe3ea; border-radius:8px;">
+        <div id="rvOvHead" style="font-size:12px; font-weight:800; color:#445; margin-bottom:6px;"></div>
+        <div id="rvList" style="display:flex; flex-wrap:wrap; gap:5px;"></div>
+        <div id="rvEdits" style="margin-top:8px;"></div>
+      </div>
     </div>`;
   wrap.appendChild(rv);
   rv.querySelector("#rvPrev").onclick = () => _ocrRvStep(-1);
@@ -2475,19 +2476,44 @@ function _ocrRvRowSummary(i) {
 function _ocrRvBuildList() {
   const list = document.getElementById("rvList");
   if (!list) return;
+  const seen = _ocrRv.seen || new Set();
+  const total = ocrEditRows.length;
+  let nSeen = 0, nSus = 0, nEdit = 0;
   let h = "";
   ocrEditRows.forEach((r, i) => {
     const { flags } = _ocrRvRowSummary(i);
     const dots = (flags.red ? "🔴" : "") + (flags.adv ? "🟠" : "") + (flags.pend ? "🟣" : "") + (flags.edit ? "🟡" : "");
-    const name = r.bl && r.bl !== "발행전" ? r.bl : r.bl || r.invoice || "(빈 줄)";
-    h += `<div data-rvi="${i}" style="display:flex; align-items:center; gap:6px; padding:8px 8px; border-bottom:1px solid #eef0f4; font-size:12px; cursor:pointer; ${i === _ocrRv.idx ? "background:#ffe9a8; font-weight:800;" : ""}">
-      <span style="flex:0 0 22px; color:#889; text-align:right;">${i + 1}</span>
-      <span style="flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${_esc(name)}</span>
-      <span style="flex:0 0 auto; color:#556;">${_esc(String(r.pal == null ? "" : r.pal))} · ${_esc(String(r.inDate == null ? "" : r.inDate))}</span>
-      <span style="flex:0 0 auto; min-width:34px; text-align:right;">${dots}</span></div>`;
+    const sus = flags.red || flags.adv || flags.pend;
+    const isSeen = seen.has(i) || i === _ocrRv.idx;
+    if (isSeen) nSeen++;
+    if (sus) nSus++;
+    if (flags.edit) nEdit++;
+    const bg = flags.red ? "#ffd1d1" : flags.adv ? "#ffe0b3" : flags.pend ? "#ece0f5" : flags.edit ? "#fff3b8" : isSeen ? "#d9f0e0" : "#eef0f4";
+    const cur = i === _ocrRv.idx;
+    h += `<div data-rvi="${i}" style="flex:0 0 auto; min-width:40px; box-sizing:border-box; padding:6px 7px; border-radius:8px; text-align:center; font-size:13px; font-weight:${cur ? 800 : 600}; cursor:pointer; background:${bg}; color:#334; ${cur ? "outline:3px solid #2b6cd4; outline-offset:-1px;" : ""}"><span>${i + 1}</span>${dots ? `<span style="font-size:9px; margin-left:2px;">${dots}</span>` : ""}</div>`;
   });
   list.innerHTML = h;
   list.querySelectorAll("[data-rvi]").forEach((el) => { el.onclick = () => _ocrRvGo(parseInt(el.getAttribute("data-rvi"))); });
+  const head = document.getElementById("rvOvHead");
+  if (head) head.innerHTML = `📋 한눈에 보기 · 확인한 줄 <span style="color:#1d6b3a;">${nSeen}/${total}</span>${nSus ? ` · 의심 <span style="color:#c0392b;">${nSus}</span>` : ""}${nEdit ? ` · 고친 줄 <span style="color:#a67c00;">${nEdit}</span>` : ""}<div style="font-weight:600; font-size:11px; color:#889; margin-top:2px;">번호를 누르면 그 줄로 이동 · 초록=확인함 · 회색=아직 안 봄</div>`;
+  // 내가 고친 곳 (확정 전에 한 번에 훑어보기)
+  const ed = document.getElementById("rvEdits");
+  if (ed) {
+    const items = [];
+    ocrEditRows.forEach((r, i) => {
+      const o = ocrOrigRows[i];
+      if (!o || r._fromDb) return;
+      OCR_COLS.forEach((c) => {
+        const a = String(o[c.key] == null ? "" : o[c.key]), b = String(r[c.key] == null ? "" : r[c.key]);
+        if (a !== b) items.push({ i, label: c.label, a, b });
+      });
+    });
+    ed.innerHTML = items.length
+      ? `<div style="font-size:12px; font-weight:800; color:#a67c00; margin-bottom:3px;">✏️ 고친 곳 ${items.length}곳 <span style="font-weight:600; color:#889;">(확정을 눌러야 DB에 반영)</span></div>` +
+        items.slice(0, 15).map((x) => `<div data-edit-go="${x.i}" style="padding:5px 4px; border-top:1px solid #f0f1f4; font-size:12px; cursor:pointer;"><b>${x.i + 1}줄</b> ${_esc(x.label)} · <span style="color:#889; text-decoration:line-through;">${_esc(x.a || "(빈칸)")}</span> → <b>${_esc(x.b || "(빈칸)")}</b></div>`).join("") + (items.length > 15 ? `<div style="font-size:11px; color:#889; padding:4px;">… 외 ${items.length - 15}곳</div>` : "")
+      : `<div style="font-size:11px; color:#889;">아직 고친 곳이 없어요</div>`;
+    ed.querySelectorAll("[data-edit-go]").forEach((el) => { el.onclick = () => _ocrRvGo(parseInt(el.getAttribute("data-edit-go"))); });
+  }
 }
 // 한 줄을 '칸 묶음'(폭이 좁은 폰에서도 글자가 커 보이도록 2~3칸씩) + 비고로 나눠 각각 [원본 조각 + 앱 값 표]로 만든다
 const OCR_RV_MIN_SCALE = 0.55; // 원본 조각이 화면에서 이 배율(이미지 1px = 화면 0.55px) 아래로 작아지지 않게 묶음 폭을 제한
@@ -2520,11 +2546,13 @@ function _ocrRvBuildTable() {
   const label = (k) => (OCR_COLS.find((c) => c.key === k) || {}).label || k;
   const fs = (k) => (k === "eta" || k === "inDate" ? 14 : k === "etc" ? 13 : 15);
   let h = "";
+  const maxTot = Math.max(...groups.map((x) => (x.x0 == null ? 1 : x.w.reduce((a, b) => a + b, 0))));
   groups.forEach((gr, gi) => {
-    const tot = gr.w.reduce((a, b) => a + b, 0);
-    h += `<div class="rvBlk" style="margin-top:${gi ? 10 : 0}px;">
+    const tot = gr.x0 == null ? maxTot : gr.w.reduce((a, b) => a + b, 0);
+    const wPct = Math.max(30, Math.min(100, (tot / maxTot) * 100)); // 가장 넓은 묶음 기준 같은 배율(글자·줄 높이가 첫 묶음과 같게)
+    h += `<div class="rvBlk" style="margin-top:${gi ? 10 : 0}px; width:${wPct.toFixed(2)}%;">
       <div style="font-size:10.5px; font-weight:800; color:#2b6cd4; padding:0 2px 2px;">원본 · ${gr.keys.map(label).join(" · ")}</div>
-      <canvas class="rvStrip" data-x0="${gr.x0 == null ? "" : gr.x0}" data-x1="${gr.x1 == null ? "" : gr.x1}" style="display:block; width:100%; box-sizing:border-box; background:#fff; border:1px solid #b9c0cc; border-radius:4px;"></canvas>
+      <canvas class="rvStrip" data-x0="${gr.x0 == null ? "" : gr.x0}" data-x1="${gr.x1 == null ? "" : gr.x1}" style="display:block; width:100%; box-sizing:border-box; background:#dce9fb; border:1px solid #8fb0e8; border-radius:4px;"></canvas>
       <table class="rvTbl" style="width:100%; table-layout:fixed; border-collapse:collapse; background:#fff; margin-top:3px;"><colgroup>${gr.keys.map((k, i) => `<col style="width:${((gr.w[i] / tot) * 100).toFixed(2)}%">`).join("")}</colgroup>
         <thead><tr>${gr.keys.map((k) => `<th style="border:1px solid #b9c0cc; background:#e8eef7; font-size:10px; padding:2px 0; font-weight:800; color:#445; overflow:hidden; white-space:nowrap;">${_esc(label(k))}</th>`).join("")}</tr></thead>
         <tbody><tr>${gr.keys.map((k) => `<td data-idx="${_ocrRv.idx}" data-field="${k}" ${k === "etc" ? "" : `data-fs="${fs(k)}"`} style="border:1px solid #9aa3b2; font-size:${fs(k)}px; height:42px; cursor:pointer; position:relative; ${k === "etc" ? "text-align:left; padding:2px 6px; white-space:normal; word-break:break-all; line-height:1.25; overflow:hidden;" : "text-align:center; padding:0 1px; overflow:hidden; text-overflow:clip; white-space:nowrap;"}"></td>`).join("")}</tr></tbody></table>
@@ -2534,7 +2562,7 @@ function _ocrRvBuildTable() {
   const gEdge = _ocrRv.geo ? _ocrRv.geo.right : null;
   if (!groups.some((x) => x.etc)) h += `<div class="rvBlk" style="margin-top:10px;">
       <div style="font-size:10.5px; font-weight:800; color:#2b6cd4; padding:0 2px 2px;">원본 · 비고</div>
-      <canvas class="rvStrip" data-etc="1" data-x0="${gEdge == null ? "" : gEdge}" data-x1="" style="display:none; width:100%; box-sizing:border-box; background:#fff; border:1px solid #b9c0cc; border-radius:4px;"></canvas>
+      <canvas class="rvStrip" data-etc="1" data-x0="${gEdge == null ? "" : gEdge}" data-x1="" style="display:none; width:100%; box-sizing:border-box; background:#dce9fb; border:1px solid #8fb0e8; border-radius:4px;"></canvas>
       <div id="rvEtcCell" data-idx="${_ocrRv.idx}" data-field="etc" style="border:1px solid #9aa3b2; background:#fff; min-height:34px; padding:7px 8px; font-size:14px; font-weight:600; position:relative; cursor:pointer; word-break:break-all; margin-top:3px; white-space:normal; line-height:1.35;"></div>
       <div class="rvChips" data-keys="etc"></div></div>`;
   host.innerHTML = h;
@@ -2584,7 +2612,8 @@ function _ocrRvDrawStrip() {
     let vw = isFinite(b) ? Math.max(b - cs, cw) : cw;
     if (isEtc) vw = Math.max(cw, refVw || cw);
     cv.style.display = "block";
-    const scale = (cssW * dpr) / vw;
+    const bw = !isEtc && cv.parentElement && cv.parentElement.clientWidth > 40 ? cv.parentElement.clientWidth : cssW;
+    const scale = (bw * dpr) / vw;
     cv.width = Math.round(vw * scale);
     cv.height = Math.round(sh * scale);
     cv.style.height = (cv.height / dpr).toFixed(1) + "px";
@@ -2592,6 +2621,8 @@ function _ocrRvDrawStrip() {
     ctx.imageSmoothingQuality = "high";
     ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
     try { ctx.drawImage(img, cs, sy, cw, sh, 0, 0, Math.round(cw * scale), cv.height); } catch (e) { note(cv, "이미지를 그릴 수 없어요"); return; }
+    // 원본임을 한눈에 알아보도록 연한 파랑 색조(곱하기)를 입힘 — 앱 값 쪽은 흰색
+    ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = "#dce9fb"; ctx.fillRect(0, 0, cv.width, cv.height); ctx.globalCompositeOperation = "source-over";
     if (!isEtc && refVw === 0) refVw = vw;
     if (single) {
       ctx.fillStyle = "#f5a623"; ctx.fillRect(0, 0, Math.max(3, dpr * 2), cv.height); // 이 줄 표시(왼쪽 주황 막대)
@@ -2717,6 +2748,8 @@ function _ocrRowViewSync(idx, field, force) {
   if (!rv) return;
   const changed = idx !== _ocrRv.built;
   const _prevBuilt = _ocrRv.built;
+  if (_ocrRv.seenFor !== ocrEditRows) { _ocrRv.seenFor = ocrEditRows; _ocrRv.seen = new Set(); } // 새 OCR 이면 '확인한 줄' 초기화
+  if (_prevBuilt >= 0 && _prevBuilt !== idx) _ocrRv.seen.add(_prevBuilt); // 떠난 줄은 확인한 줄
   _ocrRv.idx = idx;
   if (field) _ocrRv.field = field;
   if (changed) {
@@ -2753,20 +2786,8 @@ function _ocrRowViewSync(idx, field, force) {
   if (next) next.style.opacity = idx >= ocrEditRows.length - 1 ? "0.35" : "1";
   if (changed || force) {
     if (changed) _ocrRvDrawStrip();
-    _ocrRvBuildList();
-  } else {
-    // 같은 줄 안에서는 목록의 표시(🔴🟣🟡)만 가볍게 갱신
-    const el = document.querySelector(`#rvList [data-rvi="${idx}"] span:last-child`);
-    if (el) {
-      const { flags } = _ocrRvRowSummary(idx);
-      el.textContent = (flags.red ? "🔴" : "") + (flags.adv ? "🟠" : "") + (flags.pend ? "🟣" : "") + (flags.edit ? "🟡" : "");
-    }
   }
-  document.querySelectorAll("#rvList [data-rvi]").forEach((el) => {
-    const on = parseInt(el.getAttribute("data-rvi")) === idx;
-    el.style.background = on ? "#ffe9a8" : "";
-    el.style.fontWeight = on ? "800" : "";
-  });
+  _ocrRvBuildList();
   if (changed) {
     const body = document.getElementById("rvBody");
     if (body) body.scrollTop = 0;
