@@ -6741,6 +6741,7 @@ function renderPcLeftbar() {
   const holidayOn = typeof isShowHoliday !== "undefined" && isShowHoliday;
   const pcFoldOpen = _pcFoldOpenAll();
   const admin = typeof isAdmin !== "undefined" && isAdmin;
+  const systemAdmin = admin && typeof isSystemUser === "function" && isSystemUser();
   const dark = typeof isDarkMode !== "undefined" && isDarkMode;
   bar.innerHTML = `
     <div class="pclb-brand">
@@ -6799,7 +6800,10 @@ function renderPcLeftbar() {
 
     <div class="pclb-sec">기능</div>
     ${admin ? `<button class="pclb-item pclb-add-btn" onclick="openAddForm()">✏️ 신규 등록</button>` : ""}
-    ${admin ? `<button class="pclb-item pclb-ai-btn" onclick="openAiQuery()">🤖 AI 질의</button>` : ""}
+    ${systemAdmin ? `<div class="pclb-ai-actions" style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px;">
+      <button class="pclb-item pclb-ai-btn" onclick="openAiQuery()" aria-label="AI 질의" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:7px 2px; font-size:0.74em; line-height:1.15; text-align:center; white-space:nowrap;"><span>🤖</span><span>AI 질의</span></button>
+      <button class="pclb-item pclb-ai-usage-btn" onclick="openAiDashboard()" aria-label="AI 사용량" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:7px 2px; font-size:0.74em; line-height:1.15; text-align:center; white-space:nowrap; color:#0a84ff;"><span>📊</span><span>AI 사용량</span></button>
+    </div>` : admin ? `<button class="pclb-item pclb-ai-btn" onclick="openAiQuery()">🤖 AI 질의</button>` : ""}
     <button class="pclb-item" onclick="openDashboard()">📊 통계 대시보드</button>
     <button class="pclb-item" onclick="showLastOcrImage()">🖼️ OCR</button>
     <button class="pclb-item" id="pcMultiBtn" onclick="toggleMultiMode()">☑️ 다중 선택</button>
