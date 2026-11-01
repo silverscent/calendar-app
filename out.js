@@ -8255,3 +8255,4 @@ async function _submitPickInner(btn) {
     else _pickRenderMode();
   }
 }
+//업데이트테스트
