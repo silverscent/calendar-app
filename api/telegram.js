@@ -1726,6 +1726,24 @@ module.exports = async function handler(req, res) {
             `INSERT INTO ocr_store (store_key, store_value) VALUES ('LAST_OCR_DATA', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
             [jsonDataStr, jsonDataStr],
           );
+          // 🧾 OCR 건 상태: 텔레그램 /ocr 은 읽는 즉시 DB 에 반영하므로 '확정됨(applied)'. 앱에서 확정 대기 중이던 OCR 이 있으면 이 건으로 교체됨을 알림
+          try {
+            let _prevSt = null;
+            try {
+              const [_sr] = await pool.query(`SELECT store_value FROM ocr_store WHERE store_key = 'LAST_OCR_STATE'`);
+              if (_sr[0] && _sr[0].store_value) _prevSt = JSON.parse(_sr[0].store_value);
+            } catch (_) {}
+            const _stStr = JSON.stringify({ id: Date.now(), source: "telegram", at: timeStr, status: "applied", endedAt: Date.now() });
+            await pool.query(
+              `INSERT INTO ocr_store (store_key, store_value) VALUES ('LAST_OCR_STATE', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
+              [_stStr, _stStr],
+            );
+            if (_prevSt && _prevSt.status === "pending") {
+              await sendTgMsg(chatId, `ℹ️ 앱에서 올린 OCR(${_prevSt.at || ""})은 아직 확정 전이었어요. 이번 텔레그램 OCR로 교체되어 취소 처리됐습니다.`);
+            }
+          } catch (stErr) {
+            console.error("OCR 상태 기록 실패(무시):", stErr && stErr.message);
+          }
 
           if (extractedText) {
             // Vision 원본 텍스트 20KB 상한 (MEDIUMTEXT지만 불필요한 대용량 저장 방지)

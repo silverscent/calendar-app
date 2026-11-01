@@ -2094,7 +2094,10 @@ function _ocrClearFlag(idx, field) {
   if (r._vmsg) delete r._vmsg[field];
   if (r._sug) delete r._sug[field];
   if (r._ai) delete r._ai[field]; // 직접 고친 칸은 AI 제안도 걷음
-  if (Array.isArray(r._pend)) r._pend = r._pend.filter((f) => f !== field); // 직접 손댄 칸은 '사진에서 바뀐 값' 제안이 아님
+  if (Array.isArray(r._pend)) {
+    if (r._pend.indexOf(field) >= 0) _ocrPendAck(r, field); // 거절·직접 수정한 제안은 서버에 기억시킴 → 대조창을 닫았다 열어도 되살아나지 않음
+    r._pend = r._pend.filter((f) => f !== field); // 직접 손댄 칸은 '사진에서 바뀐 값' 제안이 아님
+  }
 }
 // 확인할 칸 목록(줄 순서 → 열 순서). 빨강·파랑·주황·제안·사진에서 바뀐 값
 function _ocrSuspectCells() {
@@ -2955,6 +2958,106 @@ function _ocrTimeOf(r) {
   return r && r.time ? r.time : typeof r === "string" ? r : "";
 }
 
+// =====================================================
+// 🧾 OCR 건 상태 (대기 → 확정됨 / 취소됨)
+//   · 앱에서 올린 OCR 은 '확정 대기' — 대조창의 [확정]/[취소] 로 그 건을 마무리 (확정=사진에서 읽은 값 반영, 취소=아무것도 반영 안 함)
+//   · 텔레그램 /ocr 은 읽는 즉시 DB 에 반영되므로 '확정됨(DB 반영 완료)'
+//   · 마무리된 건·상태 기록이 없는 예전 건에서는 '사진에서 바뀐 값'(보라색) 제안이 나오지 않음 → 이후엔 [반영] 버튼으로 표 수정만 반영
+// =====================================================
+let _ocrState = null; // { id, source:"app"|"telegram", at, status:"pending"|"applied"|"canceled" } | null(예전 건)
+let _ocrApplyTimer = null;
+function _ocrStatePending() { return !!(_ocrState && _ocrState.status === "pending"); }
+function _ocrStateSet(st) {
+  _ocrState = st && typeof st === "object" && st.status ? st : null;
+  _ocrStateUiSync();
+}
+// 표에서 고친 곳(보라색 제안 포함)·지운 줄이 있는지 — applyOcrEdits 의 변경 판정과 같은 기준
+function _ocrChangeCount() {
+  const FLD = ["bl", "pal", "eta", "inDate", "fwd", "sType", "invoice", "etc"];
+  const t = (v) => String(v == null ? "" : v).trim();
+  const meaningful = (r) => !!r && (t(r.bl) !== "" || t(r.invoice) !== "" || t(r.fwd) !== "" || t(r.etc) !== "" || t(r.eta) !== "" || t(r.sType) !== "" || (t(r.pal) !== "" && t(r.pal) !== "0") || (t(r.inDate) !== "" && t(r.inDate) !== "미정"));
+  let n = 0;
+  (ocrEditRows || []).forEach((r, i) => {
+    const o = (ocrOrigRows && ocrOrigRows[i]) || {};
+    if (!meaningful(r)) { if (meaningful(o)) n++; return; }
+    if (FLD.some((f) => String(r[f] == null ? "" : r[f]) !== String(o[f] == null ? "" : o[f]))) n++;
+  });
+  return n;
+}
+function _ocrStateUiSync() {
+  // 1) 제목 옆 작은 글씨: 이 OCR 이 언제·어디서·어떤 상태인지
+  const note = document.querySelector("#ocrImageModal .modal-title span");
+  if (note) {
+    if (!_ocrState) { note.textContent = "(두 손가락 확대/이동)"; note.style.color = ""; note.style.fontWeight = "normal"; }
+    else {
+      const src = _ocrState.source === "telegram" ? "텔레그램" : "앱";
+      const stx = _ocrState.status === "pending" ? "⏳ 확정 대기 중" : _ocrState.status === "canceled" ? "✖ 취소됨" : _ocrState.source === "telegram" ? "✅ DB 반영 완료" : "✅ 확정됨";
+      note.textContent = `${_ocrState.at || ""} · ${src} · ${stx}`;
+      note.style.color = _ocrState.status === "pending" ? "#d35400" : _ocrState.status === "canceled" ? "var(--text-sub)" : "#1d8a4d";
+      note.style.fontWeight = _ocrState.status === "pending" ? "800" : "600";
+    }
+  }
+  // 2) 하단 버튼: 대기 중이면 [확정][취소], 아니면 고친 게 있을 때만 켜지는 [반영]
+  const pane = document.getElementById("ocrPaneTable");
+  const apply = document.getElementById("ocrApplyBtn");
+  const cancel = document.getElementById("ocrCancelBtn");
+  const on = !!pane && pane.style.display !== "none";
+  if (!apply) return;
+  if (!on) { apply.style.display = "none"; if (cancel) cancel.style.display = "none"; return; }
+  const pend = _ocrStatePending();
+  const n = _ocrChangeCount();
+  apply.style.display = "block";
+  if (cancel) cancel.style.display = pend ? "block" : "none";
+  const cmpBtn = document.getElementById("ocrCompareBtn");
+  if (cmpBtn) cmpBtn.innerHTML = pend ? "🖼️ 이미지만" : "🖼️ 이미지만 보기"; // [취소] 버튼이 늘어난 만큼 자리를 비워 다른 버튼 글자가 잘리지 않게
+  if (pend) {
+    apply.textContent = "📌 확정";
+    apply.disabled = false;
+    apply.style.opacity = "";
+    apply.title = "이 OCR 건을 확정 — 사진에서 읽어 표에 채운 값(보라색)과 고친 값을 DB에 반영";
+  } else {
+    apply.textContent = n ? `✏️ 반영 ${n}` : "✏️ 반영";
+    apply.disabled = !n;
+    apply.style.opacity = n ? "" : "0.45";
+    apply.title = n ? "표에서 고친 내용을 DB에 반영" : "표를 고치면 활성화돼요";
+  }
+}
+function _ocrApplyWatchStart() {
+  if (_ocrApplyTimer) return;
+  _ocrApplyTimer = setInterval(() => {
+    const m = document.getElementById("ocrImageModal");
+    const pane = document.getElementById("ocrPaneTable");
+    if (!m || m.style.display === "none" || !pane || pane.style.display === "none") { clearInterval(_ocrApplyTimer); _ocrApplyTimer = null; return; }
+    _ocrStateUiSync();
+  }, 600); // 표 어디서 고쳐도(좌우 보기·줄 대조 포함) [반영] 버튼 활성/비활성이 따라오게 가볍게 점검
+}
+function _ocrPendAck(row, field) {
+  try {
+    if (!_ocrStatePending() || !row || typeof row.iy !== "number") return;
+    Promise.resolve(apiCall({ source: "vercel", domain: "system", action: "OCR_PEND_ACK", admin_id: localStorage.getItem("admin_id"), data: { id: _ocrState.id, items: [{ iy: row.iy, field }] } })).catch(() => {});
+  } catch (e) {}
+}
+async function _ocrStateEnd(status) {
+  const res = await apiCall({ source: "vercel", domain: "system", action: "OCR_STATE_END", admin_id: localStorage.getItem("admin_id"), data: { id: _ocrState ? _ocrState.id : null, status } });
+  if (res && res.ocrState) _ocrStateSet(res.ocrState);
+  return res;
+}
+// [취소] — 이 OCR 건을 DB 에 반영하지 않고 마무리
+async function cancelOcrBatch(btn) {
+  if (!isAdmin || !hasPerm("ocr_compare") || !_ocrStatePending()) return;
+  const n = _ocrChangeCount();
+  const ok = await uiConfirm(
+    `이 OCR(${_ocrState.at || ""})을 취소할까요?\n\nDB에는 아무것도 반영되지 않고, 사진에서 읽은 값 제안(보라색)은 사라져요.${n ? `\n표에 채워졌거나 고친 ${n}건도 반영되지 않아요.` : ""}\n(사진은 계속 볼 수 있어요)`,
+    { danger: true, okText: "OCR 취소" },
+  );
+  if (!ok) return;
+  if (btn) btn.disabled = true;
+  const res = await _ocrStateEnd("canceled");
+  if (btn) btn.disabled = false;
+  if (res && res.success) { showToast("OCR을 취소했어요 — DB는 그대로예요", 2500); loadOcrSplitData(); }
+  else { showToast("⚠️ " + ((res && res.msg) || "취소에 실패했습니다."), 3500); if (res && res.stale) loadOcrSplitData(); }
+}
+
 function showLastOcrImage() {
   document.getElementById("ocrImageModal").style.display = "flex";
   document.getElementById("ocrImageContent").innerHTML = "불러오는 중... ⏳";
@@ -2975,6 +3078,7 @@ function showLastOcrImage() {
       return;
     }
     let url = res && res.url ? res.url : typeof res === "string" ? res : "";
+    if (res && typeof res === "object" && "ocrState" in res) _ocrState = res.ocrState && res.ocrState.status ? res.ocrState : null; // 이 사진(OCR 건)의 상태
     if (url && (url.startsWith("http") || url.startsWith("data:image/"))) { // 앱에서 올린 사진은 data URL
       document.getElementById("ocrImageContent").innerHTML = `
         <div style="display:flex; flex-direction:column; width:100%; height:100%; overflow:hidden;">
@@ -3001,7 +3105,8 @@ function showLastOcrImage() {
             <button id="ocrAddRowBtn" onclick="addOcrBlankRow()" style="display:none; flex:0 0 auto; padding:9px 8px; background:#0a84ff; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px;">➕ 행</button>
             <button id="ocrCopyBtn" onclick="copyOcrTable(this)" style="display:none; flex:0 0 auto; padding:9px 8px; background:#6c5ce7; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px;">복사</button>
             <button id="ocrVerifyBtn" onclick="verifyOcrRows(this)" style="display:none; flex:1 1 auto; min-width:0; padding:9px 6px; background:#f39c12; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px; white-space:nowrap;">🔍 검증</button>
-            <button id="ocrApplyBtn" onclick="applyOcrEdits(this)" style="display:none; flex:1 1 auto; min-width:0; padding:9px 6px; background:#27ae60; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px; white-space:nowrap;">📌 확정</button>`
+            <button id="ocrApplyBtn" onclick="applyOcrEdits(this)" style="display:none; flex:1 1 auto; min-width:0; padding:9px 6px; background:#27ae60; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px; white-space:nowrap;">📌 확정</button>
+            <button id="ocrCancelBtn" onclick="cancelOcrBatch(this)" style="display:none; flex:0 0 auto; padding:9px 8px; background:#7f8c8d; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px; white-space:nowrap;">✖ 취소</button>`
                 : ``
             }
           </div>
@@ -3018,6 +3123,8 @@ function showLastOcrImage() {
   // 캐시가 신선하면 바로 표시 + 최신 여부만 확인
   if (_ocrImgCache && Date.now() - _ocrImgCache.ts < OCR_IMG_CACHE_MS) {
     _renderOcrImageRes({ url: _ocrImgCache.url });
+    _ocrStateUiSync();
+    if (isAdmin && hasPerm("ocr_compare")) Promise.resolve(apiCall({ source: "vercel", domain: "system", action: "GET_OCR_STATE", admin_id: localStorage.getItem("admin_id") })).then(function (sr) { if (sr && sr.success) _ocrStateSet(sr.ocrState); }).catch(function () {}); // 캐시된 사진이라도 상태(대기/확정/취소)는 최신으로
     apiCall({ source: "vercel", domain: "system", action: "GET_OCR_LAST_TIME" }).then(function (tr) {
       if (tr === null || !_ocrImgCache) return;
       if (_ocrTimeOf(tr) !== _ocrImgCache.time) {
@@ -3038,6 +3145,7 @@ function showLastOcrImage() {
     const u = res && res.url ? res.url : "";
     if (u.startsWith("http") && r[1] !== null) _ocrImgCache = { url: u, time: _ocrTimeOf(r[1]), ts: Date.now() };
     _renderOcrImageRes(res);
+    _ocrStateUiSync();
   });
 }
 
@@ -3063,6 +3171,7 @@ function toggleOcrCompare(btn) {
     imgPane.style.flex = "1 1 100%";
     if (divider) divider.style.display = "none";
     if (applyBtn) applyBtn.style.display = "none";
+    { const cb = document.getElementById("ocrCancelBtn"); if (cb) cb.style.display = "none"; }
     if (verifyBtn) verifyBtn.style.display = "none";
     if (addRowBtn) addRowBtn.style.display = "none";
     if (copyBtn)  copyBtn.style.display  = "none";
@@ -3099,6 +3208,7 @@ function toggleOcrCompare(btn) {
     resetOcrTransform();
     _ocrAlignNext = true;
     loadOcrSplitData();
+    _ocrStateUiSync();
   }
 }
 
@@ -3171,6 +3281,7 @@ function loadOcrSplitData() {
     const innerNow = document.getElementById("ocrTableInner");
     if (!innerNow) return;
     currentRawOcrString = (data && data.rawData) || "가져온 Raw 데이터가 존재하지 않습니다.";
+    _ocrState = data && data.ocrState && data.ocrState.status ? data.ocrState : null; // 이 OCR 건의 상태(예전 건이면 null)
     currentOcrGeo = data && data.geo && Array.isArray(data.geo.rows) && data.geo.rows.length ? data.geo : null;
 
     const parsed = data && Array.isArray(data.parsedData) ? data.parsedData : [];
@@ -3210,6 +3321,8 @@ function loadOcrSplitData() {
       return;
     }
     renderOcrTable();
+    _ocrStateUiSync();
+    _ocrApplyWatchStart();
     _ocrAi = { busy: false, msg: "", done: 0, total: 0, diff: 0 }; // 새 이미지·새 표 → 지난 AI 상태·밀림 구간 초기화
     _ocrAiScope = null;
     _ocrZone = new Set();
@@ -4519,8 +4632,17 @@ async function applyOcrEdits(btn) {
       changed.push(Object.assign({}, r, { _o: { bl: o.bl || "", invoice: o.invoice || "", inDate: o.inDate || "" } })); // _o: 수정 전 값 → 서버가 정확히 그 DB 행을 찾도록
   });
 
+  const pendingAtStart = _ocrStatePending(); // 확정 대기 중인 OCR 건이면 [확정] = 이 건을 마무리하는 버튼
   if (changed.length === 0 && deletes.length === 0) {
-    showToast("변경된 내용이 없습니다.", 2500);
+    if (!pendingAtStart) {
+      showToast("변경된 내용이 없습니다.", 2500);
+      return;
+    }
+    // 사진 값과 DB 값이 같거나 전부 거절한 경우에도 이 OCR 건은 마무리할 수 있어야 함 (안 그러면 같은 건이 계속 남음)
+    if (!(await uiConfirm(`DB에 바꿀 내용은 없어요.\n\n이 OCR(${_ocrState.at || ""}) 건을 확정으로 마무리할까요?\n(마무리하면 사진에서 읽은 값 제안은 더 나오지 않아요)`, { okText: "마무리" }))) return;
+    const r0 = await _ocrStateEnd("applied");
+    if (r0 && r0.success) { showToast("✅ OCR을 확정으로 마무리했어요", 2500); loadOcrSplitData(); }
+    else { showToast("⚠️ " + ((r0 && r0.msg) || "마무리에 실패했습니다."), 3500); if (r0 && r0.stale) loadOcrSplitData(); }
     return;
   }
 
@@ -4558,6 +4680,7 @@ async function applyOcrEdits(btn) {
   if (changed.length) confirmMsg += `수정/추가 ${changed.length}건`;
   if (deletes.length) confirmMsg += (confirmMsg ? "\n" : "") + `🗑️ 빈 행 ${deletes.length}건의 입고 일정을 삭제`;
   confirmMsg += "\n입고 DB에 반영할까요?";
+  if (pendingAtStart) confirmMsg += `\n\n(이 OCR ${_ocrState.at || ""} 건이 확정으로 마무리돼요)`;
   if (!(await uiConfirm(confirmMsg, deletes.length ? { danger: true, okText: "반영" } : { okText: "반영" }))) return;
 
   const orig = btn ? btn.innerHTML : "";
@@ -4571,12 +4694,13 @@ async function applyOcrEdits(btn) {
     action: "APPLY_OCR_DATA",
     admin_id: localStorage.getItem("admin_id"),
     data: { rows: changed, deletes: deletes },
-  }).then(function (res) {
+  }).then(async function (res) {
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = orig;
     }
     if (res && res.success) {
+      if (pendingAtStart) { try { await _ocrStateEnd("applied"); } catch (e) { /* DB 반영은 끝났음 — 상태만 못 바꾼 경우 다음에 [확정]을 다시 눌러 마무리 */ } }
       const delPart = res.deleteCount > 0 ? ` / 삭제 ${res.deleteCount}` : ""
       const dupPart = res.dupCount > 0 ? ` / 중복정리 ${res.dupCount}` : "";
       const skipPart = res.skipCount > 0 ? ` / 건너뜀 ${res.skipCount}${res.skipNames && res.skipNames.length ? " (" + res.skipNames.join(", ") + ")" : ""}` : "";
@@ -7158,6 +7282,15 @@ async function ocrUploadOnFile(inp) {
   if (!hasPerm("ocr_upload")) return; // 🔐 화면 숨김을 우회한 호출 방어 (서버도 별도 차단)
   _ocrUpRunning = true;
   try {
+    // 아직 확정하지 않은 OCR 이 있으면 새 사진을 올리기 전에 물어봄 (새 OCR 이 올라오면 그 건은 취소 처리됨)
+    try {
+      const sr = await apiCall({ source: "vercel", domain: "system", action: "GET_OCR_STATE", admin_id: localStorage.getItem("admin_id") });
+      const ps = sr && sr.success && sr.ocrState && sr.ocrState.status === "pending" ? sr.ocrState : null;
+      if (ps && !(await uiConfirm(`아직 확정하지 않은 OCR(${ps.at || ""}, ${ps.source === "telegram" ? "텔레그램" : "앱"})이 있어요.\n\n새 사진을 올리면 그 건은 취소 처리돼요. 계속할까요?`, { danger: true, okText: "계속 (이전 건 취소)" }))) {
+        showToast("취소했어요 — 이전 OCR이 그대로 남아 있어요", 2200);
+        return;
+      }
+    } catch (e) { /* 상태 확인에 실패해도 업로드는 진행 */ }
     _ocrUpBusy(true, "사진을 준비하는 중...");
     const b64 = await _ocrUpResize(file);
     if (OCR_UP_CONFIRM_ON) {
