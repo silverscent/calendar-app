@@ -7075,4 +7075,3 @@ function _ocrOpenCompareAfterUpload() {
     }
   }, 250);
 }
-//업데이트테스트
