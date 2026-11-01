@@ -3047,14 +3047,14 @@ async function cancelOcrBatch(btn) {
   if (!isAdmin || !hasPerm("ocr_compare") || !_ocrStatePending()) return;
   const n = _ocrChangeCount();
   const ok = await uiConfirm(
-    `이 OCR(${_ocrState.at || ""})을 취소할까요?\n\nDB에는 아무것도 반영되지 않고, 사진에서 읽은 값 제안(보라색)은 사라져요.${n ? `\n표에 채워졌거나 고친 ${n}건도 반영되지 않아요.` : ""}\n(사진은 계속 볼 수 있어요)`,
+    `이 OCR(${_ocrState.at || ""})을 취소할까요?\n\nDB에는 아무것도 반영되지 않고, 사진에서 읽은 값 제안(보라색)은 사라져요.${n ? `\n표에 채워졌거나 고친 ${n}건도 반영되지 않아요.` : ""}\n${_ocrState.hasPrev ? "\n(이전에 확정한 OCR 이미지로 돌아가요)" : "\n(이 사진은 최근 OCR 이미지로 남지 않아요)"}`,
     { danger: true, okText: "OCR 취소" },
   );
   if (!ok) return;
   if (btn) btn.disabled = true;
   const res = await _ocrStateEnd("canceled");
   if (btn) btn.disabled = false;
-  if (res && res.success) { showToast("OCR을 취소했어요 — DB는 그대로예요", 2500); loadOcrSplitData(); }
+  if (res && res.success) { showToast(res.restored ? "OCR을 취소했어요 — 이전 확정 이미지로 돌아갔어요" : "OCR을 취소했어요 — DB는 그대로예요", 2500); try { _ocrImgCache = null; } catch (_) {} loadOcrSplitData(); try { const _im = document.getElementById("ocrImageModal"); if (_im && _im.style.display === "flex") showLastOcrImage(); } catch (_) {} }
   else { showToast("⚠️ " + ((res && res.msg) || "취소에 실패했습니다."), 3500); if (res && res.stale) loadOcrSplitData(); }
 }
 

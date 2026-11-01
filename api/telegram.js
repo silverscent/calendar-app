@@ -1738,6 +1738,7 @@ module.exports = async function handler(req, res) {
               `INSERT INTO ocr_store (store_key, store_value) VALUES ('LAST_OCR_STATE', ?) ON DUPLICATE KEY UPDATE store_value = ?`,
               [_stStr, _stStr],
             );
+            try { await pool.query(`DELETE FROM ocr_store WHERE store_key IN ('PREV_last_ocr_image','PREV_LAST_OCR_DATA','PREV_LAST_OCR_RAW','PREV_LAST_OCR_GEO','PREV_LAST_OCR_STATE','PREV_last_ocr_time','PREV_OCR_MARK')`); } catch (_) {} // 이 텔레그램 OCR 이 최신 확정본 — 앱에서 보관해 둔 이전 건은 폐기
             if (_prevSt && _prevSt.status === "pending") {
               await sendTgMsg(chatId, `ℹ️ 앱에서 올린 OCR(${_prevSt.at || ""})은 아직 확정 전이었어요. 이번 텔레그램 OCR로 교체되어 취소 처리됐습니다.`);
             }

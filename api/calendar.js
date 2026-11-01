@@ -65,6 +65,44 @@ async function ocrStatePut(pool, st) {
   const v = JSON.stringify(st);
   await pool.query("INSERT INTO ocr_store (store_key, store_value) VALUES ('LAST_OCR_STATE', ?) ON DUPLICATE KEY UPDATE store_value = ?", [v, v]);
 }
+// 🗂️ '가장 최근에 확정된 OCR' 보관 — 새 앱 OCR 이 올라오면 지금 세트(사진·읽은 값·원문·좌표·상태·시각)를 PREV_* 로 복사해 두고,
+//    그 OCR 을 [취소]하면 되살리고(확정된 이전 이미지로 복귀), [확정]하면 폐기. 확정 못 한/취소한 사진은 최근 이미지로 남지 않음.
+const OCR_SET_KEYS = ["last_ocr_image", "LAST_OCR_DATA", "LAST_OCR_RAW", "LAST_OCR_GEO", "LAST_OCR_STATE"];
+const OCR_PREV_KEYS = [...OCR_SET_KEYS.map((k) => "PREV_" + k), "PREV_last_ocr_time", "PREV_OCR_MARK"];
+async function ocrBackupHas(pool) {
+  try { const [r] = await pool.query("SELECT store_value FROM ocr_store WHERE store_key = 'PREV_OCR_MARK'"); return !!(r && r[0]); } catch (e) { return false; }
+}
+async function ocrBackupDrop(pool) {
+  await pool.query("DELETE FROM ocr_store WHERE store_key IN (?)", [OCR_PREV_KEYS]);
+}
+async function ocrBackupMake(pool) {
+  await ocrBackupDrop(pool);
+  const [rows] = await pool.query("SELECT store_key, store_value FROM ocr_store WHERE store_key IN (?)", [OCR_SET_KEYS]);
+  if (!rows.some((r) => r.store_key === "LAST_OCR_DATA")) return false; // 보관할 확정 OCR 이 없음
+  for (const r of rows) await pool.query("INSERT INTO ocr_store (store_key, store_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE store_value = ?", ["PREV_" + r.store_key, r.store_value, r.store_value]);
+  const [t] = await pool.query("SELECT setting_value FROM system_settings WHERE setting_key = 'last_ocr_time'");
+  if (t && t[0] && t[0].setting_value != null) await pool.query("INSERT INTO ocr_store (store_key, store_value) VALUES ('PREV_last_ocr_time', ?) ON DUPLICATE KEY UPDATE store_value = ?", [String(t[0].setting_value), String(t[0].setting_value)]);
+  await pool.query("INSERT INTO ocr_store (store_key, store_value) VALUES ('PREV_OCR_MARK', '1') ON DUPLICATE KEY UPDATE store_value = '1'");
+  return true;
+}
+// 보관해 둔 확정 OCR 로 되돌림. 보관본이 없으면 false
+async function ocrBackupRestore(pool) {
+  if (!(await ocrBackupHas(pool))) return false;
+  const [rows] = await pool.query("SELECT store_key, store_value FROM ocr_store WHERE store_key IN (?)", [OCR_PREV_KEYS]);
+  await pool.query("DELETE FROM ocr_store WHERE store_key IN (?)", [OCR_SET_KEYS]);
+  for (const r of rows) {
+    if (r.store_key === "PREV_OCR_MARK" || r.store_key === "PREV_last_ocr_time") continue;
+    await pool.query("INSERT INTO ocr_store (store_key, store_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE store_value = ?", [r.store_key.slice(5), r.store_value, r.store_value]);
+  }
+  const pt = rows.find((r) => r.store_key === "PREV_last_ocr_time");
+  if (pt) await pool.query("INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?", [pt.store_value, pt.store_value]);
+  await ocrBackupDrop(pool);
+  return true;
+}
+// 보관본이 없을 때의 취소: 취소한 사진·값을 최근 OCR 에서 완전히 치움
+async function ocrSetDiscard(pool) {
+  await pool.query("DELETE FROM ocr_store WHERE store_key IN (?)", [OCR_SET_KEYS]);
+}
 const _ocrDbVal = (d, f) => (f === "pal" ? d.pallets : f === "inDate" ? d.receive_date : f === "eta" ? d.eta : f === "sType" ? d.s_type : d[f]);
 
 // 📲 달력 변경 텔레그램 알림
@@ -2680,8 +2718,9 @@ if (action === "VERIFY_SESSION") {
           // 좌표(iy/ih/cx)는 캐시 그대로 두되, 값(pal/날짜/인보이스/비고 등)은 현재 inbound DB로 갱신
           //  → 달력에서 따로 고친 내용이 대조창에도 반영됨. 완료된 건은 대조창에서 제외(없어지는 형태).
           let parsedData = parseJSON(parsedDataStr);
-          const ocrState = await ocrStateGet(pool);
-          const pendOk = !!(ocrState && ocrState.status === "pending"); // 확정 대기 중인 OCR 건에서만 '반영 제안'을 만듦
+          const ocrState0 = await ocrStateGet(pool);
+          const pendOk = !!(ocrState0 && ocrState0.status === "pending");
+          const ocrState = ocrState0 ? { ...ocrState0, hasPrev: pendOk ? await ocrBackupHas(pool) : false } : null; // hasPrev: 취소하면 되돌아갈 '이전 확정 이미지'가 있는지 // 확정 대기 중인 OCR 건에서만 '반영 제안'을 만듦
           if (Array.isArray(parsedData) && parsedData.length > 0) {
             try {
               const cleanBL = (v) => String(v || "").replace(/[\s•·\-\*]/g, "");
@@ -2915,6 +2954,11 @@ if (action === "VERIFY_SESSION") {
           const timeStr = `${KST.getMonth() + 1}월${KST.getDate()}일 ${String(KST.getHours()).padStart(2, "0")}:${String(KST.getMinutes()).padStart(2, "0")}`;
           const put = (k, v) => pool.query(`INSERT INTO ocr_store (store_key, store_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE store_value = VALUES(store_value)`, [k, v]);
           // 가장 크고 실패 가능성이 높은 이미지를 먼저 저장 — 실패하면 기존 최근 OCR 이 그대로 남는다
+          // 확정된 OCR(또는 상태 기록 없는 예전 OCR)이 있으면 덮어쓰기 전에 보관 — [취소]하면 그 이미지로 돌아감. 확정 대기 중이던 건 위에 덮을 땐 기존 보관본 유지
+          try {
+            const _p0 = await ocrStateGet(pool);
+            if (!_p0 || _p0.status === "applied") await ocrBackupMake(pool);
+          } catch (bkErr) { console.error("이전 OCR 보관 실패(무시):", bkErr.message); }
           await put("last_ocr_image", JSON.stringify({ url: `data:${mime};base64,${b64}`, fileId: null, uploaded: true }));
           await put("LAST_OCR_DATA", JSON.stringify(out.rows));
           try {
@@ -2926,8 +2970,7 @@ if (action === "VERIFY_SESSION") {
           await put("LAST_OCR_RAW", JSON.stringify(rawCapped));
           if (out.geo) await put("LAST_OCR_GEO", JSON.stringify(out.geo));
           else await pool.query(`DELETE FROM ocr_store WHERE store_key = 'LAST_OCR_GEO'`);
-          const jsonTime = JSON.stringify({ time: timeStr });
-          await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jsonTime, jsonTime]);
+          // ⏱️ 앱 OCR 의 '최근 OCR 시간'(last_ocr_time)은 올린 때가 아니라 [확정]한 때 기록 (OCR_STATE_END applied). 취소한 OCR 은 시간에 반영되지 않음
           await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, 'SYS_OCR_SAVE', ?)", [currentAdmin, `앱에서 OCR 업로드 (${out.rows.length}행${out.aiSuccess ? ", AI 교정" : ", 기본 파싱"})`]);
           return res.status(200).json({ success: true, rowCount: out.rows.length, aiSuccess: !!out.aiSuccess, usage: ocrCount, limit: OCR_FREE_LIMIT_MONTHLY });
         } finally {
@@ -3224,7 +3267,8 @@ if (action === "VERIFY_SESSION") {
         return res.status(200).json({ success: true, mode });
       } else if (action === "GET_OCR_STATE") {
         // 가벼운 상태 조회 — 새 OCR 을 올리기 전에 '아직 확정 안 한 OCR' 이 있는지 확인용
-        return res.status(200).json({ success: true, ocrState: await ocrStateGet(pool) });
+        const _s = await ocrStateGet(pool);
+        return res.status(200).json({ success: true, ocrState: _s ? { ..._s, hasPrev: _s.status === "pending" ? await ocrBackupHas(pool) : false } : null });
       } else if (action === "OCR_STATE_END") {
         // 대기 중인 OCR 건을 확정(applied) 또는 취소(canceled)로 마무리. 확정은 클라이언트가 DB 반영(APPLY_OCR_DATA)을 끝낸 뒤 호출.
         try {
@@ -3235,9 +3279,27 @@ if (action === "VERIFY_SESSION") {
           if (st.status !== "pending") return res.status(200).json({ success: true, already: true, ocrState: st });
           if (data && data.id != null && Number(data.id) !== Number(st.id)) return res.status(200).json({ success: false, stale: true, msg: "그 사이 새 OCR 이 올라왔어요. 화면을 새로고침해 주세요.", ocrState: st });
           const next = { ...st, status: to, endedAt: Date.now(), endedBy: currentAdmin };
-          await ocrStatePut(pool, next);
+          if (to === "applied" && st.source !== "telegram") {
+            // 앱 OCR: 확정한 시각을 '최근 OCR 시간'으로 기록 (상태의 at 도 확정 시각으로 갱신)
+            const K = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+            const confStr = `${K.getMonth() + 1}월${K.getDate()}일 ${String(K.getHours()).padStart(2, "0")}:${String(K.getMinutes()).padStart(2, "0")}`;
+            const jt = JSON.stringify({ time: confStr });
+            await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT)`);
+            await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('last_ocr_time', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [jt, jt]);
+            next.at = confStr;
+          }
+          let restored = false;
+          if (to === "canceled" && st.source !== "telegram") {
+            // 취소 → 이전에 확정한 OCR 이미지·값으로 복귀 (보관본이 없으면 취소한 사진을 치움: 최근 이미지는 '확정된 것'만)
+            restored = await ocrBackupRestore(pool);
+            if (!restored) await ocrSetDiscard(pool);
+          }
+          let outState = next;
+          if (restored) outState = await ocrStateGet(pool); // 복원된 이전 건의 상태(예전 건이면 null)
+          else await ocrStatePut(pool, next);
+          if (to === "applied") { try { await ocrBackupDrop(pool); } catch (_) {} } // 확정 → 이전 보관본은 더 필요 없음
           try { await pool.query("INSERT INTO admin_audit_logs (admin_id, action_type, description) VALUES (?, ?, ?)", [currentAdmin, to === "applied" ? "OCR_CONFIRM" : "OCR_CANCEL", `[OCR ${to === "applied" ? "확정" : "취소"}] ${st.at || ""} (${st.source === "telegram" ? "텔레그램" : "앱"})`]); } catch (_) {}
-          return res.status(200).json({ success: true, ocrState: next });
+          return res.status(200).json({ success: true, ocrState: outState, restored });
         } catch (err) {
           console.error("OCR_STATE_END 에러:", err);
           return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
