@@ -2127,8 +2127,22 @@ function applyOcrSuggestion(idx, field, valOverride) {
   _ocrAfterVerify();
   return true;
 }
+// PC 전용: 패널 높이가 바뀌면(제안 바가 나타나거나 사라짐, 창 크기 변경) 이미지 맞춤·표 맞춤을 새 크기로 다시 계산
+//  (맞춤은 열 때 한 번 계산하므로, 그 뒤 레이아웃이 밀리면 표가 이미지보다 한 줄쯤 어긋났음). 폰(_ocrSyncOn 아님)은 건드리지 않음.
+function _ocrPcRealign() {
+  if (!_ocrSyncOn() || !_ocrTblAlign || _ocrRv.on) return;
+  const tp = document.getElementById("ocrPaneTable");
+  if (!tp || tp.style.display === "none") return;
+  try { computeOcrFit(); bakeOcr(); alignOcrTableToImage(); } catch (e) {}
+}
+let _ocrPcRoBound = false;
 // 좌우 화면용 제안 바 — 선택한 칸의 사유·제안 + 의심 칸 이동
 function _ocrSugBarEnsure() {
+  if (!_ocrPcRoBound) {
+    _ocrPcRoBound = true;
+    let t = null;
+    window.addEventListener("resize", () => { if (t) clearTimeout(t); t = setTimeout(_ocrPcRealign, 150); });
+  }
   let bar = document.getElementById("ocrSugBar");
   if (bar) return bar;
   const wrap = document.getElementById("ocrSplitWrap");
@@ -2142,6 +2156,13 @@ function _ocrSugBarEnsure() {
 function _ocrSugBarUpdate() {
   const bar = _ocrSugBarEnsure();
   if (!bar) return;
+  const _ip = document.getElementById("ocrPaneImg");
+  const _ph0 = _ip ? _ip.clientHeight : 0;
+  try { _ocrSugBarUpdateInner(bar); } finally {
+    if (_ip && _ip.clientHeight !== _ph0) requestAnimationFrame(_ocrPcRealign); // 바가 생기거나 사라져 패널 높이가 달라졌으면 PC 는 다시 맞춤
+  }
+}
+function _ocrSugBarUpdateInner(bar) {
   const pane = document.getElementById("ocrPaneTable");
   const open = pane && pane.style.display !== "none" && !_ocrRv.on;
   const list = open ? _ocrSuspectCells() : [];
