@@ -28,6 +28,9 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const pickLib = require("./_pick.js"); // 출고 피킹지 사진 판독 (api/_pick.js)
 const ocrLib = require("./_ocr.js"); // 입고 OCR 읽기 엔진 — 앱에서 사진 업로드용 (api/_ocr.js)
+const aiUsage = require("./_aiusage.js"); // AI·문자인식 사용량 기록/통계 (입고·출고·AI채팅·텔레그램 공용, api/_aiusage.js)
+// AI 채팅의 Gemini 호출 — fetch 와 똑같이 쓰되 호출·성공·시간이 ai_usage_log 에 남는다
+const aiChatFetch = (u, i) => aiUsage.timed(pool, "ai_chat", fetch, [process.env.GEMINI_API_KEY_AI].concat(pickGeminiKeys()))(u, i);
 
 // 🔁 입고 OCR 대조용: 값 비교 도우미 — 날짜는 YYYY-MM-DD 로 맞추고 미정/빈값/비정상은 ""
 const _ocrNd = (v) => {
@@ -602,7 +605,7 @@ const SYSTEM_ONLY_ACTIONS = new Set([
   "CREATE_ADMIN", "DELETE_ADMIN", "REACTIVATE_ADMIN", "HARD_DELETE_ADMIN", "RESET_ADMIN_PW",
   "GET_ADMIN_LIST", "GET_ADMIN_CONN_LOGS", "GET_AUDIT_LOGS", "GET_ALL_CONN_LOGS",
   "GET_RAW_DB_ROWS", "UPDATE_RAW_ROW_FULL", "UPDATE_RAW_ROW_DIRECT", "ADD_RAW_ROW_DIRECT", "DELETE_RAW_ROW_DIRECT",
-  "SAVE_OCR_INFO", "SAVE_OCR_FILTERS", "SET_ADMIN_PERMS", "PICK_STATS", "PICK_KEYTEST",
+  "SAVE_OCR_INFO", "SAVE_OCR_FILTERS", "SET_ADMIN_PERMS", "PICK_STATS", "PICK_KEYTEST", "AI_USAGE_STATS",
 ]);
 // 위임 권한이 필요한 액션 (시스템 관리자는 항상 통과)
 const PERM_ACTIONS = { OCR_UPLOAD: "ocr_upload", APPLY_OCR_DATA: "ocr_compare", OCR_ROW_REREAD: "ocr_compare", OCR_IMAGE_DATA: "ocr_compare" };
@@ -861,6 +864,7 @@ module.exports = async function (req, res) {
         "OCR_UPLOAD",
         "PICK_PARSE",
         "PICK_REREAD",
+        "AI_USAGE_STATS",
         "OCR_ROW_REREAD",
         "OCR_IMAGE_DATA",
         "PICK_STATS",
@@ -2833,7 +2837,7 @@ if (action === "VERIFY_SESSION") {
           }
           if (ocrCount >= OCR_FREE_LIMIT_MONTHLY) return res.status(200).json({ success: false, msg: "이번 달 무료 OCR 한도를 모두 사용했습니다." });
 
-          const out = await ocrLib.runOcrPipeline(b64, { fetch, visionKey: process.env.GOOGLE_VISION_API_KEY, geminiKey: process.env.GEMINI_API_KEY });
+          const out = await ocrLib.runOcrPipeline(b64, { fetch: aiUsage.timed(pool, "app_ocr", fetch, pickGeminiKeys()), visionKey: process.env.GOOGLE_VISION_API_KEY, geminiKey: process.env.GEMINI_API_KEY });
           if (out.visionCalled) {
             ocrCount++; ocrTotal++;
             await pool.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ('OCR_COUNT', ?) ON DUPLICATE KEY UPDATE setting_value = ?`, [String(ocrCount), String(ocrCount)]);
@@ -2912,7 +2916,7 @@ if (action === "VERIFY_SESSION") {
 
         await geminiStateLoad();
         const parsed = await pickLib.parsePicking(b64, mime, {
-          fetch,
+          fetch: aiUsage.timed(pool, "pick", fetch, pickGeminiKeys()),
           visionKey: process.env.GOOGLE_VISION_API_KEY,
           geminiKey: pickGeminiKeys(), // 키가 여러 개(다른 프로젝트)면 번갈아 쓰고, 한도·과부하로 막힌 키는 풀릴 때까지 건너뜀
           model: _ctx && _ctx.isSystem ? pickLib.resolvePin(data?.model) : null, // 🧪 모델 지정 시험 — 시스템 관리자만(그 외 사용자가 보내도 무시)
@@ -2959,7 +2963,7 @@ if (action === "VERIFY_SESSION") {
         const mimeR = /^image\/(jpeg|png|webp)$/.test(String(data?.mime || "")) ? data.mime : "image/jpeg";
         await geminiStateLoad();
         const pinR = _ctx && _ctx.isSystem ? pickLib.resolvePin(data?.model) : null; // 🧪 모델 지정 시험(시스템 관리자만)
-        const rr = await pickLib.rereadHandwriting(clean, mimeR, fetch, pickGeminiKeys(), pinR);
+        const rr = await pickLib.rereadHandwriting(clean, mimeR, aiUsage.timed(pool, "pick_reread", fetch, pickGeminiKeys()), pickGeminiKeys(), pinR);
         await geminiStateSave();
         if (!rr.ok) {
           await pickLogSet(data?.parseId, "reread", { error: String(rr.err || "").slice(0, 80) }, currentAdmin);
@@ -2975,7 +2979,7 @@ if (action === "VERIFY_SESSION") {
           return res.status(200).json({ success: false, msg: "그림 형식이 올바르지 않습니다." });
         if (!pickGeminiKeys().length) return res.status(200).json({ success: false, msg: "AI 키가 설정되어 있지 않습니다." });
         await geminiStateLoad();
-        const rrO = await pickLib.rereadOcrRows(itemsClean, fetch, pickGeminiKeys());
+        const rrO = await pickLib.rereadOcrRows(itemsClean, aiUsage.timed(pool, "ocr_reread", fetch, pickGeminiKeys()), pickGeminiKeys());
         await geminiStateSave();
         if (!rrO.ok) return res.status(200).json({ success: false, msg: "AI 다시 읽기 실패: " + (rrO.err || "알 수 없는 오류"), quota: !!rrO.quota, retryAt: rrO.retryAt || 0 });
         return res.status(200).json({ success: true, rows: rrO.rows, timing: { ms: rrO.ms || null, model: rrO.model || null, keyNo: rrO.keyNo || null } });
@@ -3002,7 +3006,7 @@ if (action === "VERIFY_SESSION") {
         const kk = pickGeminiKeys();
         if (!kk.length) return res.status(200).json({ success: false, msg: "AI 키가 설정되어 있지 않습니다." });
         const extraM = ["gemini-3.8-flash"]; // 참고용(지금 쓰는 목록엔 없음): 이 키로 쓸 수 있는지만 확인
-        const tk = await pickLib.testKeys(fetch, kk, pickLib.GEMINI_MODELS(), extraM);
+        const tk = await pickLib.testKeys(aiUsage.timed(pool, "key_test", fetch, pickGeminiKeys()), kk, pickLib.GEMINI_MODELS(), extraM);
         return res.status(200).json({ success: true, keys: tk, models: pickLib.GEMINI_MODELS(), extra: extraM });
       } else if (action === "PICK_STATS") {
         // 📊 판독 정확도 (시스템 관리자 전용): 최근 N일, 등록까지 끝난 건 기준
@@ -3014,6 +3018,47 @@ if (action === "VERIFY_SESSION") {
         await geminiStateLoad(true);
         const keys = pickLib.keyStatus(pickGeminiKeys(), pickLib.GEMINI_MODELS());
         return res.status(200).json({ success: true, days, stats, keys });
+      } else if (action === "AI_USAGE_STATS") {
+        // 🤖 AI 사용량 통합 대시보드 (시스템 관리자 전용 — SYSTEM_ONLY_ACTIONS 에서 선차단)
+        //   Vision(문자인식): 입고 OCR(텔레그램+앱)의 월 카운터 OCR_COUNT + 출고 피킹지 판독 건수  /  Gemini: ai_usage_log + 키 상태
+        await geminiStateLoad(true);
+        await pickLogEnsure();
+        const st = await aiUsage.stats(pool);
+        const monthStr = String(new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" })).getMonth() + 1);
+        const sv = async (k) => { const [r] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = ?`, [k]); return r.length ? String(r[0].setting_value).replace(/"/g, "") : ""; };
+        const dbMonth = await sv("OCR_MONTH");
+        const ocrCount = dbMonth === monthStr ? parseInt(await sv("OCR_COUNT"), 10) || 0 : 0;
+        const ocrTotal = parseInt(await sv("OCR_TOTAL_COUNT"), 10) || 0;
+        const [pm] = await pool.query(`SELECT COUNT(*) n FROM pick_parse_log WHERE DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')`);
+        const pickMonth = Number(pm[0].n) || 0;
+        const LIM = 1000;
+        const used = ocrCount + pickMonth;
+        const left = LIM - used;
+        const models = pickLib.GEMINI_MODELS();
+        const gkeys = pickGeminiKeys();
+        const keyst = pickLib.keyStatus(gkeys, models);
+        const press = pickLib.keyPressure(gkeys, models);
+        const vOk = !!process.env.GOOGLE_VISION_API_KEY;
+        const vLevel = !vOk || left <= 0 ? "down" : left <= 150 ? "warn" : "ok";
+        const gLevel = !gkeys.length || press.level === "none" ? "down" : press.level === "tight" ? "warn" : "ok";
+        const chat = st.bySource.ai_chat.gemini;
+        const cLevel = chat.d7 >= 3 && chat.bad30 / Math.max(1, chat.d30) >= 0.5 ? "warn" : "ok";
+        const worst = (a, b) => (a === "down" || b === "down" ? "down" : a === "warn" || b === "warn" ? "warn" : "ok");
+        const retryTxt = press.retryAt ? new Date(press.retryAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "";
+        const features = [
+          { name: "입고 OCR (텔레그램·앱)", level: vLevel, why: !vOk ? "문자인식 키가 없어요" : left <= 0 ? "이번 달 무료 문자인식 한도(1000)를 다 썼어요" : left <= 150 ? `문자인식 남은 ${left}건 — 곧 한도예요` : `문자인식 남은 ${left}건` },
+          { name: "대조창 AI 다시읽기", level: gLevel, why: !gkeys.length ? "AI 키가 설정돼 있지 않아요" : press.level === "none" ? `AI 키가 모두 쉬는 중${retryTxt ? " · " + retryTxt + "에 풀려요" : ""}` : press.level === "tight" ? `쓸 수 있는 키 ${press.usable}/${press.total} — 여유가 적어요` : `쓸 수 있는 키 ${press.usable}/${press.total}` },
+          { name: "출고 피킹지 판독", level: vLevel === "down" ? "down" : gLevel === "down" ? "warn" : worst(vLevel, gLevel), why: vLevel === "down" ? "문자인식을 쓸 수 없어요" : gLevel === "down" ? "AI 없이 문자인식만으로 판독돼요(손글씨는 직접 입력)" : gLevel === "warn" || vLevel === "warn" ? "가능하지만 여유가 적어요" : "문자인식·AI 모두 가능" },
+          { name: "AI 채팅", level: cLevel, why: cLevel === "warn" ? "최근 호출의 절반 이상이 실패했어요" : chat.d30 ? `최근 30일 ${chat.d30}회 호출` : "아직 기록이 없어요" },
+        ];
+        return res.status(200).json({
+          success: true,
+          stats: st,
+          vision: { limit: LIM, used, left, ocrCount, ocrTotal, pickMonth, app: st.appVisionMonth, telegramEst: Math.max(0, ocrCount - st.appVisionMonth), keyConfigured: vOk },
+          gemini: { keys: keyst, pressure: press, models, keyCount: gkeys.length, chatKeySeparate: !!process.env.GEMINI_API_KEY_AI },
+          features,
+          overall: features.reduce((a, f) => worst(a, f.level), "ok"),
+        });
       } else if (action === "PICK_FIND_ROWS") {
         // 같은 업체의 '완료되지 않은' 출고 일정 찾기 (수량 추가 대상 후보). 날짜가 있으면 그 날짜만, 없으면 미정 + 오늘 이후
         const fCompany = String(data?.company || "").trim().slice(0, 100);
@@ -3508,7 +3553,7 @@ if (action === "VERIFY_SESSION") {
               const locTimer = setTimeout(() => locCtrl.abort(), 8000);
               let lr;
               try {
-                lr = await fetch(gUrl, {
+                lr = await aiChatFetch(gUrl, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
@@ -3574,7 +3619,7 @@ if (action === "VERIFY_SESSION") {
             let wAnswer = "";
             try {
               const wPrompt = `사용자가 "${question}"라고 물었어. 아래 '${wLoc}' 실시간 날씨 데이터를 근거로 친근하고 짧게(2~3문장, 존댓말, 이모지 1개 정도) 답해. 데이터에 없는 내용은 지어내지 마.\n\n${wSummary || "(날씨 데이터를 가져오지 못함)"}`;
-              const wgRes = await fetch(gUrl, {
+              const wgRes = await aiChatFetch(gUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ contents: [{ parts: [{ text: wPrompt }] }], generationConfig: { temperature: 0.7 } }),
@@ -3671,7 +3716,7 @@ ${question}
           const aiTimer = setTimeout(() => aiCtrl.abort(), 20000);
           let geminiRes;
           try {
-            geminiRes = await fetch(
+            geminiRes = await aiChatFetch(
               `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY_AI || process.env.GEMINI_API_KEY}`,
               {
                 method: "POST",
@@ -3794,7 +3839,7 @@ ${JSON.stringify(rows, null, 2)}
               const sumTimer = setTimeout(() => sumCtrl.abort(), 12000);
               let summaryRes;
               try {
-                summaryRes = await fetch(
+                summaryRes = await aiChatFetch(
                   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY_AI || process.env.GEMINI_API_KEY}`,
                   {
                     method: "POST",

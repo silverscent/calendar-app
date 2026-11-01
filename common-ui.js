@@ -1242,6 +1242,7 @@ function saveAuthData(id, role, isSave, session_token, isOwner) {
     localStorage.removeItem("my_perms");
     sessionStorage.removeItem("my_perms");
     // ⚠️ bio_registered/bio_id/bio_token 은 로그아웃해도 유지 (생체 재로그인용)
+    if (typeof applyAiBtn === "function") applyAiBtn(); // 'AI' 버튼 숨김
   }
 }
 
@@ -1266,6 +1267,7 @@ function saveMyPerms(res) {
     );
   } catch (e) {}
   if (typeof applyPermUi === "function") applyPermUi();
+  if (typeof applyAiBtn === "function") applyAiBtn();
 }
 function getMyPerms() {
   try {
@@ -2097,3 +2099,149 @@ async function showIpInfo(ip) {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
   else run();
 })();
+
+
+// =====================================================
+// 🤖 AI 사용량 대시보드 — 시스템 관리자 전용 (헤더의 'AI' 버튼, 입고·출고 공통)
+//   · 서버 AI_USAGE_STATS: 문자인식(Vision) 월 사용량(입고 OCR 텔레그램+앱 + 출고 피킹지) · Gemini 키 상태·호출 수 · 기능별 사용 가능 여부 · 최근 실패
+//   · 버튼 표시는 화면용일 뿐, 실제 차단은 서버(SYSTEM_ONLY_ACTIONS)가 한다
+// =====================================================
+function applyAiBtn() {
+  const b = document.getElementById("aiDashBtn");
+  if (!b) return;
+  let on = false;
+  try {
+    const adm = localStorage.getItem("isAdmin") === "true" || sessionStorage.getItem("isAdmin") === "true";
+    on = adm && typeof isSystemUser === "function" && isSystemUser();
+  } catch (e) {}
+  b.style.display = on ? "" : "none";
+}
+(function () {
+  const run = () => applyAiBtn();
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+  else run();
+})();
+
+function _aiDashFmtTime(ms) {
+  try {
+    return new Date(ms).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+  } catch (e) {
+    return "";
+  }
+}
+function closeAiDash() {
+  const m = document.getElementById("aiDashModal");
+  if (m) m.remove();
+  document.body.style.overflow = "";
+}
+async function openAiDashboard() {
+  if (typeof isSystemUser === "function" && !isSystemUser()) return;
+  let m = document.getElementById("aiDashModal");
+  if (m) m.remove();
+  m = document.createElement("div");
+  m.id = "aiDashModal";
+  m.style.cssText = "position:fixed; inset:0; z-index:100000; background:rgba(0,0,0,0.55); display:flex; align-items:flex-end; justify-content:center; padding:0;";
+  m.innerHTML = `<div id="aiDashBox" style="width:100%; max-width:560px; max-height:92vh; background:var(--card-bg,#fff); color:var(--text-main,#222); border-radius:18px 18px 0 0; display:flex; flex-direction:column; box-shadow:0 -8px 30px rgba(0,0,0,0.35);">
+    <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--border-color,#ddd);">
+      <div style="flex:1; font-weight:900; font-size:1.05em;">🤖 AI 사용량 <span style="font-weight:600; font-size:0.72em; opacity:.6;">시스템 관리자 전용</span></div>
+      <button id="aiDashRef" style="border:none; background:var(--border-color,#e5e7eb); color:inherit; border-radius:8px; padding:7px 10px; font-weight:800; cursor:pointer;">🔄</button>
+      <button id="aiDashX" style="border:none; background:var(--border-color,#e5e7eb); color:inherit; border-radius:8px; padding:7px 11px; font-weight:800; cursor:pointer;">✕</button>
+    </div>
+    <div id="aiDashBody" style="flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 14px 22px; font-size:0.9em; line-height:1.45;">불러오는 중…</div></div>`;
+  document.body.appendChild(m);
+  document.body.style.overflow = "hidden";
+  m.addEventListener("click", (e) => { if (e.target === m) closeAiDash(); });
+  m.querySelector("#aiDashX").onclick = closeAiDash;
+  m.querySelector("#aiDashRef").onclick = _aiDashLoad;
+  _aiDashLoad();
+}
+async function _aiDashLoad() {
+  const body = document.getElementById("aiDashBody");
+  if (!body) return;
+  body.innerHTML = '<div style="opacity:.7;">불러오는 중…</div>';
+  let r;
+  try {
+    r = await apiCall({ source: "vercel", action: "AI_USAGE_STATS" });
+  } catch (e) {
+    r = null;
+  }
+  if (!document.getElementById("aiDashBody")) return;
+  if (!r || !r.success) {
+    body.innerHTML = `<div style="padding:12px; border-radius:10px; background:#fdecea; color:#8a2a1d; font-weight:700;">불러오지 못했어요${r && r.msg ? " — " + _esc(r.msg) : ""}</div>`;
+    return;
+  }
+  body.innerHTML = _aiDashRender(r);
+}
+function _aiDashRender(r) {
+  const st = r.stats || {};
+  const v = r.vision || {};
+  const g = r.gemini || {};
+  const dot = (l) => (l === "down" ? "🔴" : l === "warn" ? "🟡" : "🟢");
+  const card = (inner, extra) => `<div style="margin-top:10px; padding:10px 12px; border:1px solid var(--border-color,#ddd); border-radius:12px; ${extra || ""}">${inner}</div>`;
+  const h = (t) => `<div style="font-weight:900; margin-bottom:6px;">${t}</div>`;
+  const sub = (t) => `<span style="opacity:.65; font-size:0.85em;">${t}</span>`;
+  const overallBg = r.overall === "down" ? "#fdecea" : r.overall === "warn" ? "#fff4d6" : "#e7f6ec";
+  const overallTx = r.overall === "down" ? "#8a2a1d" : r.overall === "warn" ? "#5a4300" : "#1d6b3a";
+  const overallMsg = r.overall === "down" ? "일부 기능을 쓸 수 없어요" : r.overall === "warn" ? "쓸 수 있지만 여유가 적은 곳이 있어요" : "AI·문자인식 모두 사용 가능해요";
+  let out = `<div style="padding:10px 12px; border-radius:12px; background:${overallBg}; color:${overallTx}; font-weight:900;">${dot(r.overall)} ${overallMsg}</div>`;
+  // 기능별 사용 가능 여부 (입고·출고 통합)
+  out += card(h("지금 쓸 수 있나? (입고·출고 통합)") + (r.features || []).map((f) => `<div style="display:flex; gap:8px; padding:5px 0; border-top:1px solid var(--border-color,#eee);"><span>${dot(f.level)}</span><div style="flex:1; min-width:0;"><b>${_esc(f.name)}</b><div style="opacity:.75; font-size:0.9em;">${_esc(f.why)}</div></div></div>`).join(""));
+  // 문자인식(Vision)
+  const lim = v.limit || 1000;
+  const pct = (n) => Math.min(100, (n / lim) * 100).toFixed(1);
+  out += card(
+    h(`🔤 문자인식(Vision) 이번 달 <span style="color:${v.left <= 0 ? "#c0392b" : v.left <= 150 ? "#b7791f" : "#1d6b3a"};">${v.used}/${lim}</span>`) +
+      `<div style="display:flex; height:14px; border-radius:7px; overflow:hidden; background:var(--border-color,#e5e7eb);"><div style="width:${pct(v.telegramEst || 0)}%; background:#2b6cd4;"></div><div style="width:${pct(v.app || 0)}%; background:#6a4bd8;"></div><div style="width:${pct(v.pickMonth || 0)}%; background:#e08a1e;"></div></div>` +
+      `<div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px 12px; font-size:0.88em;"><span><i style="display:inline-block;width:9px;height:9px;background:#2b6cd4;border-radius:2px;"></i> 텔레그램(입고) 약 ${v.telegramEst || 0}</span><span><i style="display:inline-block;width:9px;height:9px;background:#6a4bd8;border-radius:2px;"></i> 앱(입고) ${v.app || 0}</span><span><i style="display:inline-block;width:9px;height:9px;background:#e08a1e;border-radius:2px;"></i> 출고 피킹지 ${v.pickMonth || 0}</span></div>` +
+      `<div style="margin-top:6px;">${sub(`남은 ${Math.max(0, v.left || 0)}건 · 입고 OCR은 텔레그램과 앱이 같은 월 카운터를 쓰고, 출고 피킹지 판독 건수를 더해 보여줘요. 텔레그램 건수는 (월 카운터 − 앱 기록)으로 추정한 값이에요. 누적 입고 OCR ${v.ocrTotal || 0}회`)}</div>`,
+  );
+  // Gemini 키
+  const kInfo = {};
+  (st.keys || []).forEach((k) => { const o = kInfo[k.keyNo] || (kInfo[k.keyNo] = { n: 0, bad: 0 }); o.n += k.n; if (!k.ok) o.bad += k.n; });
+  let kh = h(`🔑 Gemini 키 · 쓸 수 있는 키 ${g.pressure ? g.pressure.usable : 0}/${g.pressure ? g.pressure.total : 0}`);
+  (g.keys || []).forEach((k) => {
+    const ki = kInfo[k.no] || { n: 0, bad: 0 };
+    const rest = k.blocked ? (k.keyUntil ? `${_aiDashFmtTime(k.keyUntil)}까지 쉼${k.keyWhy ? " (" + _esc(k.keyWhy) + ")" : ""}` : "모든 모델이 쉬는 중") : k.items && k.items.length ? `일부 모델 쉼: ${k.items.map((x) => _esc(String(x.model).replace("gemini-", "")) + " ~" + _aiDashFmtTime(x.until)).join(", ")}` : "";
+    kh += `<div style="padding:6px 0; border-top:1px solid var(--border-color,#eee);"><b>키 ${k.no}</b> ${k.blocked ? "⏸ 쉬는 중" : "✅ 사용 가능"} <span style="float:right; opacity:.75;">30일 ${ki.n}회${ki.bad ? ` · 실패 ${ki.bad}` : ""}</span>${rest ? `<div style="opacity:.75; font-size:0.88em;">${rest}</div>` : ""}</div>`;
+  });
+  if (g.chatKeySeparate) {
+    const ci = kInfo[9] || { n: 0, bad: 0 };
+    kh += `<div style="padding:6px 0; border-top:1px solid var(--border-color,#eee);"><b>AI 채팅 전용 키</b> <span style="float:right; opacity:.75;">30일 ${ci.n}회${ci.bad ? ` · 실패 ${ci.bad}` : ""}</span></div>`;
+  }
+  kh += `<div style="margin-top:4px;">${sub(`모델 순서: ${(g.models || []).map((x) => _esc(String(x).replace("gemini-", ""))).join(" → ")} · 무료 한도 숫자는 구글이 정하므로 '호출 수'와 '한도 오류(429)' 기록으로 판단해요`)}</div>`;
+  out += card(kh);
+  // 출처별 표
+  const names = Object.keys(st.bySource || {});
+  const th = "padding:4px 4px; text-align:right; opacity:.7; font-weight:700; font-size:0.85em;";
+  const td = "padding:5px 4px; text-align:right; border-top:1px solid var(--border-color,#eee);";
+  let tb = h("📋 어디서 얼마나 썼나") + `<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.9em;"><thead><tr><th style="${th} text-align:left;">출처</th><th style="${th}">Gemini 오늘</th><th style="${th}">7일</th><th style="${th}">30일</th><th style="${th}">실패</th><th style="${th}">Vision 30일</th></tr></thead><tbody>`;
+  names.forEach((k) => {
+    const o = st.bySource[k];
+    const gg = o.gemini, vv = o.vision;
+    if (!gg.d30 && !vv.d30) { if (k === "tg_ocr" && !st.telegramLogged) tb += `<tr><td style="${td} text-align:left;">${_esc(o.label)}</td><td colspan="5" style="${td} opacity:.65;">기록 연결 전</td></tr>`; return; }
+    tb += `<tr><td style="${td} text-align:left;">${_esc(o.label)}</td><td style="${td}">${gg.today}</td><td style="${td}">${gg.d7}</td><td style="${td}">${gg.d30}</td><td style="${td} color:${gg.bad30 ? "#c0392b" : "inherit"};">${gg.bad30 || "-"}</td><td style="${td}">${vv.d30 || "-"}</td></tr>`;
+  });
+  tb += `</tbody></table></div>`;
+  if (!st.telegramLogged) tb += `<div style="margin-top:6px; padding:7px 9px; border-radius:8px; background:#fff4d6; color:#5a4300; font-size:0.85em;">⚠️ 텔레그램 OCR 의 AI 호출은 아직 기록되지 않고 있어요 (telegram.js 연결 전). 입고 문자인식 건수는 월 카운터로 이미 합산돼요.</div>`;
+  tb += `<div style="margin-top:4px;">${sub(`기록 시작 ${st.since || "-"} · 호출이 실패하면 '실패'에 따로 집계돼요`)}</div>`;
+  out += card(tb);
+  // 14일 막대
+  const ser = st.series || [];
+  const mx = Math.max(5, ...ser.map((x) => x.n));
+  out += card(
+    h("📈 최근 14일 Gemini 호출") +
+      `<div style="display:flex; align-items:flex-end; gap:3px; height:72px;">${ser.map((x) => `<div title="${x.day} · ${x.n}회${x.bad ? " · 실패 " + x.bad : ""}" style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:100%;"><div style="height:${((x.bad / mx) * 100).toFixed(1)}%; background:#c0392b; border-radius:2px 2px 0 0;"></div><div style="height:${(((x.n - x.bad) / mx) * 100).toFixed(1)}%; background:#2b6cd4; ${x.bad ? "" : "border-radius:2px 2px 0 0;"}"></div></div>`).join("")}</div>` +
+      `<div style="display:flex; justify-content:space-between; opacity:.6; font-size:0.78em; margin-top:2px;"><span>${ser.length ? ser[0].day.slice(5) : ""}</span><span>오늘 ${ser.length ? ser[ser.length - 1].n : 0}회</span></div>`,
+  );
+  // 모델별
+  const mm = {};
+  (st.models || []).filter((x) => x.provider === "gemini").forEach((x) => { const o = mm[x.model] || (mm[x.model] = { n: 0, bad: 0, ms: 0 }); o.n += x.n; if (!x.ok) o.bad += x.n; else o.ms = x.ms; });
+  const mk = Object.keys(mm);
+  if (mk.length) out += card(h("🧠 모델별 (30일)") + mk.map((k) => `<div style="display:flex; justify-content:space-between; padding:4px 0; border-top:1px solid var(--border-color,#eee);"><span>${_esc(k.replace("gemini-", ""))}</span><span style="opacity:.8;">${mm[k].n}회${mm[k].bad ? ` · 실패 ${mm[k].bad}` : ""}${mm[k].ms ? ` · 평균 ${(mm[k].ms / 1000).toFixed(1)}초` : ""}</span></div>`).join(""));
+  // 최근 실패
+  const kindTx = { limit: "한도 초과", overload: "서버 과부하", timeout: "시간 초과", error: "오류" };
+  const fl = st.failures || [];
+  out += card(h("⚠️ 최근 실패") + (fl.length ? fl.map((x) => `<div style="padding:4px 0; border-top:1px solid var(--border-color,#eee); font-size:0.88em;">${_esc(String(x.t).slice(5, 16))} · ${_esc((st.bySource[x.source] || {}).label || x.source)} · ${x.provider === "vision" ? "Vision" : _esc(String(x.model).replace("gemini-", "")) + (x.keyNo ? " 키" + (x.keyNo === 9 ? "AI" : x.keyNo) : "")} · <b style="color:#c0392b;">${kindTx[x.kind] || "오류"}${x.status > 0 ? " (" + x.status + ")" : ""}</b></div>`).join("") : '<div style="opacity:.65;">기록된 실패가 없어요</div>'));
+  out += `<div style="margin-top:10px; opacity:.6; font-size:0.8em;">키·모델 점검은 출고 화면의 📊 판독 정확도에서 할 수 있어요. 이 화면은 새로고침(🔄)할 때 갱신돼요.</div>`;
+  return out;
+}

@@ -1,5 +1,6 @@
 require("dotenv").config();
 const mysql = require("mysql2/promise");
+const aiUsage = require("./_aiusage.js"); // AI 사용량 기록(실패해도 본 기능에 영향 없음)
 
 // 텔레그램 메시지 전송 헬퍼
 async function sendTgMsg(chatId, text, inlineKeyboard = null) {
@@ -1360,7 +1361,7 @@ module.exports = async function handler(req, res) {
             const visionTimer = setTimeout(() => visionController.abort(), 15000);
             let visionData;
             try {
-              const visionRes = await fetch(
+              const visionRes = await aiUsage.timed(pool, "tg_ocr", fetch, [])(
                 `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`,
                 {
                   method: "POST",
@@ -1424,7 +1425,7 @@ module.exports = async function handler(req, res) {
               const aiTimer = setTimeout(() => aiController.abort(), Math.max(5000, Math.min(25000, 52000 - (Date.now() - _reqStart))));
               let geminiRes;
               try {
-                geminiRes = await fetch(
+                geminiRes = await aiUsage.timed(pool, "tg_ocr", fetch, [process.env.GEMINI_API_KEY])(
                   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
                   {
                     method: "POST",
