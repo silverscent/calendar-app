@@ -1268,7 +1268,13 @@ function saveMyPerms(res) {
   } catch (e) {}
   if (typeof applyPermUi === "function") applyPermUi();
   if (typeof applyAiBtn === "function") applyAiBtn();
-  if (document.body.classList.contains("pc-dense") && typeof renderPcLeftbar === "function") renderPcLeftbar();
+  if (document.body.classList.contains("pc-dense") && typeof renderPcLeftbar === "function") {
+    // AI 사용량 버튼이 있어야 하는지/실제로 있는지가 다를 때만 왼쪽 바를 다시 그림 (접힘·스크롤 상태 보존)
+    const bar = document.getElementById("pcLeftbar");
+    const want = !!(typeof isAdmin !== "undefined" && isAdmin && typeof isSystemUser === "function" && isSystemUser()); // renderPcLeftbar 의 systemAdmin 과 같은 조건
+    const has = !!(bar && bar.querySelector(".pclb-ai-usage-btn"));
+    if (!bar || want !== has) renderPcLeftbar();
+  }
 }
 function getMyPerms() {
   try {
@@ -2200,6 +2206,18 @@ async function _aiDashLoad() {
   body.innerHTML = _aiDashRender(r);
   _aiDashApplyPcLayout(body);
 }
+(function () {
+  let t = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      const m = document.getElementById("aiDashModal");
+      if (!m) return;
+      const pc = document.body.classList.contains("pc-dense") && typeof window.matchMedia === "function" && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+      if (pc !== m.classList.contains("pc-ai-dash")) openAiDashboard();
+    }, 250);
+  });
+})();
 function _aiDashApplyPcLayout(body) {
   const modal = body && body.closest("#aiDashModal.pc-ai-dash");
   if (!modal) return;
@@ -2208,17 +2226,34 @@ function _aiDashApplyPcLayout(body) {
     Array.from(body.children).forEach((el) => { el.style.gridColumn = "1 / -1"; });
     return;
   }
-  content.style.cssText = "display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:14px;";
+  if (content.dataset.pcDone === "1") return; // 이미 배치됨(같은 내용에 두 번 적용 방지)
+  content.dataset.pcDone = "1";
+  content.style.cssText = "display:flex; flex-direction:column; gap:14px;";
   content.querySelectorAll(".ai-dash-card").forEach((el) => {
     el.style.marginTop = "0";
     el.style.minWidth = "0";
     el.style.padding = "15px 17px";
     el.style.boxShadow = "0 2px 10px rgba(15,23,42,0.035)";
   });
-  content.querySelectorAll(".ai-dash-status, .ai-dash-sources, .ai-dash-series").forEach((el) => {
-    el.style.gridColumn = "1 / -1";
+  // 위: 전체 상태 한 줄 / 가운데: 카드를 두 열에 '더 짧은 쪽'부터 채움(빈 공간 최소화) / 아래: 폭 넓은 표·그래프
+  const wide = (el) => el.classList.contains("ai-dash-sources") || el.classList.contains("ai-dash-series");
+  const cards = Array.from(content.querySelectorAll(".ai-dash-card")).filter((el) => !wide(el));
+  const status = content.querySelector(".ai-dash-status");
+  const cols = document.createElement("div");
+  cols.style.cssText = "display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start;";
+  const colA = document.createElement("div");
+  const colB = document.createElement("div");
+  [colA, colB].forEach((c) => { c.style.cssText = "display:flex; flex-direction:column; gap:14px; min-width:0;"; cols.appendChild(c); });
+  if (status && status.nextSibling) content.insertBefore(cols, status.nextSibling);
+  else content.insertBefore(cols, content.firstChild);
+  cards.forEach((el) => {
+    (colA.offsetHeight <= colB.offsetHeight ? colA : colB).appendChild(el); // 붙인 뒤 실제 높이로 다음 카드의 위치를 정함
   });
-  const chart = content.querySelector(".ai-dash-series > div:nth-child(2)");
+  // 표·그래프는 두 열 아래 전체 폭으로, 안내 문구는 맨 끝에
+  content.querySelectorAll(".ai-dash-sources, .ai-dash-series").forEach((el) => content.appendChild(el));
+  const note = Array.from(content.children).find((el) => !el.classList.contains("ai-dash-card") && !el.classList.contains("ai-dash-status") && el !== cols);
+  if (note) content.appendChild(note);
+  const chart = content.querySelector(".ai-dash-chart");
   if (chart) chart.style.height = "112px";
 }
 function _aiDashRender(r) {
@@ -2281,7 +2316,7 @@ function _aiDashRender(r) {
   const mx = Math.max(5, ...ser.map((x) => x.n));
   out += card(
     h("📈 최근 14일 Gemini 호출") +
-      `<div style="display:flex; align-items:flex-end; gap:3px; height:72px;">${ser.map((x) => `<div title="${x.day} · ${x.n}회${x.bad ? " · 실패 " + x.bad : ""}" style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:100%;"><div style="height:${((x.bad / mx) * 100).toFixed(1)}%; background:#c0392b; border-radius:2px 2px 0 0;"></div><div style="height:${(((x.n - x.bad) / mx) * 100).toFixed(1)}%; background:#2b6cd4; ${x.bad ? "" : "border-radius:2px 2px 0 0;"}"></div></div>`).join("")}</div>` +
+      `<div class="ai-dash-chart" style="display:flex; align-items:flex-end; gap:3px; height:72px;">${ser.map((x) => `<div title="${x.day} · ${x.n}회${x.bad ? " · 실패 " + x.bad : ""}" style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:100%;"><div style="height:${((x.bad / mx) * 100).toFixed(1)}%; background:#c0392b; border-radius:2px 2px 0 0;"></div><div style="height:${(((x.n - x.bad) / mx) * 100).toFixed(1)}%; background:#2b6cd4; ${x.bad ? "" : "border-radius:2px 2px 0 0;"}"></div></div>`).join("")}</div>` +
       `<div style="display:flex; justify-content:space-between; opacity:.6; font-size:0.78em; margin-top:2px;"><span>${ser.length ? ser[0].day.slice(5) : ""}</span><span>오늘 ${ser.length ? ser[ser.length - 1].n : 0}회</span></div>`,
     "",
     "ai-dash-series",
