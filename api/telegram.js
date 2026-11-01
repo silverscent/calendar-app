@@ -36,6 +36,31 @@ async function sendTgPhoto(chatId, photo, caption = null) {
   }
 }
 
+// 📤 앱에서 올린 OCR 이미지(data URL, fileId 없음)를 텔레그램으로 직접 업로드 — 성공 여부 반환
+// 사진(sendPhoto)은 크기·비율 제한이 있어 실패하면 파일(sendDocument)로 다시 시도
+async function sendTgDataUrl(chatId, dataUrl, caption = null) {
+  try {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+\/=]+)$/.exec(String(dataUrl || ""));
+    if (!m) return false;
+    const buf = Buffer.from(m[2], "base64");
+    if (!buf.length || buf.length > 9.5 * 1024 * 1024) return false; // 텔레그램 사진 업로드 한도(10MB) 안쪽
+    const ext = m[1] === "image/png" ? "png" : m[1] === "image/webp" ? "webp" : "jpg";
+    const send = async (method, field) => {
+      const fd = new FormData();
+      fd.append("chat_id", String(chatId));
+      if (caption) fd.append("caption", caption);
+      fd.append(field, new Blob([buf], { type: m[1] }), `ocr.${ext}`);
+      const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, { method: "POST", body: fd });
+      const rj = await r.json();
+      return rj.ok === true;
+    };
+    return (await send("sendPhoto", "photo")) || (await send("sendDocument", "document"));
+  } catch (e) {
+    console.error("텔레그램 앱 이미지 전송 에러:", e && e.message);
+    return false;
+  }
+}
+
 // 📄 텔레그램 파일(문서) 전송 헬퍼 — 성공 여부 반환
 // 이미지를 파일로 보낸 경우 file_id 타입이 document이므로 sendPhoto가 실패함 → 이 함수로 폴백
 async function sendTgDocument(chatId, document, caption = null) {
@@ -715,6 +740,10 @@ module.exports = async function handler(req, res) {
             if (!ok) {
               await sendTgMsg(chatId, "⚠️ 이미지를 불러올 수 없습니다. 새 이미지를 보내고 /ocr 을 실행하면 정상 표시됩니다.");
             }
+          } else if (imgUrl && /^data:image\//.test(imgUrl)) {
+            // 앱에서 올린 OCR 이미지 — fileId 가 없고 사진 자체가 저장돼 있으므로 그대로 업로드
+            const okApp = await sendTgDataUrl(chatId, imgUrl, "📁 가장 최근에 판독한 원본 이미지입니다. (앱에서 올린 사진)");
+            if (!okApp) await sendTgMsg(chatId, "⚠️ 앱에서 올린 이미지를 텔레그램으로 보내지 못했습니다. 앱의 대조창에서는 정상 표시됩니다.");
           } else if (imgUrl) {
             // fileId 없음(구형 저장 데이터) — 새 /ocr 실행을 안내
             await sendTgMsg(chatId, "⚠️ 이미지 정보가 구형 형식입니다. 새 이미지를 보내고 /ocr 을 실행하면 정상 표시됩니다.");
