@@ -439,7 +439,7 @@ window.addEventListener("DOMContentLoaded", () => {
   } catch (e) {}
 
   const savedTheme = localStorage.getItem("cal_theme") || "light";
-  const themeBtn = document.querySelector(".theme-toggle");
+  const themeBtn = document.getElementById("themeToggleBtn");
   if (savedTheme === "light") {
     document.body.classList.add("light-mode");
     isDarkMode = false;
@@ -5355,7 +5355,7 @@ function closeModalOnBgClick(e) {
 }
 function toggleTheme() {
   const body = document.body;
-  const themeBtn = document.querySelector(".theme-toggle");
+  const themeBtn = document.getElementById("themeToggleBtn");
   if (isDarkMode) {
     body.classList.add("light-mode");
     isDarkMode = false;

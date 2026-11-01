@@ -4767,7 +4767,7 @@ function closeModalOnBgClick(e) {
 
 function toggleTheme() {
   const body = document.body;
-  const themeBtn = document.querySelector(".theme-toggle");
+  const themeBtn = document.getElementById("themeToggleBtn");
   if (isDarkMode) {
     body.classList.add("light-mode");
     isDarkMode = false;
@@ -5900,7 +5900,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const savedTheme = localStorage.getItem("cal_theme") || "light";
   // ... (아래부터는 기존 코드 그대로 유지) ...
-  const themeBtn = document.querySelector(".theme-toggle");
+  const themeBtn = document.getElementById("themeToggleBtn");
   if (savedTheme === "light") {
     document.body.classList.add("light-mode");
     isDarkMode = false;
