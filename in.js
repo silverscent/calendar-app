@@ -2186,7 +2186,7 @@ function _ocrSugBarUpdateInner(bar) {
     (cur && cur.sug ? `<button id="sbApply" style="${btn} background:#2b6cd4; color:#fff;">이 값으로 바꾸기</button>` : "") +
     (canUndo ? `<button id="sbUndo" style="${btn} background:#e8ecf2; color:#334;">되돌리기</button>` : "") +
     (cur && cur.alt ? `<button id="sbAlt" style="${btn} background:#6a4bd8; color:#fff;">🤖 AI 값</button>` : "") +
-    (OCR_AI_REREAD_ON && typeof hasPerm === "function" && hasPerm("ocr_compare") ? `<button id="sbAi" ${_ocrAi.busy ? "disabled" : ""} style="${btn} background:${_ocrAi.busy ? "#b9c0cc" : "#e6e0fa"}; color:#43309a;">${_ocrAi.busy ? `🤖 ${_ocrAi.done}/${_ocrAi.total}` : "🤖"}</button>` : "") +
+    (OCR_AI_REREAD_ON && typeof hasPerm === "function" && hasPerm("ocr_compare") ? `<button id="sbAi" ${_ocrAi.busy ? "disabled" : ""} style="${btn} background:${_ocrAiGauge("#e6e0fa")}; color:${_ocrAi.busy ? "#fff" : "#43309a"};">${_ocrAi.busy ? `🤖 ${_ocrAi.done}/${_ocrAi.total}` : "🤖"}</button>` : "") +
     `<button id="sbNext" style="${btn} background:#dfe6f2; color:#334;">▶</button>`;
   bar.style.display = "flex";
   bar.querySelector("#sbPrev").onclick = () => _ocrGoSuspectCell(-1);
@@ -2230,11 +2230,18 @@ function _ocrGoSuspectCell(dir) {
 //   AI 는 표를 고치지 않고 '이 줄은 이렇게 읽힌다'만 알려줌 → 현재 값과 다르면 제안 버튼으로 나타남 (누르기 전엔 아무것도 안 바뀜)
 // =====================================================
 let _ocrAi = { busy: false, msg: "", done: 0, total: 0, diff: 0 };
+let _ocrAiScope = null; // AI 확인 범위: null(자동) | "sus"(의심 줄) | "one"(지금 보는 줄만) | "all"(전체). 줄 대조 화면의 칩으로 고름
 let _ocrAiImgCache = null; // { src, im } — 교차출처 사진을 서버가 받아 준 복사본
 // AI 에 보낼 줄: 의심(빨강·파랑·주황·제안) 줄 + 밀림 구간 줄. all 이면 모든 줄
+function _ocrAiOneIdx() { // 지금 보고 있는 줄(줄 대조 화면이면 그 줄, 아니면 선택한 칸의 줄). AI 로 읽을 수 있는 줄이 아니면 -1
+  const i = _ocrRv.on ? _ocrRv.idx : _ocrSelectedCell ? _ocrSelectedCell.idx : -1;
+  const r = ocrEditRows[i];
+  return r && !r._fromDb && typeof r.iy === "number" ? i : -1;
+}
 function _ocrAiTargets(all) {
   const set = new Set();
-  if (all) ocrEditRows.forEach((r, i) => { if (r && !r._fromDb && typeof r.iy === "number") set.add(i); });
+  if (all === "one") { const o = _ocrAiOneIdx(); if (o >= 0) set.add(o); }
+  else if (all) ocrEditRows.forEach((r, i) => { if (r && !r._fromDb && typeof r.iy === "number") set.add(i); });
   else {
     _ocrSuspectCells().forEach((c) => { if (c.flag || c.sug) set.add(c.idx); });
     _ocrZone.forEach((i) => set.add(i));
@@ -2326,9 +2333,9 @@ function _ocrAiCountDiff() {
 async function ocrAiReread(all) {
   if (!OCR_AI_REREAD_ON || _ocrAi.busy) return;
   if (typeof hasPerm === "function" && !hasPerm("ocr_compare")) return;
-  const targets = _ocrAiTargets(all).slice(0, all ? 60 : 24);
-  if (!targets.length) { showToast("AI로 다시 읽을 줄이 없어요", 1800); return; }
-  _ocrAi = { busy: true, msg: "", done: 0, total: targets.length, diff: 0 };
+  const targets = _ocrAiTargets(all).slice(0, all === true ? 60 : 24);
+  if (!targets.length) { showToast(all === "one" ? "이 줄은 AI로 읽을 수 없어요 (사진 위치 정보가 없어요)" : "AI로 다시 읽을 줄이 없어요", 2200); return; }
+  _ocrAi = { busy: true, msg: "", done: 0, total: targets.length, diff: 0, one: all === "one" ? targets[0] : -1 };
   _ocrAfterVerify();
   try {
     const im = await _ocrAiImage();
@@ -2356,18 +2363,44 @@ async function ocrAiReread(all) {
   } finally {
     _ocrAi.busy = false;
     _ocrAi.diff = _ocrAiCountDiff();
+    if (!_ocrAi.msg && _ocrAi.one >= 0) {
+      const r1 = ocrEditRows[_ocrAi.one];
+      const d1 = r1 && r1._ai ? OCR_AI_FIELDS.filter((k) => r1._ai[k] != null && _ocrAiNorm(k, r1._ai[k]) !== _ocrAiNorm(k, r1[k])).length : 0;
+      _ocrAi.msg = r1 && r1._ai ? (d1 ? `이 줄은 다르게 읽힌 칸 ${d1}곳` : "이 줄은 AI도 현재 값과 같게 읽었어요 ✅") : "이 줄은 AI가 읽지 못했어요";
+    }
     if (!_ocrAi.msg) _ocrAi.msg = _ocrAi.diff ? `다르게 읽힌 칸 ${_ocrAi.diff}곳` : "AI도 모든 칸을 현재 값과 같게 읽었어요 ✅";
     _ocrAfterVerify();
   }
 }
+// AI 확인 범위 — 칩으로 고른 값이 있으면 그것, 없으면 줄 대조 화면의 [의심 줄만/모든 줄] 상태를 따라감
+function _ocrAiScopeNow() {
+  const nSus = _ocrAiTargets(false).length;
+  const one = _ocrAiOneIdx() >= 0;
+  let sc = _ocrAiScope;
+  if (sc === "sus" && !nSus) sc = null;
+  if (sc === "one" && !one) sc = null;
+  if (!sc) sc = nSus && (!_ocrRv.on || _ocrRv.only) ? "sus" : "all";
+  return sc;
+}
+// 버튼 안에 진행 게이지를 깔기 (바쁠 때만) — 보라 진한 부분이 진행률
+function _ocrAiGauge(idle) {
+  if (!_ocrAi.busy) return idle;
+  const p = _ocrAi.total ? Math.max(6, Math.min(100, Math.round((_ocrAi.done / _ocrAi.total) * 100))) : 6;
+  return `linear-gradient(90deg, #4b2fb8 ${p}%, #9d8be0 ${p}%)`;
+}
 // AI 버튼 글자(요약·제안 바 공용)
 function _ocrAiBtnLabel() {
-  if (_ocrAi.busy) return _ocrAi.done ? `🤖 AI가 읽는 중… ${_ocrAi.done}/${_ocrAi.total}` : `🤖 AI에 보내는 중… (${_ocrAi.total}줄, 6줄씩)`;
-  const n = _ocrAiTargets(false).length;
+  if (_ocrAi.busy) return _ocrAi.done ? `🤖 AI가 읽는 중… ${_ocrAi.done}/${_ocrAi.total}줄` : `🤖 AI에 보내는 중… (${_ocrAi.total}줄, 6줄씩)`;
+  const sc = _ocrAiScopeNow();
   const done = ocrEditRows.some((r) => r && r._ai);
-  const total = _ocrAiTargets(true).length;
-  if (!n) return `🤖 AI로 전체 ${total}줄 확인 (의심은 없어요)`;
+  if (sc === "one") { const o = _ocrAiOneIdx(); const again = ocrEditRows[o] && ocrEditRows[o]._ai; return `🤖 이 줄(${o + 1}번)만 AI로 ${again ? "다시 " : ""}읽기`; }
+  if (sc === "all") return `🤖 AI로 전체 ${_ocrAiTargets(true).length}줄 ${done ? "다시 " : ""}확인${_ocrAiTargets(false).length ? "" : " (의심은 없어요)"}`;
+  const n = _ocrAiTargets(false).length;
   return done ? `🤖 의심 ${n}줄만 AI로 다시 읽기` : `🤖 의심 ${n}줄만 AI로 읽기`;
+}
+function _ocrAiRun() {
+  const sc = _ocrAiScopeNow();
+  return ocrAiReread(sc === "all" ? true : sc === "one" ? "one" : false);
 }
 
 function _ocrAfterVerify() {
@@ -2681,17 +2714,20 @@ function _ocrRvRenderIssues(idx) {
         <span style="flex:1 1 auto; min-width:0;">🎯 확인할 줄 <b>${rows.length}</b>개${tag(cnt.red, "🔴")}${tag(cnt.adv, "🟠")}${tag(cnt.sug, "💡")}${tag(cnt.pend, "🟣")}${orph ? ` · 📌 ${orph}` : ""}${zoneN ? ` · 🧩 밀림 의심 ${zoneN}줄` : ""}</span>
         <button id="rvOnly" style="flex:0 0 auto; border:none; border-radius:6px; padding:5px 9px; font-weight:800; font-size:12px; cursor:pointer; background:${_ocrRv.only ? "#2b6cd4" : "#e8ecf2"}; color:${_ocrRv.only ? "#fff" : "#334"};">${_ocrRv.only ? "의심 줄만" : "모든 줄"}</button></div>`;
       const ob = sm.querySelector("#rvOnly");
-      if (ob) ob.onclick = () => { _ocrRv.only = !_ocrRv.only; _ocrRvRenderIssues(_ocrRv.idx); };
+      if (ob) ob.onclick = () => { _ocrRv.only = !_ocrRv.only; _ocrAiScope = null; _ocrRvRenderIssues(_ocrRv.idx); };
     }
     // 🤖 AI 로 다시 읽기 (눌렀을 때만 호출)
     if (OCR_AI_REREAD_ON && (rows.length || _ocrAi.msg || ocrEditRows.some((r) => r && !r._fromDb)) && typeof hasPerm === "function" && hasPerm("ocr_compare")) {
-      sm.insertAdjacentHTML("beforeend", `<div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
-        <button id="rvAi" ${_ocrAi.busy ? "disabled" : ""} style="flex:1 1 auto; border:none; border-radius:8px; padding:9px 8px; font-weight:800; font-size:13px; background:${_ocrAi.busy ? "#b9c0cc" : "#6a4bd8"}; color:#fff; cursor:pointer;">${_esc(_ocrAiBtnLabel())}</button>
-        ${_ocrAiTargets(false).length ? `<button id="rvAiAll" ${_ocrAi.busy ? "disabled" : ""} title="모든 줄을 AI 로 확인" style="flex:0 0 auto; border:none; border-radius:8px; padding:9px 10px; font-weight:800; font-size:12px; background:#e6e0fa; color:#43309a; cursor:pointer;">전체 ${_ocrAiTargets(true).length}줄</button>` : ""}</div>
+      const sc = _ocrAiScopeNow();
+      const nSus = _ocrAiTargets(false).length, oneI = _ocrAiOneIdx(), nAll = _ocrAiTargets(true).length;
+      const chip = (id, on, off, txt) => `<button data-aisc="${id}" ${off || _ocrAi.busy ? "disabled" : ""} style="flex:1 1 0; min-width:0; border:1px solid ${on ? "#6a4bd8" : "#d6d0f0"}; border-radius:7px; padding:5px 4px; font-weight:800; font-size:12px; background:${on ? "#efeafd" : "#fff"}; color:${off ? "#b3b3bd" : "#43309a"}; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${txt}</button>`;
+      sm.insertAdjacentHTML("beforeend", `<div style="margin-top:6px;">
+        <div id="rvAiScope" style="display:flex; gap:5px; margin-bottom:5px;">${chip("sus", sc === "sus", !nSus, `의심 ${nSus}줄`)}${chip("one", sc === "one", oneI < 0, oneI >= 0 ? `이 줄(${oneI + 1}번)만` : "이 줄만")}${chip("all", sc === "all", !nAll, `전체 ${nAll}줄`)}</div>
+        <button id="rvAi" ${_ocrAi.busy ? "disabled" : ""} style="display:block; width:100%; border:none; border-radius:8px; padding:10px 8px; font-weight:800; font-size:13px; background:${_ocrAiGauge("#6a4bd8")}; color:#fff; cursor:pointer; transition:background .25s;">${_esc(_ocrAiBtnLabel())}</button></div>
         ${_ocrAi.msg ? `<div style="margin-top:4px; font-size:12px; color:#43309a;">${_esc(_ocrAi.msg)}</div>` : ""}`);
-      const b1 = sm.querySelector("#rvAi"), b2 = sm.querySelector("#rvAiAll");
-      if (b1) b1.onclick = () => ocrAiReread(_ocrAiTargets(false).length === 0); // 의심이 없으면 전체 줄을 확인
-      if (b2) b2.onclick = () => ocrAiReread(true);
+      sm.querySelectorAll("[data-aisc]").forEach((b) => { b.onclick = () => { _ocrAiScope = b.getAttribute("data-aisc"); _ocrRvRenderIssues(_ocrRv.idx); }; });
+      const b1 = sm.querySelector("#rvAi");
+      if (b1) b1.onclick = () => _ocrAiRun();
     }
     // 원본에는 있는데 표에 못 들어간 글자
     if (orph) {
@@ -3175,6 +3211,7 @@ function loadOcrSplitData() {
     }
     renderOcrTable();
     _ocrAi = { busy: false, msg: "", done: 0, total: 0, diff: 0 }; // 새 이미지·새 표 → 지난 AI 상태·밀림 구간 초기화
+    _ocrAiScope = null;
     _ocrZone = new Set();
     try { Promise.resolve(verifyOcrRows(null, true, true)).catch(function () {}); } catch (e) { /* 검증 실패해도 표는 그대로 */ }
     if (OCR_AI_AUTO) setTimeout(() => ocrAiReread(false), 400);
@@ -3186,6 +3223,7 @@ function loadOcrSplitData() {
       if (!_ocrRv.on) {
         const sr = _ocrSuspectRows();
         _ocrRv.only = sr.length > 0;
+        _ocrAiScope = null;
         if (sr.length) _k = sr[0]; // 처음 열 땐 첫 의심 줄부터
       }
       _ocrRvOpen(_k);
@@ -6966,8 +7004,37 @@ function _ocrUpResize(file) {
   });
 }
 
-function _ocrUpBusy(on, msg) {
+// 📷 OCR 진행창. 사진 준비·서버 전송은 실제 진행이고, 서버 안의 단계(문자 인식 → AI 정리 → 저장)는 서버가 중간 상황을 알려주지 않아
+//    '보통 걸리는 시간' 기준으로 짐작해서 보여줌(예상). 끝나면 실제 결과로 닫힘.
+const _OCR_UP_STEPS = [
+  { t: 0, label: "사진 보내는 중", note: "압축한 사진을 서버로 올려요" },
+  { t: 3, label: "글자 읽는 중 (Google Vision)", note: "사진 속 글자와 위치를 읽어요" },
+  { t: 12, label: "AI가 표로 정리하는 중 (Gemini)", note: "B/L·팔레트·날짜 등을 칸에 맞춰요" },
+  { t: 32, label: "마무리하는 중", note: "저장하고 대조창을 준비해요 (조금만 더요)" },
+];
+let _ocrUpTimer = null;
+function _ocrUpProgTick(t0) {
+  const el = document.getElementById("ocrUpBusy");
+  if (!el) return;
+  const sec = (Date.now() - t0) / 1000;
+  let k = 0;
+  _OCR_UP_STEPS.forEach((st, i) => { if (sec >= st.t) k = i; });
+  const pct = Math.min(94, Math.round(94 * (1 - Math.exp(-sec / 17)))); // 처음엔 빠르게, 뒤로 갈수록 천천히 94% 까지만 (끝나기 전엔 100% 로 안 감)
+  const bar = el.querySelector("#ocrUpBar");
+  if (bar) bar.style.width = Math.max(3, pct) + "%";
+  const lab = el.querySelector("#ocrUpStep"), note = el.querySelector("#ocrUpNote"), sc = el.querySelector("#ocrUpSec"), pc = el.querySelector("#ocrUpPct");
+  if (lab) lab.textContent = `${k + 1}/${_OCR_UP_STEPS.length} ${_OCR_UP_STEPS[k].label}`;
+  if (note) note.textContent = _OCR_UP_STEPS[k].note;
+  if (sc) sc.textContent = `${Math.floor(sec)}초 경과 · 보통 20~40초`;
+  if (pc) pc.textContent = pct + "%";
+  el.querySelectorAll("[data-upstep]").forEach((d) => {
+    const i = +d.getAttribute("data-upstep");
+    d.style.background = i < k ? "#2f9e5b" : i === k ? "#6a4bd8" : "#c9ccd4";
+  });
+}
+function _ocrUpBusy(on, msg, withProg) {
   let el = document.getElementById("ocrUpBusy");
+  if (_ocrUpTimer) { clearInterval(_ocrUpTimer); _ocrUpTimer = null; }
   if (!on) {
     if (el) el.remove();
     return;
@@ -6978,10 +7045,25 @@ function _ocrUpBusy(on, msg) {
     el.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px";
     document.body.appendChild(el);
   }
-  el.innerHTML = `<div style="background:var(--card-bg,#2a2c30);color:var(--text-main,#f0f0f0);padding:24px 22px;border-radius:16px;text-align:center;max-width:320px;width:100%">
+  if (!withProg) {
+    el.innerHTML = `<div style="background:var(--card-bg,#2a2c30);color:var(--text-main,#f0f0f0);padding:24px 22px;border-radius:16px;text-align:center;max-width:320px;width:100%">
     <div style="font-size:2em">⏳</div>
     <div style="margin-top:10px;font-weight:800">${_esc(msg)}</div>
-    <div style="margin-top:6px;font-size:0.85em;color:var(--text-sub,#a0a0a0)">약 20~40초 걸립니다. 창을 닫지 마세요.</div></div>`;
+    <div style="margin-top:6px;font-size:0.85em;color:var(--text-sub,#a0a0a0)">잠시만 기다려 주세요.</div></div>`;
+    return;
+  }
+  el.innerHTML = `<div style="background:var(--card-bg,#2a2c30);color:var(--text-main,#f0f0f0);padding:22px 20px 18px;border-radius:16px;text-align:center;max-width:340px;width:100%">
+    <div style="font-size:2em">⏳</div>
+    <div style="margin-top:8px;font-weight:800">${_esc(msg)}</div>
+    <div style="margin-top:14px;height:12px;border-radius:6px;background:rgba(127,127,140,.28);overflow:hidden;"><div id="ocrUpBar" style="height:100%;width:3%;border-radius:6px;background:linear-gradient(90deg,#6a4bd8,#2b6cd4);transition:width .35s ease;"></div></div>
+    <div style="margin-top:6px;display:flex;justify-content:space-between;font-size:0.8em;color:var(--text-sub,#a0a0a0);"><span id="ocrUpSec"></span><span id="ocrUpPct" style="font-weight:800;"></span></div>
+    <div style="margin-top:12px;display:flex;justify-content:center;gap:6px;">${_OCR_UP_STEPS.map((_, i) => `<span data-upstep="${i}" style="width:26px;height:5px;border-radius:3px;background:#c9ccd4;"></span>`).join("")}</div>
+    <div id="ocrUpStep" style="margin-top:10px;font-weight:800;font-size:0.95em;"></div>
+    <div id="ocrUpNote" style="margin-top:3px;font-size:0.82em;color:var(--text-sub,#a0a0a0);"></div>
+    <div style="margin-top:10px;font-size:0.75em;color:var(--text-sub,#a0a0a0);opacity:.85;">단계는 보통 걸리는 시간으로 짐작한 표시예요 · 창을 닫지 마세요</div></div>`;
+  const t0 = Date.now();
+  _ocrUpProgTick(t0);
+  _ocrUpTimer = setInterval(() => _ocrUpProgTick(t0), 300);
 }
 
 // 📷 사진을 고른 뒤, OCR 을 시작하기 전에 '이 사진으로 할까요?' 확인창 (핀치로 확대해서 글자가 읽히는지 볼 수 있음)
@@ -7083,7 +7165,7 @@ async function ocrUploadOnFile(inp) {
       const go = await _ocrUpConfirm(b64);
       if (!go) { showToast("취소했어요 — OCR 하지 않았습니다", 1800); return; }
     }
-    _ocrUpBusy(true, "OCR 판독 중...");
+    _ocrUpBusy(true, "OCR 판독 중...", true);
     const token = window._sessionToken || localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 58000); // 서버 한도(60초) 안에서 충분히 기다림 (기본 apiCall 은 15초라 사용 안 함)
