@@ -59,7 +59,6 @@ let isShowHoliday = localStorage.getItem("cal_show_holiday") !== "false";
 
 let activeRequests = 0;
 
-
 function updateFooterUI() {
   const footer = document.getElementById("infoFooter");
   if (footer) {
@@ -1744,6 +1743,8 @@ const OCR_ROWVIEW_ON = true; // 폰 '줄 대조' 화면 (false = 항상 예전 �
 const OCR_PC_SYNC_ON = true; // PC: 표가 이미지와 같이 확대·이동 (false = 예전처럼 따로)
 const OCR_LINEDETECT_ON = true; // PC: 이미지의 가로 눈금선으로 줄 위치를 정확히 (false = 줄 간격 추정만)
 const OCR_TAP_SCALE = 4.5; // 셀 탭 시 이미지 확대 배율(폰·기본)
+const OCR_PHONE_MATCH_ON = true; // 폰 좌우 보기: 이미지 줄 높이와 표 줄 높이가 같아지는 배율로 확대하고, 확대·이동할 때마다 표를 다시 맞춤 (false = 예전 방식)
+const OCR_PHONE_ROW_PX = 26; // 폰 좌우 보기에서 이미지·표의 한 줄 높이(화면 px)
 const OCR_TAP_SCALE_PC = 2.2; // PC: 셀 탭 시 이미지 확대 배율(표도 같이 확대되므로 폰보다 낮게)
 
 function _ocrIsDesktop() {
@@ -1766,6 +1767,18 @@ function _ocrWantRowView() {
   if (p === "row") return true;
   if (p === "split") return false;
   return !_ocrIsDesktop(); // 기본: 폰=줄 대조, PC=좌우
+}
+function _ocrPhoneMatch() {
+  return OCR_PHONE_MATCH_ON && !_ocrIsDesktop() && !_ocrRv.on;
+}
+// 폰: 이미지 한 줄이 OCR_PHONE_ROW_PX 가 되는 배율 (줄 높이를 모르면 기존 배율)
+function _ocrPhoneScale() {
+  const img = document.getElementById("ocrImgElement");
+  if (!img || !img.naturalHeight || !ocrImgFit.h) return OCR_TAP_SCALE;
+  const pos = _ocrRowCenterY(0);
+  const h1 = pos && pos.h ? (pos.h / img.naturalHeight) * ocrImgFit.h : 0; // 배율 1 에서 이미지 한 줄의 화면 높이
+  if (!(h1 > 0.5)) return OCR_TAP_SCALE;
+  return Math.max(1.5, Math.min(6, OCR_PHONE_ROW_PX / h1));
 }
 function _ocrSyncOn() {
   return OCR_PC_SYNC_ON && _ocrIsDesktop() && !_ocrRv.on;
@@ -2133,19 +2146,24 @@ function _ocrSugBarUpdate() {
   const open = pane && pane.style.display !== "none" && !_ocrRv.on;
   const list = open ? _ocrSuspectCells() : [];
   const zoneOn = Array.from(_ocrZone).some((i) => ocrEditRows[i] && !ocrEditRows[i]._fromDb);
-  if (!open || (!list.length && !zoneOn)) { bar.style.display = "none"; bar.innerHTML = ""; return; }
+  const vi = _ocrVerifyInfo;
+  const showClean = open && vi && vi.ran && ocrEditRows.some((r) => r && !r._fromDb);
+  if (!open || (!list.length && !zoneOn && !showClean)) { bar.style.display = "none"; bar.innerHTML = ""; return; }
   const sel = _ocrSelectedCell;
   const cur = sel ? _ocrCellInfo(sel.idx, sel.field) : null;
   const colName = sel ? (OCR_COLS.find((c) => c.key === sel.field) || {}).label || sel.field : "";
-  let mid = `<span style="flex:1 1 auto; min-width:0;">🎯 확인할 칸 <b>${list.length}</b>개${zoneOn ? " · 🧩 밀림 의심 구간 있음" : ""}${_ocrAi.msg ? "<br>" + _esc(_ocrAi.msg) : ""}</span>`;
+  const cleanTxt = !list.length && !zoneOn ? `✅ 검사 ${vi.rows}줄 · 의심되는 곳 없음${vi.geo ? " (글자 위치 대조)" : " (형식 위주)"}` : "";
+  let mid = cleanTxt ? `<span style="flex:1 1 auto; min-width:0;">${cleanTxt}${_ocrAi.msg ? "<br>" + _esc(_ocrAi.msg) : ""}</span>` : `<span style="flex:1 1 auto; min-width:0;">🎯 확인할 칸 <b>${list.length}</b>개${zoneOn ? " · 🧩 밀림 의심 구간 있음" : ""}${_ocrAi.msg ? "<br>" + _esc(_ocrAi.msg) : ""}</span>`;
   if (cur && (cur.flag || cur.sug || cur.pend)) {
     const why = cur.msg || (cur.pend ? "이번 사진에서 바뀐 값" : "");
-    mid = `<span style="flex:1 1 auto; min-width:0; line-height:1.35;"><b>${_esc(colName)}</b> ${_esc(why)}${cur.sug ? ` → 💡 <b>${_esc(String(cur.sug.val))}</b>` : ""}</span>`;
+    mid = `<span style="flex:1 1 auto; min-width:0; line-height:1.35;"><b>${_esc(colName)}</b> ${_esc(why)}${cur.sug ? ` → 💡 <b>${_esc(String(cur.sug.val))}</b>` : ""}${cur.aiSame ? " · 🤖 AI도 같게 읽음" : ""}</span>`;
   }
+  const canUndo = !!(cur && cur.pend && sel && ocrOrigRows[sel.idx]);
   const btn = "flex:0 0 auto; border:none; border-radius:6px; padding:5px 9px; font-weight:800; font-size:12px; cursor:pointer;";
   bar.innerHTML =
     `<button id="sbPrev" style="${btn} background:#dfe6f2; color:#334;">◀</button>${mid}` +
     (cur && cur.sug ? `<button id="sbApply" style="${btn} background:#2b6cd4; color:#fff;">이 값으로 바꾸기</button>` : "") +
+    (canUndo ? `<button id="sbUndo" style="${btn} background:#e8ecf2; color:#334;">되돌리기</button>` : "") +
     (cur && cur.alt ? `<button id="sbAlt" style="${btn} background:#6a4bd8; color:#fff;">🤖 AI 값</button>` : "") +
     (OCR_AI_REREAD_ON && typeof hasPerm === "function" && hasPerm("ocr_compare") ? `<button id="sbAi" ${_ocrAi.busy ? "disabled" : ""} style="${btn} background:${_ocrAi.busy ? "#b9c0cc" : "#e6e0fa"}; color:#43309a;">${_ocrAi.busy ? `🤖 ${_ocrAi.done}/${_ocrAi.total}` : "🤖"}</button>` : "") +
     `<button id="sbNext" style="${btn} background:#dfe6f2; color:#334;">▶</button>`;
@@ -2154,6 +2172,14 @@ function _ocrSugBarUpdate() {
   bar.querySelector("#sbNext").onclick = () => _ocrGoSuspectCell(1);
   const ap = bar.querySelector("#sbApply");
   if (ap) ap.onclick = () => applyOcrSuggestion(sel.idx, sel.field);
+  const un = bar.querySelector("#sbUndo");
+  if (un) un.onclick = () => {
+    const ov = ocrOrigRows[sel.idx] ? ocrOrigRows[sel.idx][sel.field] : "";
+    setOcrCellValue(sel.idx, sel.field, String(ov == null ? "" : ov));
+    _ocrClearFlag(sel.idx, sel.field);
+    if (ocrEditRows[sel.idx]) ocrEditRows[sel.idx][sel.field] = String(ov == null ? "" : ov);
+    _ocrAfterVerify();
+  };
   const al = bar.querySelector("#sbAlt");
   if (al) al.onclick = () => applyOcrSuggestion(sel.idx, sel.field, cur.alt.val);
   const sa = bar.querySelector("#sbAi");
@@ -2309,10 +2335,12 @@ async function ocrAiReread(all) {
 }
 // AI 버튼 글자(요약·제안 바 공용)
 function _ocrAiBtnLabel() {
-  if (_ocrAi.busy) return `🤖 AI가 읽는 중… ${_ocrAi.done}/${_ocrAi.total}`;
+  if (_ocrAi.busy) return _ocrAi.done ? `🤖 AI가 읽는 중… ${_ocrAi.done}/${_ocrAi.total}` : `🤖 AI에 보내는 중… (${_ocrAi.total}줄, 6줄씩)`;
   const n = _ocrAiTargets(false).length;
   const done = ocrEditRows.some((r) => r && r._ai);
-  return done ? "🤖 AI로 다시 읽기(재확인)" : n ? `🤖 의심 ${n}줄 AI로 읽기` : "🤖 의심은 없지만 AI로 한 번 더 확인";
+  const total = _ocrAiTargets(true).length;
+  if (!n) return `🤖 AI로 전체 ${total}줄 확인 (의심은 없어요)`;
+  return done ? `🤖 의심 ${n}줄만 AI로 다시 읽기` : `🤖 의심 ${n}줄만 AI로 읽기`;
 }
 
 function _ocrAfterVerify() {
@@ -2334,20 +2362,13 @@ function _ocrRvEnsure() {
       <button id="rvPrev" style="${btn} background:#e8ecf2; color:#334;">◀</button>
       <div id="rvTitle" style="flex:1 1 auto; text-align:center; font-weight:800; font-size:14px; line-height:1.25;"></div>
       <button id="rvNext" style="${btn} background:#2b6cd4; color:#fff;">▶</button>
-      <button id="rvZoom" style="${btn} background:#e8ecf2; color:#334; padding:8px 9px; font-size:12px;">🔍×1</button>
     </div>
     <div id="rvBody" style="flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:8px 6px 14px;">
       <div id="rvSummary" style="margin-bottom:8px;"></div>
-      <div id="rvScroll" style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
-        <div id="rvInner" style="width:100%; position:relative;">
-          <div style="font-size:11px; font-weight:800; color:#2b6cd4; padding:0 2px 3px;">① 원본 이미지 (이 줄 + 위아래)</div>
-          <canvas id="rvStrip" style="display:block; width:100%; box-sizing:border-box; background:#fff; border:1px solid #b9c0cc; border-radius:4px;"></canvas>
-          <div style="font-size:11px; font-weight:800; color:#555; padding:7px 2px 3px;">② 앱에 저장된 값 — 칸을 누르면 그 자리에서 수정</div>
-          <table id="rvTable" style="width:100%; table-layout:fixed; border-collapse:collapse; background:#fff;"></table>
-        </div>
+      <div id="rvIssues" style="margin-top:6px;"></div>
+      <div id="rvInner" style="width:100%; position:relative; margin-top:2px;">
+        <div id="rvBlocks"></div>
       </div>
-      <div id="rvEtc" style="margin-top:8px;"></div>
-      <div id="rvIssues" style="margin-top:8px;"></div>
       <details id="rvListWrap" style="margin-top:12px;">
         <summary style="cursor:pointer; font-size:12px; font-weight:800; color:#556; padding:4px 2px;">전체 줄 보기</summary>
         <div id="rvList" style="margin-top:6px; border:1px solid #dfe3ea; border-radius:6px; background:#fff; overflow:hidden;"></div>
@@ -2356,19 +2377,7 @@ function _ocrRvEnsure() {
   wrap.appendChild(rv);
   rv.querySelector("#rvPrev").onclick = () => _ocrRvStep(-1);
   rv.querySelector("#rvNext").onclick = () => _ocrRvStep(1);
-  rv.querySelector("#rvZoom").onclick = () => {
-    _ocrRv.zoom = (_ocrRv.zoom + 1) % OCR_RV_ZOOMS.length;
-    _ocrRvApplyZoom();
-    _ocrRvDrawStrip();
-  };
   return rv;
-}
-function _ocrRvApplyZoom() {
-  const z = OCR_RV_ZOOMS[_ocrRv.zoom] || 1;
-  const inner = document.getElementById("rvInner");
-  const b = document.getElementById("rvZoom");
-  if (inner) inner.style.width = z * 100 + "%";
-  if (b) b.textContent = "🔍×" + (z === 1 ? "1" : z);
 }
 
 // 한 줄을 바꿀 때 표(열 폭)·제목·목록을 새로 만들고, 같은 줄 안에서는 칸 내용만 제자리 갱신
@@ -2437,6 +2446,13 @@ function _ocrRvPaintCell(td, idx, field) {
   td.style.background = look.bg;
   td.style.boxShadow = look.shadow;
   td.style.fontWeight = look.pend ? "800" : "600";
+  // 글자가 칸을 넘으면 칸에 들어올 때까지 글자 크기를 줄임(최소 9px)
+  const base = parseFloat(td.getAttribute("data-fs"));
+  if (base && td.clientWidth > 0) {
+    let f = base;
+    td.style.fontSize = f + "px";
+    while (td.scrollWidth > td.clientWidth + 1 && f > 9) { f -= 0.5; td.style.fontSize = f + "px"; }
+  }
 }
 function _ocrRvRowSummary(i) {
   const r = ocrEditRows[i] || {};
@@ -2467,80 +2483,106 @@ function _ocrRvBuildList() {
   list.innerHTML = h;
   list.querySelectorAll("[data-rvi]").forEach((el) => { el.onclick = () => _ocrRvGo(parseInt(el.getAttribute("data-rvi"))); });
 }
-function _ocrRvBuildTable() {
-  const tb = document.getElementById("rvTable");
-  if (!tb) return;
-  const g = _ocrRvGeometry();
-  _ocrRv.geo = g;
-  let widths;
-  if (g) {
-    const tot = g.right - g.left;
-    widths = [];
-    for (let i = 0; i < 7; i++) widths.push(((g.edges[i + 1] - g.edges[i]) / tot) * 100);
-  } else widths = OCR_RV_KEYS.map(() => 100 / 7);
-  const labels = OCR_RV_KEYS.map((k) => (OCR_COLS.find((c) => c.key === k) || {}).label || k);
-  let h = "<colgroup>" + widths.map((w) => `<col style="width:${w.toFixed(2)}%">`).join("") + "</colgroup><thead><tr>";
-  labels.forEach((l) => { h += `<th style="border:1px solid #b9c0cc; background:#e8eef7; font-size:10px; padding:3px 0; font-weight:800; color:#445; overflow:hidden; white-space:nowrap;">${_esc(l)}</th>`; });
-  h += "</tr></thead><tbody><tr>";
-  OCR_RV_KEYS.forEach((k) => {
-    h += `<td data-idx="${_ocrRv.idx}" data-field="${k}" style="border:1px solid #9aa3b2; text-align:center; font-size:${k === "eta" || k === "inDate" ? 11.5 : 13}px; letter-spacing:${k === "eta" || k === "inDate" ? "-0.4px" : "0"}; height:44px; padding:0 1px; overflow:hidden; text-overflow:clip; white-space:nowrap; cursor:pointer; position:relative;"></td>`;
+// 한 줄을 '칸 묶음'(폭이 좁은 폰에서도 글자가 커 보이도록 2~3칸씩) + 비고로 나눠 각각 [원본 조각 + 앱 값 표]로 만든다
+const OCR_RV_MIN_SCALE = 0.55; // 원본 조각이 화면에서 이 배율(이미지 1px = 화면 0.55px) 아래로 작아지지 않게 묶음 폭을 제한
+function _ocrRvGroups(cssW) {
+  const g = _ocrRv.geo;
+  if (!g) return [{ keys: OCR_RV_KEYS.slice(), x0: null, x1: null, w: OCR_RV_KEYS.map(() => 1) }];
+  const wmax = cssW / OCR_RV_MIN_SCALE;
+  const groups = [];
+  let cur = null;
+  OCR_RV_KEYS.forEach((k, i) => {
+    const w = g.edges[i + 1] - g.edges[i];
+    if (!cur || cur.x1 - cur.x0 + w > wmax) { cur = { keys: [], x0: g.edges[i], x1: g.edges[i], w: [] }; groups.push(cur); }
+    cur.keys.push(k); cur.w.push(w); cur.x1 = g.edges[i + 1];
   });
-  h += "</tr></tbody>";
-  tb.innerHTML = h;
-  tb.querySelectorAll("td").forEach((td) => { td.onclick = () => _ocrRvTap(td); });
-  // 비고
-  const etc = document.getElementById("rvEtc");
-  if (etc) {
-    etc.innerHTML = `<div style="font-size:11px; font-weight:800; color:#555; padding:0 2px 3px;">비고</div><div id="rvEtcCell" data-idx="${_ocrRv.idx}" data-field="etc" style="border:1px solid #9aa3b2; background:#fff; min-height:38px; padding:9px 8px; font-size:13px; font-weight:600; position:relative; cursor:pointer; word-break:break-all;"></div>`;
-    const ec = etc.querySelector("#rvEtcCell");
-    ec.onclick = () => _ocrRvTap(ec);
-  }
+  return groups;
+}
+function _ocrRvBuildTable() {
+  const host = document.getElementById("rvBlocks");
+  const inner = document.getElementById("rvInner");
+  if (!host) return;
+  _ocrRv.geo = _ocrRvGeometry();
+  const cssW = Math.max((inner && inner.clientWidth) || 0, 60);
+  const groups = _ocrRvGroups(cssW);
+  _ocrRv.groups = groups;
+  const label = (k) => (OCR_COLS.find((c) => c.key === k) || {}).label || k;
+  const fs = (k) => (k === "eta" || k === "inDate" ? 14 : 15);
+  let h = "";
+  groups.forEach((gr, gi) => {
+    const tot = gr.w.reduce((a, b) => a + b, 0);
+    h += `<div class="rvBlk" style="margin-top:${gi ? 10 : 0}px;">
+      <div style="font-size:10.5px; font-weight:800; color:#2b6cd4; padding:0 2px 2px;">원본 · ${gr.keys.map(label).join(" · ")}</div>
+      <canvas class="rvStrip" data-x0="${gr.x0 == null ? "" : gr.x0}" data-x1="${gr.x1 == null ? "" : gr.x1}" style="display:block; width:100%; box-sizing:border-box; background:#fff; border:1px solid #b9c0cc; border-radius:4px;"></canvas>
+      <table class="rvTbl" style="width:100%; table-layout:fixed; border-collapse:collapse; background:#fff; margin-top:3px;"><colgroup>${gr.keys.map((k, i) => `<col style="width:${((gr.w[i] / tot) * 100).toFixed(2)}%">`).join("")}</colgroup>
+        <thead><tr>${gr.keys.map((k) => `<th style="border:1px solid #b9c0cc; background:#e8eef7; font-size:10px; padding:2px 0; font-weight:800; color:#445; overflow:hidden; white-space:nowrap;">${_esc(label(k))}</th>`).join("")}</tr></thead>
+        <tbody><tr>${gr.keys.map((k) => `<td data-idx="${_ocrRv.idx}" data-field="${k}" data-fs="${fs(k)}" style="border:1px solid #9aa3b2; text-align:center; font-size:${fs(k)}px; height:42px; padding:0 1px; overflow:hidden; text-overflow:clip; white-space:nowrap; cursor:pointer; position:relative;"></td>`).join("")}</tr></tbody></table>
+      <div class="rvChips" data-keys="${gr.keys.join(",")}"></div></div>`;
+  });
+  // 비고: 원본 조각(이미지의 마지막 칸 오른쪽 끝까지) + 앱 값(전체 폭, 길면 줄바꿈)
+  const gEdge = _ocrRv.geo ? _ocrRv.geo.right : null;
+  h += `<div class="rvBlk" style="margin-top:10px;">
+      <div style="font-size:10.5px; font-weight:800; color:#2b6cd4; padding:0 2px 2px;">원본 · 비고</div>
+      <canvas class="rvStrip" data-etc="1" data-x0="${gEdge == null ? "" : gEdge}" data-x1="" style="display:none; width:100%; box-sizing:border-box; background:#fff; border:1px solid #b9c0cc; border-radius:4px;"></canvas>
+      <div id="rvEtcCell" data-idx="${_ocrRv.idx}" data-field="etc" style="border:1px solid #9aa3b2; background:#fff; min-height:40px; padding:9px 8px; font-size:14px; font-weight:600; position:relative; cursor:pointer; word-break:break-all; margin-top:3px; white-space:normal; line-height:1.35;"></div>
+      <div class="rvChips" data-keys="etc"></div></div>`;
+  host.innerHTML = h;
+  host.querySelectorAll("td[data-field]").forEach((td) => { td.onclick = () => _ocrRvTap(td); });
+  const ec = host.querySelector("#rvEtcCell");
+  if (ec) ec.onclick = () => _ocrRvTap(ec);
 }
 
 function _ocrRvDrawStrip() {
-  const cv = document.getElementById("rvStrip");
   const img = document.getElementById("ocrImgElement");
   const inner = document.getElementById("rvInner");
-  if (!cv || !inner) return;
+  const cvs = Array.from(document.querySelectorAll("#rvBlocks canvas.rvStrip"));
+  if (!cvs.length || !inner) return;
   const cssW = Math.max(inner.clientWidth, 60);
-  const ctx = cv.getContext("2d");
   const idx = _ocrRv.idx;
   const pos = _ocrRowCenterY(idx);
-  const g = _ocrRv.geo;
-  const note = (msg) => {
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const note = (cv, msg) => {
+    cv.style.display = "block";
     cv.width = cssW * 2; cv.height = 60 * 2; cv.style.height = "60px";
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
-    ctx.fillStyle = "#889"; ctx.font = "26px sans-serif"; ctx.textAlign = "center"; ctx.fillText(msg, cv.width / 2, 72);
+    const c = cv.getContext("2d");
+    c.fillStyle = "#fff"; c.fillRect(0, 0, cv.width, cv.height);
+    c.fillStyle = "#889"; c.font = "26px sans-serif"; c.textAlign = "center"; c.fillText(msg, cv.width / 2, 72);
   };
-  if (!img || !img.naturalWidth || !img.complete) return note("이미지를 불러오는 중…");
-  if (!pos || ocrEditRows[idx]._fromDb) return note("이 줄은 원본 이미지에 위치 정보가 없어요 (직접 추가한 줄)");
+  if (!img || !img.naturalWidth || !img.complete) return cvs.forEach((cv) => note(cv, "이미지를 불러오는 중…"));
+  if (!pos || ocrEditRows[idx]._fromDb) return cvs.forEach((cv, k) => { if (!cv.getAttribute("data-etc") && k === 0) note(cv, "이 줄은 원본 이미지에 위치 정보가 없어요 (직접 추가한 줄)"); else cv.style.display = "none"; });
   const nw = img.naturalWidth, nh = img.naturalHeight;
-  const sx = g ? g.left : 0, sw = g ? g.right - g.left : nw;
   const pitch = Math.max(pos.h, 10);
-  const above = 1.5, below = 1.5;
-  let sy = pos.y - pitch * above, sh = pitch * (above + below);
+  // 줄 위치를 눈금선으로 정확히 알면 그 줄 하나만(위아래는 얇은 띠), 추정이라 덜 정확하면 위아래 줄까지 보여 줌
+  const single = pos.src === "line";
+  const pad = single ? 0.58 : 1.5;
+  let sy = pos.y - pitch * pad, sh = pitch * pad * 2;
   if (sy < 0) { sh += sy; sy = 0; }
   if (sy + sh > nh) sh = nh - sy;
-  const cs = Math.max(sx, 0), cw = Math.min(sw, nw - cs);
-  if (!(sh > 2 && cw > 2)) return note("이미지 범위를 벗어난 줄이에요");
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
-  const scale = (cssW * dpr) / cw;
-  cv.width = Math.round(cw * scale);
-  cv.height = Math.round(sh * scale);
-  cv.style.height = (cv.height / dpr).toFixed(1) + "px";
-  ctx.imageSmoothingQuality = "high";
-  try { ctx.drawImage(img, cs, sy, cw, sh, 0, 0, cv.width, cv.height); } catch (e) { return note("이미지를 그릴 수 없어요"); }
-  // 선택 줄 표시(가운데)
-  const y0 = (pos.y - pitch / 2 - sy) * scale, hh = pitch * scale;
-  ctx.fillStyle = "rgba(255,196,0,0.13)";
-  ctx.fillRect(0, y0, cv.width, hh);
-  ctx.strokeStyle = "#f5a623"; ctx.lineWidth = Math.max(2, dpr * 1.2);
-  ctx.strokeRect(1, y0, cv.width - 2, hh);
-  // 열 구분(표와 맞추는 눈금) — 위쪽에 짧게
-  if (g) {
-    ctx.strokeStyle = "rgba(43,108,212,0.55)"; ctx.lineWidth = Math.max(1, dpr * 0.8);
-    g.edges.forEach((e) => { const x = (e - cs) * scale; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 10 * dpr); ctx.stroke(); });
-  }
+  const hasEtc = !!(currentOcrGeo && currentOcrGeo.hasEtc) || ocrEditRows.some((r) => r && String(r.etc || "").trim());
+  cvs.forEach((cv) => {
+    const isEtc = !!cv.getAttribute("data-etc");
+    if (isEtc && !hasEtc) { cv.style.display = "none"; return; }
+    const a = parseFloat(cv.getAttribute("data-x0")), b = parseFloat(cv.getAttribute("data-x1"));
+    const cs = isFinite(a) ? Math.max(a, 0) : 0;
+    const ce = isFinite(b) ? Math.min(b, nw) : nw;
+    const cw = ce - cs;
+    if (!(sh > 2 && cw > 2)) { if (isEtc) cv.style.display = "none"; else note(cv, "이미지 범위를 벗어난 줄이에요"); return; }
+    cv.style.display = "block";
+    const scale = (cssW * dpr) / cw;
+    cv.width = Math.round(cw * scale);
+    cv.height = Math.round(sh * scale);
+    cv.style.height = (cv.height / dpr).toFixed(1) + "px";
+    const ctx = cv.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    try { ctx.drawImage(img, cs, sy, cw, sh, 0, 0, cv.width, cv.height); } catch (e) { note(cv, "이미지를 그릴 수 없어요"); return; }
+    if (single) {
+      ctx.fillStyle = "#f5a623"; ctx.fillRect(0, 0, Math.max(3, dpr * 2), cv.height); // 이 줄 표시(왼쪽 주황 막대)
+    } else {
+      const y0 = (pos.y - pitch / 2 - sy) * scale, hh = pitch * scale;
+      ctx.fillStyle = "rgba(255,196,0,0.13)"; ctx.fillRect(0, y0, cv.width, hh);
+      ctx.strokeStyle = "#f5a623"; ctx.lineWidth = Math.max(2, dpr * 1.2); ctx.strokeRect(1, y0, cv.width - 2, hh);
+    }
+  });
 }
 
 // 줄 대조 화면의 요약(확인할 줄 N개)·이 줄의 사유/제안 버튼·원본에만 있는 글자 카드
@@ -2575,7 +2617,7 @@ function _ocrRvRenderIssues(idx) {
     if (OCR_AI_REREAD_ON && (rows.length || _ocrAi.msg || ocrEditRows.some((r) => r && !r._fromDb)) && typeof hasPerm === "function" && hasPerm("ocr_compare")) {
       sm.insertAdjacentHTML("beforeend", `<div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
         <button id="rvAi" ${_ocrAi.busy ? "disabled" : ""} style="flex:1 1 auto; border:none; border-radius:8px; padding:9px 8px; font-weight:800; font-size:13px; background:${_ocrAi.busy ? "#b9c0cc" : "#6a4bd8"}; color:#fff; cursor:pointer;">${_esc(_ocrAiBtnLabel())}</button>
-        <button id="rvAiAll" ${_ocrAi.busy ? "disabled" : ""} title="모든 줄을 AI 로 확인" style="flex:0 0 auto; border:none; border-radius:8px; padding:9px 10px; font-weight:800; font-size:12px; background:#e6e0fa; color:#43309a; cursor:pointer;">전체 줄</button></div>
+        ${_ocrAiTargets(false).length ? `<button id="rvAiAll" ${_ocrAi.busy ? "disabled" : ""} title="모든 줄을 AI 로 확인" style="flex:0 0 auto; border:none; border-radius:8px; padding:9px 10px; font-weight:800; font-size:12px; background:#e6e0fa; color:#43309a; cursor:pointer;">전체 ${_ocrAiTargets(true).length}줄</button>` : ""}</div>
         ${_ocrAi.msg ? `<div style="margin-top:4px; font-size:12px; color:#43309a;">${_esc(_ocrAi.msg)}</div>` : ""}`);
       const b1 = sm.querySelector("#rvAi"), b2 = sm.querySelector("#rvAiAll");
       if (b1) b1.onclick = () => ocrAiReread(_ocrAiTargets(false).length === 0); // 의심이 없으면 전체 줄을 확인
@@ -2603,30 +2645,42 @@ function _ocrRvRenderIssues(idx) {
   }
   const iss = document.getElementById("rvIssues");
   if (!iss) return;
-  let h = "";
   const row = ocrEditRows[idx] || {};
-  if (_ocrZone.has(idx) && !OCR_COLS.some((c) => { const i = _ocrCellInfo(idx, c.key); return i.flag || i.sug; })) {
-    h += `<div style="font-size:12px; padding:7px 9px; margin-top:5px; border-radius:6px; background:#efe8ff; color:#333;">🧩 이 줄 근처에서 표가 밀린 흔적이 있어요 — 원본과 직접 맞는지 보거나 AI로 읽어 보세요</div>`;
-  }
-  OCR_COLS.forEach((c) => {
-    const info = _ocrCellInfo(idx, c.key);
+  // 칸 하나의 사유 + 💡 제안 + (AI 값) + (기존 값으로 되돌리기) — 그 칸이 있는 묶음 바로 아래에 붙음
+  const chipOf = (key) => {
+    const c = OCR_COLS.find((x) => x.key === key);
+    if (!c) return "";
+    const info = _ocrCellInfo(idx, key);
     if (!info.flag) { // 데이터에 없으면 숨은 표에 칠해진 색(예전 방식)에서 읽음
-      const lk = _ocrRvCellLook(idx, c.key);
+      const lk = _ocrRvCellLook(idx, key);
       if (lk.flag && lk.flag !== "edit") { info.flag = lk.flag; info.msg = info.msg || lk.title; }
     }
-    if (!info.flag && !info.sug && !info.pend) return;
+    if (!info.flag && !info.sug && !info.pend) return "";
     const bg = info.flag === "red" ? "#ffd1d1" : info.flag === "blue" ? "#cfe3ff" : info.flag === "adv" ? "#ffe0b3" : info.pend ? "#ece0f5" : "#eef4ff";
     const why = (info.msg || (info.pend ? "이번 사진에서 바뀐 값" : "")) + (info.aiSame ? " · 🤖 AI는 현재 값과 같게 읽음" : "");
-    h += `<div style="font-size:12px; padding:7px 9px; margin-top:5px; border-radius:6px; background:${bg}; color:#333;"><div><b>${_esc(c.label)}</b> ${why ? "· " + _esc(why) : ""}</div>`;
-    if (info.sug) h += `<button data-sug="${c.key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:9px 8px; font-weight:800; font-size:13px; background:#2b6cd4; color:#fff; cursor:pointer;">💡 '${_esc(String(info.sug.val))}' 로 바꾸기</button>`;
-    if (info.alt) h += `<button data-sug2="${c.key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:8px; font-weight:800; font-size:13px; background:#6a4bd8; color:#fff; cursor:pointer;">🤖 AI가 읽은 '${_esc(String(info.alt.val))}' 로 바꾸기</button>`;
-    if (info.pend && ocrOrigRows[idx]) h += `<button data-undo="${c.key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:8px; font-weight:700; font-size:12px; background:#e8ecf2; color:#334; cursor:pointer;">기존 값 '${_esc(String(ocrOrigRows[idx][c.key] == null ? "" : ocrOrigRows[idx][c.key]))}' 으로 되돌리기</button>`;
-    h += `</div>`;
-  });
-  iss.innerHTML = h;
-  iss.querySelectorAll("[data-sug]").forEach((b) => { b.onclick = () => applyOcrSuggestion(idx, b.getAttribute("data-sug")); });
-  iss.querySelectorAll("[data-sug2]").forEach((b) => { b.onclick = () => { const f = b.getAttribute("data-sug2"); const a = _ocrCellInfo(idx, f).alt; if (a) applyOcrSuggestion(idx, f, a.val); }; });
-  iss.querySelectorAll("[data-undo]").forEach((b) => {
+    let h = `<div style="font-size:12px; padding:7px 9px; margin-top:5px; border-radius:7px; background:${bg}; color:#333;"><div><b>${_esc(c.label)}</b> ${why ? "· " + _esc(why) : ""}</div>`;
+    if (info.sug) h += `<button data-sug="${key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:9px 8px; font-weight:800; font-size:13px; background:#2b6cd4; color:#fff; cursor:pointer;">💡 '${_esc(String(info.sug.val))}' 로 바꾸기</button>`;
+    if (info.alt) h += `<button data-sug2="${key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:8px; font-weight:800; font-size:13px; background:#6a4bd8; color:#fff; cursor:pointer;">🤖 AI가 읽은 '${_esc(String(info.alt.val))}' 로 바꾸기</button>`;
+    if (info.pend && ocrOrigRows[idx]) h += `<button data-undo="${key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:8px; font-weight:700; font-size:12px; background:#e8ecf2; color:#334; cursor:pointer;">기존 값 '${_esc(String(ocrOrigRows[idx][key] == null ? "" : ocrOrigRows[idx][key]))}' 으로 되돌리기</button>`;
+    return h + `</div>`;
+  };
+  let zone = "";
+  if (_ocrZone.has(idx) && !OCR_COLS.some((c) => { const i = _ocrCellInfo(idx, c.key); return i.flag || i.sug; })) {
+    zone = `<div style="font-size:12px; padding:7px 9px; margin-top:5px; border-radius:6px; background:#efe8ff; color:#333;">🧩 이 줄 근처에서 표가 밀린 흔적이 있어요 — 원본과 직접 맞는지 보거나 AI로 읽어 보세요</div>`;
+  }
+  const holders = Array.from(document.querySelectorAll("#rvBlocks .rvChips"));
+  let rest = "";
+  if (holders.length) {
+    holders.forEach((hd) => { hd.innerHTML = (hd.getAttribute("data-keys") || "").split(",").map(chipOf).join(""); });
+    iss.innerHTML = zone;
+  } else { // 묶음 자리가 없으면(옛 화면) 한 곳에 모아서
+    OCR_COLS.forEach((c) => { rest += chipOf(c.key); });
+    iss.innerHTML = zone + rest;
+  }
+  const scope = document.getElementById("ocrRowView") || document;
+  scope.querySelectorAll("[data-sug]").forEach((b) => { b.onclick = () => applyOcrSuggestion(idx, b.getAttribute("data-sug")); });
+  scope.querySelectorAll("[data-sug2]").forEach((b) => { b.onclick = () => { const f = b.getAttribute("data-sug2"); const a = _ocrCellInfo(idx, f).alt; if (a) applyOcrSuggestion(idx, f, a.val); }; });
+  scope.querySelectorAll("[data-undo]").forEach((b) => {
     b.onclick = () => {
       const f = b.getAttribute("data-undo");
       const ov = ocrOrigRows[idx] ? ocrOrigRows[idx][f] : "";
@@ -2651,7 +2705,7 @@ function _ocrRowViewSync(idx, field, force) {
     _ocrRvBuildTable();
     _ocrRv.built = idx;
   }
-  rv.querySelectorAll("#rvTable td").forEach((td) => {
+  rv.querySelectorAll("#rvBlocks td[data-field]").forEach((td) => {
     td.setAttribute("data-idx", idx);
     _ocrRvPaintCell(td, idx, td.getAttribute("data-field"));
   });
@@ -2723,7 +2777,6 @@ function _ocrRvOpen(startIdx) {
   if (!_ocrSelectedCell && ocrEditRows.length) _ocrRv.field = _ocrRv.field || "bl";
   rv.style.display = "flex";
   _ocrSyncClear();
-  _ocrRvApplyZoom();
   const hint = document.getElementById("ocrHint");
   if (hint) hint.innerHTML = "◀ ▶ 로 줄 이동 · <b style='color:#4a90e2;'>칸을 누르면 그 자리에서 수정</b> · 🔍로 가로 확대";
   _ocrInstallViewBtn();
@@ -2747,7 +2800,7 @@ function _ocrRvOpen(startIdx) {
       if (!inner || inner.clientWidth === lastW) return;
       lastW = inner.clientWidth;
       if (t2) clearTimeout(t2);
-      t2 = setTimeout(() => { if (_ocrRv.on) _ocrRvDrawStrip(); }, 80);
+      t2 = setTimeout(() => { if (_ocrRv.on) { _ocrRv.built = -1; _ocrRowViewSync(_ocrRv.idx, _ocrRv.field, true); } }, 80); // 폭이 바뀌면(회전 등) 칸 묶음부터 다시
     });
     const inner = document.getElementById("rvInner");
     if (inner) _ocrRv.ro.observe(inner);
@@ -3073,7 +3126,7 @@ function loadOcrSplitData() {
         if (sr.length) _k = sr[0]; // 처음 열 땐 첫 의심 줄부터
       }
       _ocrRvOpen(_k);
-    } else if (_doAlign) requestAnimationFrame(alignOcrTableToImage);
+    } else if (_doAlign) requestAnimationFrame(() => { if (!(_ocrPhoneMatch() && locateOcrImage(0, "bl"))) alignOcrTableToImage(); }); // 폰: 첫 줄 크기로 확대한 뒤 표를 맞춤
     // 이미지 눈금선 검출(비동기) — 끝나면 줄 위치를 눈금선 기준으로 다시 맞춤/그림. 실패하면 아무 일 없음(예전 방식)
     ensureOcrLines().then(function (m) {
       if (!m) return;
@@ -3109,7 +3162,7 @@ function renderOcrTable() {
   });
   html += `</tbody></table>`;
   inner.innerHTML = html;
-  if (_ocrTblAlign && (ocrTransform.scale === 1 || _ocrSyncOn())) alignOcrTableToImage(); // 줄을 추가·수정해 다시 그려도 이미지와 맞춘 상태 유지
+  if (_ocrTblAlign && (ocrTransform.scale === 1 || _ocrSyncOn() || _ocrPhoneMatch())) alignOcrTableToImage(); // 줄을 추가·수정해 다시 그려도 이미지와 맞춘 상태 유지
   // PC 키보드(엑셀형 이동/편집/복사) 핸들러 1회 바인딩
   if (!_ocrKbBound) {
     document.addEventListener("keydown", _onOcrKeydown);
@@ -3228,7 +3281,7 @@ function locateOcrImage(idx, field) {
   const pane = document.getElementById("ocrPaneImg");
   if (!img || !pane || !r || typeof r.iy !== "number" || !img.naturalHeight || !ocrImgFit.w) return false;
   const f = Math.max(0, Math.min(r.iy / img.naturalHeight, 1)); // 이미지 세로 비율(0~1)
-  const targetScale = _ocrSyncOn() ? OCR_TAP_SCALE_PC : OCR_TAP_SCALE;
+  const targetScale = _ocrSyncOn() ? OCR_TAP_SCALE_PC : _ocrPhoneMatch() ? _ocrPhoneScale() : OCR_TAP_SCALE;
   ocrTransform.scale = targetScale;
   const dispH = ocrImgFit.h * targetScale;
   const dispW = ocrImgFit.w * targetScale;
@@ -3261,6 +3314,7 @@ function locateOcrImage(idx, field) {
   _ocrBakeTimer = setTimeout(() => {
     img.style.transition = "none";
     bakeOcr();
+    if (_ocrPhoneMatch() && !_ocrTblAlign) alignOcrTableToImage(); // 폰: 처음 한 번은 여기서 표를 맞춤(그 뒤는 bakeOcr 가 매번)
   }, 320);
   return true;
 }
@@ -4201,6 +4255,7 @@ function alignOcrTableToImage() {
   const trs = Array.from(table.querySelectorAll("tbody tr"));
   trs.forEach((tr) => { tr.style.height = ""; Array.from(tr.children).forEach((td) => (td.style.padding = "")); }); // 이전 맞춤 제거 후 다시 계산
   table.style.marginTop = "";
+  table.style.transform = "";
   tpane.scrollTop = 0;
   // 이미지 위 각 줄의 세로 위치 — 왼쪽 노란 밴드(positionOcrHilite)와 같은 계산식(화면에 그려지는 중인 값이 아니라 현재 상태값으로 계산)
   const _sc = _ref ? 1 : ocrTransform.scale, _ty = _ref ? 0 : ocrTransform.y;
@@ -4256,7 +4311,12 @@ function alignOcrTableToImage() {
     if (hh.length) pitch = hh[Math.floor(hh.length / 2)];
   }
   const pitchAt = () => pitch;
-  const nat = natH; // 손대지 않은 한 줄 높이
+  const _pm = _ocrPhoneMatch(); // 폰: 이미지 줄 높이가 넉넉하면 표 글자도 키워서 같은 크기로 보이게
+  let nat = natH; // 손대지 않은 한 줄 높이
+  if (_pm) {
+    table.style.fontSize = Math.max(12, Math.min(16, pitch * 0.55)) + "px";
+    nat = trs[pts[0].i].getBoundingClientRect().height;
+  }
   const tight = pitch < nat; // 이미지 줄 간격이 표 기본 줄 높이보다 좁으면 칸 여백을 줄여서 맞춤
   // 줄 높이를 tr 높이만이 아니라 칸의 줄 높이(line-height)로도 고정 — 브라우저가 tr 높이를 무시해도 줄 높이가 정해진 대로 나오게
   const setH = (i, h) => {
@@ -4270,7 +4330,14 @@ function alignOcrTableToImage() {
   const tTop = () => tpane.getBoundingClientRect().top;
   const have = trs[idxs[0]].getBoundingClientRect().top - tTop(); // 표 첫 줄의 윗선(여백 0일 때)
   const off = want - have;
-  if (off >= 0) table.style.marginTop = off + "px";
+  // 표 위치: 아래로 내릴 땐 위 여백(marginTop), 위로 올릴 땐(폰: 확대한 이미지의 첫 줄이 화면 밖) 눈에 보이는 이동(translateY)으로 — 스크롤 한도에 걸리지 않게
+  const setTop = (v) => {
+    if (_pm && v < 0) { table.style.marginTop = "0px"; table.style.transform = `translateY(${v}px)`; }
+    else { table.style.marginTop = Math.max(v, 0) + "px"; table.style.transform = ""; }
+  };
+  let curTop = off;
+  if (_pm) setTop(off);
+  else if (off >= 0) table.style.marginTop = off + "px";
   else tpane.scrollTop = -off; // 이미지 첫 줄이 맨 위에 가까우면 표를 살짝 올려서 맞춤
   // 실제로 그려진 줄 중심을 재서 이미지 줄 중심(Y)과 어긋난 만큼 줄 높이를 보정(최대 3번) — 브라우저마다 테두리·반올림이 달라도 맞도록
   let worst = 0;
@@ -4286,7 +4353,8 @@ function alignOcrTableToImage() {
       setH(idxs[k], hs[k]);
     }
     const f0 = trs[idxs[0]].getBoundingClientRect().top - tTop() + tpane.scrollTop, mt = parseFloat(table.style.marginTop) || 0;
-    table.style.marginTop = Math.max(mt + (want - f0), 0) + "px";
+    if (_pm) { curTop = curTop + (want - f0); setTop(curTop); }
+    else table.style.marginTop = Math.max(mt + (want - f0), 0) + "px";
   }
   // 맞춤 결과를 안내 줄에 작게 표시(어긋나면 이 숫자를 알려주면 원인을 바로 찾을 수 있음)
   const hint = document.getElementById("ocrHint");
@@ -4469,6 +4537,7 @@ function bakeOcr() {
     img.style.transform = `translate3d(${ocrTransform.x}px, ${ocrTransform.y}px, 0) scale(1)`;
   }
   positionOcrHilite();
+  if (_ocrPhoneMatch() && _ocrTblAlign) alignOcrTableToImage(); // 폰: 확대·이동이 끝날 때마다 표를 이미지 줄에 다시 맞춤
 }
 
 // 제스처 끝나면 살짝 뒤에 굽기 (휠 연속 입력 대비 디바운스)
