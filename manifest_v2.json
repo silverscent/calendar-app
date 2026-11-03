@@ -3,7 +3,7 @@
   "name": "물류 출고 캘린더 V2",
   "short_name": "출고 캘린더 V2",
   "start_url": "/index.html",
-  "scope": "/",
+  "scope": "/index.html",
   "display": "standalone",
   "background_color": "#f4f6f9",
   "theme_color": "#ffffff",
