@@ -2766,6 +2766,7 @@ if (action === "VERIFY_SESSION") {
                 // 🔁 이번 사진에서 새로 읽힌 값(OCR) ≠ 현재 DB 이고, DB 가 OCR 시점(_base) 이후 안 고쳐졌다면 → '반영 제안'(_pend)
                 //    사람이 OCR 이후 고친 값(DB ≠ _base)은 그대로 DB 값 유지. OCR 이 날짜를 못 읽은 경우(미정/비정상)는 제안하지 않음.
                 let pend = null;
+                let conf = null; // 달력에 진짜 B/L 이 있는데 사진 B/L 이 다른 경우 — 사진 값을 채우고, 달력 값을 conf.bl 로 알려 표시
                 if (pendOk && r._base && typeof r._base === "object") {
                   for (const f of _OCR_PEND_FIELDS) {
                     if (Array.isArray(r._ack) && r._ack.includes(f)) continue; // 사용자가 이미 거절·수정한 칸은 다시 제안하지 않음
@@ -2774,9 +2775,9 @@ if (action === "VERIFY_SESSION") {
                     if (!ov) continue;
                     const cur = cmp(_ocrDbVal(d, f));
                     if (ov === cur) continue;
-                    if (f === "bl" && !_ocrBlOpen(_ocrDbVal(d, f))) continue; // 달력에 진짜 B/L 이 이미 있으면 제안하지 않음
                     // 'OCR 시점 값(_base)'이 없는 칸(B/L·비고를 기록하기 전에 올린 사진)은 그 뒤 안 고쳐졌다고 보고 비교를 건너뜀
                     if (Object.prototype.hasOwnProperty.call(r._base, f) && cmp(r._base[f]) !== cur) continue;
+                    if (f === "bl" && !_ocrBlOpen(_ocrDbVal(d, f))) conf = { bl: String(_ocrDbVal(d, f)).trim() }; // 달력에 진짜 B/L 이 이미 있는데 사진 값이 다름 → 사진 값을 채우되(아래 pend) 달력 값을 함께 알려 '확인 필요' 표시
                     (pend = pend || {})[f] = f === "pal" ? String(parseInt(r[f], 10)) : (f === "eta" || f === "inDate" || f === "bl") ? ov : String(r[f]).trim();
                   }
                 }
@@ -2791,6 +2792,7 @@ if (action === "VERIFY_SESSION") {
                   sType: d.s_type || "",
                   invoice: d.invoice || "",
                   etc: d.remarks || "",
+                  _conf: conf, // {bl: 달력 B/L} — 표에는 사진 B/L 이 채워져 있고, 달력 값과 다름(확인 필요 표시)
                   _pend: pend, // {필드: OCR 새 값} — 클라가 표에 미리 채우고 보라색으로 표시(확정해야 DB 반영)
                 });
               }
