@@ -2762,7 +2762,7 @@ if (action === "VERIFY_SESSION") {
                   merged.push(r); // 달력에 없으면(삭제 등) OCR 스냅샷 유지
                   continue;
                 }
-                if (d.status === "완료") { doneRows.push({ bl: d.bl_number || r.bl || "", invoice: d.invoice || r.invoice || "", eta: d.eta || r.eta || "", inDate: d.receive_date || r.inDate || "" }); continue; } // 입고 완료 → 대조창에서 제외(그 줄의 값은 '표에 없는 글자' 알림에서 빼도록 목록으로 알려 줌)
+                if (d.status === "완료") { doneRows.push({ bl: d.bl_number || r.bl || "", invoice: d.invoice || r.invoice || "", eta: d.eta || r.eta || "", inDate: d.receive_date || r.inDate || "", ocrEta: r.eta || "", ocrIn: r.inDate || "" }); continue; } // 입고 완료 → 대조창에서 제외(그 줄의 값은 '표에 없는 글자' 알림에서 빼도록 목록으로 알려 줌)
                 // 🔁 이번 사진에서 새로 읽힌 값(OCR) ≠ 현재 DB 이고, DB 가 OCR 시점(_base) 이후 안 고쳐졌다면 → '반영 제안'(_pend)
                 //    사람이 OCR 이후 고친 값(DB ≠ _base)은 그대로 DB 값 유지. OCR 이 날짜를 못 읽은 경우(미정/비정상)는 제안하지 않음.
                 let pend = null;

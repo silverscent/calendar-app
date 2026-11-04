@@ -2556,7 +2556,7 @@ function _ocrRvRowSummary(i) {
     const l = _ocrRvCellLook(i, c.key);
     if (l.flag === "red" || l.flag === "blue") flags.red = true;
     if (l.flag === "adv") flags.adv = true;
-    if (l.flag === "edit") flags.edit = true;
+    if (l.flag === "edit" && !l.pend) flags.edit = true; // 사진에서 바뀐 칸은 '내가 고친 곳'이 아님
     if (l.pend) flags.pend = true;
   });
   return { r, flags };
@@ -2566,12 +2566,13 @@ function _ocrRvBuildList() {
   if (!list) return;
   const seen = _ocrRv.seen || new Set();
   const total = ocrEditRows.length;
-  let nSeen = 0, nSus = 0, nEdit = 0;
+  let nSeen = 0, nSus = 0, nEdit = 0, nPend = 0;
   let h = "";
   ocrEditRows.forEach((r, i) => {
     const { flags } = _ocrRvRowSummary(i);
     const dots = (flags.red ? "🔴" : "") + (flags.adv ? "🟠" : "") + (flags.pend ? "🟣" : "") + (flags.edit ? "🟡" : "");
-    const sus = flags.red || flags.adv || flags.pend;
+    const sus = flags.red || flags.adv; // 보라색(사진에서 바뀐 값)은 의심이 아님 — 따로 센다
+    if (flags.pend) nPend++;
     const isSeen = seen.has(i) || i === _ocrRv.idx;
     if (isSeen) nSeen++;
     if (sus) nSus++;
@@ -2583,24 +2584,26 @@ function _ocrRvBuildList() {
   list.innerHTML = h;
   list.querySelectorAll("[data-rvi]").forEach((el) => { el.onclick = () => _ocrRvGo(parseInt(el.getAttribute("data-rvi"))); });
   const head = document.getElementById("rvOvHead");
-  if (head) head.innerHTML = `📋 한눈에 보기 · 확인한 줄 <span style="color:#1d6b3a;">${nSeen}/${total}</span>${nSus ? ` · 의심 <span style="color:#c0392b;">${nSus}</span>` : ""}${nEdit ? ` · 고친 줄 <span style="color:#a67c00;">${nEdit}</span>` : ""}<div style="font-weight:600; font-size:11px; color:#889; margin-top:2px;">번호를 누르면 그 줄로 이동 · 초록=확인함 · 회색=아직 안 봄</div>`;
+  if (head) head.innerHTML = `📋 한눈에 보기 · 확인한 줄 <span style="color:#1d6b3a;">${nSeen}/${total}</span>${nSus ? ` · 의심 <span style="color:#c0392b;">${nSus}</span>` : ""}${nPend ? ` · 사진에서 바뀐 줄 <span style="color:#8e44ad;">${nPend}</span>` : ""}${nEdit ? ` · 고친 줄 <span style="color:#a67c00;">${nEdit}</span>` : ""}<div style="font-weight:600; font-size:11px; color:#889; margin-top:2px;">번호를 누르면 그 줄로 이동 · 초록=확인함 · 회색=아직 안 봄</div>`;
   // 내가 고친 곳 (확정 전에 한 번에 훑어보기)
   const ed = document.getElementById("rvEdits");
   if (ed) {
-    const items = [];
+    const items = [], pitems = [];
     ocrEditRows.forEach((r, i) => {
       const o = ocrOrigRows[i];
       if (!o || r._fromDb) return;
       OCR_COLS.forEach((c) => {
-        if (_ocrPendRaw(r, c.key) && !_ocrShowChanges) return; // 사진에서 바뀐 값은 숨김 상태에선 '고친 곳'에 넣지 않음
+        const isP = _ocrPendRaw(r, c.key);
+        if (isP && !_ocrShowChanges) return; // 사진에서 바뀐 값은 숨김 상태에선 목록에 넣지 않음
         const a = String(o[c.key] == null ? "" : o[c.key]), b = String(r[c.key] == null ? "" : r[c.key]);
-        if (a !== b) items.push({ i, label: c.label, a, b });
+        if (a !== b) (isP ? pitems : items).push({ i, label: c.label, a, b });
       });
     });
-    ed.innerHTML = items.length
-      ? `<div style="font-size:12px; font-weight:800; color:#a67c00; margin-bottom:3px;">✏️ 고친 곳 ${items.length}곳 <span style="font-weight:600; color:#889;">(확정을 눌러야 DB에 반영)</span></div>` +
-        items.slice(0, 15).map((x) => `<div data-edit-go="${x.i}" style="padding:5px 4px; border-top:1px solid #f0f1f4; font-size:12px; cursor:pointer;"><b>${x.i + 1}줄</b> ${_esc(x.label)} · <span style="color:#889; text-decoration:line-through;">${_esc(x.a || "(빈칸)")}</span> → <b>${_esc(x.b || "(빈칸)")}</b></div>`).join("") + (items.length > 15 ? `<div style="font-size:11px; color:#889; padding:4px;">… 외 ${items.length - 15}곳</div>` : "")
-      : `<div style="font-size:11px; color:#889;">아직 고친 곳이 없어요</div>`;
+    const _lst = (arr) => arr.slice(0, 15).map((x) => `<div data-edit-go="${x.i}" style="padding:5px 4px; border-top:1px solid #f0f1f4; font-size:12px; cursor:pointer;"><b>${x.i + 1}줄</b> ${_esc(x.label)} · <span style="color:#889; text-decoration:line-through;">${_esc(x.a || "(빈칸)")}</span> → <b>${_esc(x.b || "(빈칸)")}</b></div>`).join("") + (arr.length > 15 ? `<div style="font-size:11px; color:#889; padding:4px;">… 외 ${arr.length - 15}곳</div>` : "");
+    ed.innerHTML = (items.length
+      ? `<div style="font-size:12px; font-weight:800; color:#a67c00; margin-bottom:3px;">✏️ 내가 고친 곳 ${items.length}곳 <span style="font-weight:600; color:#889;">(확정을 눌러야 DB에 반영)</span></div>` + _lst(items)
+      : `<div style="font-size:11px; color:#889;">아직 내가 고친 곳이 없어요</div>`) +
+      (pitems.length ? `<div style="font-size:12px; font-weight:800; color:#8e44ad; margin:8px 0 3px;">🟣 사진에서 바뀐 곳 ${pitems.length}곳 <span style="font-weight:600; color:#889;">(달력 값 → 사진 값, 확정하면 반영)</span></div>` + _lst(pitems) : "");
     ed.querySelectorAll("[data-edit-go]").forEach((el) => { el.onclick = () => _ocrRvGo(parseInt(el.getAttribute("data-edit-go"))); });
   }
 }
@@ -2804,7 +2807,7 @@ function _ocrRvRenderIssues(idx) {
     if (info.sug) h += `<button data-sug="${key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:9px 8px; font-weight:800; font-size:13px; background:#2b6cd4; color:#fff; cursor:pointer;">💡 '${_esc(String(info.sug.val))}' 로 바꾸기</button>`;
     if (info.alt) h += `<button data-sug2="${key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:8px; font-weight:800; font-size:13px; background:#6a4bd8; color:#fff; cursor:pointer;">🤖 AI가 읽은 '${_esc(String(info.alt.val))}' 로 바꾸기</button>`;
     if (info.conf) h += `<button data-keepconf="${key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:8px; font-weight:700; font-size:12px; background:#e8ecf2; color:#334; cursor:pointer;">사진 값 '${_esc(String(ocrEditRows[idx] ? ocrEditRows[idx][key] : ""))}' 맞음 (표시 끄기)</button>`;
-    if (info.pend && ocrOrigRows[idx]) h += `<button data-undo="${key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:8px; font-weight:700; font-size:12px; background:#e8ecf2; color:#334; cursor:pointer;">기존 값 '${_esc(String(ocrOrigRows[idx][key] == null ? "" : ocrOrigRows[idx][key]))}' 으로 되돌리기</button>`;
+    if (info.pend && ocrOrigRows[idx]) h += `<button data-undo="${key}" style="margin-top:6px; width:100%; border:none; border-radius:6px; padding:8px; font-weight:700; font-size:12px; background:#e8ecf2; color:#334; cursor:pointer;">기존 값 ${_esc(String(ocrOrigRows[idx][key] == null ? "" : ocrOrigRows[idx][key]) === "" ? "(빈칸)" : "'" + String(ocrOrigRows[idx][key]) + "'")} 으로 되돌리기</button>`;
     return h + `</div>`;
   };
   let zone = "";
@@ -4377,6 +4380,7 @@ async function verifyOcrRows(_btn, _skipFixPrompt, _auto) {
   (_ocrDoneRows || []).forEach((d) => {
     [d.bl, d.invoice].forEach((v) => { const t = String(v || "").replace(/[\s•·\-*]/g, "").toUpperCase(); if (t) _doneTxt.add(t); });
     ["eta", "inDate"].forEach((f) => { const x = _sugDate(d[f]); if (x) _rowDates.add(x); });
+    [d.ocrEta, d.ocrIn].forEach((v) => { const x = _sugDate(v); if (x) _rowDates.add(x); }); // 사진에 찍힌 완료 줄의 날짜(완료 후 달력 날짜가 바뀌었어도)
   });
   const orphans = { bl: [], inv: [], date: [] };
   _rawTokArr.forEach((t) => {
