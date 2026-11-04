@@ -2047,6 +2047,7 @@ function _ocrChangesBtnHtml() {
 function _ocrToggleChanges() {
   _ocrShowChanges = !_ocrShowChanges;
   try { renderOcrTable(); } catch (e) {}
+  try { _ocrSugBarUpdate(); } catch (e) {}
   try { verifyOcrRows(null, true, true); } catch (e) {} // 안내줄·제안 바·줄 대조를 새 기준으로 다시 그림(안내창 없이)
 }
 let _ocrVerifyInfo = { ran: false, rows: 0, geo: false, geoMatched: 0, why: "" }; // 마지막 검사가 실제로 돌았는지·무엇과 대조했는지 (화면에 '검사함'을 보여주려는 용도)
@@ -2190,12 +2191,14 @@ function _ocrSugBarUpdateInner(bar) {
   const zoneOn = Array.from(_ocrZone).some((i) => ocrEditRows[i] && !ocrEditRows[i]._fromDb);
   const vi = _ocrVerifyInfo;
   const showClean = open && vi && vi.ran && ocrEditRows.some((r) => r && !r._fromDb);
-  if (!open || (!list.length && !zoneOn && !showClean)) { bar.style.display = "none"; bar.innerHTML = ""; return; }
+  const pendN = open ? _ocrPendCount() : 0; // 사진에서 바뀐 값(보라색) 칸 수 — 보기 토글을 좌우 보기에도 둠
+  if (!open || (!list.length && !zoneOn && !showClean && !pendN)) { bar.style.display = "none"; bar.innerHTML = ""; return; }
   const sel = _ocrSelectedCell;
   const cur = sel ? _ocrCellInfo(sel.idx, sel.field) : null;
   const colName = sel ? (OCR_COLS.find((c) => c.key === sel.field) || {}).label || sel.field : "";
-  const cleanTxt = !list.length && !zoneOn ? `✅ 검사 ${vi.rows}줄 · 의심되는 곳 없음${vi.geo ? " (글자 위치 대조)" : " (형식 위주)"} · ◀▶ 줄 이동` : "";
+  const cleanTxt = !list.length && !zoneOn && showClean ? `✅ 검사 ${vi.rows}줄 · 의심되는 곳 없음${vi.geo ? " (글자 위치 대조)" : " (형식 위주)"} · ◀▶ 줄 이동` : "";
   let mid = cleanTxt ? `<span style="flex:1 1 auto; min-width:0;">${cleanTxt}${_ocrAi.msg ? "<br>" + _esc(_ocrAi.msg) : ""}</span>` : `<span style="flex:1 1 auto; min-width:0;">🎯 확인할 칸 <b>${list.length}</b>개${zoneOn ? " · 🧩 밀림 의심 구간 있음" : ""}${_ocrAi.msg ? "<br>" + _esc(_ocrAi.msg) : ""}</span>`;
+  if (!cleanTxt && !list.length && !zoneOn) mid = `<span style="flex:1 1 auto; min-width:0;">🟣 사진에서 바뀐 값 ${pendN}칸 · ◀▶ 줄 이동</span>`;
   if (cur && (cur.flag || cur.sug || cur.pend)) {
     const why = cur.msg || (cur.pend ? "이번 사진에서 바뀐 값" : "");
     mid = `<span style="flex:1 1 auto; min-width:0; line-height:1.35;"><b>${_esc(colName)}</b> ${_esc(why)}${cur.sug ? ` → 💡 <b>${_esc(String(cur.sug.val))}</b>` : ""}${cur.aiSame ? " · 🤖 AI도 같게 읽음" : ""}</span>`;
@@ -2209,8 +2212,11 @@ function _ocrSugBarUpdateInner(bar) {
     (cur && cur.conf ? `<button id="sbKeep" style="${btn} background:#e8ecf2; color:#334;">사진 값 맞음</button>` : "") +
     (cur && cur.alt ? `<button id="sbAlt" style="${btn} background:#6a4bd8; color:#fff;">🤖 AI 값</button>` : "") +
     (OCR_AI_REREAD_ON && typeof hasPerm === "function" && hasPerm("ocr_compare") ? `<button id="sbAi" ${_ocrAi.busy ? "disabled" : ""} style="${btn} background:${_ocrAiGauge("#e6e0fa")}; color:${_ocrAi.busy ? "#fff" : "#43309a"};">${_ocrAi.busy ? `🤖 ${_ocrAi.done}/${_ocrAi.total}` : "🤖"}</button>` : "") +
+    (pendN ? `<button id="sbChg" title="사진에서 바뀐 값(달력 값과 달라진 칸) 보라색으로 보기" style="${btn} background:${_ocrShowChanges ? "#8e44ad" : "#f4eefb"}; color:${_ocrShowChanges ? "#fff" : "#6c3483"};">🟣 ${pendN}${_ocrShowChanges ? " 숨김" : " 보기"}</button>` : "") +
     `<button id="sbNext" style="${btn} background:#dfe6f2; color:#334;">▶</button>`;
   bar.style.display = "flex";
+  const cg = bar.querySelector("#sbChg");
+  if (cg) cg.onclick = () => _ocrToggleChanges();
   bar.querySelector("#sbPrev").onclick = () => _ocrGoSuspectCell(-1);
   bar.querySelector("#sbNext").onclick = () => _ocrGoSuspectCell(1);
   if (!list.length) { // 의심 칸이 없으면 ◀▶ 는 이전/다음 줄로 이동 (같은 열)
