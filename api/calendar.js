@@ -46,8 +46,14 @@ const _ocrCmpField = {
   pal: (v) => { const n = parseInt(String(v == null ? "" : v).replace(/\D/g, ""), 10); return n > 0 ? String(n) : ""; },
   fwd: (v) => String(v == null ? "" : v).replace(/\s+/g, "").toUpperCase(),
   sType: (v) => String(v == null ? "" : v).replace(/\s+/g, "").toUpperCase(),
+  // B/L: 진짜 B/L(영문+숫자) 모양만 제안 대상 — '발행전'·깨진 글자는 빈 값 취급(제안 안 함)
+  bl: (v) => { const t = String(v == null ? "" : v).replace(/[\s•·\-*]/g, "").toUpperCase(); return /^[A-Z]{1,8}\d{5,12}$/.test(t) ? t : ""; },
+  // 비고: 공백 차이·시스템이 붙인 [AI자동수정] 같은 꼬리표는 무시하고 비교
+  etc: (v) => String(v == null ? "" : v).replace(/\[(AI자동수정|수동완료|일괄완료|완료유지|입고일자동수정|출고완료)\]/g, "").replace(/\s+/g, ""),
 };
-const _OCR_PEND_FIELDS = ["pal", "eta", "inDate", "fwd", "sType"]; // 새 OCR 값을 '반영 제안'으로 보여 줄 칸 (B/L·인보이스·비고는 제외)
+// B/L 은 달력 값이 비어 있거나 '발행전'일 때만 새 B/L 을 제안 (이미 진짜 B/L 이 있으면 사진을 잘못 읽은 것일 수 있어 건드리지 않음)
+const _ocrBlOpen = (v) => { const t = String(v == null ? "" : v).replace(/[\s•·\-*]/g, ""); return t === "" || t === "발행전"; };
+const _OCR_PEND_FIELDS = ["pal", "eta", "inDate", "fwd", "sType", "bl", "etc"]; // 새 OCR 값을 '반영 제안'으로 보여 줄 칸 (인보이스는 줄을 찾는 열쇠라 제외 · B/L 은 달력이 비었거나 '발행전'일 때만)
 // 🧾 OCR 건 상태 — ocr_store.LAST_OCR_STATE = { id, source:"app"|"telegram", at:"11월1일 15:52", status:"pending"|"applied"|"canceled", by, endedAt }
 //    · 앱에서 올린 OCR 은 pending(대조창에서 [확정]/[취소] 로 마무리) · 텔레그램 /ocr 은 읽는 즉시 DB 반영이라 applied 로 기록
 //    · 상태 기록이 없는 예전 OCR(null)은 '끝난 건'으로 취급 → '사진에서 바뀐 값' 제안(_pend)을 만들지 않음
@@ -103,7 +109,7 @@ async function ocrBackupRestore(pool) {
 async function ocrSetDiscard(pool) {
   await pool.query("DELETE FROM ocr_store WHERE store_key IN (?)", [OCR_SET_KEYS]);
 }
-const _ocrDbVal = (d, f) => (f === "pal" ? d.pallets : f === "inDate" ? d.receive_date : f === "eta" ? d.eta : f === "sType" ? d.s_type : d[f]);
+const _ocrDbVal = (d, f) => (f === "pal" ? d.pallets : f === "inDate" ? d.receive_date : f === "eta" ? d.eta : f === "sType" ? d.s_type : f === "bl" ? d.bl_number : f === "etc" ? d.remarks : d[f]);
 
 // 📲 달력 변경 텔레그램 알림
 // 1:1 DM 전송: ADMIN_TELEGRAM_USER_ID = 봇과 1:1 대화 chat_id (사용자 개인 ID)
@@ -2721,6 +2727,7 @@ if (action === "VERIFY_SESSION") {
           const ocrState0 = await ocrStateGet(pool);
           const pendOk = !!(ocrState0 && ocrState0.status === "pending");
           const ocrState = ocrState0 ? { ...ocrState0, hasPrev: pendOk ? await ocrBackupHas(pool) : false } : null; // hasPrev: 취소하면 되돌아갈 '이전 확정 이미지'가 있는지 // 확정 대기 중인 OCR 건에서만 '반영 제안'을 만듦
+          const doneRows = []; // 이미 '완료'라서 대조표에서 뺀 줄의 값 (대조창이 '원본에는 있는데 표에 없는 글자' 에서 제외하는 데 씀)
           if (Array.isArray(parsedData) && parsedData.length > 0) {
             try {
               const cleanBL = (v) => String(v || "").replace(/[\s•·\-\*]/g, "");
@@ -2755,7 +2762,7 @@ if (action === "VERIFY_SESSION") {
                   merged.push(r); // 달력에 없으면(삭제 등) OCR 스냅샷 유지
                   continue;
                 }
-                if (d.status === "완료") continue; // 입고 완료 → 대조창에서 제외
+                if (d.status === "완료") { doneRows.push({ bl: d.bl_number || r.bl || "", invoice: d.invoice || r.invoice || "", eta: d.eta || r.eta || "", inDate: d.receive_date || r.inDate || "" }); continue; } // 입고 완료 → 대조창에서 제외(그 줄의 값은 '표에 없는 글자' 알림에서 빼도록 목록으로 알려 줌)
                 // 🔁 이번 사진에서 새로 읽힌 값(OCR) ≠ 현재 DB 이고, DB 가 OCR 시점(_base) 이후 안 고쳐졌다면 → '반영 제안'(_pend)
                 //    사람이 OCR 이후 고친 값(DB ≠ _base)은 그대로 DB 값 유지. OCR 이 날짜를 못 읽은 경우(미정/비정상)는 제안하지 않음.
                 let pend = null;
@@ -2767,8 +2774,10 @@ if (action === "VERIFY_SESSION") {
                     if (!ov) continue;
                     const cur = cmp(_ocrDbVal(d, f));
                     if (ov === cur) continue;
-                    if (cmp(r._base[f]) !== cur) continue;
-                    (pend = pend || {})[f] = f === "pal" ? String(parseInt(r[f], 10)) : (f === "eta" || f === "inDate") ? ov : String(r[f]).trim();
+                    if (f === "bl" && !_ocrBlOpen(_ocrDbVal(d, f))) continue; // 달력에 진짜 B/L 이 이미 있으면 제안하지 않음
+                    // 'OCR 시점 값(_base)'이 없는 칸(B/L·비고를 기록하기 전에 올린 사진)은 그 뒤 안 고쳐졌다고 보고 비교를 건너뜀
+                    if (Object.prototype.hasOwnProperty.call(r._base, f) && cmp(r._base[f]) !== cur) continue;
+                    (pend = pend || {})[f] = f === "pal" ? String(parseInt(r[f], 10)) : (f === "eta" || f === "inDate" || f === "bl") ? ov : String(r[f]).trim();
                   }
                 }
                 merged.push({
@@ -2856,6 +2865,7 @@ if (action === "VERIFY_SESSION") {
             rawData: rawDataStr, // 완벽히 복원된 순수 원본 텍스트
             geo, // 좌표 독립 판독 결과 (rows[{y,bl,pal,eta,inDate,fwd,sType,invoice,etc}], pitch…)
             ocrState, // 이 OCR 건의 상태(대기/확정/취소) — null 이면 상태 기록이 없는 예전 건
+            doneRows, // 완료 처리돼 표에서 빠진 줄들의 {bl, invoice, eta, inDate}
           });
         } catch (err) {
           console.error("OCR 데이터 조회 에러:", err);

@@ -2032,6 +2032,7 @@ function _ocrRvGeometry() {
 // 💡 의심 칸 · 제안값 (검증이 행에 남긴 _vf/_vmsg/_sug 를 읽어 쓰는 공통 도구)
 // =====================================================
 let _ocrOrphans = { bl: [], inv: [], date: [] };
+let _ocrDoneRows = []; // 서버가 알려 준 '완료 처리돼 표에서 뺀 줄' {bl, invoice, eta, inDate}
 let _ocrVerifyInfo = { ran: false, rows: 0, geo: false, geoMatched: 0, why: "" }; // 마지막 검사가 실제로 돌았는지·무엇과 대조했는지 (화면에 '검사함'을 보여주려는 용도)
 let _ocrZone = new Set(); // 표가 밀렸을 가능성이 있는 줄(밀림 증거가 있는 줄 + 앞뒤 한 줄) — AI 다시 읽기 대상에 같이 넣음
 // ── 🤖 AI 다시 읽기 결과(r._ai)를 제안에 합치는 도구
@@ -3283,6 +3284,7 @@ function loadOcrSplitData() {
     currentRawOcrString = (data && data.rawData) || "가져온 Raw 데이터가 존재하지 않습니다.";
     _ocrState = data && data.ocrState && data.ocrState.status ? data.ocrState : null; // 이 OCR 건의 상태(예전 건이면 null)
     currentOcrGeo = data && data.geo && Array.isArray(data.geo.rows) && data.geo.rows.length ? data.geo : null;
+    _ocrDoneRows = data && Array.isArray(data.doneRows) ? data.doneRows : []; // 이미 완료 처리돼 표에서 빠진 줄 — '표에 없는 글자' 알림에서 제외
 
     const parsed = data && Array.isArray(data.parsedData) ? data.parsedData : [];
     ocrEditRows = parsed.map((r) => ({
@@ -3308,7 +3310,7 @@ function loadOcrSplitData() {
       if (!pd || !ocrEditRows[i]) return;
       const fs = [];
       Object.keys(pd).forEach((f) => {
-        if (["pal", "eta", "inDate", "fwd", "sType"].indexOf(f) < 0) return;
+        if (["pal", "eta", "inDate", "fwd", "sType", "bl", "etc"].indexOf(f) < 0) return;
         ocrEditRows[i][f] = String(pd[f]);
         fs.push(f);
       });
@@ -4330,10 +4332,16 @@ async function verifyOcrRows(_btn, _skipFixPrompt, _auto) {
   const _allRowText = ocrEditRows.map((r) => [r.bl, r.invoice, r.etc, r.eta, r.inDate].join(" ").toUpperCase()).join(" | ");
   const _rowDates = new Set();
   ocrEditRows.forEach((r) => ["eta", "inDate"].forEach((f) => { const d = _sugDate(r[f]); if (d) _rowDates.add(d); }));
+  // 완료 처리돼 표에서 빠진 줄의 B/L·인보이스·날짜는 '표에 없는 글자'가 아님 (이미 처리된 건)
+  const _doneTxt = new Set();
+  (_ocrDoneRows || []).forEach((d) => {
+    [d.bl, d.invoice].forEach((v) => { const t = String(v || "").replace(/[\s•·\-*]/g, "").toUpperCase(); if (t) _doneTxt.add(t); });
+    ["eta", "inDate"].forEach((f) => { const x = _sugDate(d[f]); if (x) _rowDates.add(x); });
+  });
   const orphans = { bl: [], inv: [], date: [] };
   _rawTokArr.forEach((t) => {
-    if ((/^[A-Z]{1,5}\d{5,9}$/.test(t) || /^[A-Z]{4,8}\d{6,12}$/.test(t)) && !_usedBl.has(t) && !_allRowText.includes(t) && orphans.bl.indexOf(t) < 0) orphans.bl.push(t);
-    else if (/^\d{7,8}$/.test(t) && !_usedInv.has(t) && !_allRowText.includes(t) && orphans.inv.indexOf(t) < 0) orphans.inv.push(t);
+    if ((/^[A-Z]{1,5}\d{5,9}$/.test(t) || /^[A-Z]{4,8}\d{6,12}$/.test(t)) && !_usedBl.has(t) && !_allRowText.includes(t) && !_doneTxt.has(t) && orphans.bl.indexOf(t) < 0) orphans.bl.push(t);
+    else if (/^\d{7,8}$/.test(t) && !_usedInv.has(t) && !_allRowText.includes(t) && !_doneTxt.has(t) && orphans.inv.indexOf(t) < 0) orphans.inv.push(t);
   });
   (currentRawOcrString.match(/\d{4}-\d{1,2}-\d{1,2}/g) || []).forEach((d0) => {
     if (!isReasonableDate(d0)) return;
@@ -4467,9 +4475,10 @@ function alignOcrTableToImage() {
   _ocrSyncClear(); // PC: 이전 확대 변환을 풀고 배율 1 기준으로 맞춘 뒤 다시 입힘
   const _ref = _ocrSyncOn(); // PC 같이 확대: 맞춤은 항상 배율 1(이동 0) 기준
   const trs = Array.from(table.querySelectorAll("tbody tr"));
-  trs.forEach((tr) => { tr.style.height = ""; Array.from(tr.children).forEach((td) => (td.style.padding = "")); }); // 이전 맞춤 제거 후 다시 계산
+  trs.forEach((tr) => { tr.style.height = ""; Array.from(tr.children).forEach((td) => { td.style.padding = ""; if (_ref) td.style.lineHeight = ""; }); }); // 이전 맞춤 제거 후 다시 계산 (PC: 이전에 정한 줄 높이도 풀어야 '원래 줄 높이'를 제대로 잼)
   table.style.marginTop = "";
   table.style.transform = "";
+  if (_ref) table.style.fontSize = ""; // PC: 이전 맞춤에서 줄인 글자 크기를 풀고 다시 계산 (폰은 아래 _pm 분기가 따로 정함)
   tpane.scrollTop = 0;
   // 이미지 위 각 줄의 세로 위치 — 왼쪽 노란 밴드(positionOcrHilite)와 같은 계산식(화면에 그려지는 중인 값이 아니라 현재 상태값으로 계산)
   const _sc = _ref ? 1 : ocrTransform.scale, _ty = _ref ? 0 : ocrTransform.y;
@@ -4531,13 +4540,21 @@ function alignOcrTableToImage() {
     table.style.fontSize = Math.max(12, Math.min(16, pitch * 0.55)) + "px";
     nat = trs[pts[0].i].getBoundingClientRect().height;
   }
+  // PC 같이 확대: 이미지 줄이 표의 가장 낮은 줄(약 15px)보다 좁으면(가로로 넓은 앱 사진 등) 표 글자도 같은 비율로 줄여서 줄 높이가 이미지와 같아지게 함
+  //  (안 그러면 줄마다 몇 px 씩 벌어져 아래 줄일수록 크게 어긋남. 확대하면 표도 같이 커지므로 읽는 데는 문제없음)
+  const tiny = _ref && !_pm && pitch < nat;
+  if (tiny) {
+    table.style.fontSize = Math.max(6, Math.min(13, pitch * 0.62)) + "px";
+    nat = trs[pts[0].i].getBoundingClientRect().height;
+  }
   const tight = pitch < nat; // 이미지 줄 간격이 표 기본 줄 높이보다 좁으면 칸 여백을 줄여서 맞춤
+  const minH = tiny ? 6 : 12; // 한 줄 최소 높이 (폰·보통 크기는 그대로 12)
   // 줄 높이를 tr 높이만이 아니라 칸의 줄 높이(line-height)로도 고정 — 브라우저가 tr 높이를 무시해도 줄 높이가 정해진 대로 나오게
   const setH = (i, h) => {
     trs[i].style.height = h + "px";
-    Array.from(trs[i].children).forEach((td) => { td.style.padding = tight ? "2px 8px" : ""; td.style.lineHeight = Math.max(h - (tight ? 4 : 14) - 2, 10) + "px"; });
+    Array.from(trs[i].children).forEach((td) => { td.style.padding = tiny ? "1px 6px" : tight ? "2px 8px" : ""; td.style.lineHeight = tiny ? Math.max(h - 3, 5) + "px" : Math.max(h - (tight ? 4 : 14) - 2, 10) + "px"; });
   };
-  const hs = idxs.map((_, k) => Math.max(Bnd[k] ? Bnd[k].bot - Bnd[k].top : pitchAt(k), 12));
+  const hs = idxs.map((_, k) => Math.max(Bnd[k] ? Bnd[k].bot - Bnd[k].top : pitchAt(k), minH));
   idxs.forEach((i, k) => setH(i, hs[k]));
   // 표 첫 줄의 윗선을 이미지 첫 줄의 윗선에 맞춤 — 첫 줄이 실제로 놓인 자리를 재서 필요한 만큼만 아래로 내림
   const want = Bnd[0] ? Bnd[0].top : Y[0] - pitchAt(0) / 2; // 이미지 첫 줄의 윗선(패널 위쪽 기준)
@@ -4563,7 +4580,7 @@ function alignOcrTableToImage() {
     for (let k = 0; k < idxs.length - 1; k++) {
       const b = trs[idxs[k]].getBoundingClientRect(), n = trs[idxs[k + 1]].getBoundingClientRect();
       const wantTop = Bnd[k] ? Bnd[k].bot : (Y[k] + Y[k + 1]) / 2, nowTop = n.top - tTop() + tpane.scrollTop;
-      hs[k] = Math.max(hs[k] + (wantTop - nowTop), 12);
+      hs[k] = Math.max(hs[k] + (wantTop - nowTop), minH);
       setH(idxs[k], hs[k]);
     }
     const f0 = trs[idxs[0]].getBoundingClientRect().top - tTop() + tpane.scrollTop, mt = parseFloat(table.style.marginTop) || 0;
