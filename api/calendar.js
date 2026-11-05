@@ -2781,6 +2781,9 @@ if (action === "VERIFY_SESSION") {
                     (pend = pend || {})[f] = f === "pal" ? String(parseInt(r[f], 10)) : (f === "eta" || f === "inDate" || f === "bl") ? ov : String(r[f]).trim();
                   }
                 }
+                // 사진엔 비고가 비었는데 달력엔 비고가 있음 → 달력 값 유지(제안 아님). 확인용으로만 알림
+                let kept = null;
+                if (pendOk && !_ocrCmpField.etc(r.etc) && _ocrCmpField.etc(d.remarks)) kept = { etc: String(d.remarks).trim() };
                 merged.push({
                   ...r, // iy/ih/cx 등 좌표 유지
                   _ocr: { bl: r.bl || "", eta: r.eta || "", inDate: r.inDate || "", invoice: r.invoice || "", pal: r.pal != null ? String(r.pal) : "", fwd: r.fwd || "", sType: r.sType || "", etc: r.etc || "" }, // OCR 당시 파싱값 (대조창에서 '이후 사람이 고친 값' 구분용)
@@ -2793,6 +2796,7 @@ if (action === "VERIFY_SESSION") {
                   invoice: d.invoice || "",
                   etc: d.remarks || "",
                   _conf: conf, // {bl: 달력 B/L} — 표에는 사진 B/L 이 채워져 있고, 달력 값과 다름(확인 필요 표시)
+                  _kept: kept, // {etc: 달력 비고} — 사진엔 없고 달력엔 있는 값(유지)
                   _pend: pend, // {필드: OCR 새 값} — 클라가 표에 미리 채우고 보라색으로 표시(확정해야 DB 반영)
                 });
               }
