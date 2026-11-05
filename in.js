@@ -2064,6 +2064,7 @@ function _ocxStyle() {
     .ocx-seg button.on.sus{background:#c0392b}.ocx-seg button.on.ref{background:#8e44ad}.ocx-seg button.on.both{background:#3b4a6b}
     .ocx-ghost{border:1px solid #cdd5e2;background:#fff;color:#44506a;border-radius:9px;font-weight:800;font-size:12px;padding:5px 10px;cursor:pointer}
     .ocx-ghost.on{background:#e9eef7}
+    .ocx-compact .ocx-seg button{padding:4px 8px;font-size:11.5px}.ocx-compact .ocx-ghost{padding:4px 8px;font-size:11.5px}.ocx-compact .ocx-badge{font-size:12px;padding:3px 9px}.ocx-compact #ocrChgBtn{margin-top:0!important}
     .ocx-note{margin-top:6px;padding:7px 10px;border-radius:9px;background:#fdf1f0;border:1px solid #f2c9c5;font-size:11.5px;line-height:1.5;color:#7a2a22}
     .ocx-detail{margin-top:5px;font-size:11px;line-height:1.55;color:#5d6a80}
   `;
@@ -2093,6 +2094,7 @@ function _ocrSetMode(m) {
   try { renderOcrTable(); } catch (e) {}
   try { _ocrSugBarUpdate(); } catch (e) {}
   try { verifyOcrRows(null, true, true); } catch (e) {} // 안내줄·제안 바·줄 대조를 새 기준으로 다시 그림(안내창 없이)
+  _ocrStripRender();
 }
 // 🎨 색 안내 — 의심(배경색)과 확인용(테두리·점)을 화면에서 바로 구분하도록
 let _ocrLegendOn = false;
@@ -2108,14 +2110,67 @@ function _ocrLegendHtml() {
 function _ocrLegendBtnHtml() {
   return `<button type="button" id="ocrLegendBtn" class="ocx-ghost${_ocrLegendOn ? " on" : ""}" onclick="_ocrToggleLegend()">🎨 색 안내 ${_ocrLegendOn ? "닫기" : "보기"}</button>`;
 }
+// 🧭 검증 결과 막대 — 줄 대조 화면에서는 '고정 한 줄 막대'(+눌렀을 때만 뜨는 팝오버)라 아래 대조 영역이 줄지 않음. 다른 화면은 안내 카드
+let _ocrStripData = null;
+let _ocrPop = null; // 줄 대조 팝오버: null | "info" | "legend"
+function _ocrStripPieces(d) {
+  const pill = (kind, t, pop) => `<span class="ocx-pill ${kind}"${pop ? ` style="cursor:pointer;" onclick="_ocrPopToggle('${pop}')"` : ""}>${t}</span>`;
+  const o = { pills: "", orphanHtml: "", detailHtml: "", geoHtml: "", pillsFull: "" };
+  if (!d) return o;
+  const adv = d.advRows ? pill("adv", `🟠 참고 ${d.advRows}행`) : "";
+  const sug = d.sugN ? pill("sug", `💡 제안 ${d.sugN}칸`) : "";
+  const dt = d.dateFixCount ? pill("blue", `📅 날짜 이상 → 미정 변경 ${d.dateFixCount}건`) : "";
+  o.pillsFull = dt + adv + sug;
+  o.pills = (d.dateFixCount ? pill("blue", `📅 ${d.dateFixCount}`, "info") : "") + (d.advRows ? pill("adv", `🟠 ${d.advRows}`, "info") : "") + (d.sugN ? pill("sug", `💡 ${d.sugN}`, "info") : "") + (d.orphN ? pill("orph", `📌 ${d.orphN}`, "info") : "");
+  o.orphanHtml = d.orphN ? `<div class="ocx-note"><b>📌 원본에는 있는데 표에 없는 글자 ${d.orphN}개</b> · ${_esc(d.orphList.slice(0, 6).join(", "))}${d.orphN > 6 ? " …" : ""}</div>` : "";
+  o.detailHtml = d.details.length ? `<div class="ocx-detail">${d.details.slice(0, 6).map((x) => _esc(x)).join("<br>")}${d.details.length > 6 ? `<br>…외 ${d.details.length - 6}건` : ""}</div>` : "";
+  o.geoHtml = `<span class="ocx-muted">${d.geo ? `좌표 대조 ${d.geoMatched}/${d.nRows}행` : "좌표 대조 없음(새 OCR부터 적용)"}</span>`;
+  return o;
+}
+function _ocrStripRender() {
+  _ocxStyle();
+  const d = _ocrStripData;
+  const pc = _ocrStripPieces(d);
+  const rv = document.getElementById("ocrRowView");
+  if (_ocrRv && _ocrRv.on && rv) {
+    let st = document.getElementById("rvStrip");
+    if (!st) {
+      st = document.createElement("div");
+      st.id = "rvStrip";
+      st.className = "ocx-compact";
+      st.style.cssText = "flex:0 0 auto; position:relative; background:#fff; border-bottom:1px solid #dfe3ea; padding:5px 8px;";
+      const body = rv.querySelector("#rvBody");
+      rv.insertBefore(st, body);
+    }
+    const bad = d && (d.problem || d.orphN);
+    let pop = "";
+    if (_ocrPop) {
+      const inner = _ocrPop === "legend" ? _ocrLegendHtml() : d ? `<div class="ocx-row"><span class="ocx-badge ${bad ? "bad" : "ok"}">${d.head}</span></div><div class="ocx-row" style="margin-top:6px;">${pc.pillsFull}${pc.geoHtml}</div>${pc.orphanHtml}${pc.detailHtml}` : `<span class="ocx-muted">아직 검증 결과가 없어요 — 아래 [검증] 버튼을 눌러 보세요</span>`;
+      pop = `<div id="rvPop" style="position:absolute; left:6px; right:6px; top:100%; z-index:40; max-height:55vh; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff; border:1px solid #cdd5e2; border-radius:12px; box-shadow:0 10px 28px rgba(20,30,60,.22); padding:8px 10px;"><div style="text-align:right; margin-bottom:2px;"><button type="button" class="ocx-ghost" onclick="_ocrPopToggle(null)">닫기 ✕</button></div>${inner}</div>`;
+    }
+    st.innerHTML = `<div class="ocx-row" style="gap:4px 6px;"><span class="ocx-badge ${bad ? "bad" : "ok"}" style="cursor:pointer;" onclick="_ocrPopToggle('info')">${d ? d.headShort : "검증 전"}</span>${pc.pills}${_ocrChangesBtnHtml()}<button type="button" class="ocx-ghost${_ocrPop === "legend" ? " on" : ""}" onclick="_ocrPopToggle('legend')" title="색 안내">🎨</button><button type="button" class="ocx-ghost${_ocrPop === "info" ? " on" : ""}" onclick="_ocrPopToggle('info')" title="검증 상세">ⓘ</button></div>${pop}`;
+    return;
+  }
+  const hint = document.getElementById("ocrHint");
+  if (!d || !hint) return;
+  const moreN = d.details.length;
+  const moreBtn = `<button type="button" class="ocx-ghost${_ocrHintMore ? " on" : ""}" onclick="_ocrToggleHintMore()">${_ocrHintMore ? "상세 접기 ▴" : `상세${moreN ? ` ${moreN}건` : ""} ▾`}</button>`;
+  hint.innerHTML = `<div class="ocx-card"><div class="ocx-row"><span class="ocx-badge ${d.problem || d.orphN ? "bad" : "ok"}">${d.head}</span></div>` +
+    `<div class="ocx-row" style="margin-top:6px;">${pc.pillsFull}${_ocrHintMore || !d.geo ? pc.geoHtml : ""}</div>` +
+    `<div class="ocx-row" style="margin-top:7px;">${_ocrChangesBtnHtml()}${_ocrLegendBtnHtml()}${moreBtn}</div>${_ocrLegendOn ? _ocrLegendHtml() : ""}${pc.orphanHtml}${_ocrHintMore ? pc.detailHtml : ""}</div>`;
+}
+function _ocrPopToggle(k) {
+  _ocrPop = k && _ocrPop !== k ? k : null;
+  _ocrStripRender();
+}
 function _ocrToggleHintMore() {
   _ocrHintMore = !_ocrHintMore;
-  try { verifyOcrRows(null, true, true); } catch (e) {}
+  _ocrStripRender();
   try { _ocrSugBarUpdate(); } catch (e) {}
 }
 function _ocrToggleLegend() {
   _ocrLegendOn = !_ocrLegendOn;
-  try { verifyOcrRows(null, true, true); } catch (e) {} // 안내줄(줄 대조)을 다시 그림
+  _ocrStripRender();
   try { _ocrSugBarUpdate(); } catch (e) {}
 }
 let _ocrVerifyInfo = { ran: false, rows: 0, geo: false, geoMatched: 0, why: "" }; // 마지막 검사가 실제로 돌았는지·무엇과 대조했는지 (화면에 '검사함'을 보여주려는 용도)
@@ -2522,6 +2577,7 @@ function _ocrAiRun() {
 }
 
 function _ocrAfterVerify() {
+  _ocrStripRender();
   if (_ocrRv.on) _ocrRowViewSync(_ocrRv.idx, _ocrRv.field, true);
   _ocrSugBarUpdate();
 }
@@ -2829,7 +2885,7 @@ function _ocrRvRenderIssues(idx) {
     if (!rows.length && !orph) {
       const vi = _ocrVerifyInfo;
       sm.innerHTML = vi.ran
-        ? `<div style="padding:8px 10px; border-radius:8px; background:#e7f6ec; color:#1d6b3a; font-size:13px;"><div style="font-weight:800;">${_ocrViewMode() === "ref" ? "🟣🟡 확인용으로 볼 칸이 없어요" : "✅ 의심되는 곳이 없어요"}</div><div style="margin-top:3px; font-size:11px; font-weight:600; opacity:.85;">${vi.rows}줄 검사 · 형식·원본 글자·입고일 순서${vi.geo ? ` · 글자 위치 판독 대조 ${vi.geoMatched}줄(밀림 감지)` : ""}${vi.geo ? "" : " · ⚠️ 글자 위치 판독이 없어 밀림 감지는 약해요"}</div></div>`
+        ? `<div style="padding:4px 9px; border-radius:8px; background:#e7f6ec; color:#1d6b3a; font-size:12px; line-height:1.45;"><b>${_ocrViewMode() === "ref" ? "🟣🟡 확인용으로 볼 칸이 없어요" : "✅ 의심되는 곳이 없어요"}</b> <span style="font-size:11px; font-weight:600; opacity:.85;">${vi.rows}줄 검사 · 형식·원본 글자·입고일 순서${vi.geo ? ` · 글자 위치 판독 대조 ${vi.geoMatched}줄(밀림 감지)` : ""}${vi.geo ? "" : " · ⚠️ 글자 위치 판독이 없어 밀림 감지는 약해요"}</span></div>`
         : `<div style="padding:8px 10px; border-radius:8px; background:#fdecea; color:#8a2a1d; font-size:13px; font-weight:800;">⚠️ ${_esc(vi.why || "자동 검사가 아직 안 돌았어요 — 아래 [검증] 버튼을 눌러 보세요")}</div>`;
     } else {
       _ocxStyle();
@@ -2840,7 +2896,6 @@ function _ocrRvRenderIssues(idx) {
       const ob = sm.querySelector("#rvOnly");
       if (ob) ob.onclick = () => { _ocrRv.only = !_ocrRv.only; _ocrAiScope = null; _ocrRvRenderIssues(_ocrRv.idx); };
     }
-    if (!document.querySelector("#ocrHint #ocrChgBtn")) sm.insertAdjacentHTML("beforeend", `<div style="margin:4px 0;">${_ocrChangesBtnHtml()}</div>`); // 보기 모드(안내줄에 이미 있으면 중복 안 그림)
     // 🤖 AI 로 다시 읽기 (눌렀을 때만 호출)
     if (OCR_AI_REREAD_ON && (rows.length || _ocrAi.msg || ocrEditRows.some((r) => r && !r._fromDb)) && typeof hasPerm === "function" && hasPerm("ocr_compare")) {
       const sc = _ocrAiScopeNow();
@@ -2996,6 +3051,7 @@ function _ocrRvOpen(startIdx) {
   const rv = _ocrRvEnsure();
   if (!rv) return false;
   _ocrRv.on = true;
+  try { _ocrStripRender(); } catch (e) {}
   _ocrRv.built = -1;
   if (!_ocrSelectedCell && ocrEditRows.length) _ocrRv.field = _ocrRv.field || "bl";
   rv.style.display = "flex";
@@ -4543,26 +4599,14 @@ async function verifyOcrRows(_btn, _skipFixPrompt, _auto) {
       `</div>`;
   }
   const hint = document.getElementById("ocrHint");
-  _ocxStyle();
-  const pill = (kind, t) => `<span class="ocx-pill ${kind}">${t}</span>`;
-  const advNoteHtml = advRows ? pill("adv", `🟠 참고 ${advRows}행`) : "";
   const _orphN = orphans.bl.length + orphans.inv.length + orphans.date.length;
-  const orphanHtml = _orphN
-    ? `<div class="ocx-note"><b>📌 원본에는 있는데 표에 없는 글자 ${_orphN}개</b> · ${_esc(orphans.bl.concat(orphans.inv, orphans.date).slice(0, 6).join(", "))}${_orphN > 6 ? " …" : ""}</div>`
-    : "";
-  const _sugN = ocrEditRows.reduce((n, r) => n + Object.keys(r._sug || {}).length, 0);
-  const sugHtml = _sugN ? pill("sug", `💡 제안 ${_sugN}칸`) : "";
-  const dateNoteHtml2 = dateFixCount ? pill("blue", `📅 날짜 이상 → 미정 변경 ${dateFixCount}건`) : "";
-  const geoNoteHtml = `<span class="ocx-muted">${geo ? `좌표 대조 ${geoMatched}/${ocrEditRows.filter((r) => !r._fromDb).length}행` : "좌표 대조 없음(새 OCR부터 적용)"}</span>`;
-  const detailHtml2 = allDetails.length
-    ? `<div class="ocx-detail">${allDetails.slice(0, 6).map((d) => _esc(d)).join("<br>")}${allDetails.length > 6 ? `<br>…외 ${allDetails.length - 6}건` : ""}</div>`
-    : "";
-  const legendPanel = _ocrLegendOn ? _ocrLegendHtml() : "";
-  const moreN = allDetails.length;
-  const moreBtn = `<button type="button" class="ocx-ghost${_ocrHintMore ? " on" : ""}" onclick="_ocrToggleHintMore()">${_ocrHintMore ? "상세 접기 ▴" : `상세${moreN ? ` ${moreN}건` : ""} ▾`}</button>`;
-  if (hint) hint.innerHTML = `<div class="ocx-card"><div class="ocx-row"><span class="ocx-badge ${problem || _orphN ? "bad" : "ok"}">${head}</span></div>` +
-    `<div class="ocx-row" style="margin-top:6px;">${dateNoteHtml2}${advNoteHtml}${sugHtml}${_ocrHintMore || !geo ? geoNoteHtml : ""}</div>` +
-    `<div class="ocx-row" style="margin-top:7px;">${_ocrChangesBtnHtml()}${_ocrLegendBtnHtml()}${moreBtn}</div>${legendPanel}${orphanHtml}${_ocrHintMore ? detailHtml2 : ""}</div>`;
+  _ocrStripData = {
+    head, problem: !!problem, headShort: warnRows ? `🔍 ${warnRows}건 확인필요` : countWarn ? "⚠️ 개별 오류 없음" : "✅ 이상 없음",
+    orphN: _orphN, orphList: orphans.bl.concat(orphans.inv, orphans.date), dateFixCount, advRows,
+    sugN: ocrEditRows.reduce((n, r) => n + Object.keys(r._sug || {}).length, 0), geo: !!geo, geoMatched,
+    nRows: ocrEditRows.filter((r) => !r._fromDb).length, details: allDetails.slice(),
+  };
+  _ocrStripRender(); // 줄 대조 화면이면 그 안의 고정 한 줄 막대, 아니면 안내 카드(ocrHint)
   if (!_auto) showToast(head + (dateFixCount ? ` · 날짜이상 미정변경 ${dateFixCount}건` : "") + (advRows ? ` · 🟠참고 ${advRows}행` : ""), 4000);
   _ocrInstallViewBtn(); // 안내줄을 다시 썼으니 보기 전환 버튼을 다시 붙임
   _ocrAfterVerify(); // 줄 대조 화면·제안 바 갱신
