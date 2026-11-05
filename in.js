@@ -2127,6 +2127,12 @@ function _ocrStripPieces(d) {
   o.geoHtml = `<span class="ocx-muted">${d.geo ? `좌표 대조 ${d.geoMatched}/${d.nRows}행` : "좌표 대조 없음(새 OCR부터 적용)"}</span>`;
   return o;
 }
+function _ocrPopHtml(pos) { // 🎨 색 안내 / ⓘ 검증 상세 팝오버 — 화면 위에 떠서 덮음(아래 대조 영역 높이 불변)
+  if (!_ocrPop) return "";
+  const d = _ocrStripData, pc = _ocrStripPieces(d), bad = d && (d.problem || d.orphN);
+  const inner = _ocrPop === "legend" ? _ocrLegendHtml() : d ? `<div class="ocx-row"><span class="ocx-badge ${bad ? "bad" : "ok"}">${d.head}</span></div><div class="ocx-row" style="margin-top:6px;">${pc.pillsFull}${pc.geoHtml}</div>${pc.orphanHtml}${pc.detailHtml}` : `<span class="ocx-muted">아직 검증 결과가 없어요 — 아래 [검증] 버튼을 눌러 보세요</span>`;
+  return `<div id="rvPop" style="position:absolute; ${pos} z-index:60; max-height:55vh; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff; border:1px solid #cdd5e2; border-radius:12px; box-shadow:0 10px 28px rgba(20,30,60,.22); padding:8px 10px; text-align:left; font-weight:normal;"><div style="text-align:right; margin-bottom:2px;"><button type="button" class="ocx-ghost" onclick="_ocrPopToggle(null)">닫기 ✕</button></div>${inner}</div>`;
+}
 function _ocrStripRender() {
   _ocxStyle();
   const d = _ocrStripData;
@@ -2143,25 +2149,26 @@ function _ocrStripRender() {
       rv.insertBefore(st, body);
     }
     const bad = d && (d.problem || d.orphN);
-    let pop = "";
-    if (_ocrPop) {
-      const inner = _ocrPop === "legend" ? _ocrLegendHtml() : d ? `<div class="ocx-row"><span class="ocx-badge ${bad ? "bad" : "ok"}">${d.head}</span></div><div class="ocx-row" style="margin-top:6px;">${pc.pillsFull}${pc.geoHtml}</div>${pc.orphanHtml}${pc.detailHtml}` : `<span class="ocx-muted">아직 검증 결과가 없어요 — 아래 [검증] 버튼을 눌러 보세요</span>`;
-      pop = `<div id="rvPop" style="position:absolute; left:6px; right:6px; top:100%; z-index:40; max-height:55vh; overflow:auto; -webkit-overflow-scrolling:touch; background:#fff; border:1px solid #cdd5e2; border-radius:12px; box-shadow:0 10px 28px rgba(20,30,60,.22); padding:8px 10px;"><div style="text-align:right; margin-bottom:2px;"><button type="button" class="ocx-ghost" onclick="_ocrPopToggle(null)">닫기 ✕</button></div>${inner}</div>`;
-    }
+    const pop = _ocrPopHtml("left:6px; right:6px; top:100%;");
     st.innerHTML = `<div class="ocx-row" style="gap:4px 6px;"><span class="ocx-badge ${bad ? "bad" : "ok"}" style="cursor:pointer;" onclick="_ocrPopToggle('info')">${d ? d.headShort : "검증 전"}</span>${pc.pills}${_ocrChangesBtnHtml()}<button type="button" class="ocx-ghost${_ocrPop === "legend" ? " on" : ""}" onclick="_ocrPopToggle('legend')" title="색 안내">🎨</button><button type="button" class="ocx-ghost${_ocrPop === "info" ? " on" : ""}" onclick="_ocrPopToggle('info')" title="검증 상세">ⓘ</button></div>${pop}`;
     return;
   }
   const hint = document.getElementById("ocrHint");
-  if (!d || !hint) return;
+  let card = document.getElementById("ocrVerifyCard");
+  const pane = document.getElementById("ocrPaneTable");
+  const splitOpen = !!(pane && pane.style.display !== "none");
+  if (!d || !hint || splitOpen) { if (card) card.remove(); return; } // 좌우 보기에서는 하단 바(🎨·ⓘ)가 맡음 — 안내 영역(줄 대조 버튼 등)은 건드리지 않음
+  if (!card) { card = document.createElement("div"); card.id = "ocrVerifyCard"; hint.parentNode.insertBefore(card, hint.nextSibling); }
   const moreN = d.details.length;
   const moreBtn = `<button type="button" class="ocx-ghost${_ocrHintMore ? " on" : ""}" onclick="_ocrToggleHintMore()">${_ocrHintMore ? "상세 접기 ▴" : `상세${moreN ? ` ${moreN}건` : ""} ▾`}</button>`;
-  hint.innerHTML = `<div class="ocx-card"><div class="ocx-row"><span class="ocx-badge ${d.problem || d.orphN ? "bad" : "ok"}">${d.head}</span></div>` +
+  card.innerHTML = `<div class="ocx-card"><div class="ocx-row"><span class="ocx-badge ${d.problem || d.orphN ? "bad" : "ok"}">${d.head}</span></div>` +
     `<div class="ocx-row" style="margin-top:6px;">${pc.pillsFull}${_ocrHintMore || !d.geo ? pc.geoHtml : ""}</div>` +
     `<div class="ocx-row" style="margin-top:7px;">${_ocrChangesBtnHtml()}${_ocrLegendBtnHtml()}${moreBtn}</div>${_ocrLegendOn ? _ocrLegendHtml() : ""}${pc.orphanHtml}${_ocrHintMore ? pc.detailHtml : ""}</div>`;
 }
 function _ocrPopToggle(k) {
   _ocrPop = k && _ocrPop !== k ? k : null;
   _ocrStripRender();
+  try { _ocrSugBarUpdate(); } catch (e) {}
 }
 function _ocrToggleHintMore() {
   _ocrHintMore = !_ocrHintMore;
@@ -2298,7 +2305,7 @@ function _ocrSugBarEnsure() {
   if (!wrap || !wrap.parentNode) return null;
   bar = document.createElement("div");
   bar.id = "ocrSugBar";
-  bar.style.cssText = "flex:0 0 auto; display:none; align-items:center; gap:6px; padding:5px 8px; margin:0 0 4px; background:#fff; border:1px solid #d5ddec; border-radius:10px; box-shadow:0 1px 4px rgba(24,38,80,.07); font-size:12px; color:#223;";
+  bar.style.cssText = "flex:0 0 auto; display:none; align-items:center; gap:6px; position:relative; padding:5px 8px; margin:0 0 4px; background:#fff; border:1px solid #d5ddec; border-radius:10px; box-shadow:0 1px 4px rgba(24,38,80,.07); font-size:12px; color:#223;";
   wrap.parentNode.insertBefore(bar, wrap);
   return bar;
 }
@@ -2319,7 +2326,7 @@ function _ocrSugBarUpdateInner(bar) {
   const vi = _ocrVerifyInfo;
   const showClean = open && vi && vi.ran && ocrEditRows.some((r) => r && !r._fromDb);
   const pendN = open ? _ocrRefCount() : 0; // 사진에서 바뀐 값(보라색) 칸 수 — 보기 토글을 좌우 보기에도 둠
-  if (!open || (!list.length && !zoneOn && !showClean && !pendN)) { bar.style.display = "none"; bar.innerHTML = ""; const lg0 = document.getElementById("ocrLegendSplit"); if (lg0) lg0.remove(); return; }
+  if (!open || (!list.length && !zoneOn && !showClean && !pendN)) { bar.style.display = "none"; bar.innerHTML = ""; return; }
   const sel = _ocrSelectedCell;
   const cur = sel ? _ocrCellInfo(sel.idx, sel.field) : null;
   const colName = sel ? (OCR_COLS.find((c) => c.key === sel.field) || {}).label || sel.field : "";
@@ -2339,17 +2346,15 @@ function _ocrSugBarUpdateInner(bar) {
     (cur && cur.conf ? `<button id="sbKeep" style="${btn} background:#e8ecf2; color:#334;">사진 값 맞음</button>` : "") +
     (cur && cur.alt ? `<button id="sbAlt" style="${btn} background:#6a4bd8; color:#fff;">🤖 AI 값</button>` : "") +
     (OCR_AI_REREAD_ON && typeof hasPerm === "function" && hasPerm("ocr_compare") ? `<button id="sbAi" ${_ocrAi.busy ? "disabled" : ""} style="${btn} background:${_ocrAiGauge("#e6e0fa")}; color:${_ocrAi.busy ? "#fff" : "#43309a"};">${_ocrAi.busy ? `🤖 ${_ocrAi.done}/${_ocrAi.total}` : "🤖"}</button>` : "") +
-    `<button id="sbLg" title="색 안내" style="${btn} background:${_ocrLegendOn ? "#cfd6e2" : "#eef1f6"}; color:#445;">🎨</button>` +
+    `<button id="sbLg" title="색 안내" style="${btn} background:${_ocrPop === "legend" ? "#cfd6e2" : "#eef1f6"}; color:#445;">🎨</button>` +
+    `<button id="sbInfo" title="검증 상세" style="${btn} background:${_ocrPop === "info" ? "#cfd6e2" : "#eef1f6"}; color:#445;">ⓘ</button>` +
     (pendN ? (() => { const m = _ocrViewMode(); const sb = (id, on, t) => `<button data-sbmode="${id}" class="${on ? "on " : ""}${id}" style="font-size:12px; padding:5px 8px;">${t}</button>`; _ocxStyle(); return `<span class="ocx-seg" style="flex:0 0 auto;" title="보기: 의심 / 확인용(🟣사진에서 바뀜·🟡내가 고침) / 전체">${sb("sus", m === "sus", "의심")}${sb("ref", m === "ref", `확인용 ${pendN}`)}${sb("both", m === "both", "전체")}</span>`; })() : "") +
     `<button id="sbNext" style="${btn} background:#dfe6f2; color:#334;">▶</button>`;
   bar.style.display = "flex";
   bar.querySelectorAll("[data-sbmode]").forEach((b) => { b.onclick = () => _ocrSetMode(b.getAttribute("data-sbmode")); });
-  bar.querySelector("#sbLg").onclick = () => _ocrToggleLegend();
-  let lg = document.getElementById("ocrLegendSplit");
-  if (_ocrLegendOn) {
-    if (!lg) { lg = document.createElement("div"); lg.id = "ocrLegendSplit"; lg.style.cssText = "flex:0 0 auto;"; bar.parentNode.insertBefore(lg, bar.nextSibling); }
-    lg.innerHTML = _ocrLegendHtml();
-  } else if (lg) lg.remove();
+  bar.querySelector("#sbLg").onclick = () => _ocrPopToggle("legend");
+  bar.querySelector("#sbInfo").onclick = () => _ocrPopToggle("info");
+  if (_ocrPop) bar.insertAdjacentHTML("beforeend", _ocrPopHtml("left:0; right:0; top:100%; margin-top:4px;"));
   bar.querySelector("#sbPrev").onclick = () => _ocrGoSuspectCell(-1);
   bar.querySelector("#sbNext").onclick = () => _ocrGoSuspectCell(1);
   if (!list.length) { // 의심 칸이 없으면 ◀▶ 는 이전/다음 줄로 이동 (같은 열)
