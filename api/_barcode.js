@@ -61,22 +61,26 @@ async function readOrderBarcode(b64, mime, opts) {
     const buf = Buffer.from(String(b64 || ""), "base64");
     if (!buf.length) return done({ why: "사진 없음" });
     if (buf.length > 6 * 1024 * 1024) return done({ why: "사진이 너무 큼" });
+    const td = Date.now();
     const im = m.jpeg.decode(buf, { useTArray: true, maxMemoryUsageInMB: 512 });
+    const decMs = Date.now() - td;
+    let tries = 0;
     if (!im || !im.width || !im.height) return done({ why: "사진 해석 실패" });
-    const maxMs = o.maxMs || 2500;
+    const maxMs = o.maxMs || 9000; // 서버에서는 로컬보다 느릴 수 있음(첫 호출은 wasm 준비도 포함). 글자 읽기와 동시에 진행되므로 이 안이면 전체 대기가 늘지 않음
     const bands = [["top", 0, 0.25], ["bottom", 0.75, 1]];
     const scales = [2, 4, 3, 1.5];
     for (const [name, a, b] of bands) {
       const y0 = Math.floor(im.height * a), y1 = Math.floor(im.height * b);
       for (const s of scales) {
-        if (Date.now() - t0 > maxMs) return done({ why: "시간 초과" });
+        if (Date.now() - t0 > maxMs) return done({ why: `시간 초과(사진 해석 ${decMs}ms, ${tries}회 시도, 총 ${Date.now() - t0}ms)` });
+        tries++;
         const c = cropScale(im, 0, y0, im.width, y1, s);
         const rs = await m.zx.readBarcodes(c, { formats: ["Code128"], tryHarder: true, maxNumberOfSymbols: 3 });
         const hit = (rs || []).map((r) => String(r.text || "").trim().toUpperCase()).find((t) => ORDER_RE.test(t));
         if (hit) return done({ ok: true, text: hit, scale: s, band: name });
       }
     }
-    return done({ why: "바코드를 못 찾음" });
+    return done({ why: `바코드를 못 찾음(${tries}회 시도, 총 ${Date.now() - t0}ms)` });
   } catch (e) {
     return done({ why: "오류: " + String((e && e.message) || e).slice(0, 60) });
   }
