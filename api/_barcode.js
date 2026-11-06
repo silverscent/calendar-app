@@ -69,10 +69,11 @@ async function readOrderBarcode(b64, mime, opts) {
     const done2 = (r) => done(Object.assign({ dim }, r)); // 받은 사진 크기도 함께 알림(바코드 막대가 너무 가늘면 못 읽으므로 원인 파악용)
     if (!im || !im.width || !im.height) return done({ why: "사진 해석 실패" });
     const maxMs = o.maxMs || 9000; // 서버에서는 로컬보다 느릴 수 있음(첫 호출은 wasm 준비도 포함). 글자 읽기와 동시에 진행되므로 이 안이면 전체 대기가 늘지 않음
-    const bands = [["top", 0, 0.25], ["bottom", 0.75, 1]];
-    const scales = [2, 4, 3, 1.5];
+    // whole=true: 앱이 따로 보낸 '종이 위쪽 띠' 조각 — 전체가 곧 바코드 후보 영역이라 그림 전체를 읽는다(원본 해상도라 크게 키울 필요 없음)
+    const bands = o.whole ? [["all", 0, 1]] : [["top", 0, 0.25], ["bottom", 0.75, 1]];
+    const scales = o.whole ? [1, 1.5, 2, 3] : [2, 4, 3, 1.5];
     for (const [name, a, b] of bands) {
-      const y0 = Math.floor(im.height * a), y1 = Math.floor(im.height * b);
+      const y0 = Math.floor(im.height * a), y1 = Math.max(y0 + 1, Math.floor(im.height * b));
       for (const s of scales) {
         if (Date.now() - t0 > maxMs) return done2({ why: `시간 초과(사진 ${dim}, 해석 ${decMs}ms, ${tries}회 시도, 총 ${Date.now() - t0}ms)` });
         tries++;

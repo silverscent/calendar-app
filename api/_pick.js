@@ -1071,7 +1071,7 @@ function reconcile(printed, hw, g, errs, bar) {
     setFlag("orderNo", { level: "orange", msg: `바코드를 못 읽고 ${vNo ? "문자인식" : "AI"} 한 곳에서만 읽은 번호 ${orderNo} — 종이와 맞는지 꼭 확인하세요` });
   }
   if (orderNo && orderNoSrc !== "barcode" && !_fmtOk(orderNo)) setFlag("orderNo", { level: "red", msg: `번호 ${orderNo} 가 출고지시번호 모양(SH+숫자 10자리)이 아님 — 종이에서 직접 확인하세요` });
-  const orderNoCheck = { src: orderNoSrc, barcode: bNo || null, vision: vNo || null, ai: aNo || null, bc: bar ? { ok: !!bar.ok, why: bar.why || "", ms: bar.ms || null, scale: bar.scale || null, band: bar.band || null, dim: bar.dim || null } : null };
+  const orderNoCheck = { src: orderNoSrc, barcode: bNo || null, vision: vNo || null, ai: aNo || null, bc: bar ? { ok: !!bar.ok, why: bar.why || "", ms: bar.ms || null, scale: bar.scale || null, band: bar.band || null, dim: bar.dim || null, from: bar.from || null } : null };
   const customer = clean(printed.customer) || clean(g.customer);
   if (clean(printed.customer) && clean(g.customer) && normName(printed.customer) !== normName(g.customer) && similarity(normName(printed.customer), normName(g.customer)) < 0.6)
     setFlag("customer", { level: "orange", msg: `문자인식 "${printed.customer}" / AI "${g.customer}" 불일치` });
@@ -1168,7 +1168,19 @@ async function parsePicking(b64, mime, opts) {
   const pVision = timed(callVision(b64, fetchFn, opts.visionKey));
   const pMain = timed(callGemini(b64, mime, fetchFn, opts.geminiKey, pin, false));
   // 인쇄된 바코드(Code128)에서 출고지시번호를 직접 읽음 — 글자 읽기와 따로 진행하는 세 번째 눈(기준값)
-  const pBar = _bc ? timed(_bc.readOrderBarcode(b64, mime, { disabled: !!(opts && opts.barcode === false) })) : Promise.resolve({ ok: false, text: null, why: "바코드 모듈 없음", ms: 0 });
+  const pBar = _bc ? timed((async () => {
+    const off = !!(opts && opts.barcode === false);
+    let h = null;
+    // ① 앱이 원본 사진에서 따로 잘라 보낸 위쪽 띠(고해상도) → ② 판독용 사진 자체(해상도가 낮으면 못 읽을 수 있음)
+    if (!off && opts && typeof opts.hdr === "string" && opts.hdr.length > 1000) {
+      h = await _bc.readOrderBarcode(opts.hdr, "image/jpeg", { whole: true });
+      if (h.ok) return Object.assign(h, { from: "hdr" });
+    }
+    const m = await _bc.readOrderBarcode(b64, mime, { disabled: off });
+    if (m.ok) return Object.assign(m, { from: "main" });
+    if (h) m.why = `${m.why} / 위쪽 조각: ${h.why}`;
+    return m;
+  })()) : Promise.resolve({ ok: false, text: null, why: "바코드 모듈 없음", ms: 0 });
   let shadowP = null;
   try {
     if (!pin && !(opts && opts.shadow === false) && keyPressure(opts.geminiKey, GEMINI_MODELS()).level === "ok") {

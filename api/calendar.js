@@ -3003,8 +3003,12 @@ if (action === "VERIFY_SESSION") {
         if (!process.env.GOOGLE_VISION_API_KEY && !pickGeminiKeys().length)
           return res.status(200).json({ success: false, msg: "OCR API 키가 설정되어 있지 않습니다." });
 
+        // 바코드용 위쪽 띠 조각(선택): 형식·크기가 맞을 때만 받고, 아니면 무시(판독에는 영향 없음)
+        const hdr = typeof data?.hdr === "string" ? data.hdr.replace(/^data:[^,]+,/, "") : "";
+        const hdrOk = hdr.length > 1000 && hdr.length <= 1800000 && /^[A-Za-z0-9+\/]+={0,2}$/.test(hdr);
         await geminiStateLoad();
         const parsed = await pickLib.parsePicking(b64, mime, {
+          hdr: hdrOk ? hdr : null,
           fetch: aiUsage.timed(pool, "pick", fetch, pickGeminiKeys()),
           visionKey: process.env.GOOGLE_VISION_API_KEY,
           geminiKey: pickGeminiKeys(), // 키가 여러 개(다른 프로젝트)면 번갈아 쓰고, 한도·과부하로 막힌 키는 풀릴 때까지 건너뜀

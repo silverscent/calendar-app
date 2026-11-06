@@ -7065,6 +7065,43 @@ function _dsWarp(src, sw, sh, Q, ow, oh) {
 // ───────── 📄 모서리 맞추기 화면 ─────────
 // 사진 → (자동으로 종이 모서리 찾기) → 사람이 점을 끌어 확인 → 반듯하게 펴서 서버로.
 let _dsEd = null; // { cv(원본 캔버스), quad, disp(표시 캔버스), sc, drag }
+let _pickHdr = null; // 바코드용: 원본 사진에서 종이 위쪽 띠만 높은 해상도로 자른 그림(base64). 서버가 출고지시번호 바코드를 읽는 데만 씀
+// 종이 위쪽 띠(출고지시번호 바코드가 있는 곳)를 원본 해상도로 잘라낸다. 펴기를 했으면 같은 모서리로 펴서, 안 했으면 사진 위쪽을 그대로 자른다. 실패해도 판독은 계속(null)
+async function _pickBuildHdr(cvLow, quadLow, flatten) {
+  try {
+    const file = cvLow && cvLow._origFile;
+    if (!file) return null;
+    const img = await new Promise((res, rej) => { const u = URL.createObjectURL(file); const im = new Image(); im.onload = () => { URL.revokeObjectURL(u); res(im); }; im.onerror = () => { URL.revokeObjectURL(u); rej(new Error("open")); }; im.src = u; });
+    const W = img.naturalWidth, H = img.naturalHeight;
+    if (!W || !H) return null;
+    const k = W / cvLow.width; // 작은 그림 좌표 → 원본 좌표
+    const FR = 0.26; // 종이 위쪽 26%
+    let Q;
+    if (flatten && quadLow && quadLow.length === 4) {
+      const q = quadLow.map((p) => ({ x: p.x * k, y: p.y * k }));
+      const lp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      Q = [q[0], q[1], lp(q[1], q[2], FR), lp(q[0], q[3], FR)];
+    } else {
+      Q = [{ x: 0, y: 0 }, { x: W - 1, y: 0 }, { x: W - 1, y: H * FR }, { x: 0, y: H * FR }];
+    }
+    const xs = Q.map((p) => p.x), ys = Q.map((p) => p.y);
+    const bx = Math.max(0, Math.floor(Math.min(...xs)) - 2), by = Math.max(0, Math.floor(Math.min(...ys)) - 2);
+    const bw = Math.min(W - bx, Math.ceil(Math.max(...xs)) + 2 - bx), bh = Math.min(H - by, Math.ceil(Math.max(...ys)) + 2 - by);
+    if (bw < 200 || bh < 40 || bw * bh > 40e6) return null;
+    const c1 = document.createElement("canvas"); c1.width = bw; c1.height = bh;
+    const x1 = c1.getContext("2d"); x1.drawImage(img, bx, by, bw, bh, 0, 0, bw, bh);
+    const lq = Q.map((p) => ({ x: p.x - bx, y: p.y - by }));
+    const o = _dsOutSize(lq, 3200);
+    const src = x1.getImageData(0, 0, bw, bh).data;
+    const px = _dsWarp(src, bw, bh, lq, o.w, o.h);
+    if (!px) return null;
+    const oc = document.createElement("canvas"); oc.width = o.w; oc.height = o.h;
+    oc.getContext("2d").putImageData(new ImageData(px, o.w, o.h), 0, 0);
+    let q = 0.88, d = oc.toDataURL("image/jpeg", q);
+    while (d.length > 1400000 && q > 0.5) { q -= 0.1; d = oc.toDataURL("image/jpeg", q); }
+    return d.length > 1700000 ? null : d.replace(/^data:[^,]+,/, "");
+  } catch (_) { return null; }
+}
 let _pickSentCv = null; // 서버로 보낸 바로 그 그림(손글씨 2차 판독 때 같은 좌표로 자르기 위해 판독이 끝날 때까지 보관)
 function _dsLoad(file) {
   return new Promise((resolve, reject) => {
@@ -7078,6 +7115,7 @@ function _dsLoad(file) {
         cv.width = Math.max(1, Math.round(img.naturalWidth * sc));
         cv.height = Math.max(1, Math.round(img.naturalHeight * sc));
         cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        cv._origFile = file; // 바코드용 고해상도 조각을 원본에서 다시 자르기 위해 보관
         URL.revokeObjectURL(url);
         resolve(cv);
       } catch (e) { URL.revokeObjectURL(url); reject(e); }
@@ -7258,6 +7296,7 @@ async function pickEditSend(flatten) {
     b64 = _dsToB64(E.cv);
     _pickSentCv = E.cv;
   }
+  _pickHdr = await _pickBuildHdr(E.cv, E.quad, !!flatten && _dsQuadOk(E.quad)); // 바코드용 고해상도 조각(실패하면 null — 판독은 그대로)
   _dsEd = null;
   _pickPrepMs = Date.now() - _tPrep;
   await _pickSend(b64);
@@ -7537,6 +7576,7 @@ async function pickOnFile(inp) {
   _pickState = { busy: true };
   body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)"><div style="font-size:2em">⏳</div><div style="margin-top:10px;font-weight:800;color:var(--text-main)">사진을 여는 중입니다</div></div>`;
   try {
+    _pickHdr = null; // 새 사진이면 이전 사진의 바코드 조각은 버림
     const cv = await _dsLoad(file);
     if (myReq !== _pickReq) return;
     _pickState = null; // 편집 화면에서는 닫기 가능
@@ -7796,7 +7836,7 @@ function _pickTraceHtml() {
     rr = `<div style="padding:7px 0;border-top:1px solid var(--border-color)">${h}</div>`;
   }
   const rs = T.res || {};
-  const info = [`사진 ${T.kb || "?"}KB`, T.prepMs ? `준비 ${sec(T.prepMs)}` : "", `손글씨 칸 위치 ${rs.hw ? "찾음" : "못 찾음"}`, rs.tilt ? `사진 기울기 ${rs.tilt}°` : "", rs.pressure ? `AI 키 여유 ${rs.pressure.usable}/${rs.pressure.total}개 (${_esc(rs.pressure.level)})` : "", rs.parseId ? `판독 기록 #${rs.parseId}` : "", rs.bc ? (rs.bc.ok ? `바코드 읽음 ${sec(rs.bc.ms || 0)}${rs.bc.dim ? ` · 사진 ${_esc(rs.bc.dim)}` : ""}${rs.bc.scale ? ` (${rs.bc.band === "bottom" ? "아래" : "위"} ${rs.bc.scale}배)` : ""}` : `바코드 못 읽음(${_esc(rs.bc.why || "?")})`) : ""].filter(Boolean).join(" · ");
+  const info = [`사진 ${T.kb || "?"}KB`, T.prepMs ? `준비 ${sec(T.prepMs)}` : "", `손글씨 칸 위치 ${rs.hw ? "찾음" : "못 찾음"}`, rs.tilt ? `사진 기울기 ${rs.tilt}°` : "", rs.pressure ? `AI 키 여유 ${rs.pressure.usable}/${rs.pressure.total}개 (${_esc(rs.pressure.level)})` : "", rs.parseId ? `판독 기록 #${rs.parseId}` : "", rs.bc ? (rs.bc.ok ? `바코드 읽음${rs.bc.from === "hdr" ? "(고해상도 조각)" : ""} ${sec(rs.bc.ms || 0)}${rs.bc.dim ? ` · 사진 ${_esc(rs.bc.dim)}` : ""}${rs.bc.scale ? ` (${rs.bc.band === "bottom" ? "아래" : "위"} ${rs.bc.scale}배)` : ""}` : `바코드 못 읽음(${_esc(rs.bc.why || "?")})`) : ""].filter(Boolean).join(" · ");
   return `<div style="margin-bottom:10px;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg);overflow:hidden">
     <button type="button" onclick="_pickTraceToggle()" style="width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;border:0;background:none;color:var(--text-main);font-size:0.84em;font-weight:800;text-align:left;cursor:pointer"><span>🔬 판독 상세 <small style="font-weight:600;color:var(--text-sub)">(나만 보임) · 총 ${sec(total)}${aiTxt ? " · " + _esc(aiTxt) : ""}${tm0 && tm0.pinned ? " · 🧪지정" : ""}</small></span><span>${_pickTraceOpen ? "▴" : "▾"}</span></button>
     <div style="display:${_pickTraceOpen ? "block" : "none"};padding:0 12px 10px;font-size:0.8em;line-height:1.6">${rows}${T.res && T.res.usedFirstPass ? line('<span style="color:#ff9f0a">↩ 돌려서 다시 읽은 결과가 AI 실패라 처음(1차) 결과를 사용했어요</span>') : ""}${rr}${line(info)}${line("총 시간 = 사진 준비 + 앱이 보낸 순간부터 이 창이 뜰 때까지(2차 확인은 따로)")}</div></div>`;
@@ -7826,7 +7866,7 @@ async function _pickSend(b64, _rotated, _enh, _opt) {
         body: JSON.stringify({
           source: "vercel", domain: "system", action: "PICK_PARSE",
           admin_id: localStorage.getItem("admin_id"), session_token: token,
-          data: Object.assign({ image: b64, mime: "image/jpeg", meta: { rot: _rotated === true, enh: _enh === true } }, _pickPinCur() ? { model: _pickPinCur() } : {}),
+          data: Object.assign({ image: b64, mime: "image/jpeg", meta: { rot: _rotated === true, enh: _enh === true } }, _pickPinCur() ? { model: _pickPinCur() } : {}, _pickHdr ? { hdr: _pickHdr } : {}),
         }),
         signal: ctl.signal,
       });
