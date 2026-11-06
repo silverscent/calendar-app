@@ -45,7 +45,7 @@ const fixedCompanies = [
   "엠코리아토탈서비스",
   "위드비아",
   "제니스엠지",
-  "지엔씨메딕",
+  "지앤씨메딕",
   "하이메드",
   "스마트엠케어",
 ];
@@ -60,6 +60,7 @@ const compShortMap = {
   백년가게국제의료기: "국제",
   드림케어메디칼: "드림",
   지엔씨메딕: "지엔",
+  지앤씨메딕: "지앤",
   링크더랩: "링랩",
   위드비아: "위비",
   하이메드: "하메",
@@ -80,8 +81,10 @@ const compFullMap = {
   엠코: "엠코리아토탈서비스",
   국제: "백년가게국제의료기",
   드림: "드림케어메디칼",
-  지엔: "지엔씨메딕",
-  지엔씨: "지엔씨메딕",
+  지엔: "지앤씨메딕",
+  지엔씨: "지앤씨메딕",
+  지앤: "지앤씨메딕",
+  지앤씨: "지앤씨메딕",
   링랩: "링크더랩",
   링크: "링크더랩",
   위비: "위드비아",
@@ -5965,6 +5968,9 @@ function getPillHtml(compName) {
 //    반드시 '서버 최신 compInfoDB를 받은 직후'에만 호출할 것 (기존 데이터 보존)
 function migrateFixedCompanies() {
   if (localStorage.getItem("crm_fixed_migrated_v1")) return;
+  // 업체정보가 비어 있는 새 DB 일 때만 기본 업체를 넣는다. 예전에는 '이 브라우저에서 처음'이면 무조건 다시 넣어서,
+  // 이름을 바꾸거나 지운 기본 업체(예: 지엔씨메딕→지앤씨메딕)가 다른 폰·PC 에서 열 때마다 되살아나 피킹 후보에 옛 이름이 같이 떴음
+  if (Object.keys(compInfoDB || {}).length > 0) { localStorage.setItem("crm_fixed_migrated_v1", "1"); return; }
   let changed = false;
   fixedCompanies.forEach((name) => {
     if (!compInfoDB[name]) {
@@ -6951,6 +6957,98 @@ function _dsPolyArea(P) {
   for (let i = 0; i < P.length; i++) { const j = (i + 1) % P.length; a += P[i].x * P[j].y - P[j].x * P[i].y; }
   return Math.abs(a) / 2;
 }
+// ── 변(직선)으로 모서리 예측: 윤곽점에서 네 변을 각각 '직선'으로 맞추고(이상한 점은 무시하는 RANSAC), 이웃한 두 직선의 교점을 모서리로 삼는다.
+//    종이 옆에 다른 종이가 붙었거나·모서리가 말려 올라갔거나·접힌 조각이 삐져나와도, 곧게 이어진 변을 따라 모서리 위치를 '연장해서' 맞춘다.
+function _dsFitSide(pts, A, B, band, tol, angTol, seed) {
+  const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy);
+  if (L < 1) return null;
+  const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, th0 = Math.atan2(dy, dx);
+  const c = [];
+  for (const p of pts) {
+    const t = (p.x - A.x) * ux + (p.y - A.y) * uy;
+    if (t < -0.08 * L || t > 1.08 * L) continue;
+    if (Math.abs((p.x - A.x) * nx + (p.y - A.y) * ny) > band) continue;
+    c.push(p);
+  }
+  if (c.length < 12) return null;
+  let rs = (seed * 2654435761 + 12345) >>> 0; // 항상 같은 결과가 나오도록 고정된 난수
+  const rnd = () => { rs = (rs * 1664525 + 1013904223) >>> 0; return rs / 4294967296; };
+  const inl = (px, py, dx2, dy2) => { // 점-직선 거리가 tol 이하인 점들
+    const o = [];
+    for (const p of c) if (Math.abs(-(p.x - px) * dy2 + (p.y - py) * dx2) <= tol) o.push(p);
+    return o;
+  };
+  let best = null;
+  for (let it = 0; it < 300; it++) {
+    const a = c[(rnd() * c.length) | 0], b = c[(rnd() * c.length) | 0];
+    const ex = b.x - a.x, ey = b.y - a.y, el = Math.hypot(ex, ey);
+    if (el < 0.12 * L) continue;
+    const d0 = Math.atan2(ey, ex) - th0;
+    if (Math.abs(Math.atan2(Math.sin(2 * d0), Math.cos(2 * d0))) / 2 > angTol) continue;
+    const n = inl(a.x, a.y, ex / el, ey / el);
+    if (!best || n.length > best.n.length) best = { n };
+  }
+  if (!best) return null;
+  let set = best.n, ln = null;
+  for (let r = 0; r < 3; r++) { // 최소제곱으로 다듬고 다시 모음
+    let mx = 0, my = 0;
+    for (const p of set) { mx += p.x; my += p.y; }
+    mx /= set.length; my /= set.length;
+    let sxx = 0, syy = 0, sxy = 0;
+    for (const p of set) { sxx += (p.x - mx) * (p.x - mx); syy += (p.y - my) * (p.y - my); sxy += (p.x - mx) * (p.y - my); }
+    const th = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+    ln = { px: mx, py: my, dx: Math.cos(th), dy: Math.sin(th) };
+    set = inl(ln.px, ln.py, ln.dx, ln.dy);
+    if (set.length < 8) return null;
+  }
+  let tmin = Infinity, tmax = -Infinity;
+  for (const p of set) { const t = (p.x - ln.px) * ln.dx + (p.y - ln.py) * ln.dy; if (t < tmin) tmin = t; if (t > tmax) tmax = t; }
+  if (tmax - tmin < 0.3 * L) return null; // 곧게 이어진 부분이 변 길이의 30% 도 안 되면 믿지 않음
+  return ln;
+}
+function _dsInter(l1, l2) {
+  const cr = l1.dx * l2.dy - l1.dy * l2.dx;
+  if (Math.abs(cr) < 1e-3) return null;
+  const t = ((l2.px - l1.px) * l2.dy - (l2.py - l1.py) * l2.dx) / cr;
+  return { x: l1.px + l1.dx * t, y: l1.py + l1.dy * t };
+}
+function _dsQuadSane(Q, w, h, refArea, lo, hi) {
+  if (!Q || Q.some((p) => !p || !isFinite(p.x) || !isFinite(p.y))) return false;
+  let sg = 0;
+  for (let i = 0; i < 4; i++) { // 볼록한지(꼬이지 않았는지) + 안쪽 각도가 직사각형에 가까운지
+    const a = Q[i], b = Q[(i + 1) % 4], c = Q[(i + 2) % 4];
+    const cr = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    const s = cr > 0 ? 1 : -1;
+    if (!sg) sg = s; else if (s !== sg) return false;
+    const ang = Math.acos(Math.max(-1, Math.min(1, ((a.x - b.x) * (c.x - b.x) + (a.y - b.y) * (c.y - b.y)) / (Math.hypot(a.x - b.x, a.y - b.y) * Math.hypot(c.x - b.x, c.y - b.y) || 1)))) * 180 / Math.PI;
+    if (ang < 55 || ang > 125) return false;
+    if (b.x < -0.1 * w || b.x > 1.1 * w || b.y < -0.1 * h || b.y > 1.1 * h) return false;
+  }
+  const r = _dsPolyArea(Q) / Math.max(1, refArea);
+  return r >= lo && r <= hi;
+}
+// pts: 종이 덩어리 윤곽점(사진 테두리에 닿은 점 제외), Q0: 기존 방식으로 얻은 사각형. 정제에 실패하면 null(= 기존 결과를 그대로 씀)
+function _dsRefineQuad(pts, Q0, w, h) {
+  const diag = Math.hypot(w, h), a0 = _dsPolyArea(Q0);
+  let Q = Q0, ok = false;
+  for (let pass = 0; pass < 2; pass++) {
+    const band = (pass ? 0.03 : 0.1) * diag, tol = Math.max(2, 0.005 * diag), ang = (pass ? 6 : 15) * Math.PI / 180;
+    let miss = 0;
+    const L = [0, 1, 2, 3].map((i) => {
+      const A = Q[i], B = Q[(i + 1) % 4];
+      const f = _dsFitSide(pts, A, B, band, tol, ang, i * 7 + pass + 1);
+      if (f) return f;
+      miss++;
+      const d = Math.hypot(B.x - A.x, B.y - A.y) || 1; // 못 맞춘 변은 지금 변 그대로 둠
+      return { px: A.x, py: A.y, dx: (B.x - A.x) / d, dy: (B.y - A.y) / d };
+    });
+    if (miss > 2) break;
+    const N = [0, 1, 2, 3].map((i) => _dsInter(L[(i + 3) % 4], L[i]));
+    if (!_dsQuadSane(N, w, h, pass ? _dsPolyArea(Q) : a0, pass ? 0.8 : 0.5, pass ? 1.2 : 1.3)) break;
+    Q = N; ok = true;
+  }
+  return ok ? Q : null;
+}
 function _dsFindQuad(gray, w, h) {
   if (!gray || gray.length !== w * h || w < 20 || h < 20) return null;
   const thr = Math.min(215, Math.max(80, _dsOtsu(gray)));
@@ -7005,7 +7103,26 @@ function _dsFindQuad(gray, w, h) {
   const fill = bestSize / Math.max(1, qa); // 덩어리가 사각형을 얼마나 채우나(글씨 구멍이 있어도 보통 0.8 이상)
   const areaRatio = qa / (w * h);
   if (areaRatio < 0.12 || fill < 0.6) return null;
-  return { quad: Q, conf: Math.min(1, fill) * Math.min(1, areaRatio / 0.4), areaRatio, fill };
+  // 끝점만 따라가면 옆 종이·말린 모서리에 끌려가므로, 네 변을 직선으로 맞춰 모서리를 다시 구한다(사진 테두리에 닿은 점은 종이 변이 아니므로 제외)
+  // 단, 종이 '안쪽'의 표 선·글자 구멍 테두리는 변이 아니므로, 사진 테두리에서 바깥 배경을 채워 들어가 그 바깥과 닿는 점만 쓴다.
+  let Qr = null;
+  try {
+    const outside = new Uint8Array(w * h);
+    let sp = 0;
+    const seed = (c) => { if (lab[c] !== bestId && !outside[c]) { outside[c] = 1; stack[sp++] = c; } };
+    for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
+    for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
+    while (sp) {
+      const c = stack[--sp], x = c % w, y = (c / w) | 0;
+      if (x > 0) seed(c - 1);
+      if (x < w - 1) seed(c + 1);
+      if (y > 0) seed(c - w);
+      if (y < h - 1) seed(c + w);
+    }
+    const outer = pts.filter((p) => p.x > 0 && p.y > 0 && p.x < w - 1 && p.y < h - 1 && (outside[p.y * w + p.x - 1] || outside[p.y * w + p.x + 1] || outside[(p.y - 1) * w + p.x] || outside[(p.y + 1) * w + p.x]));
+    Qr = _dsRefineQuad(outer, Q, w, h);
+  } catch (_) { Qr = null; }
+  return { quad: Qr || Q, quad0: Q, refined: !!Qr, conf: Math.min(1, fill) * Math.min(1, areaRatio / 0.4), areaRatio, fill };
 }
 // 사각형을 사방으로 조금 넓힘(종이 가장자리가 잘리지 않게)
 function _dsExpand(Q, k) {
@@ -7749,7 +7866,7 @@ function _pickProgStart(body) {
   const _kids = [{ id: "v", label: "문자인식(구글)" }, { id: "g", label: "AI(Gemini)" }, { id: "b", label: "출고지시번호 바코드 읽기" }];
   const _p0 = Math.min(14, 4 + 2 * _prepRows.length); // 막대는 끝난 준비 작업 수만큼 먼저 차 있다가 이어서 천천히 채워짐
   _pickTr.ui = { steps: _prepRows.concat([{ id: "read", label: _PICK_PROG_LABELS.read, state: "run", t: now, kids: _kids }]), pct: _p0, startPct: _p0, cap: 88, stageStart: now, finished: false, dirty: true };
-  body.innerHTML = `<div id="pk-prog" style="padding:26px 4px 8px">
+  body.innerHTML = `<style>@keyframes pkSpin{to{transform:rotate(360deg)}}.pk-ring{display:inline-block;width:.95em;height:.95em;box-sizing:border-box;border:2.5px solid rgba(10,132,255,.22);border-top-color:#0a84ff;border-radius:50%;animation:pkSpin .8s linear infinite;vertical-align:-.12em}</style><div id="pk-prog" style="padding:26px 4px 8px">
     <div style="text-align:center"><div style="font-size:1.9em">⏳</div><div style="margin-top:8px;font-weight:800;color:var(--text-main)">피킹지를 읽는 중입니다</div><div style="margin-top:4px;font-size:0.82em;color:var(--text-sub)">보통 10~20초 걸려요. 창을 닫지 마세요.</div></div>
     <div style="margin:18px 2px 5px;height:12px;border-radius:99px;background:var(--border-color);overflow:hidden"><div id="pk-prog-bar" style="position:relative;overflow:hidden;height:100%;width:${Math.min(14, 4 + 2 * ((_pickPrepSteps && _pickPrepSteps.length) || 1))}%;border-radius:99px;transition:width .16s linear;background:linear-gradient(90deg,#0a84ff,#5ac8fa)"><div id="pk-prog-shine" style="position:absolute;top:0;bottom:0;left:-40%;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent)"></div></div></div>
     <div style="display:flex;justify-content:space-between;font-size:0.78em;color:var(--text-sub);margin:0 2px"><span id="pk-prog-pct">4%</span><span id="pk-prog-el">0초 경과</span></div>
@@ -7793,14 +7910,11 @@ function _pickProgPaint(full) {
   if (ee) ee.textContent = sec + "초 경과";
   if (he && !ui.finished) he.textContent = sec >= 45 ? "곧 시간 초과(55초)로 끊깁니다. 끊기면 '다시 선택'으로 다시 시도해 주세요." : sec >= 25 ? "평소보다 오래 걸리고 있어요. AI가 혼잡하면 자동으로 다른 모델·키로 넘어가며 읽어요." : "손글씨 2차 확인은 결과 창이 뜬 뒤 이어서 진행돼요.";
   if (full || ui.dirty) {
-    const row = (ic, label, run, ms, kid) => `<div style="display:flex;gap:8px;align-items:baseline${kid ? ";margin-left:1.6em;font-size:0.94em" : ""}"><span ${run ? 'class="pk-prog-ic"' : ""} style="width:1.3em;text-align:center">${ic}</span><span style="${run ? "font-weight:800;color:var(--text-main)" : "color:var(--text-sub)"}">${_esc(label)}${ms != null ? ` <small>· ${(ms / 1000).toFixed(1)}초</small>` : ""}</span></div>`;
+    const row = (ic, label, run, ms, kid) => `<div style="display:flex;gap:8px;align-items:baseline${kid ? ";margin-left:1.6em;font-size:0.94em" : ""}"><span ${run ? 'class="pk-prog-ic"' : ""} style="width:1.3em;text-align:center">${run ? '<span class="pk-ring"></span>' : ic}</span><span style="${run ? "font-weight:800;color:var(--text-main)" : "color:var(--text-sub)"}">${_esc(label)}${ms != null ? ` <small>· ${(ms / 1000).toFixed(1)}초</small>` : ""}</span></div>`;
     const fin = ui.finished;
     const el = document.getElementById("pk-prog-steps");
     if (el) el.innerHTML = ui.steps.map((x) => row(x.state === "done" ? "✅" : "◐", x.label, x.state === "run", x.state === "done" ? x.ms : null) + (x.kids ? x.kids.map((k) => row(k.state !== "done" ? "◐" : k.ok === true ? "✅" : k.ok === false ? "⚠️" : "–", k.label + (k.state === "done" && k.ok === false ? " — 못 읽음" : ""), k.state !== "done", k.state === "done" ? k.ms : null, true)).join("") : "")).join("") + row(fin ? "✅" : "○", "번호 대조·출고일 확인·업체 연결", false, null);
     ui.dirty = false;
-  } else {
-    const _sp = ["◐", "◓", "◑", "◒"][Math.floor(now / 200) % 4];
-    document.querySelectorAll(".pk-prog-ic").forEach((ic) => { ic.textContent = _sp; });
   }
   return true;
 }
