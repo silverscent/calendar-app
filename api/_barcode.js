@@ -20,7 +20,7 @@ function load() {
     zx.setZXingModuleOverrides({ wasmBinary });
     _mods = { jpeg, zx };
   } catch (e) {
-    _modErr = String((e && e.message) || e).slice(0, 80);
+    _modErr = String((e && e.message) || e).slice(0, 220);
   }
   return _mods;
 }
