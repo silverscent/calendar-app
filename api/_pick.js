@@ -1071,7 +1071,7 @@ function reconcile(printed, hw, g, errs, bar) {
     setFlag("orderNo", { level: "orange", msg: `바코드를 못 읽고 ${vNo ? "문자인식" : "AI"} 한 곳에서만 읽은 번호 ${orderNo} — 종이와 맞는지 꼭 확인하세요` });
   }
   if (orderNo && orderNoSrc !== "barcode" && !_fmtOk(orderNo)) setFlag("orderNo", { level: "red", msg: `번호 ${orderNo} 가 출고지시번호 모양(SH+숫자 10자리)이 아님 — 종이에서 직접 확인하세요` });
-  const orderNoCheck = { src: orderNoSrc, barcode: bNo || null, vision: vNo || null, ai: aNo || null, bc: bar ? { ok: !!bar.ok, why: bar.why || "", ms: bar.ms || null, scale: bar.scale || null, band: bar.band || null } : null };
+  const orderNoCheck = { src: orderNoSrc, barcode: bNo || null, vision: vNo || null, ai: aNo || null, bc: bar ? { ok: !!bar.ok, why: bar.why || "", ms: bar.ms || null, scale: bar.scale || null, band: bar.band || null, dim: bar.dim || null } : null };
   const customer = clean(printed.customer) || clean(g.customer);
   if (clean(printed.customer) && clean(g.customer) && normName(printed.customer) !== normName(g.customer) && similarity(normName(printed.customer), normName(g.customer)) < 0.6)
     setFlag("customer", { level: "orange", msg: `문자인식 "${printed.customer}" / AI "${g.customer}" 불일치` });

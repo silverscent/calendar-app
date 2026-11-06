@@ -65,6 +65,8 @@ async function readOrderBarcode(b64, mime, opts) {
     const im = m.jpeg.decode(buf, { useTArray: true, maxMemoryUsageInMB: 512 });
     const decMs = Date.now() - td;
     let tries = 0;
+    const dim = `${im.width}x${im.height}`;
+    const done2 = (r) => done(Object.assign({ dim }, r)); // 받은 사진 크기도 함께 알림(바코드 막대가 너무 가늘면 못 읽으므로 원인 파악용)
     if (!im || !im.width || !im.height) return done({ why: "사진 해석 실패" });
     const maxMs = o.maxMs || 9000; // 서버에서는 로컬보다 느릴 수 있음(첫 호출은 wasm 준비도 포함). 글자 읽기와 동시에 진행되므로 이 안이면 전체 대기가 늘지 않음
     const bands = [["top", 0, 0.25], ["bottom", 0.75, 1]];
@@ -72,15 +74,15 @@ async function readOrderBarcode(b64, mime, opts) {
     for (const [name, a, b] of bands) {
       const y0 = Math.floor(im.height * a), y1 = Math.floor(im.height * b);
       for (const s of scales) {
-        if (Date.now() - t0 > maxMs) return done({ why: `시간 초과(사진 해석 ${decMs}ms, ${tries}회 시도, 총 ${Date.now() - t0}ms)` });
+        if (Date.now() - t0 > maxMs) return done2({ why: `시간 초과(사진 ${dim}, 해석 ${decMs}ms, ${tries}회 시도, 총 ${Date.now() - t0}ms)` });
         tries++;
         const c = cropScale(im, 0, y0, im.width, y1, s);
         const rs = await m.zx.readBarcodes(c, { formats: ["Code128"], tryHarder: true, maxNumberOfSymbols: 3 });
         const hit = (rs || []).map((r) => String(r.text || "").trim().toUpperCase()).find((t) => ORDER_RE.test(t));
-        if (hit) return done({ ok: true, text: hit, scale: s, band: name });
+        if (hit) return done2({ ok: true, text: hit, scale: s, band: name });
       }
     }
-    return done({ why: `바코드를 못 찾음(${tries}회 시도, 총 ${Date.now() - t0}ms)` });
+    return done2({ why: `바코드를 못 찾음(사진 ${dim}, ${tries}회 시도, 총 ${Date.now() - t0}ms)` });
   } catch (e) {
     return done({ why: "오류: " + String((e && e.message) || e).slice(0, 60) });
   }
