@@ -11,6 +11,8 @@
 //   · 빨강(red) = 직접 채워야 함 / 주황(orange) = 참고(다시 확인)
 "use strict";
 
+let _bc = null; // 바코드 읽기(선택 모듈 — 없어도 기존 흐름 그대로)
+try { _bc = require("./_barcode.js"); } catch (_) { _bc = null; }
 const VISION_TIMEOUT_MS = 15000;
 let GEMINI_TIMEOUT_MS = 45000; // 판독 한 번에 AI 가 쓸 수 있는 전체 시간(서버 한도 60초·앱 대기 55초 안)
 let REREAD_TIMEOUT_MS = 35000; // 2차 판독(앱은 40초까지 기다림)
@@ -43,7 +45,7 @@ async function callVision(b64, fetchFn, apiKey) {
 const GEMINI_PROMPT = `이 이미지는 물류센터 '피킹 리스트'(출고 작업지시서)의 마지막 장을 폰으로 찍은 사진이다(약간 기울거나 그림자가 있을 수 있고, 종이가 옆으로 눕거나 거꾸로 찍혔을 수도 있으니 글자가 읽히는 방향으로 돌려서 읽을 것). 아래 값을 JSON 객체 하나로만 출력해.
 
 [인쇄된 글자 — 사람이 펜으로 쓴 것은 섞지 말 것]
-- orderNo: '출고지시번호' (예: SH2610200371). 없으면 null
+- orderNo: '출고지시번호' (예: SH2610200371). 맨 위 왼쪽 라벨 3줄(출고지시번호·판매번호·신청자) 중 첫 줄 값이고 영문 SH 로 시작해 숫자 10자리가 이어진다. 바로 아래 '판매번호'(S 로 시작, 예: S2611050321)는 출고지시번호가 아니다. 없으면 null
 - customer: '출고처명' 값 전체(예: "(주)백년가게국제의료기", "메디맥 주식회사"). 없으면 null
 - address: '주의사항' 줄의 전체 텍스트(주소·호수 포함). 없으면 null
 - buyerNote: '구매처 비고' 칸의 텍스트 전체(예: "10월발주) 10/21(수) 부탁드립니다."). 비어 있으면 null
@@ -62,7 +64,7 @@ const GEMINI_PROMPT = `이 이미지는 물류센터 '피킹 리스트'(출고 �
 - handNote: 위 뜻의 손글씨 원문(예: "기존에추가"). 없으면 null
 - uncertain: 값을 확신하지 못하는 키 이름 배열
 
-날짜(10/15 등)·시간(13:05 등)·피킹/검수 칸의 서명, 빨강·파랑 펜으로 그은 동그라미·체크·계산 메모(예: "145,116,24,+2,+1")는 모두 무시해. 숫자 1 은 짧은 세로선이나 약간 기울어진 선("/" 처럼 사선 한 줄만 그어진 것도 1)으로, 숫자 7 은 윗줄이 구부러져 "ㄱ"처럼 보일 수 있다. 완박스·혼재박스 칸에 사선(/)이나 세로선 한 줄이라도 있으면 빈칸이 아니라 1 이다 — 세 칸을 모두 empty 로 답하기 전에 칸마다 선이 있는지 한 번 더 확인해. PLT 는 읽을 수 없으면 null 로 두되, 완박스·혼재박스는 위 규칙대로 숫자(또는 empty)로만 답해. 두 자리 숫자도 있다: 세로선·사선이 나란히 두 개면 11, 세 개면 111 이니 한 개로 합쳐 읽지 말고 선의 개수를 하나씩 세어서 답한다(예: "11" 을 "1" 로 읽는 것이 가장 흔한 실수).`;
+손글씨 영역의 날짜(10/15 등)·시간(13:05 등)·피킹/검수 칸의 서명(※ 위 인쇄 항목인 '구매처 비고'·'주의사항' 안에 인쇄된 날짜는 무시하지 말고 그대로 읽는다), 빨강·파랑 펜으로 그은 동그라미·체크·계산 메모(예: "145,116,24,+2,+1")는 모두 무시해. 숫자 1 은 짧은 세로선이나 약간 기울어진 선("/" 처럼 사선 한 줄만 그어진 것도 1)으로, 숫자 7 은 윗줄이 구부러져 "ㄱ"처럼 보일 수 있다. 완박스·혼재박스 칸에 사선(/)이나 세로선 한 줄이라도 있으면 빈칸이 아니라 1 이다 — 세 칸을 모두 empty 로 답하기 전에 칸마다 선이 있는지 한 번 더 확인해. PLT 는 읽을 수 없으면 null 로 두되, 완박스·혼재박스는 위 규칙대로 숫자(또는 empty)로만 답해. 두 자리 숫자도 있다: 세로선·사선이 나란히 두 개면 11, 세 개면 111 이니 한 개로 합쳐 읽지 말고 선의 개수를 하나씩 세어서 답한다(예: "11" 을 "1" 로 읽는 것이 가장 흔한 실수).`;
 
 // ── Gemini 키·모델 여러 개 ──
 // 키: 첫 키가 한도 초과·과부하·키 오류면 다음 키로(서로 다른 프로젝트의 키여야 한도가 따로 계산됨). 막힌 키는 60초 건너뜀.
@@ -1042,17 +1044,46 @@ function judgeHandwriting(label, G, V, uncertain, key, zeroWhenEmpty) {
 }
 
 // printed: extractPrinted 결과, hw: extractHandwritingVision 결과, g: Gemini 결과
-function reconcile(printed, hw, g, errs) {
+function reconcile(printed, hw, g, errs, bar) {
   printed = printed || {}; hw = hw || {}; g = g || {};
   const flags = {};
   const setFlag = (f, fl) => { if (!fl) return; if (!flags[f] || (flags[f].level === "orange" && fl.level === "red")) flags[f] = fl; };
 
-  const orderNo = ((clean(printed.orderNo) || clean(g.orderNo) || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 40)) || null; // 등록 때와 같은 규칙으로 정리(중복판단 키 일치)
+  // 출고지시번호: ① 인쇄된 바코드(체크 규칙이 있어 가장 믿을 만함) ② 문자인식·AI 글자가 같게 읽은 값 ③ 한 곳에서만 읽은 값(확인 표시) — 서로 다르면 비워서 직접 확인
+  const _noN = (x) => ((clean(x) || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 40));
+  const vNo = _noN(printed.orderNo), aNo = _noN(g.orderNo), bNo = bar && bar.ok && bar.text ? _noN(bar.text) : "";
+  const _fmtOk = (x) => /^[A-Z]{2,3}\d{9,12}$/i.test(x);
+  let orderNo = null, orderNoSrc = null;
+  if (bNo) {
+    orderNo = bNo; orderNoSrc = "barcode";
+    const diff = [];
+    if (vNo && vNo.toUpperCase() !== bNo.toUpperCase()) diff.push(`문자인식 ${vNo}`);
+    if (aNo && aNo.toUpperCase() !== bNo.toUpperCase()) diff.push(`AI ${aNo}`);
+    if (diff.length) setFlag("orderNo", { level: "orange", msg: `바코드 번호 ${bNo} 사용 — 글자는 ${diff.join(" / ")} 로 읽혀 달랐어요(바코드 기준)` });
+  } else if (vNo && aNo && vNo.toUpperCase() === aNo.toUpperCase()) {
+    orderNo = vNo; orderNoSrc = "text2";
+    setFlag("orderNo", { level: "orange", msg: `바코드를 못 읽음(${(bar && bar.why) || "?"}) — 문자인식·AI 가 같게 읽은 번호 ${vNo}. 종이와 한 번 맞춰보세요` });
+  } else if (vNo && aNo) {
+    orderNo = null; orderNoSrc = "conflict";
+    setFlag("orderNo", { level: "red", msg: `출고지시번호가 서로 다르게 읽힘 — 문자인식 ${vNo} / AI ${aNo} (바코드도 못 읽음). 종이에서 직접 확인해 입력하세요` });
+  } else if (vNo || aNo) {
+    orderNo = vNo || aNo; orderNoSrc = vNo ? "vision" : "ai";
+    setFlag("orderNo", { level: "orange", msg: `바코드를 못 읽고 ${vNo ? "문자인식" : "AI"} 한 곳에서만 읽은 번호 ${orderNo} — 종이와 맞는지 꼭 확인하세요` });
+  }
+  if (orderNo && orderNoSrc !== "barcode" && !_fmtOk(orderNo)) setFlag("orderNo", { level: "red", msg: `번호 ${orderNo} 가 출고지시번호 모양(SH+숫자 10자리)이 아님 — 종이에서 직접 확인하세요` });
+  const orderNoCheck = { src: orderNoSrc, barcode: bNo || null, vision: vNo || null, ai: aNo || null, bc: bar ? { ok: !!bar.ok, why: bar.why || "", ms: bar.ms || null, scale: bar.scale || null, band: bar.band || null } : null };
   const customer = clean(printed.customer) || clean(g.customer);
   if (clean(printed.customer) && clean(g.customer) && normName(printed.customer) !== normName(g.customer) && similarity(normName(printed.customer), normName(g.customer)) < 0.6)
     setFlag("customer", { level: "orange", msg: `문자인식 "${printed.customer}" / AI "${g.customer}" 불일치` });
   const address = clean(printed.address) || clean(g.address);
-  const buyerNote = clean(printed.buyerNote) || clean(g.buyerNote);
+  // 구매처 비고: 두 줄짜리 칸을 문자인식이 단어 순서를 섞어 읽는 일이 있어(예: "수량 (11월) 변경 11/9 시 …"), 섞인 것으로 보이면 AI 가 읽은 값을 쓴다
+  //   '섞임' = 문자인식 비고(공백·기호 뺀 글자)가 주의사항 글자 안에 통째로 들어 있지 않은데 AI 비고는 들어 있을 때
+  const _sq = (x) => String(x || "").replace(/[\s\p{P}\p{S}]/gu, "");
+  let buyerNote = clean(printed.buyerNote) || clean(g.buyerNote);
+  try {
+    const na = _sq(clean(g.address) || clean(printed.address)), pn = _sq(printed.buyerNote), gn = _sq(g.buyerNote);
+    if (clean(printed.buyerNote) && clean(g.buyerNote) && na && pn && gn && !na.includes(pn) && na.includes(gn)) buyerNote = clean(g.buyerNote);
+  } catch (_) {}
   // 택배유형: ① 문서의 택배유형 칸에서 읽은 값(용차·택배 종류처럼 그럴듯할 때만) ② 문서 전체 글자에서 찾은 '○○택배' ③ AI 판독 값
   const _shipOk = (v) => /용차|택배|CJ|씨제이|대한통운|직송|퀵|화물/i.test(String(v || ""));
   const shipType = (_shipOk(printed.shipType) ? clean(printed.shipType) : null) || clean(printed.shipScan) || clean(g.shipType) || clean(printed.shipType);
@@ -1061,11 +1092,17 @@ function reconcile(printed, hw, g, errs) {
   // 출고일: 인쇄된 '출고일' 라벨 > 구매처 비고 속 날짜 > 미정
   let shipDate = validDate(printed.shipDate);
   let shipDateNote = null;
-  if (!shipDate && buyerNote) {
-    const ds = datesFromNote(buyerNote, printedAt).filter(validDate);
-    if (ds.length >= 1) {
-      shipDate = ds[0];
-      setFlag("shipDate", { level: "orange", msg: ds.length > 1 ? `구매처 비고에 날짜가 여러 개(${ds.join(", ")}) — 확인` : `구매처 비고에서 찾은 날짜 — 확인: "${buyerNote}"` });
+  if (!shipDate) {
+    // 날짜를 찾을 후보 글: 구매처 비고(문자인식) → 구매처 비고(AI) → 주의사항(문자인식) → 주의사항(AI). 먼저 날짜가 나오는 글을 쓴다
+    const cands = [[clean(printed.buyerNote), "구매처 비고"], [clean(g.buyerNote), "구매처 비고(AI)"], [clean(printed.address), "주의사항"], [clean(g.address), "주의사항(AI)"]];
+    for (const [txt, label] of cands) {
+      if (!txt) continue;
+      const ds = datesFromNote(txt, printedAt).filter(validDate);
+      if (ds.length >= 1) {
+        shipDate = ds[0];
+        setFlag("shipDate", { level: "orange", msg: ds.length > 1 ? `${label}에 날짜가 여러 개(${ds.join(", ")}) — 확인` : `${label}에서 찾은 날짜 — 확인: "${txt.slice(0, 60)}"` });
+        break;
+      }
     }
   }
   // 층: 문자인식 주소와 AI 주소 중 호수가 읽힌 쪽을 사용 (한쪽이 주소를 일부만 읽어도 다른 쪽으로 보완). 둘 다 읽혔는데 다르면 주황
@@ -1110,7 +1147,7 @@ function reconcile(printed, hw, g, errs) {
   if (!customer) setFlag("customer", { level: "red", msg: "출고처명을 읽지 못함 — 직접 선택" });
 
   return {
-    orderNo, customer, address, floor, buyerNote, shipType, shipDate, shipDateNote,
+    orderNo, orderNoSrc, orderNoCheck, customer, address, floor, buyerNote, shipType, shipDate, shipDateNote,
     plt, wanbox: wan, honjae: hon, box, sbox, rbox,
     addExisting, addNote, pltAddZero, mergeHint, mergeNote,
     unfinished, flags,
@@ -1130,6 +1167,8 @@ async function parsePicking(b64, mime, opts) {
   //   본 판독을 먼저 시작해 키 돌려쓰기·모델 순서가 곁가지 때문에 달라지지 않게 한다
   const pVision = timed(callVision(b64, fetchFn, opts.visionKey));
   const pMain = timed(callGemini(b64, mime, fetchFn, opts.geminiKey, pin, false));
+  // 인쇄된 바코드(Code128)에서 출고지시번호를 직접 읽음 — 글자 읽기와 따로 진행하는 세 번째 눈(기준값)
+  const pBar = _bc ? timed(_bc.readOrderBarcode(b64, mime, { disabled: !!(opts && opts.barcode === false) })) : Promise.resolve({ ok: false, text: null, why: "바코드 모듈 없음", ms: 0 });
   let shadowP = null;
   try {
     if (!pin && !(opts && opts.shadow === false) && keyPressure(opts.geminiKey, GEMINI_MODELS()).level === "ok") {
@@ -1137,13 +1176,13 @@ async function parsePicking(b64, mime, opts) {
       shadowP = callGemini(b64, mime, fetchFn, opts.geminiKey, SHADOW_MODEL, true).then((r) => { r.ms = Date.now() - ts; return r; });
     }
   } catch (_) { shadowP = null; }
-  const [v, g] = await Promise.all([pVision, pMain]);
+  const [v, g, bar] = await Promise.all([pVision, pMain, pBar]);
   if (!v.ok) errs.push(v.err);
   if (!g.ok) errs.push(g.err);
   if (!v.ok && !g.ok) return { ok: false, err: errs.join(" / ") };
   const printed = v.ok ? extractPrinted(v.data) : {};
   const hw = v.ok ? extractHandwritingVision(v.data) : {};
-  const out = reconcile(printed, hw, g.ok ? g.data : {}, errs);
+  const out = reconcile(printed, hw, g.ok ? g.data : {}, errs, bar);
   try { out.hwRegions = v.ok ? handRegions(v.data) : null; } catch (_) { out.hwRegions = null; }
   // 손글씨 칸 위치를 못 찾았을 때 이유를 볼 수 있게: 문자인식이 읽은 글자 수와 머리글 비슷한 글자들
   try { out.hwDiag = out.hwRegions ? null : handDiag(v.ok ? v.data : null); } catch (_) { out.hwDiag = null; }

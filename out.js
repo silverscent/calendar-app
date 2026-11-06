@@ -7681,7 +7681,7 @@ function _pickTrRun(label, tStart, d, err) {
 function _pickTrPick(d) {
   if (!_pickTr) return;
   _pickTr.runs.forEach((r) => { r.picked = r.ref === d; delete r.ref; });
-  _pickTr.res = d && d.result ? { usedFirstPass: !!d.result.usedFirstPass, hw: !!d.result.hwRegions, tilt: d.result.pageTilt || 0, pressure: d.result.pressure || null, parseId: d.parseId || null, ai: d.result.ai } : null;
+  _pickTr.res = d && d.result ? { usedFirstPass: !!d.result.usedFirstPass, hw: !!d.result.hwRegions, tilt: d.result.pageTilt || 0, pressure: d.result.pressure || null, parseId: d.parseId || null, ai: d.result.ai, bc: (d.result.orderNoCheck && d.result.orderNoCheck.bc) || null } : null;
 }
 function _pickProgStart(body) {
   const now = Date.now();
@@ -7796,7 +7796,7 @@ function _pickTraceHtml() {
     rr = `<div style="padding:7px 0;border-top:1px solid var(--border-color)">${h}</div>`;
   }
   const rs = T.res || {};
-  const info = [`사진 ${T.kb || "?"}KB`, T.prepMs ? `준비 ${sec(T.prepMs)}` : "", `손글씨 칸 위치 ${rs.hw ? "찾음" : "못 찾음"}`, rs.tilt ? `사진 기울기 ${rs.tilt}°` : "", rs.pressure ? `AI 키 여유 ${rs.pressure.usable}/${rs.pressure.total}개 (${_esc(rs.pressure.level)})` : "", rs.parseId ? `판독 기록 #${rs.parseId}` : ""].filter(Boolean).join(" · ");
+  const info = [`사진 ${T.kb || "?"}KB`, T.prepMs ? `준비 ${sec(T.prepMs)}` : "", `손글씨 칸 위치 ${rs.hw ? "찾음" : "못 찾음"}`, rs.tilt ? `사진 기울기 ${rs.tilt}°` : "", rs.pressure ? `AI 키 여유 ${rs.pressure.usable}/${rs.pressure.total}개 (${_esc(rs.pressure.level)})` : "", rs.parseId ? `판독 기록 #${rs.parseId}` : "", rs.bc ? (rs.bc.ok ? `바코드 읽음 ${sec(rs.bc.ms || 0)}${rs.bc.scale ? ` (${rs.bc.band === "bottom" ? "아래" : "위"} ${rs.bc.scale}배)` : ""}` : `바코드 못 읽음(${_esc(rs.bc.why || "?")})`) : ""].filter(Boolean).join(" · ");
   return `<div style="margin-bottom:10px;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg);overflow:hidden">
     <button type="button" onclick="_pickTraceToggle()" style="width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;border:0;background:none;color:var(--text-main);font-size:0.84em;font-weight:800;text-align:left;cursor:pointer"><span>🔬 판독 상세 <small style="font-weight:600;color:var(--text-sub)">(나만 보임) · 총 ${sec(total)}${aiTxt ? " · " + _esc(aiTxt) : ""}${tm0 && tm0.pinned ? " · 🧪지정" : ""}</small></span><span>${_pickTraceOpen ? "▴" : "▾"}</span></button>
     <div style="display:${_pickTraceOpen ? "block" : "none"};padding:0 12px 10px;font-size:0.8em;line-height:1.6">${rows}${T.res && T.res.usedFirstPass ? line('<span style="color:#ff9f0a">↩ 돌려서 다시 읽은 결과가 AI 실패라 처음(1차) 결과를 사용했어요</span>') : ""}${rr}${line(info)}${line("총 시간 = 사진 준비 + 앱이 보낸 순간부터 이 창이 뜰 때까지(2차 확인은 따로)")}</div></div>`;
@@ -8000,11 +8000,12 @@ function _pickRender() {
   }
   const isYongcha = !r.shipType || /용차/.test(r.shipType) || !!_shipKey(r.shipType); // 용마·CJ 택배는 아래 '배송 구분' 칸에서 고르므로 경고하지 않음
   const metaRows = [];
-  if (r.orderNo) metaRows.push(`출고지시번호 <b>${_esc(r.orderNo)}</b>`);
+  { const _src = r.orderNoSrc === "barcode" ? ` <span style="color:#30d158;font-weight:700">✓ 바코드로 확인</span>` : r.orderNoSrc === "text2" ? ` <span style="color:${_PICK_ORANGE};font-weight:700">글자만 일치(바코드 못 읽음)</span>` : r.orderNoSrc === "vision" || r.orderNoSrc === "ai" ? ` <span style="color:${_PICK_ORANGE};font-weight:700">한 곳에서만 읽음</span>` : ""; // 번호가 어디서 확인됐는지
+    if (r.orderNo) metaRows.push(`출고지시번호 <b>${_esc(r.orderNo)}</b>${_src}`); }
   if (r.shipType) metaRows.push(`택배유형 <b style="${isYongcha ? "" : "color:" + _PICK_ORANGE}">${_esc(r.shipType)}</b>${isYongcha ? "" : " — 용차·용마·CJ 가 아니라 등록 때 한 번 더 묻습니다"}`);
   if (r.buyerNote) metaRows.push(`구매처 비고 <b>${_esc(r.buyerNote)}</b>`);
   if (r.sbox !== null && r.sbox !== undefined) metaRows.push(`이 장 인쇄 합계 SBOX ${_esc(String(r.sbox))} / RBOX ${r.rbox === null || r.rbox === undefined ? "?" : _esc(String(r.rbox))} <span style="opacity:.8">(손글씨 합계와 달라도 정상)</span>`);
-  const metaHtml = (metaRows.length ? `<div class="pk-meta">${metaRows.join("<br>")}</div>` : "") + (!r.orderNo ? _pickFlagHtml("orderNo") : "");
+  const metaHtml = (metaRows.length ? `<div class="pk-meta">${metaRows.join("<br>")}</div>` : "") + _pickFlagHtml("orderNo"); // 번호가 있어도 바코드·글자가 다르거나 한 곳에서만 읽었으면 안내를 보여줌
   const matchNote = c.company
     ? `인쇄된 출고처명 "${_esc(r.customer || "")}" → 자동 연결`
     : printedName
@@ -8233,7 +8234,9 @@ async function _submitPickInner(btn) {
   const msg = app
     ? `${company}\n${target.date || "미정"} 일정 (현재 PLT ${target.pal} / 박스 ${target.box})\n+ PLT ${pal} / 박스 ${box} (완박스 ${wan} + 혼재 ${hon})\n→ PLT ${(parseInt(target.pal) || 0) + pal} / 박스 ${(parseInt(target.box) || 0) + box}\n이 일정에 추가할까요?`
     : `${company}\nPLT ${pal} / 박스 ${box} (완박스 ${wan} + 혼재 ${hon})\n출고일 ${date || "미정"}\n새 출고 일정으로 등록할까요?`;
-  if (!(await uiConfirm(msg + (orangeLeft ? `\n\n🟠 참고 표시 ${orangeLeft}건이 남아 있습니다.` : ""), { okText: app ? "추가" : "등록" }))) return;
+  const _onf = st.result && st.result.flags && st.result.flags.orderNo;
+  const _onMsg = _onf ? `\n\n${_onf.level === "red" ? "🔴" : "🟠"} 출고지시번호: ${_onf.msg}` : "";
+  if (!(await uiConfirm(msg + _onMsg + (orangeLeft ? `\n\n🟠 참고 표시 ${orangeLeft}건이 남아 있습니다.` : ""), { okText: app ? "추가" : "등록" }))) return;
   st.busy = true;
   if (btn) { btn.dataset.busy = "1"; btn.disabled = true; btn.textContent = "처리 중... ⏳"; }
   const res = await apiCall({
