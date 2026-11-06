@@ -1172,13 +1172,16 @@ async function parsePicking(b64, mime, opts) {
     const off = !!(opts && opts.barcode === false);
     let h = null;
     // ① 앱이 원본 사진에서 따로 잘라 보낸 위쪽 띠(고해상도) → ② 판독용 사진 자체(해상도가 낮으면 못 읽을 수 있음)
-    if (!off && opts && typeof opts.hdr === "string" && opts.hdr.length > 1000) {
-      h = await _bc.readOrderBarcode(opts.hdr, "image/jpeg", { whole: true });
-      if (h.ok) return Object.assign(h, { from: "hdr" });
+    const list = !off && opts ? (Array.isArray(opts.hdrs) ? opts.hdrs : typeof opts.hdr === "string" ? [opts.hdr] : []).filter((x) => typeof x === "string" && x.length > 1000) : [];
+    const whys = [];
+    for (let i = 0; i < list.length; i++) {
+      h = await _bc.readOrderBarcode(list[i], "image/jpeg", { whole: true });
+      if (h.ok) return Object.assign(h, { from: i === 0 ? "hdr" : "hdr2" });
+      whys.push(`${i === 0 ? "위" : "아래"}쪽 조각: ${h.why}`);
     }
     const m = await _bc.readOrderBarcode(b64, mime, { disabled: off });
     if (m.ok) return Object.assign(m, { from: "main" });
-    if (h) m.why = `${m.why} / 위쪽 조각: ${h.why}`;
+    if (whys.length) m.why = `${m.why} / ${whys.join(" / ")}`;
     return m;
   })()) : Promise.resolve({ ok: false, text: null, why: "바코드 모듈 없음", ms: 0 });
   let shadowP = null;

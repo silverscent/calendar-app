@@ -7065,9 +7065,11 @@ function _dsWarp(src, sw, sh, Q, ow, oh) {
 // ───────── 📄 모서리 맞추기 화면 ─────────
 // 사진 → (자동으로 종이 모서리 찾기) → 사람이 점을 끌어 확인 → 반듯하게 펴서 서버로.
 let _dsEd = null; // { cv(원본 캔버스), quad, disp(표시 캔버스), sc, drag }
+let _pickPrepSteps = []; // 로딩바에 보여줄 '앱이 실제로 한 준비 작업'(이름·걸린 시간) — 끝난 일만 기록
+let _pickHdr2 = null; // 위 조각과 같은 방식으로 자른 종이 '아래쪽' 띠 — 거꾸로 찍힌 사진은 바코드가 아래쪽에 오므로 같이 보낸다
 let _pickHdr = null; // 바코드용: 원본 사진에서 종이 위쪽 띠만 높은 해상도로 자른 그림(base64). 서버가 출고지시번호 바코드를 읽는 데만 씀
 // 종이 위쪽 띠(출고지시번호 바코드가 있는 곳)를 원본 해상도로 잘라낸다. 펴기를 했으면 같은 모서리로 펴서, 안 했으면 사진 위쪽을 그대로 자른다. 실패해도 판독은 계속(null)
-async function _pickBuildHdr(cvLow, quadLow, flatten) {
+async function _pickBuildHdr(cvLow, quadLow, flatten, part) { // part: "top"(기본) | "bottom"
   try {
     const file = cvLow && cvLow._origFile;
     if (!file) return null;
@@ -7080,9 +7082,9 @@ async function _pickBuildHdr(cvLow, quadLow, flatten) {
     if (flatten && quadLow && quadLow.length === 4) {
       const q = quadLow.map((p) => ({ x: p.x * k, y: p.y * k }));
       const lp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-      Q = [q[0], q[1], lp(q[1], q[2], FR), lp(q[0], q[3], FR)];
+      Q = part === "bottom" ? [lp(q[0], q[3], 1 - FR), lp(q[1], q[2], 1 - FR), q[2], q[3]] : [q[0], q[1], lp(q[1], q[2], FR), lp(q[0], q[3], FR)];
     } else {
-      Q = [{ x: 0, y: 0 }, { x: W - 1, y: 0 }, { x: W - 1, y: H * FR }, { x: 0, y: H * FR }];
+      Q = part === "bottom" ? [{ x: 0, y: H * (1 - FR) }, { x: W - 1, y: H * (1 - FR) }, { x: W - 1, y: H - 1 }, { x: 0, y: H - 1 }] : [{ x: 0, y: 0 }, { x: W - 1, y: 0 }, { x: W - 1, y: H * FR }, { x: 0, y: H * FR }];
     }
     const xs = Q.map((p) => p.x), ys = Q.map((p) => p.y);
     const bx = Math.max(0, Math.floor(Math.min(...xs)) - 2), by = Math.max(0, Math.floor(Math.min(...ys)) - 2);
@@ -7271,6 +7273,8 @@ async function pickEditSend(flatten) {
   if (!E) return;
   const _tPrep = Date.now();
   let b64;
+  let _tStep = Date.now();
+  const _stepDone = (label) => { const n = Date.now(); _pickPrepSteps.push({ label, ms: n - _tStep }); _tStep = n; }; // 끝난 준비 작업을 이름·시간과 함께 기록
   try {
     if (flatten) {
       if (!_dsQuadOk(E.quad)) { showToast("모서리 점이 꼬였어요. 네 점을 종이 모서리 순서대로 맞춰주세요.", 2800); return; }
@@ -7285,18 +7289,26 @@ async function pickEditSend(flatten) {
       const oc = document.createElement("canvas");
       oc.width = o.w; oc.height = o.h;
       oc.getContext("2d").putImageData(new ImageData(px, o.w, o.h), 0, 0);
+      _stepDone("종이 반듯하게 펴기");
       b64 = _dsToB64(oc);
       _pickSentCv = oc;
+      _stepDone("사진 압축");
     } else {
       b64 = _dsToB64(E.cv);
       _pickSentCv = E.cv;
+      _stepDone("사진 압축");
     }
   } catch (e) {
     // 펴기에 실패하면 원본 그대로 읽는다
+    _stepDone("종이 펴기 — 실패해 원본 그대로 읽기");
     b64 = _dsToB64(E.cv);
     _pickSentCv = E.cv;
+    _stepDone("사진 압축");
   }
-  _pickHdr = await _pickBuildHdr(E.cv, E.quad, !!flatten && _dsQuadOk(E.quad)); // 바코드용 고해상도 조각(실패하면 null — 판독은 그대로)
+  const _fl = !!flatten && _dsQuadOk(E.quad);
+  _pickHdr = await _pickBuildHdr(E.cv, E.quad, _fl, "top"); // 바코드용 고해상도 조각(실패하면 null — 판독은 그대로)
+  _pickHdr2 = await _pickBuildHdr(E.cv, E.quad, _fl, "bottom"); // 거꾸로 찍힌 사진 대비: 아래쪽 띠도 함께
+  _stepDone(_pickHdr || _pickHdr2 ? "바코드용 고해상도 조각(위·아래) 만들기" : "바코드용 고해상도 조각 — 못 만들어 건너뜀");
   _dsEd = null;
   _pickPrepMs = Date.now() - _tPrep;
   await _pickSend(b64);
@@ -7576,11 +7588,16 @@ async function pickOnFile(inp) {
   _pickState = { busy: true };
   body.innerHTML = `<div style="text-align:center;padding:36px 8px;color:var(--text-sub)"><div style="font-size:2em">⏳</div><div style="margin-top:10px;font-weight:800;color:var(--text-main)">사진을 여는 중입니다</div></div>`;
   try {
-    _pickHdr = null; // 새 사진이면 이전 사진의 바코드 조각은 버림
+    _pickHdr = null; _pickHdr2 = null; _pickPrepSteps = []; // 새 사진이면 이전 사진의 바코드 조각·준비 기록은 버림
+    const _tOpen = Date.now();
     const cv = await _dsLoad(file);
     if (myReq !== _pickReq) return;
+    _pickPrepSteps.push({ label: "사진 열기·크기 맞추기", ms: Date.now() - _tOpen });
+    const _tAuto = Date.now();
+    const _autoQ = _dsAuto(cv);
+    _pickPrepSteps.push({ label: _autoQ ? "종이 모서리 찾기" : "종이 모서리 찾기 — 못 찾아 직접 맞추기", ms: Date.now() - _tAuto });
     _pickState = null; // 편집 화면에서는 닫기 가능
-    _pickEditShow(cv, _dsAuto(cv));
+    _pickEditShow(cv, _autoQ);
   } catch (e) {
     if (myReq !== _pickReq) return;
     _pickShowError("사진을 열 수 없습니다. 다시 시도해주세요.");
@@ -7704,7 +7721,7 @@ function _pickRotateCv(cv, deg) {
 let _pickTr = null, _pickProgTimer = null, _pickTraceOpen = false;
 const _PICK_PROG_LABELS = {
   prep: "사진 준비·전송",
-  read: "문자인식(구글)·AI(Gemini) 판독 — 동시에 진행",
+  read: "서버로 보내 읽는 중 — 아래 세 가지를 동시에 진행",
   rot: "사진을 바로 세워 다시 읽기",
   retry: "AI가 잠시 실패해 한 번 더 읽기",
   enh: "사진을 선명하게 보정해 다시 읽기",
@@ -7716,6 +7733,8 @@ function _pickTrNew(b64) {
 function _pickTrRun(label, tStart, d, err) {
   if (!_pickTr) return;
   const r = d && d.result ? d.result : null;
+  if (r) _pickTr.kidOk = { v: r.timing && r.timing.vision > 0 ? true : undefined, g: r.ai === "fail" ? false : r.ai ? true : undefined, b: r.orderNoCheck && r.orderNoCheck.bc ? !!r.orderNoCheck.bc.ok : undefined };
+  if (r) _pickTr.kidMs = { v: r.timing && r.timing.vision, g: r.timing && r.timing.gemini, b: r.orderNoCheck && r.orderNoCheck.bc && r.orderNoCheck.bc.ms }; // 하위 줄에 붙일 실제 시간(서버가 잰 값)
   _pickTr.runs.push({ label, rt: Date.now() - tStart, shadow: r && r.shadow ? r.shadow : null, aiRaw: r && r.aiRaw ? r.aiRaw : null, tm: r && r.timing ? r.timing : null, ai: r ? r.ai : null, errs: r && Array.isArray(r.errs) ? r.errs.filter(Boolean).slice(0, 3) : [], err: err || (d && !d.success ? d.msg || "서버 오류" : d ? "" : "응답 없음"), ref: d || null });
 }
 function _pickTrPick(d) {
@@ -7725,10 +7744,14 @@ function _pickTrPick(d) {
 }
 function _pickProgStart(body) {
   const now = Date.now();
-  _pickTr.ui = { steps: [{ id: "prep", label: _PICK_PROG_LABELS.prep, state: "done", ms: _pickTr.prepMs || null, t: now }, { id: "read", label: _PICK_PROG_LABELS.read, state: "run", t: now }], pct: 4, startPct: 4, cap: 88, stageStart: now, finished: false, dirty: true };
+  // 앱이 실제로 끝낸 준비 작업(있으면 하나씩, 없으면 예전처럼 한 줄) → 서버 판독(동시에 3가지: 끝나기 전에는 ✅를 띄우지 않고, 끝나면 각자의 실제 시간을 붙임)
+  const _prepRows = (_pickPrepSteps && _pickPrepSteps.length ? _pickPrepSteps.map((x, i) => ({ id: "prep" + i, label: x.label, state: "done", ms: x.ms, t: now })) : [{ id: "prep", label: _PICK_PROG_LABELS.prep, state: "done", ms: _pickTr.prepMs || null, t: now }]);
+  const _kids = [{ id: "v", label: "문자인식(구글)" }, { id: "g", label: "AI(Gemini)" }, { id: "b", label: "출고지시번호 바코드 읽기" }];
+  const _p0 = Math.min(14, 4 + 2 * _prepRows.length); // 막대는 끝난 준비 작업 수만큼 먼저 차 있다가 이어서 천천히 채워짐
+  _pickTr.ui = { steps: _prepRows.concat([{ id: "read", label: _PICK_PROG_LABELS.read, state: "run", t: now, kids: _kids }]), pct: _p0, startPct: _p0, cap: 88, stageStart: now, finished: false, dirty: true };
   body.innerHTML = `<div id="pk-prog" style="padding:26px 4px 8px">
     <div style="text-align:center"><div style="font-size:1.9em">⏳</div><div style="margin-top:8px;font-weight:800;color:var(--text-main)">피킹지를 읽는 중입니다</div><div style="margin-top:4px;font-size:0.82em;color:var(--text-sub)">보통 10~20초 걸려요. 창을 닫지 마세요.</div></div>
-    <div style="margin:18px 2px 5px;height:12px;border-radius:99px;background:var(--border-color);overflow:hidden"><div id="pk-prog-bar" style="position:relative;overflow:hidden;height:100%;width:4%;border-radius:99px;transition:width .16s linear;background:linear-gradient(90deg,#0a84ff,#5ac8fa)"><div id="pk-prog-shine" style="position:absolute;top:0;bottom:0;left:-40%;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent)"></div></div></div>
+    <div style="margin:18px 2px 5px;height:12px;border-radius:99px;background:var(--border-color);overflow:hidden"><div id="pk-prog-bar" style="position:relative;overflow:hidden;height:100%;width:${Math.min(14, 4 + 2 * ((_pickPrepSteps && _pickPrepSteps.length) || 1))}%;border-radius:99px;transition:width .16s linear;background:linear-gradient(90deg,#0a84ff,#5ac8fa)"><div id="pk-prog-shine" style="position:absolute;top:0;bottom:0;left:-40%;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent)"></div></div></div>
     <div style="display:flex;justify-content:space-between;font-size:0.78em;color:var(--text-sub);margin:0 2px"><span id="pk-prog-pct">4%</span><span id="pk-prog-el">0초 경과</span></div>
     <div id="pk-prog-steps" style="margin-top:14px;font-size:0.86em;line-height:1.85"></div>
     <div id="pk-prog-hint" style="margin-top:8px;font-size:0.78em;color:var(--text-sub);min-height:2.4em"></div></div>`;
@@ -7736,12 +7759,21 @@ function _pickProgStart(body) {
   _pickProgTimer = setInterval(() => _pickProgPaint(false), 100);
   _pickProgPaint(true);
 }
+// 진행 중인 단계를 끝난 것으로 바꿈. 동시에 돌던 하위 줄(문자인식·AI·바코드)은 서버가 알려준 실제 시간으로 채운다(알려주지 않은 것은 시간 없이 ✅만)
+function _pickProgClose(step, now) {
+  step.state = "done"; step.ms = now - step.t;
+  if (step.kids) {
+    const km = (_pickTr && _pickTr.kidMs) || {};
+    const ko = (_pickTr && _pickTr.kidOk) || {};
+    step.kids.forEach((k) => { k.state = "done"; k.ms = km[k.id] > 0 ? km[k.id] : null; k.ok = ko[k.id]; }); // ok: true 읽음 · false 못 읽음 · 없음 = 서버가 알려주지 않음
+  }
+}
 function _pickProgStage(id) {
   const ui = _pickTr && _pickTr.ui;
   if (!ui) return;
   const now = Date.now();
   const cur = ui.steps.find((x) => x.state === "run");
-  if (cur) { cur.state = "done"; cur.ms = now - cur.t; }
+  if (cur) _pickProgClose(cur, now);
   ui.steps.push({ id, label: _PICK_PROG_LABELS[id] || id, state: "run", t: now });
   ui.stageStart = now; ui.startPct = ui.pct; ui.cap = 97; ui.dirty = true; // 다시 읽는 단계는 지금 위치에서 끊김 없이 이어서 천천히 채운다(뛰어오르지 않음)
   _pickProgPaint(true);
@@ -7761,14 +7793,14 @@ function _pickProgPaint(full) {
   if (ee) ee.textContent = sec + "초 경과";
   if (he && !ui.finished) he.textContent = sec >= 45 ? "곧 시간 초과(55초)로 끊깁니다. 끊기면 '다시 선택'으로 다시 시도해 주세요." : sec >= 25 ? "평소보다 오래 걸리고 있어요. AI가 혼잡하면 자동으로 다른 모델·키로 넘어가며 읽어요." : "손글씨 2차 확인은 결과 창이 뜬 뒤 이어서 진행돼요.";
   if (full || ui.dirty) {
-    const row = (ic, label, run, ms) => `<div style="display:flex;gap:8px;align-items:baseline"><span ${run ? 'id="pk-prog-ic"' : ""} style="width:1.3em;text-align:center">${ic}</span><span style="${run ? "font-weight:800;color:var(--text-main)" : "color:var(--text-sub)"}">${_esc(label)}${ms != null ? ` <small>· ${(ms / 1000).toFixed(1)}초</small>` : ""}</span></div>`;
+    const row = (ic, label, run, ms, kid) => `<div style="display:flex;gap:8px;align-items:baseline${kid ? ";margin-left:1.6em;font-size:0.94em" : ""}"><span ${run ? 'class="pk-prog-ic"' : ""} style="width:1.3em;text-align:center">${ic}</span><span style="${run ? "font-weight:800;color:var(--text-main)" : "color:var(--text-sub)"}">${_esc(label)}${ms != null ? ` <small>· ${(ms / 1000).toFixed(1)}초</small>` : ""}</span></div>`;
     const fin = ui.finished;
     const el = document.getElementById("pk-prog-steps");
-    if (el) el.innerHTML = ui.steps.map((x) => row(x.state === "done" ? "✅" : "◐", x.label, x.state === "run", x.state === "done" ? x.ms : null)).join("") + row(fin ? "✅" : "○", "결과 정리·업체 연결", false, null);
+    if (el) el.innerHTML = ui.steps.map((x) => row(x.state === "done" ? "✅" : "◐", x.label, x.state === "run", x.state === "done" ? x.ms : null) + (x.kids ? x.kids.map((k) => row(k.state !== "done" ? "◐" : k.ok === true ? "✅" : k.ok === false ? "⚠️" : "–", k.label + (k.state === "done" && k.ok === false ? " — 못 읽음" : ""), k.state !== "done", k.state === "done" ? k.ms : null, true)).join("") : "")).join("") + row(fin ? "✅" : "○", "번호 대조·출고일 확인·업체 연결", false, null);
     ui.dirty = false;
   } else {
-    const ic = document.getElementById("pk-prog-ic");
-    if (ic) ic.textContent = ["◐", "◓", "◑", "◒"][Math.floor(now / 200) % 4];
+    const _sp = ["◐", "◓", "◑", "◒"][Math.floor(now / 200) % 4];
+    document.querySelectorAll(".pk-prog-ic").forEach((ic) => { ic.textContent = _sp; });
   }
   return true;
 }
@@ -7777,7 +7809,7 @@ async function _pickProgFinish() {
   if (!ui) return;
   const now = Date.now();
   const cur = ui.steps.find((x) => x.state === "run");
-  if (cur) { cur.state = "done"; cur.ms = now - cur.t; }
+  if (cur) _pickProgClose(cur, now);
   ui.finished = true; ui.dirty = true;
   const he = document.getElementById("pk-prog-hint"); if (he) he.textContent = "";
   if (_pickProgPaint(true)) await new Promise((r) => setTimeout(r, 350)); // 100% 가 잠깐 보이게
@@ -7836,7 +7868,7 @@ function _pickTraceHtml() {
     rr = `<div style="padding:7px 0;border-top:1px solid var(--border-color)">${h}</div>`;
   }
   const rs = T.res || {};
-  const info = [`사진 ${T.kb || "?"}KB`, T.prepMs ? `준비 ${sec(T.prepMs)}` : "", `손글씨 칸 위치 ${rs.hw ? "찾음" : "못 찾음"}`, rs.tilt ? `사진 기울기 ${rs.tilt}°` : "", rs.pressure ? `AI 키 여유 ${rs.pressure.usable}/${rs.pressure.total}개 (${_esc(rs.pressure.level)})` : "", rs.parseId ? `판독 기록 #${rs.parseId}` : "", rs.bc ? (rs.bc.ok ? `바코드 읽음${rs.bc.from === "hdr" ? "(고해상도 조각)" : ""} ${sec(rs.bc.ms || 0)}${rs.bc.dim ? ` · 사진 ${_esc(rs.bc.dim)}` : ""}${rs.bc.scale ? ` (${rs.bc.band === "bottom" ? "아래" : "위"} ${rs.bc.scale}배)` : ""}` : `바코드 못 읽음(${_esc(rs.bc.why || "?")})`) : ""].filter(Boolean).join(" · ");
+  const info = [`사진 ${T.kb || "?"}KB`, T.prepMs ? `준비 ${sec(T.prepMs)}` : "", `손글씨 칸 위치 ${rs.hw ? "찾음" : "못 찾음"}`, rs.tilt ? `사진 기울기 ${rs.tilt}°` : "", rs.pressure ? `AI 키 여유 ${rs.pressure.usable}/${rs.pressure.total}개 (${_esc(rs.pressure.level)})` : "", rs.parseId ? `판독 기록 #${rs.parseId}` : "", rs.bc ? (rs.bc.ok ? `바코드 읽음${rs.bc.from === "hdr" ? "(고해상도 조각)" : rs.bc.from === "hdr2" ? "(고해상도 조각·아래쪽 — 거꾸로 찍힌 사진)" : ""} ${sec(rs.bc.ms || 0)}${rs.bc.dim ? ` · 사진 ${_esc(rs.bc.dim)}` : ""}${rs.bc.scale ? ` (${rs.bc.band === "bottom" ? "아래" : "위"} ${rs.bc.scale}배)` : ""}` : `바코드 못 읽음(${_esc(rs.bc.why || "?")})`) : ""].filter(Boolean).join(" · ");
   return `<div style="margin-bottom:10px;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg);overflow:hidden">
     <button type="button" onclick="_pickTraceToggle()" style="width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 12px;border:0;background:none;color:var(--text-main);font-size:0.84em;font-weight:800;text-align:left;cursor:pointer"><span>🔬 판독 상세 <small style="font-weight:600;color:var(--text-sub)">(나만 보임) · 총 ${sec(total)}${aiTxt ? " · " + _esc(aiTxt) : ""}${tm0 && tm0.pinned ? " · 🧪지정" : ""}</small></span><span>${_pickTraceOpen ? "▴" : "▾"}</span></button>
     <div style="display:${_pickTraceOpen ? "block" : "none"};padding:0 12px 10px;font-size:0.8em;line-height:1.6">${rows}${T.res && T.res.usedFirstPass ? line('<span style="color:#ff9f0a">↩ 돌려서 다시 읽은 결과가 AI 실패라 처음(1차) 결과를 사용했어요</span>') : ""}${rr}${line(info)}${line("총 시간 = 사진 준비 + 앱이 보낸 순간부터 이 창이 뜰 때까지(2차 확인은 따로)")}</div></div>`;
@@ -7866,7 +7898,7 @@ async function _pickSend(b64, _rotated, _enh, _opt) {
         body: JSON.stringify({
           source: "vercel", domain: "system", action: "PICK_PARSE",
           admin_id: localStorage.getItem("admin_id"), session_token: token,
-          data: Object.assign({ image: b64, mime: "image/jpeg", meta: { rot: _rotated === true, enh: _enh === true } }, _pickPinCur() ? { model: _pickPinCur() } : {}, _pickHdr ? { hdr: _pickHdr } : {}),
+          data: Object.assign({ image: b64, mime: "image/jpeg", meta: { rot: _rotated === true, enh: _enh === true } }, _pickPinCur() ? { model: _pickPinCur() } : {}, _pickHdr ? { hdr: _pickHdr } : {}, _pickHdr2 ? { hdr2: _pickHdr2 } : {}),
         }),
         signal: ctl.signal,
       });
