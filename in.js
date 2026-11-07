@@ -3177,7 +3177,8 @@ function _ocrChangeCount() {
   let n = 0;
   (ocrEditRows || []).forEach((r, i) => {
     const o = (ocrOrigRows && ocrOrigRows[i]) || {};
-    if (!meaningful(r)) { if (meaningful(o)) n++; return; }
+    if (!meaningful(r)) { if (meaningful(o) && !r._new) n++; return; }
+    if (r._new) { n++; return; } // 달력에 없는 줄 = 새로 추가할 변경
     if (FLD.some((f) => String(r[f] == null ? "" : r[f]) !== String(o[f] == null ? "" : o[f]))) n++;
   });
   return n;
@@ -3498,6 +3499,7 @@ function loadOcrSplitData() {
       ih: typeof r.ih === "number" ? r.ih : null,
       cx: r.cx && typeof r.cx === "object" ? r.cx : null, // 열별 X(px) 맵
       _fromDb: !!r._fromDb, // 마지막 OCR 이후 달력에서 추가/수정된 행(좌표 없음) — 검증 제외 + 파란 음영
+      _new: !!r._new, // 달력에 없는 줄(확정 대기 중 OCR) — [확정]하면 새 일정으로 추가
       _ocr: r._ocr && typeof r._ocr === "object" ? r._ocr : null, // OCR 당시 파싱값 (이후 고친 값 구분용)
       _conf: r._conf && typeof r._conf === "object" ? r._conf : null, // {bl}: 달력에 있던 B/L (표에는 사진 B/L) — 다르면 확인 표시
     }));
@@ -3520,6 +3522,7 @@ function loadOcrSplitData() {
       if (kp && ocrEditRows[i] && String(ocrEditRows[i].etc || "").trim() && Object.keys(kp).indexOf("etc") >= 0) ocrEditRows[i]._kept = ["etc"];
     });
     if (_pendN) setTimeout(() => showToast(`사진에서 바뀐 값 ${_pendN}줄은 숨겨 뒀어요 (확정하면 함께 반영) — [🟣 보기]로 확인`, 5000), 300);
+    { const _newN = ocrEditRows.filter((r) => r && r._new).length; if (_newN) setTimeout(() => showToast(`🆕 달력에 없는 줄 ${_newN}개 — [확정]하면 새 일정으로 추가돼요`, 6000), _pendN ? 5600 : 300); }
 
     if (ocrEditRows.length === 0) {
       innerNow.innerHTML = `<div style="padding:20px; text-align:center; color:#888; font-size:12px;">저장된 파싱 데이터가 없습니다.</div>`;
@@ -3575,8 +3578,10 @@ function renderOcrTable() {
       const pf = _ocrPendOn(row, c.key); // 사진에서 새로 바뀐 칸(현재 DB 값과 다름) — '보기'를 켰을 때만 보라색
       const pTip = !pf && _ocrKeptOn(row, c.key) ? ` title="사진엔 없음 — 달력 값 유지"` : pf && ocrOrigRows[idx] ? ` title="사진 새 값 — 현재 DB: ${_esc(String(ocrOrigRows[idx][c.key] == null ? "" : ocrOrigRows[idx][c.key]))}"` : "";
       const kf = !pf && _ocrKeptOn(row, c.key);
-      const pSty = pf ? " box-shadow:inset 0 0 0 2px #8e44ad; font-weight:bold;" : kf ? " box-shadow:inset 0 0 0 2px #c9a8e0;" : "";
-      html += `<td onclick="onOcrCellTap(this)" data-idx="${idx}" data-field="${c.key}" data-bg="${bg}"${pTip} style="padding:7px 8px; border:1px solid #ddd; text-align:${c.align}; cursor:pointer; background:${bg}; ${wrap}${pSty}">${_esc(v)}</td>`;
+      let pSty = pf ? " box-shadow:inset 0 0 0 2px #8e44ad; font-weight:bold;" : kf ? " box-shadow:inset 0 0 0 2px #c9a8e0;" : "";
+      let nTip = pTip;
+      if (row._new && c.key === OCR_COLS[0].key) { pSty += " border-left:5px solid #16a085;"; nTip = ` title="🆕 달력에 없는 줄 — [확정]하면 새 일정으로 추가돼요"`; }
+      html += `<td onclick="onOcrCellTap(this)" data-idx="${idx}" data-field="${c.key}" data-bg="${bg}"${nTip} style="padding:7px 8px; border:1px solid #ddd; text-align:${c.align}; cursor:pointer; background:${bg}; ${wrap}${pSty}">${_esc(v)}</td>`;
     });
     html += `</tr>`;
   });
@@ -4844,13 +4849,15 @@ async function applyOcrEdits(btn) {
   const FLD = ["bl", "pal", "eta", "inDate", "fwd", "sType", "invoice", "etc"];
   const changed = [];
   const deletes = [];
+  let newRows = 0;
   ocrEditRows.forEach((r, i) => {
     const o = ocrOrigRows[i] || {};
     if (!meaningful(r)) {
-      // 행 데이터를 전부 지운 경우: 원래 일정이 있던 행이면 '삭제', 빈 행 그대로면 무시
-      if (meaningful(o)) deletes.push({ bl: o.bl || "", invoice: o.invoice || "", inDate: o.inDate || "" });
+      // 행 데이터를 전부 지운 경우: 원래 일정이 있던 행이면 '삭제', 빈 행 그대로면 무시 (달력에 없던 줄은 지울 게 없으니 그냥 추가 안 함)
+      if (meaningful(o) && !r._new) deletes.push({ bl: o.bl || "", invoice: o.invoice || "", inDate: o.inDate || "" });
       return;
     }
+    if (r._new) { newRows++; changed.push(Object.assign({}, r)); return; } // 달력에 없는 줄 → _o 없이 보냄(서버가 인보이스·B/L 로 찾고, 없으면 새로 추가)
     if (FLD.some((f) => String(r[f] == null ? "" : r[f]) !== String(o[f] == null ? "" : o[f])))
       changed.push(Object.assign({}, r, { _o: { bl: o.bl || "", invoice: o.invoice || "", inDate: o.inDate || "" } })); // _o: 수정 전 값 → 서버가 정확히 그 DB 행을 찾도록
   });
@@ -4890,7 +4897,7 @@ async function applyOcrEdits(btn) {
     const changedIdx = new Set();
     ocrEditRows.forEach((r, i) => {
       const o = ocrOrigRows[i] || {};
-      if (FLD.some((f) => String(r[f] == null ? "" : r[f]) !== String(o[f] == null ? "" : o[f]))) changedIdx.add(i);
+      if (r._new || FLD.some((f) => String(r[f] == null ? "" : r[f]) !== String(o[f] == null ? "" : o[f]))) changedIdx.add(i);
     });
     document.querySelectorAll("#ocrTableInner td[data-idx]").forEach((td) => {
       if (!changedIdx.has(parseInt(td.dataset.idx, 10))) return;
@@ -4901,6 +4908,7 @@ async function applyOcrEdits(btn) {
   let confirmMsg = "";
   if (redCount > 0) confirmMsg += `⚠️ 확인필요(빨강) ${redCount}건 — 그래도 반영할까요?\n\n`;
   if (changed.length) confirmMsg += `수정/추가 ${changed.length}건`;
+  if (newRows) confirmMsg += ` (🆕 달력에 없던 줄 ${newRows}건을 새 일정으로 추가)`;
   if (deletes.length) confirmMsg += (confirmMsg ? "\n" : "") + `🗑️ 빈 행 ${deletes.length}건의 입고 일정을 삭제`;
   { const hidN = !_ocrShowChanges ? _ocrPendCount() : 0; if (hidN) confirmMsg += (confirmMsg ? "\n" : "") + `🟣 사진에서 바뀐 값 ${hidN}칸 포함 (숨겨 둔 상태 — 화면의 [사진에서 바뀐 값 보기]로 확인)`; }
   confirmMsg += "\n입고 DB에 반영할까요?";
@@ -4929,7 +4937,11 @@ async function applyOcrEdits(btn) {
       const dupPart = res.dupCount > 0 ? ` / 중복정리 ${res.dupCount}` : "";
       const skipPart = res.skipCount > 0 ? ` / 건너뜀 ${res.skipCount}${res.skipNames && res.skipNames.length ? " (" + res.skipNames.join(", ") + ")" : ""}` : "";
       const delFailPart = res.deleteSkipped > 0 ? ` / ⚠️ 삭제 못함 ${res.deleteSkipped}${res.deleteSkippedNames && res.deleteSkippedNames.length ? " (" + res.deleteSkippedNames.join(", ") + ")" : ""}` : "";
-      showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount}${delPart}${delFailPart}${dupPart}${skipPart})`, res.skipCount > 0 || res.deleteSkipped > 0 ? 6000 : 3000);
+      const vf = res.verify || null; // 서버가 반영 뒤 달력(DB)을 다시 읽어 확인한 결과
+      const vfBad = !!(vf && (vf.bad && vf.bad.length));
+      const vfPart = vf && vf.total ? ` / 🔎 달력 재확인 ${vf.ok}/${vf.total} 일치` : vf && vf.error ? " / ⚠️ 달력 재확인 못 함" : "";
+      showToast(`✅ 반영 완료 (신규 ${res.insertCount} / 수정 ${res.updateCount}${delPart}${delFailPart}${dupPart}${skipPart}${vfPart})`, vfBad || res.skipCount > 0 || res.deleteSkipped > 0 ? 6000 : 3500);
+      if (vfBad) setTimeout(() => showToast(`⚠️ 달력과 다른 줄 ${vf.bad.length}건: ${vf.bad.slice(0, 3).join(", ")}${vf.bad.length > 3 ? " 외" : ""} — 달력을 직접 확인해 주세요`, 9000), 600);
       if (typeof navMonth === "function") navMonth(0);
       loadOcrSplitData(); // 대조표 새로고침(삭제된 빈 행 제거 + 최신값 반영 + 기준 갱신)
     } else {

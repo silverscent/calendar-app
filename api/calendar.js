@@ -2804,7 +2804,10 @@ if (action === "VERIFY_SESSION") {
                 const blc = keyBl(r);
                 const d = (inv && byInv[inv]) || (blc && blc !== "발행전" && byBl[blc]) || null;
                 if (!d) {
-                  merged.push(r); // 달력에 없으면(삭제 등) OCR 스냅샷 유지
+                  // 달력에 없는 줄: 확정 대기 중인 OCR 이면 '새로 추가될 줄'(_new)로 표시 — 안 그러면 대조표엔 보이는데 [확정]해도 DB 에 안 들어갔음
+                  //  (표 값과 기준 값이 같아 '바뀐 것 없음'으로 취급됐기 때문). 인보이스·B/L 이 둘 다 없는 줄은 달력의 같은 줄과 구분할 수 없어 표시하지 않음
+                  const _hasKey = !!inv || (!!blc && blc !== "발행전");
+                  merged.push(pendOk && _hasKey && !r._fromDb ? { ...r, _new: true } : r); // 확정/취소가 끝난 건은 그대로(달력에서 일부러 지운 줄을 되살리지 않음)
                   continue;
                 }
                 if (d.status === "완료") { doneRows.push({ bl: d.bl_number || r.bl || "", invoice: d.invoice || r.invoice || "", eta: d.eta || r.eta || "", inDate: d.receive_date || r.inDate || "", ocrEta: r.eta || "", ocrIn: r.inDate || "" }); continue; } // 입고 완료 → 대조창에서 제외(그 줄의 값은 '표에 없는 글자' 알림에서 빼도록 목록으로 알려 줌)
@@ -3172,7 +3175,11 @@ if (action === "VERIFY_SESSION") {
             let x = {};
             try { x = JSON.parse(r.parsed || "{}"); } catch (_) {}
             const bc = x.bc ? `바코드 ${x.bc.ok ? "성공" : "실패"}${x.bc.from ? "(" + x.bc.from + ")" : ""}${x.bc.ms ? " " + x.bc.ms + "ms" : ""}${x.bc.ok ? "" : x.bc.why ? " — " + x.bc.why : ""}` : "바코드 기록 없음";
-            const tm = x.timing ? Object.keys(x.timing).map((k) => `${k} ${x.timing[k]}`).join(" ") : "";
+            const tm = x.timing ? Object.keys(x.timing).filter((k) => x.timing[k] !== null && x.timing[k] !== undefined && x.timing[k] !== false && k !== "pinned").map((k) => {
+              const v = x.timing[k];
+              if (k === "attempts") return Array.isArray(v) && v.length ? "시도[" + v.map((a) => `키${a.keyNo} ${String(a.model || "").replace("gemini-", "")} ${a.ok ? "성공" : (a.why || "실패")} ${a.ms}ms`).join(" → ") + "]" : "";
+              return `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`;
+            }).filter(Boolean).join(" ") : "";
             const fl = x.flags ? Object.keys(x.flags).filter((k) => x.flags[k] && x.flags[k] !== "ok").map((k) => `${k}:${x.flags[k]}`).join(" ") : "";
             picksD.push(`${r.t} · 번호 ${x.orderNo || "(없음)"}${x.orderNoSrc ? "(" + x.orderNoSrc + ")" : ""} · ${bc}${tm ? " · 시간 " + tm : ""}${x.kb ? " · 사진 " + x.kb + "KB" : ""}${fl ? " · 확인필요 " + fl : ""}`);
           });
@@ -3563,12 +3570,14 @@ if (action === "VERIFY_SESSION") {
                   [p.bl, p.pal, p.inDate, p.etc, p.sType, p.fwd, p.invoice, p.eta, p.target.id],
                 );
                 updateCount++;
+                p.written = true;
               } else {
                 await pool.query(
                   `INSERT INTO inbound (bl_number, pallets, receive_date, status, s_type, fwd, invoice, eta, remarks, is_ai_modified) VALUES (?, ?, ?, '입고대기', ?, ?, ?, ?, ?, 1)`,
                   [p.bl, p.pal, p.inDate, p.sType, p.fwd, p.invoice, p.eta, p.etc],
                 );
                 insertCount++;
+                p.written = true;
               }
             } catch (rowErr) {
               skipCount++;
@@ -3602,6 +3611,38 @@ if (action === "VERIFY_SESSION") {
           }
           // ⚠️ LAST_OCR_DATA(좌표 캐시)의 OCR 당시 값·좌표는 덮어쓰지 않음 — 대조창은 GET 때 현재 inbound 값을 합쳐서 보여줌
 
+          // 🔎 반영 뒤 달력(DB)을 다시 읽어 방금 쓴 값과 같은지 확인 — '대조표는 맞는데 달력은 안 바뀐' 일을 확정 순간에 바로 알리기 위함 (조회 1~2번뿐)
+          const verify = { total: 0, ok: 0, bad: [], unverified: 0 };
+          try {
+            const wrote = plan.filter((p) => p.written);
+            const invs = [...new Set(wrote.filter((p) => p.invoice).map((p) => p.invoice))];
+            const bls = [...new Set(wrote.filter((p) => !p.invoice && p.bl && p.bl !== "발행전").map((p) => p.bl))];
+            const wp = [], wa = [];
+            if (invs.length) { wp.push("invoice IN (?)"); wa.push(invs); }
+            if (bls.length) { wp.push("bl_number IN (?)"); wa.push(bls); }
+            let back = [];
+            if (wp.length) {
+              const [vr] = await pool.query(
+                "SELECT bl_number, pallets, DATE_FORMAT(eta,'%Y-%m-%d') AS eta, DATE_FORMAT(receive_date,'%Y-%m-%d') AS receive_date, fwd, s_type, invoice, remarks FROM inbound WHERE " + wp.join(" OR "),
+                wa,
+              );
+              back = vr;
+            }
+            const T = (v) => String(v == null ? "" : v).trim();
+            for (const p of wrote) {
+              if (!p.invoice && (!p.bl || p.bl === "발행전")) { verify.unverified++; continue; } // 인보이스·B/L 이 없는 줄은 DB 에서 다시 찾을 수 없음
+              verify.total++;
+              const cand = back.filter((d) => (p.invoice ? T(d.invoice) === p.invoice : T(d.bl_number).replace(/[\s•·\-\*]/g, "").toUpperCase() === p.bl));
+              const want = { bl: p.bl, pal: p.pal, inDate: p.inDate || "", eta: p.eta || "", fwd: p.fwd, sType: p.sType, invoice: p.invoice, etc: p.etc };
+              const same = (d) => T(d.bl_number).replace(/[\s•·\-\*]/g, "").toUpperCase() === want.bl && Number(d.pallets) === want.pal && T(d.receive_date) === want.inDate && T(d.eta) === want.eta && T(d.fwd) === want.fwd && T(d.s_type).toUpperCase() === want.sType && T(d.invoice) === want.invoice && T(d.remarks) === want.etc;
+              if (cand.some(same)) verify.ok++;
+              else verify.bad.push(`${p.bl || p.invoice}${p.invoice ? "/" + p.invoice : ""}${cand.length ? "" : " (달력에서 못 찾음)"}`);
+            }
+          } catch (vErr) {
+            console.error("[APPLY_OCR] 반영 후 재확인 실패(무시):", vErr.sqlMessage || vErr.message);
+            verify.error = true;
+          }
+
           // 감사 로그 + 텔레그램 알림
           try {
             let ip = req.headers["x-forwarded-for"] || req.connection?.remoteAddress || "IP 알수없음";
@@ -3610,7 +3651,7 @@ if (action === "VERIFY_SESSION") {
             const blList = rows.slice(0, 5).map((r) => String(r.bl || r.invoice || "").slice(-8)).filter(Boolean);
             const blSuffix = rows.length > 5 ? ` 외 ${rows.length - 5}건` : "";
             const blStr = blList.length > 0 ? ` [${blList.join(", ")}${blSuffix}]` : "";
-            const ocrDesc = `[OCR 확정] 신규 ${insertCount}건 / 수정 ${updateCount}건 / 삭제 ${deleteCount}건${blStr}`;
+            const ocrDesc = `[OCR 확정] 신규 ${insertCount}건 / 수정 ${updateCount}건 / 삭제 ${deleteCount}건${blStr}${verify.total ? ` · 달력 재확인 ${verify.ok}/${verify.total}${verify.bad.length ? " 불일치 " + verify.bad.slice(0, 3).join(",") : ""}` : ""}`;
             await pool.query(
               "INSERT INTO admin_audit_logs (admin_id, action_type, description, ip_address) VALUES (?, 'OCR_APPLY', ?, ?)",
               [currentAdmin, ocrDesc, ip],
@@ -3618,7 +3659,7 @@ if (action === "VERIFY_SESSION") {
             notifyCalendarChange(ocrDesc, currentAdmin);
           } catch (e) {}
 
-          return res.status(200).json({ success: true, insertCount, updateCount, skipCount, skipNames: skipNames.slice(0, 10), deleteCount, deleteSkipped, deleteSkippedNames: deleteSkippedNames.slice(0, 10), total: rows.length });
+          return res.status(200).json({ success: true, insertCount, updateCount, skipCount, skipNames: skipNames.slice(0, 10), deleteCount, deleteSkipped, deleteSkippedNames: deleteSkippedNames.slice(0, 10), total: rows.length, verify: { total: verify.total, ok: verify.ok, bad: verify.bad.slice(0, 10), unverified: verify.unverified, error: !!verify.error } });
         } catch (err) {
           console.error("OCR 적용 에러:", err);
           return res.status(200).json({ success: false, msg: "요청 처리 중 오류가 발생했습니다." });
