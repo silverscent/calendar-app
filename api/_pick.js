@@ -852,45 +852,7 @@ const normName = (s) =>
     .replace(/앤/g, "엔")
     // 메디칼/메디컬, 메디맥/메디멕, 써/서 처럼 인쇄·손글씨에서 자주 바뀌는 글자도 같은 글자로 본다
     .replace(/컬/g, "칼").replace(/멕/g, "맥").replace(/캐/g, "케").replace(/써/g, "서").replace(/쎄/g, "세");
-// ── 업체 약어·옛 이름 사전 (출고 화면 out.js 의 compFullMap 과 같은 내용 — 한쪽을 고치면 다른 쪽도 고칠 것) ──
-// 화면은 약어를 정식명으로 바꿔 저장하지만, 옛 데이터·손으로 쓴 이름에는 약어/옛 이름이 남아 있을 수 있어 서버도 같은 사전으로 맞춘다.
-const LEGACY_COMP_MAP = {
-  // 💡 1. 약어를 새 이름으로 연결
-  메2: "(주)메디맥 2층",
-  메디맥2층: "(주)메디맥 2층",
-  메3: "(주)메디맥 3층",
-  메디맥3층: "(주)메디맥 3층",
-  메뱅: "(주)메디뱅크",
-  메써: "메디칼써프라이",
-  서호: "서호메디코",
-  엠코: "엠코리아토탈서비스",
-  국제: "백년가게국제의료기",
-  드림: "드림케어메디칼",
-  지엔: "지앤씨메딕",
-  지엔씨: "지앤씨메딕",
-  지앤: "지앤씨메딕",
-  지앤씨: "지앤씨메딕",
-  링랩: "링크더랩",
-  링크: "링크더랩",
-  위비: "위드비아",
-  위드: "위드비아",
-  하메: "하이메드",
-  하이: "하이메드",
-  스엠: "스마트엠케어",
-  스마: "스마트엠케어",
-  제니: "제니스엠지",
-  세람: "세람메디칼",
-
-  // 🚨 2. [가장 중요!] 과거 DB에 박혀있는 옛날 이름을 -> '새 이름'으로 강제 세탁!!
-  "메디맥 주식회사 2층": "(주)메디맥 2층",
-  "메디맥 주식회사 3층": "(주)메디맥 3층",
-  "메디멕 주식회사 2층": "(주)메디맥 2층", // 멕/맥 오타까지 방어
-  "메디멕 주식회사 3층": "(주)메디맥 3층",
-  제니스: "제니스엠지",
-  국제의료기: "백년가게국제의료기",
-};
-const _LEGACY_N = {};
-Object.keys(LEGACY_COMP_MAP).forEach((k) => { const nk = normName(k); if (nk) _LEGACY_N[nk] = LEGACY_COMP_MAP[k]; });
+// 업체 약어·옛 이름은 코드에 두지 않는다 — 업체정보(compDb)의 이름·약어 칸(쉼표로 여러 개)이 유일한 기준.
 // CRM 약어 칸에 "메3, 메디맥3" 처럼 여러 개를 적어도 각각 약어로 취급
 function shortsOf(entry) {
   const s = entry && entry.shortName ? String(entry.shortName) : "";
@@ -906,11 +868,6 @@ function canonCompany(name, compDb) {
   const sh = names.filter((f) => shortsOf(compDb[f]).includes(n));
   if (sh.length === 1) return sh[0];
   if (sh.length > 1) return null; // 같은 약어를 쓰는 업체가 여럿 → 애매
-  const L = _LEGACY_N[n];
-  if (L) {
-    const m = names.find((f) => normName(f) === normName(L));
-    return m || L;
-  }
   return null;
 }
 function bigrams(s) { const o = new Set(); for (let i = 0; i < s.length - 1; i++) o.add(s.slice(i, i + 2)); return o; }
@@ -953,7 +910,7 @@ function matchCompany(printed, compDb, alias, opts) {
     if (byF.length === 1) return { status: "floor", company: byF[0], candidates: byF };
     return { status: "candidates", company: null, candidates: exact.slice(0, 5) };
   }
-  // 옛 약어/옛 이름 사전 (엠코·국제·메3 …) 으로 마스터 업체 찾기
+  // 이름·약어 칸으로 마스터 업체 찾기
   if (exact.length === 0) {
     const cc = canonCompany(printed, compDb);
     if (cc && names.includes(cc)) return { status: "alias", company: cc, candidates: [cc] };
@@ -993,12 +950,6 @@ function matchCompany(printed, compDb, alias, opts) {
   let cands = contain.length > 1 ? contain.slice(0, 5) : ranked;
   if (!contain.length) {
     const pre = names.filter((n) => shortsOf(compDb[n]).some((s) => s.length === 2 && p.startsWith(s)));
-    Object.keys(_LEGACY_N).forEach((k) => {
-      if (k.length === 2 && p.startsWith(k)) {
-        const m = names.find((f) => normName(f) === normName(_LEGACY_N[k]));
-        if (m && !pre.includes(m)) pre.push(m);
-      }
-    });
     if (pre.length) cands = pre.concat(cands.filter((c) => !pre.includes(c))).slice(0, 5);
   }
   return { status: cands.length ? "candidates" : "none", company: null, candidates: cands };
@@ -1231,4 +1182,4 @@ async function parsePicking(b64, mime, opts) {
   return out;
 }
 
-module.exports = { PIN_MODELS, SHADOW_MODEL, resolvePin, _setTimeouts, testKeys, keyPressure, geminiPost, geminiWhy, exportKeyState, importKeyState, resetKeyState, keyStatus, coolMs, msToPacificMidnight, DEFAULT_MODELS, GEMINI_MODELS, genCfg, toKeyList, handRegions, rereadHandwriting, normReread, rereadOcrRows, normOcrRowReread, computePickStats, canonCompany, shortsOf, LEGACY_COMP_MAP, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };
+module.exports = { PIN_MODELS, SHADOW_MODEL, resolvePin, _setTimeouts, testKeys, keyPressure, geminiPost, geminiWhy, exportKeyState, importKeyState, resetKeyState, keyStatus, coolMs, msToPacificMidnight, DEFAULT_MODELS, GEMINI_MODELS, genCfg, toKeyList, handRegions, rereadHandwriting, normReread, rereadOcrRows, normOcrRowReread, computePickStats, canonCompany, shortsOf, parsePicking, reconcile, extractPrinted, extractHandwritingVision, matchCompany, normName, visionWords, validDate, datesFromNote, floorFromAddress, judgeHandwriting };

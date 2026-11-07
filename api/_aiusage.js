@@ -14,12 +14,39 @@ const SOURCES = {
 };
 
 let _ready = false;
+let _hasErr = false; // err(실패 원인 요약) 칸이 있는지 — 추가에 실패해도 기록 자체는 계속(원인 칸만 비움)
 async function ensure(pool) {
   if (_ready) return;
   await pool.query(
-    `CREATE TABLE IF NOT EXISTS ai_usage_log (id BIGINT AUTO_INCREMENT PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, day CHAR(10), source VARCHAR(24), provider VARCHAR(12), model VARCHAR(48), key_no TINYINT DEFAULT 0, ok TINYINT DEFAULT 1, status SMALLINT DEFAULT 0, ms INT DEFAULT 0, KEY idx_day (day, source), KEY idx_created (created_at))`,
+    `CREATE TABLE IF NOT EXISTS ai_usage_log (id BIGINT AUTO_INCREMENT PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, day CHAR(10), source VARCHAR(24), provider VARCHAR(12), model VARCHAR(48), key_no TINYINT DEFAULT 0, ok TINYINT DEFAULT 1, status SMALLINT DEFAULT 0, ms INT DEFAULT 0, err VARCHAR(300) NULL, KEY idx_day (day, source), KEY idx_created (created_at))`,
   );
+  try {
+    const [c] = await pool.query(`SHOW COLUMNS FROM ai_usage_log LIKE 'err'`);
+    if (!c.length) await pool.query(`ALTER TABLE ai_usage_log ADD COLUMN err VARCHAR(300) NULL`);
+    _hasErr = true;
+  } catch (_) {
+    _hasErr = false;
+  }
   _ready = true;
+}
+
+// 실패 원인 요약에서 키 같은 비밀값을 가리고 한 줄로 만든다(저장·복사 모두 이 결과만 사용)
+function mask(s) {
+  return String(s == null ? "" : s)
+    .replace(/AIza[0-9A-Za-z_\-]{10,}/g, "AIza***")
+    .replace(/([?&]key=)[^&\s"']+/gi, "$1***")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+// 구글 응답 본문(JSON)에서 '상태·코드·메시지' 만 뽑는다. JSON 이 아니면 앞부분 글자만.
+function errSummary(text) {
+  let t = String(text || "");
+  try {
+    const j = JSON.parse(t);
+    const e = j.error || (j.responses && j.responses[0] && j.responses[0].error);
+    if (e) t = [e.status, e.code, e.message].filter((x) => x !== undefined && x !== null && x !== "").join(" ");
+  } catch (_) {}
+  return mask(t).slice(0, 300);
 }
 
 // 한국 날짜(YYYY-MM-DD)
@@ -37,8 +64,12 @@ async function log(pool, rows) {
     if (!list.length) return;
     await ensure(pool);
     const day = kstDay();
-    const vals = list.map((r) => [day, String(r.source || "").slice(0, 24), String(r.provider || "").slice(0, 12), String(r.model || "").slice(0, 48), Number(r.keyNo) || 0, r.ok ? 1 : 0, Number(r.status) || 0, Math.max(0, Math.round(Number(r.ms) || 0))]);
-    await pool.query(`INSERT INTO ai_usage_log (day, source, provider, model, key_no, ok, status, ms) VALUES ?`, [vals]);
+    const vals = list.map((r) => {
+      const row = [day, String(r.source || "").slice(0, 24), String(r.provider || "").slice(0, 12), String(r.model || "").slice(0, 48), Number(r.keyNo) || 0, r.ok ? 1 : 0, Number(r.status) || 0, Math.max(0, Math.round(Number(r.ms) || 0))];
+      if (_hasErr) row.push(r.ok || !r.err ? null : mask(r.err).slice(0, 300)); // 실패한 호출만 원인을 남겨 DB 쓰기량을 늘리지 않음
+      return row;
+    });
+    await pool.query(`INSERT INTO ai_usage_log (day, source, provider, model, key_no, ok, status, ms${_hasErr ? ", err" : ""}) VALUES ?`, [vals]);
   } catch (_) {}
 }
 
@@ -62,10 +93,15 @@ function timed(pool, source, fetchFn, keys) {
     const model = isV ? "vision" : ((u.match(/models\/([^:?\/]+)/) || [])[1] || "");
     try {
       const res = await fetchFn(url, init);
-      await log(pool, { source, provider: isV ? "vision" : "gemini", model, keyNo, ok: !!res.ok, status: res.status, ms: Date.now() - t0 });
+      let err = "";
+      if (!res.ok && res && typeof res.clone === "function") {
+        try { err = errSummary(await res.clone().text()); } catch (_) {} // 원래 응답은 그대로 두고 복제본만 읽음(실패일 때만)
+      }
+      await log(pool, { source, provider: isV ? "vision" : "gemini", model, keyNo, ok: !!res.ok, status: res.status, ms: Date.now() - t0, err });
       return res;
     } catch (e) {
-      await log(pool, { source, provider: isV ? "vision" : "gemini", model, keyNo, ok: false, status: e && e.name === "AbortError" ? 0 : -1, ms: Date.now() - t0 });
+      const err = e && e.name === "AbortError" ? "시간 초과(AbortError)" : mask((e && e.message) || e);
+      await log(pool, { source, provider: isV ? "vision" : "gemini", model, keyNo, ok: false, status: e && e.name === "AbortError" ? 0 : -1, ms: Date.now() - t0, err });
       throw e;
     }
   };
@@ -119,4 +155,59 @@ async function stats(pool) {
   };
 }
 
-module.exports = { SOURCES, ensure, log, timed, stats, kstDay, kstMonthStart, kindOf };
+// ── 진단 복사용 ─────────────────────────────────────────
+const KIND_TX = { limit: "한도 초과", overload: "서버 과부하", timeout: "시간 초과", error: "오류" };
+// 최근 실패 n건(원인 요약 포함)
+async function failureDetail(pool, n) {
+  await ensure(pool);
+  const [f] = await pool.query(`SELECT DATE_FORMAT(created_at, '%m-%d %H:%i:%s') t, source, provider, model, key_no, status, ms, ${_hasErr ? "err" : "NULL AS err"} FROM ai_usage_log WHERE ok = 0 ORDER BY id DESC LIMIT ?`, [Math.max(1, Math.min(100, n | 0 || 40))]);
+  return f.map((r) => ({ t: r.t, source: r.source, provider: r.provider, model: r.model, keyNo: Number(r.key_no), status: Number(r.status), ms: Number(r.ms), err: r.err || "" }));
+}
+// 최근 7일 실패를 출처·모델·키·상태별로 묶음(같은 문제가 몇 번 반복됐나)
+async function failureGroups(pool) {
+  await ensure(pool);
+  const d7 = kstDay(new Date(Date.now() - 6 * 86400000));
+  const [g] = await pool.query(`SELECT source, provider, model, key_no, status, COUNT(*) n, DATE_FORMAT(MAX(created_at), '%m-%d %H:%i') last FROM ai_usage_log WHERE ok = 0 AND day >= ? GROUP BY source, provider, model, key_no, status ORDER BY n DESC LIMIT 25`, [d7]);
+  return g.map((r) => ({ source: r.source, provider: r.provider, model: r.model, keyNo: Number(r.key_no), status: Number(r.status), n: Number(r.n), last: r.last }));
+}
+const _kstFmt = (ms) => { try { return new Date(ms).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: false }); } catch (_) { return ""; } };
+const _lv = (l) => (l === "down" ? "🔴" : l === "warn" ? "🟡" : "🟢");
+// 모든 입력(payload=AI 사용량 화면 데이터, failures·groups, picks=최근 피킹지 판독 요약)을 받아 복사용 글 한 덩어리를 만든다. 비밀값(키 원문)은 어디에도 넣지 않는다.
+function buildDiagText(o) {
+  const p = o.payload || {}, st = p.stats || {}, v = p.vision || {}, g = p.gemini || {};
+  const L = [];
+  L.push(`[AI 진단 리포트] ${_kstFmt(o.now || Date.now())} (서버 기준, 한국 시간)`);
+  L.push(`전체 상태: ${_lv(p.overall)} ${p.overall || "?"}`);
+  L.push("", "== 기능별 상태 ==");
+  (p.features || []).forEach((f) => L.push(`${_lv(f.level)} ${f.name} — ${f.why || ""}`));
+  L.push("", "== 문자인식(Vision) ==");
+  L.push(`이번 달 ${v.used ?? "?"}/${v.limit ?? 1000} (입고 OCR 카운터 ${v.ocrCount ?? "?"} + 출고 피킹지 ${v.pickMonth ?? "?"}) · 남은 ${v.left ?? "?"} · 키 ${v.keyConfigured ? "설정됨" : "없음"}`);
+  L.push("", "== Gemini ==");
+  L.push(`키 ${g.keyCount ?? "?"}개${g.chatKeySeparate ? " + 채팅 전용 키" : ""} · 쓸 수 있는 키 ${g.pressure ? g.pressure.usable : "?"}/${g.pressure ? g.pressure.total : "?"} · 모델 순서: ${(g.models || []).join(" → ")}`);
+  const kInfo = {};
+  (st.keys || []).forEach((k) => { const x = kInfo[k.keyNo] || (kInfo[k.keyNo] = { n: 0, bad: 0 }); x.n += k.n; if (!k.ok) x.bad += k.n; });
+  (g.keys || []).forEach((k) => {
+    const ki = kInfo[k.no] || { n: 0, bad: 0 };
+    L.push(`키 ${k.no}: ${k.blocked ? "쉬는 중" + (k.keyUntil ? ` (${_kstFmt(k.keyUntil)}까지${k.keyWhy ? ", " + k.keyWhy : ""})` : "") : "사용 가능"} · 30일 호출 ${ki.n}회 중 실패 ${ki.bad}`);
+  });
+  L.push("", "== 출처별 호출(30일, 실패) ==");
+  Object.keys(st.bySource || {}).forEach((k) => {
+    const x = st.bySource[k];
+    if (!x.gemini.d30 && !x.vision.d30) return;
+    L.push(`${x.label}: Gemini 오늘 ${x.gemini.today} · 7일 ${x.gemini.d7} · 30일 ${x.gemini.d30}(실패 ${x.gemini.bad30}) / Vision 30일 ${x.vision.d30}(실패 ${x.vision.bad30})`);
+  });
+  L.push("", "== 최근 7일 실패 묶음 ==");
+  if (!(o.groups || []).length) L.push("(없음)");
+  (o.groups || []).forEach((x) => L.push(`${SOURCES[x.source] || x.source} · ${x.provider}${x.model ? " " + x.model : ""}${x.keyNo ? " · 키" + x.keyNo : ""} · 상태 ${x.status}(${KIND_TX[kindOf(x.status)]}) × ${x.n}회, 마지막 ${x.last}`));
+  L.push("", "== 최근 실패 " + (o.failures || []).length + "건 (최신 먼저) ==");
+  if (!(o.failures || []).length) L.push("(없음)");
+  (o.failures || []).forEach((x) => L.push(`${x.t} · ${SOURCES[x.source] || x.source} · ${x.provider}${x.model ? " " + x.model : ""}${x.keyNo ? " 키" + x.keyNo : ""} · ${x.status}(${KIND_TX[kindOf(x.status)]}) · ${x.ms}ms${x.err ? " · " + x.err : ""}`));
+  const hasErr = (o.failures || []).some((x) => x.err);
+  if ((o.failures || []).length && !hasErr) L.push("※ 원인 요약은 이 기능을 배포한 뒤 새로 생긴 실패부터 기록돼요(이전 실패는 상태 코드만 남아 있음).");
+  L.push("", "== 최근 피킹지 판독 " + (o.picks || []).length + "건 ==");
+  if (!(o.picks || []).length) L.push("(없음)");
+  (o.picks || []).forEach((x) => L.push(x));
+  return L.join("\n");
+}
+
+module.exports = { SOURCES, ensure, log, timed, stats, kstDay, kstMonthStart, kindOf, mask, errSummary, failureDetail, failureGroups, buildDiagText };

@@ -361,7 +361,51 @@ function pickParsedSnapshot(parsed, comp, extra) {
     flags: { plt: lv("plt"), wanbox: lv("wanbox"), honjae: lv("honjae"), customer: lv("customer"), shipDate: lv("shipDate") },
     tilt: parsed.hwRegions ? parsed.hwRegions.tilt : null, hwFound: !!parsed.hwRegions, hwAgree: parsed.hwAgree === true,
     aiRaw: parsed.aiRaw || null, shadow: parsed.shadow || null, pinned: parsed.pinned || null, // 모델별 비교용: AI 가 합치기 전에 직접 읽은 값 / lite 곁가지 결과 / 모델 지정 시험 여부
+    orderNoSrc: parsed.orderNoSrc || null, bc: parsed.orderNoCheck && parsed.orderNoCheck.bc ? { ok: !!parsed.orderNoCheck.bc.ok, why: String(parsed.orderNoCheck.bc.why || "").slice(0, 80), ms: parsed.orderNoCheck.bc.ms || null, from: parsed.orderNoCheck.bc.from || null } : null, // 번호 출처·바코드 읽기 결과(진단용)
     timing: parsed.timing || null, kb: extra && extra.kb ? extra.kb : null, meta: extra && extra.meta ? extra.meta : null, // 소요시간·사진 크기(KB)·화면이 돌리거나 보정해 다시 보냈는지
+  };
+}
+// 🤖 AI 사용량 통합 데이터(대시보드·진단 복사 공용). 시스템 관리자 전용 액션에서만 호출됨
+async function aiUsagePayload() {
+  // 🤖 AI 사용량 통합 대시보드 (시스템 관리자 전용 — SYSTEM_ONLY_ACTIONS 에서 선차단)
+  //   Vision(문자인식): 입고 OCR(텔레그램+앱)의 월 카운터 OCR_COUNT + 출고 피킹지 판독 건수  /  Gemini: ai_usage_log + 키 상태
+  await geminiStateLoad(true);
+  await pickLogEnsure();
+  const st = await aiUsage.stats(pool);
+  const monthStr = String(new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" })).getMonth() + 1);
+  const sv = async (k) => { const [r] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = ?`, [k]); return r.length ? String(r[0].setting_value).replace(/"/g, "") : ""; };
+  const dbMonth = await sv("OCR_MONTH");
+  const ocrCount = dbMonth === monthStr ? parseInt(await sv("OCR_COUNT"), 10) || 0 : 0;
+  const ocrTotal = parseInt(await sv("OCR_TOTAL_COUNT"), 10) || 0;
+  const [pm] = await pool.query(`SELECT COUNT(*) n FROM pick_parse_log WHERE DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')`);
+  const pickMonth = Number(pm[0].n) || 0;
+  const LIM = 1000;
+  const used = ocrCount + pickMonth;
+  const left = LIM - used;
+  const models = pickLib.GEMINI_MODELS();
+  const gkeys = pickGeminiKeys();
+  const keyst = pickLib.keyStatus(gkeys, models);
+  const press = pickLib.keyPressure(gkeys, models);
+  const vOk = !!process.env.GOOGLE_VISION_API_KEY;
+  const vLevel = !vOk || left <= 0 ? "down" : left <= 150 ? "warn" : "ok";
+  const gLevel = !gkeys.length || press.level === "none" ? "down" : press.level === "tight" ? "warn" : "ok";
+  const chat = st.bySource.ai_chat.gemini;
+  const cLevel = chat.d7 >= 3 && chat.bad30 / Math.max(1, chat.d30) >= 0.5 ? "warn" : "ok";
+  const worst = (a, b) => (a === "down" || b === "down" ? "down" : a === "warn" || b === "warn" ? "warn" : "ok");
+  const retryTxt = press.retryAt ? new Date(press.retryAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "";
+  const features = [
+    { name: "입고 OCR (텔레그램·앱)", level: vLevel, why: !vOk ? "문자인식 키가 없어요" : left <= 0 ? "이번 달 무료 문자인식 한도(1000)를 다 썼어요" : left <= 150 ? `문자인식 남은 ${left}건 — 곧 한도예요` : `문자인식 남은 ${left}건` },
+    { name: "대조창 AI 다시읽기", level: gLevel, why: !gkeys.length ? "AI 키가 설정돼 있지 않아요" : press.level === "none" ? `AI 키가 모두 쉬는 중${retryTxt ? " · " + retryTxt + "에 풀려요" : ""}` : press.level === "tight" ? `쓸 수 있는 키 ${press.usable}/${press.total} — 여유가 적어요` : `쓸 수 있는 키 ${press.usable}/${press.total}` },
+    { name: "출고 피킹지 판독", level: vLevel === "down" ? "down" : gLevel === "down" ? "warn" : worst(vLevel, gLevel), why: vLevel === "down" ? "문자인식을 쓸 수 없어요" : gLevel === "down" ? "AI 없이 문자인식만으로 판독돼요(손글씨는 직접 입력)" : gLevel === "warn" || vLevel === "warn" ? "가능하지만 여유가 적어요" : "문자인식·AI 모두 가능" },
+    { name: "AI 채팅", level: cLevel, why: cLevel === "warn" ? "최근 호출의 절반 이상이 실패했어요" : chat.d30 ? `최근 30일 ${chat.d30}회 호출` : "아직 기록이 없어요" },
+  ];
+  return {
+    success: true,
+    stats: st,
+    vision: { limit: LIM, used, left, ocrCount, ocrTotal, pickMonth, app: st.appVisionMonth, telegramEst: Math.max(0, ocrCount - st.appVisionMonth), keyConfigured: vOk },
+    gemini: { keys: keyst, pressure: press, models, keyCount: gkeys.length, chatKeySeparate: !!process.env.GEMINI_API_KEY_AI },
+    features,
+    overall: features.reduce((a, f) => worst(a, f.level), "ok"),
   };
 }
 async function pickLogInsert(adminId, snap) {
@@ -666,7 +710,7 @@ const SYSTEM_ONLY_ACTIONS = new Set([
   "CREATE_ADMIN", "DELETE_ADMIN", "REACTIVATE_ADMIN", "HARD_DELETE_ADMIN", "RESET_ADMIN_PW",
   "GET_ADMIN_LIST", "GET_ADMIN_CONN_LOGS", "GET_AUDIT_LOGS", "GET_ALL_CONN_LOGS",
   "GET_RAW_DB_ROWS", "UPDATE_RAW_ROW_FULL", "UPDATE_RAW_ROW_DIRECT", "ADD_RAW_ROW_DIRECT", "DELETE_RAW_ROW_DIRECT",
-  "SAVE_OCR_INFO", "SAVE_OCR_FILTERS", "SET_ADMIN_PERMS", "PICK_STATS", "PICK_KEYTEST", "AI_USAGE_STATS",
+  "SAVE_OCR_INFO", "SAVE_OCR_FILTERS", "SET_ADMIN_PERMS", "PICK_STATS", "PICK_KEYTEST", "AI_USAGE_STATS", "AI_DIAG",
 ]);
 // 위임 권한이 필요한 액션 (시스템 관리자는 항상 통과)
 const PERM_ACTIONS = { OCR_UPLOAD: "ocr_upload", APPLY_OCR_DATA: "ocr_compare", OCR_ROW_REREAD: "ocr_compare", OCR_IMAGE_DATA: "ocr_compare", GET_OCR_STATE: "ocr_compare", OCR_STATE_END: "ocr_compare", OCR_PEND_ACK: "ocr_compare" };
@@ -929,6 +973,7 @@ module.exports = async function (req, res) {
         "PICK_PARSE",
         "PICK_REREAD",
         "AI_USAGE_STATS",
+        "AI_DIAG",
         "OCR_ROW_REREAD",
         "OCR_IMAGE_DATA",
         "PICK_STATS",
@@ -3113,45 +3158,26 @@ if (action === "VERIFY_SESSION") {
         return res.status(200).json({ success: true, days, stats, keys });
       } else if (action === "AI_USAGE_STATS") {
         // 🤖 AI 사용량 통합 대시보드 (시스템 관리자 전용 — SYSTEM_ONLY_ACTIONS 에서 선차단)
-        //   Vision(문자인식): 입고 OCR(텔레그램+앱)의 월 카운터 OCR_COUNT + 출고 피킹지 판독 건수  /  Gemini: ai_usage_log + 키 상태
-        await geminiStateLoad(true);
-        await pickLogEnsure();
-        const st = await aiUsage.stats(pool);
-        const monthStr = String(new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" })).getMonth() + 1);
-        const sv = async (k) => { const [r] = await pool.query(`SELECT setting_value FROM system_settings WHERE setting_key = ?`, [k]); return r.length ? String(r[0].setting_value).replace(/"/g, "") : ""; };
-        const dbMonth = await sv("OCR_MONTH");
-        const ocrCount = dbMonth === monthStr ? parseInt(await sv("OCR_COUNT"), 10) || 0 : 0;
-        const ocrTotal = parseInt(await sv("OCR_TOTAL_COUNT"), 10) || 0;
-        const [pm] = await pool.query(`SELECT COUNT(*) n FROM pick_parse_log WHERE DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')`);
-        const pickMonth = Number(pm[0].n) || 0;
-        const LIM = 1000;
-        const used = ocrCount + pickMonth;
-        const left = LIM - used;
-        const models = pickLib.GEMINI_MODELS();
-        const gkeys = pickGeminiKeys();
-        const keyst = pickLib.keyStatus(gkeys, models);
-        const press = pickLib.keyPressure(gkeys, models);
-        const vOk = !!process.env.GOOGLE_VISION_API_KEY;
-        const vLevel = !vOk || left <= 0 ? "down" : left <= 150 ? "warn" : "ok";
-        const gLevel = !gkeys.length || press.level === "none" ? "down" : press.level === "tight" ? "warn" : "ok";
-        const chat = st.bySource.ai_chat.gemini;
-        const cLevel = chat.d7 >= 3 && chat.bad30 / Math.max(1, chat.d30) >= 0.5 ? "warn" : "ok";
-        const worst = (a, b) => (a === "down" || b === "down" ? "down" : a === "warn" || b === "warn" ? "warn" : "ok");
-        const retryTxt = press.retryAt ? new Date(press.retryAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }) : "";
-        const features = [
-          { name: "입고 OCR (텔레그램·앱)", level: vLevel, why: !vOk ? "문자인식 키가 없어요" : left <= 0 ? "이번 달 무료 문자인식 한도(1000)를 다 썼어요" : left <= 150 ? `문자인식 남은 ${left}건 — 곧 한도예요` : `문자인식 남은 ${left}건` },
-          { name: "대조창 AI 다시읽기", level: gLevel, why: !gkeys.length ? "AI 키가 설정돼 있지 않아요" : press.level === "none" ? `AI 키가 모두 쉬는 중${retryTxt ? " · " + retryTxt + "에 풀려요" : ""}` : press.level === "tight" ? `쓸 수 있는 키 ${press.usable}/${press.total} — 여유가 적어요` : `쓸 수 있는 키 ${press.usable}/${press.total}` },
-          { name: "출고 피킹지 판독", level: vLevel === "down" ? "down" : gLevel === "down" ? "warn" : worst(vLevel, gLevel), why: vLevel === "down" ? "문자인식을 쓸 수 없어요" : gLevel === "down" ? "AI 없이 문자인식만으로 판독돼요(손글씨는 직접 입력)" : gLevel === "warn" || vLevel === "warn" ? "가능하지만 여유가 적어요" : "문자인식·AI 모두 가능" },
-          { name: "AI 채팅", level: cLevel, why: cLevel === "warn" ? "최근 호출의 절반 이상이 실패했어요" : chat.d30 ? `최근 30일 ${chat.d30}회 호출` : "아직 기록이 없어요" },
-        ];
-        return res.status(200).json({
-          success: true,
-          stats: st,
-          vision: { limit: LIM, used, left, ocrCount, ocrTotal, pickMonth, app: st.appVisionMonth, telegramEst: Math.max(0, ocrCount - st.appVisionMonth), keyConfigured: vOk },
-          gemini: { keys: keyst, pressure: press, models, keyCount: gkeys.length, chatKeySeparate: !!process.env.GEMINI_API_KEY_AI },
-          features,
-          overall: features.reduce((a, f) => worst(a, f.level), "ok"),
-        });
+        return res.status(200).json(await aiUsagePayload());
+      } else if (action === "AI_DIAG") {
+        // 📋 진단 복사: 사용량·키 상태·최근 실패(원인 요약 포함)·최근 피킹지 판독(바코드 결과·시간)을 글 한 덩어리로. 키 원문은 포함하지 않음
+        const payloadD = await aiUsagePayload();
+        const failuresD = await aiUsage.failureDetail(pool, 40);
+        const groupsD = await aiUsage.failureGroups(pool);
+        const picksD = [];
+        try {
+          await pickLogEnsure();
+          const [pr] = await pool.query(`SELECT parsed, DATE_FORMAT(created_at, '%m-%d %H:%i') t FROM pick_parse_log ORDER BY id DESC LIMIT 8`);
+          pr.forEach((r) => {
+            let x = {};
+            try { x = JSON.parse(r.parsed || "{}"); } catch (_) {}
+            const bc = x.bc ? `바코드 ${x.bc.ok ? "성공" : "실패"}${x.bc.from ? "(" + x.bc.from + ")" : ""}${x.bc.ms ? " " + x.bc.ms + "ms" : ""}${x.bc.ok ? "" : x.bc.why ? " — " + x.bc.why : ""}` : "바코드 기록 없음";
+            const tm = x.timing ? Object.keys(x.timing).map((k) => `${k} ${x.timing[k]}`).join(" ") : "";
+            const fl = x.flags ? Object.keys(x.flags).filter((k) => x.flags[k] && x.flags[k] !== "ok").map((k) => `${k}:${x.flags[k]}`).join(" ") : "";
+            picksD.push(`${r.t} · 번호 ${x.orderNo || "(없음)"}${x.orderNoSrc ? "(" + x.orderNoSrc + ")" : ""} · ${bc}${tm ? " · 시간 " + tm : ""}${x.kb ? " · 사진 " + x.kb + "KB" : ""}${fl ? " · 확인필요 " + fl : ""}`);
+          });
+        } catch (_) {}
+        return res.status(200).json({ success: true, text: aiUsage.buildDiagText({ now: Date.now(), payload: payloadD, failures: failuresD, groups: groupsD, picks: picksD }) });
       } else if (action === "PICK_FIND_ROWS") {
         // 같은 업체의 '완료되지 않은' 출고 일정 찾기 (수량 추가 대상 후보). 날짜가 있으면 그 날짜만, 없으면 미정 + 오늘 이후
         const fCompany = String(data?.company || "").trim().slice(0, 100);

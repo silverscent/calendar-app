@@ -2175,6 +2175,7 @@ async function openAiDashboard() {
   m.innerHTML = `<div id="aiDashBox" style="${boxStyle}">
     <div style="${headerStyle}">
       <div style="flex:1; font-weight:900; font-size:${pcMode ? "1.1em" : "1.05em"};">${pcMode ? `<div style="font-size:0.62em; letter-spacing:0.12em; color:#0a84ff; margin-bottom:3px;">SYSTEM INSIGHTS</div>📊 AI 사용량 대시보드` : "🤖 AI 사용량"} <span style="font-weight:600; font-size:0.72em; opacity:.6;">시스템 관리자 전용</span></div>
+      <button id="aiDashDiag" style="${refreshStyle}" title="사용량·키 상태·최근 실패 원인·최근 피킹지 판독을 한 번에 복사해요">${pcMode ? "📋 진단 복사" : "📋"}</button>
       <button id="aiDashRef" style="${refreshStyle}">${pcMode ? "🔄 새로고침" : "🔄"}</button>
       <button id="aiDashX" style="${closeStyle}">${pcMode ? "닫기 ✕" : "✕"}</button>
     </div>
@@ -2185,6 +2186,7 @@ async function openAiDashboard() {
   m.addEventListener("click", (e) => { if (e.target === m) closeAiDash(); });
   m.querySelector("#aiDashX").onclick = closeAiDash;
   m.querySelector("#aiDashRef").onclick = _aiDashLoad;
+  m.querySelector("#aiDashDiag").onclick = function () { _aiDashCopyDiag(this); };
   _aiDashLoad();
 }
 async function _aiDashLoad() {
@@ -2205,6 +2207,61 @@ async function _aiDashLoad() {
   }
   body.innerHTML = _aiDashRender(r);
   _aiDashApplyPcLayout(body);
+}
+// 📋 진단 복사: 서버가 만든 진단 글(사용량·키 상태·최근 실패와 원인·최근 피킹지 판독)에 이 화면 정보를 붙여 클립보드로 복사한다.
+//   복사가 막힌 브라우저에서는 직접 복사할 수 있는 글상자를 띄운다(내용을 그냥 잃지 않도록).
+function _aiDashClientInfo() {
+  let vw = "";
+  try { vw = `${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio || 1}`; } catch (e) {}
+  let t = "";
+  try { t = new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false }); } catch (e) {}
+  return [`[화면 정보] ${t} · 주소 ${location.pathname} · 화면 ${vw} · ${navigator.onLine === false ? "오프라인" : "온라인"}`, `브라우저: ${String(navigator.userAgent || "").slice(0, 200)}`].join("\n");
+}
+function _aiDashShowText(text) {
+  const old = document.getElementById("aiDiagBox");
+  if (old) old.remove();
+  const w = document.createElement("div");
+  w.id = "aiDiagBox";
+  w.style.cssText = "position:fixed; inset:0; z-index:100001; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; padding:14px; box-sizing:border-box;";
+  w.innerHTML = `<div style="width:100%; max-width:640px; max-height:90vh; background:var(--card-bg,#fff); color:var(--text-main,#222); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+    <div style="font-weight:900;">자동 복사가 안 돼요 — 아래 글을 전체 선택해서 복사해 주세요</div>
+    <textarea id="aiDiagTa" readonly style="flex:1; min-height:240px; width:100%; box-sizing:border-box; font-size:12px; line-height:1.45; border:1px solid var(--border-color,#ccc); border-radius:8px; padding:8px; background:var(--bg-color,#f7f7f7); color:inherit;"></textarea>
+    <div style="display:flex; gap:8px; justify-content:flex-end;"><button id="aiDiagSel" style="border:none; background:#0a84ff; color:#fff; border-radius:8px; padding:8px 14px; font-weight:800;">전체 선택</button><button id="aiDiagX" style="border:none; background:var(--border-color,#e5e7eb); color:inherit; border-radius:8px; padding:8px 14px; font-weight:800;">닫기</button></div></div>`;
+  document.body.appendChild(w);
+  const ta = w.querySelector("#aiDiagTa");
+  ta.value = text;
+  const sel = () => { ta.focus(); ta.select(); try { ta.setSelectionRange(0, text.length); } catch (e) {} };
+  w.querySelector("#aiDiagSel").onclick = sel;
+  w.querySelector("#aiDiagX").onclick = () => w.remove();
+  w.addEventListener("click", (e) => { if (e.target === w) w.remove(); });
+  sel();
+}
+async function _aiDashCopyDiag(btn) {
+  const label = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "…"; }
+  let r = null;
+  try { r = await apiCall({ source: "vercel", action: "AI_DIAG" }); } catch (e) { r = null; }
+  if (btn) { btn.disabled = false; btn.textContent = label; }
+  if (!r || !r.success || !r.text) {
+    showToast("진단 정보를 가져오지 못했어요" + (r && r.msg ? " — " + r.msg : ""), 3500);
+    return;
+  }
+  const text = _aiDashClientInfo() + "\n\n" + r.text;
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {}
+  if (!ok) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed; left:-9999px; top:0;";
+      document.body.appendChild(ta);
+      ta.select();
+      ok = document.execCommand("copy");
+      ta.remove();
+    } catch (e) { ok = false; }
+  }
+  if (ok) showToast(`진단 정보를 복사했어요 (${text.length.toLocaleString()}자) — 대화창에 붙여넣어 주세요`, 3500);
+  else _aiDashShowText(text);
 }
 (function () {
   let t = null;

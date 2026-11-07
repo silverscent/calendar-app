@@ -31,79 +31,8 @@ let isShowHoliday = localStorage.getItem("cal_show_holiday") !== "false";
 
 // (폴리필 -> common-core.js 로 분리됨)
 
-// 🏢 업체명 관련 해시 맵 (관리자님의 '새로운 마스터 명칭' 기준!)
-const fixedCompanies = [
-  "(주)메디뱅크",
-  "백년가게국제의료기", // (이전 대화에서 이게 찐 풀네임이라고 하셔서 유지했습니다!)
-  "드림케어메디칼",
-  "링크더랩",
-  "(주)메디맥 2층",
-  "(주)메디맥 3층",
-  "메디칼써프라이",
-  "서호메디코",
-  "세람메디칼",
-  "엠코리아토탈서비스",
-  "위드비아",
-  "제니스엠지",
-  "지앤씨메딕",
-  "하이메드",
-  "스마트엠케어",
-];
-
-const compShortMap = {
-  "(주)메디맥 2층": "메2",
-  "(주)메디맥 3층": "메3",
-  "(주)메디뱅크": "메뱅",
-  메디칼써프라이: "메써",
-  서호메디코: "서호",
-  엠코리아토탈서비스: "엠코",
-  백년가게국제의료기: "국제",
-  드림케어메디칼: "드림",
-  지엔씨메딕: "지엔",
-  지앤씨메딕: "지앤",
-  링크더랩: "링랩",
-  위드비아: "위비",
-  하이메드: "하메",
-  스마트엠케어: "스엠",
-  제니스엠지: "제니",
-  세람메디칼: "세람",
-};
-
-const compFullMap = {
-  // 💡 1. 약어를 새 이름으로 연결
-  메2: "(주)메디맥 2층",
-  메디맥2층: "(주)메디맥 2층",
-  메3: "(주)메디맥 3층",
-  메디맥3층: "(주)메디맥 3층",
-  메뱅: "(주)메디뱅크",
-  메써: "메디칼써프라이",
-  서호: "서호메디코",
-  엠코: "엠코리아토탈서비스",
-  국제: "백년가게국제의료기",
-  드림: "드림케어메디칼",
-  지엔: "지앤씨메딕",
-  지엔씨: "지앤씨메딕",
-  지앤: "지앤씨메딕",
-  지앤씨: "지앤씨메딕",
-  링랩: "링크더랩",
-  링크: "링크더랩",
-  위비: "위드비아",
-  위드: "위드비아",
-  하메: "하이메드",
-  하이: "하이메드",
-  스엠: "스마트엠케어",
-  스마: "스마트엠케어",
-  제니: "제니스엠지",
-  세람: "세람메디칼",
-
-  // 🚨 2. [가장 중요!] 과거 DB에 박혀있는 옛날 이름을 -> '새 이름'으로 강제 세탁!!
-  "메디맥 주식회사 2층": "(주)메디맥 2층",
-  "메디맥 주식회사 3층": "(주)메디맥 3층",
-  "메디멕 주식회사 2층": "(주)메디맥 2층", // 멕/맥 오타까지 방어
-  "메디멕 주식회사 3층": "(주)메디맥 3층",
-  제니스: "제니스엠지",
-  국제의료기: "백년가게국제의료기",
-};
+// 🏢 업체명·약어는 '업체정보(compInfoDB)'가 유일한 기준입니다. 코드에 업체 이름표를 두지 않아요.
+//    옛 이름·옛 약어로 들어온 데이터를 맞추고 싶으면 업체정보의 '약어' 칸에 쉼표로 적어 두세요(예: 메3, 메디맥3).
 
 // 💡 [지능형 약어 변환기]
 function getShortName(name) {
@@ -112,8 +41,7 @@ function getShortName(name) {
 
   // 1. CRM에 등록된 약어가 있다면 최우선
   if (compInfoDB[fullName] && compInfoDB[fullName].shortName) return compInfoDB[fullName].shortName;
-  // 2. 하드코딩 맵 사용
-  if (compShortMap[fullName]) return compShortMap[fullName];
+  // 2. 약어 칸이 비어 있으면 앞 두 글자
   return fullName.substring(0, 2);
 }
 
@@ -125,21 +53,15 @@ function getFullName(name) {
   // 1순위: CRM DB 검색
   if (typeof compInfoDB === "object" && compInfoDB !== null && compInfoDB[input]) return input;
 
-  // 2순위: CRM 약어 검색
+  // 2순위: CRM 약어 검색 (약어 칸에 "메3, 메디맥3" 처럼 쉼표로 여러 개를 적어도 각각 약어로 본다)
   try {
     if (typeof compInfoDB === "object" && compInfoDB !== null) {
       for (let masterName in compInfoDB) {
-        if (compInfoDB[masterName] && compInfoDB[masterName].shortName === input) return masterName;
+        const sn = compInfoDB[masterName] && compInfoDB[masterName].shortName;
+        if (sn && (sn === input || String(sn).split(/[,，/·;]+/).some((x) => x.trim() === input))) return masterName;
       }
     }
   } catch (e) {}
-
-  // 3순위: 하드코딩 맵 검색 (🌟 여기서 과거 DB의 "제니스"가 "제니스엠지"로 바뀜!)
-  if (typeof compFullMap !== "undefined" && compFullMap[input]) {
-    let legacyFullName = compFullMap[input];
-    if (typeof compInfoDB === "object" && compInfoDB !== null && compInfoDB[legacyFullName]) return legacyFullName;
-    return legacyFullName;
-  }
 
   return input;
 }
@@ -2093,7 +2015,6 @@ function syncCrmDataBackground() {
       compInfoDB = dbData;
       localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB));
     }
-    if (typeof migrateFixedCompanies === "function") migrateFixedCompanies(); // 서버 최신 데이터 기준 1회 seed
     renderCalendar();
   });
 }
@@ -5964,36 +5885,6 @@ function getPillHtml(compName) {
 }
 
 // 💡 1. 업체 리스트 모달창 열기 (서버 기다리지 않고 즉시 오픈!)
-// 🔁 [1회성 마이그레이션] 하드코딩 기본 업체를 compInfoDB로 이관
-//    반드시 '서버 최신 compInfoDB를 받은 직후'에만 호출할 것 (기존 데이터 보존)
-function migrateFixedCompanies() {
-  if (localStorage.getItem("crm_fixed_migrated_v1")) return;
-  // 업체정보가 비어 있는 새 DB 일 때만 기본 업체를 넣는다. 예전에는 '이 브라우저에서 처음'이면 무조건 다시 넣어서,
-  // 이름을 바꾸거나 지운 기본 업체(예: 지엔씨메딕→지앤씨메딕)가 다른 폰·PC 에서 열 때마다 되살아나 피킹 후보에 옛 이름이 같이 떴음
-  if (Object.keys(compInfoDB || {}).length > 0) { localStorage.setItem("crm_fixed_migrated_v1", "1"); return; }
-  let changed = false;
-  fixedCompanies.forEach((name) => {
-    if (!compInfoDB[name]) {
-      compInfoDB[name] = {
-        shortName: compShortMap[name] || name.substring(0, 2),
-        ic: false,
-        oc: false,
-        wc: false,
-        etc: "",
-        addr: "",
-        phone: "",
-        time: "",
-      };
-      changed = true;
-    }
-  });
-  if (changed) {
-    localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB));
-    apiCall({ source: "vercel", action: "SAVE_COMP_INFO_DB", data: compInfoDB });
-  }
-  localStorage.setItem("crm_fixed_migrated_v1", "1");
-}
-
 function openCompListModal() {
   // 1단계: [즉시 실행] 내 폰에 저장된 데이터로 0.1초 만에 창부터 엽니다.
   document.getElementById("btnAddNewComp").style.display = isAdmin ? "block" : "none";
@@ -6006,7 +5897,6 @@ function openCompListModal() {
     const prevSig = JSON.stringify(compInfoDB);
     compInfoDB = dbData;
     localStorage.setItem("COMP_INFO_DB", JSON.stringify(compInfoDB));
-    migrateFixedCompanies();
     const changed = JSON.stringify(compInfoDB) !== prevSig;
     if (changed) {
       renderCompList(); // 데이터 바뀐 경우에만 재렌더
