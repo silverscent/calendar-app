@@ -7049,9 +7049,53 @@ function _dsRefineQuad(pts, Q0, w, h) {
   }
   return ok ? Q : null;
 }
+// 사각형 둘레를 따라 '안쪽(종이)은 밝고 바깥쪽은 어두운' 정도를 잰다(0~60). 사진 테두리 쪽 표본은 판단에서 뺀다.
+function _dsEdgeScore(gray, w, h, Q) {
+  const cx = (Q[0].x + Q[1].x + Q[2].x + Q[3].x) / 4, cy = (Q[0].y + Q[1].y + Q[2].y + Q[3].y) / 4;
+  const at = (x, y) => {
+    const xi = Math.round(x), yi = Math.round(y);
+    if (xi < 2 || yi < 2 || xi > w - 3 || yi > h - 3) return -1;
+    let s = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) s += gray[(yi + dy) * w + xi + dx];
+    return s / 9;
+  };
+  const d = Math.max(3, Math.round(0.012 * Math.hypot(w, h)));
+  let tot = 0, n = 0;
+  for (let i = 0; i < 4; i++) {
+    const A = Q[i], B = Q[(i + 1) % 4], L = Math.hypot(B.x - A.x, B.y - A.y) || 1;
+    let nx = -(B.y - A.y) / L, ny = (B.x - A.x) / L;
+    if (nx * ((A.x + B.x) / 2 - cx) + ny * ((A.y + B.y) / 2 - cy) < 0) { nx = -nx; ny = -ny; } // 바깥쪽 방향
+    for (let k = 0; k < 30; k++) {
+      const t = 0.08 + (0.84 * k) / 29, px = A.x + (B.x - A.x) * t, py = A.y + (B.y - A.y) * t;
+      const a = at(px - nx * d, py - ny * d), b = at(px + nx * d, py + ny * d);
+      if (a < 0 || b < 0) continue;
+      tot += Math.max(0, Math.min(60, a - b)); n++;
+    }
+  }
+  return n >= 20 ? tot / n : -1;
+}
 function _dsFindQuad(gray, w, h) {
   if (!gray || gray.length !== w * h || w < 20 || h < 20) return null;
-  const thr = Math.min(215, Math.max(80, _dsOtsu(gray)));
+  const o = _dsOtsu(gray);
+  // 밝기 기준을 몇 가지로 바꿔 보고, 종이 가장자리(안쪽 밝고 바깥 어두움)가 가장 뚜렷한 결과를 쓴다.
+  // (기준이 낮으면 종이 옆의 밝은 소파·벽까지 한 덩어리가 되어 모서리가 엉뚱한 곳으로 가므로)
+  let best = null;
+  for (const dt of [0, 16, 32, -14]) {
+    const t = Math.min(225, Math.max(80, o + dt));
+    if (dt && Math.abs(t - Math.min(215, Math.max(80, o))) < 6) continue;
+    let r = null;
+    try { r = _dsFindQuadT(gray, w, h, dt ? t : Math.min(215, Math.max(80, o))); } catch (_) { r = null; }
+    if (!r) continue;
+    r.edge = _dsEdgeScore(gray, w, h, r.quad);
+    r.thr = dt ? t : Math.min(215, Math.max(80, o));
+    // 기본(dt=0) 결과보다 뚜렷하게(+4 이상) 나을 때만 바꾼다 → 잘 되던 사진은 그대로
+    if (!best) { if (!dt || r.areaRatio < 0.97) best = r; }
+    else if (r.edge > best.edge + 4 && r.areaRatio > 0.2 && r.areaRatio < 0.97) best = r; // 사진 전체가 종이로 잡힌 결과(단색 사진 등)는 대안으로 쓰지 않음
+  }
+  return best;
+}
+function _dsFindQuadT(gray, w, h, thr) {
+  if (!gray || gray.length !== w * h || w < 20 || h < 20) return null;
   const mask = new Uint8Array(w * h);
   for (let i = 0; i < mask.length; i++) mask[i] = gray[i] > thr ? 1 : 0;
   // 가장 큰 밝은 덩어리(= 종이)
